@@ -1482,7 +1482,7 @@
 			</div>
 			<div class="vt-sep"></div>
 			<button class="vt-btn vt-icon-btn" id="toggle-snap" title="Snap — pivot snaps to nearest vertex/face, objects snap to each other">
-				<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v6a4 4 0 0 0 8 0V2"/><path d="M4 2h2.5"/><path d="M9.5 2H12"/><path d="M5 12.5v2"/><path d="M11 12.5v2"/></svg>
+				<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13V7a5 5 0 0 1 10 0v6"/><line x1="3" y1="10" x2="6" y2="10"/><line x1="10" y1="10" x2="13" y2="10"/></svg>
 			</button>
 			<button class="vt-btn vt-icon-btn active" id="toggle-grid" title="Show/hide ground grid">
 				<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2" y="2" width="12" height="12"/><line x1="6" y1="2" x2="6" y2="14"/><line x1="10" y1="2" x2="10" y2="14"/><line x1="2" y1="6" x2="14" y2="6"/><line x1="2" y1="10" x2="14" y2="10"/></svg>
@@ -3439,9 +3439,12 @@ canvas.addEventListener("pointerleave", () => {
 	if (canvas.style.cursor === "pointer") canvas.style.cursor = "";
 });
 canvas.addEventListener("pointerup", e => {
-	if (transform.dragging || transform.axis) return;
+	// Bail only on an actual gizmo drag — `transform.axis` being non-null just means the
+	// gizmo's hover-picker is under the cursor; the user can still want to select the
+	// object underneath. We fall through and let the raycast decide.
+	if (transform.dragging) return;
 	if (e.altKey || altCamHeld || altDragging) return;
-	if (Math.abs(e.clientX - pointerDownX) > 4 || Math.abs(e.clientY - pointerDownY) > 4) return;
+	if (Math.abs(e.clientX - pointerDownX) > 6 || Math.abs(e.clientY - pointerDownY) > 6) return;
 	// Path-dot pick: clicking a square dot on the motion path jumps the playhead to that
 	// key and selects it on the timeline. Screen-space hit test so the tolerance matches
 	// the on-screen dot size regardless of distance.
@@ -3476,6 +3479,9 @@ canvas.addEventListener("pointerup", e => {
 			if (d < sphereHitDist) { sphereHitDist = d; sphereHit = o; }
 		}
 	}
+	// Gizmo absorbed the click but nothing real was under it — keep the current selection
+	// instead of deselecting to empty space.
+	if (!meshHit && !sphereHit && transform.axis) return;
 	if (meshHit && (!sphereHit || meshHit.distance < sphereHitDist)) {
 		let root = meshHit.object;
 		while (root && !objects.includes(root)) root = root.parent;
@@ -5453,6 +5459,20 @@ document.getElementById("vp-save-render")?.addEventListener("click", () => {
 	document.body.appendChild(a); a.click(); a.remove();
 });
 
+// Tear down the post-render UI (Save + Render/Blockout toggle, overlay) so the toolbar
+// only shows those things when there's actually a generated result to act on. Called
+// when a project is cleared / a different project is loaded.
+function resetResultUI() {
+	lastResult = null;
+	resultMode = "viewport";
+	const saveBtn = document.getElementById("vp-save-render");
+	if (saveBtn) saveBtn.hidden = true;
+	if (renderToggleBtn) renderToggleBtn.hidden = true;
+	if (blockoutToggleBtn) blockoutToggleBtn.hidden = true;
+	if (viewportToggleBtn) viewportToggleBtn.hidden = true;
+	applyResultMode?.();
+}
+
 for (const b of resultToggle.querySelectorAll("button")) {
 	b.addEventListener("click", () => {
 		// Don't let the user click into "render" before a result exists
@@ -6933,6 +6953,9 @@ async function deserializeScene(state, opts = {}) {
 	cancelPendingSave();
 	try {
 	applyProjectName(state.projectName || null);
+	// Renders aren't part of the saved project — clear the post-render toolbar UI so
+	// loading a fresh project doesn't leave a stale Save button from the previous one.
+	resetResultUI?.();
 	while (objects.length) deleteObject(objects[0]);
 
 	for (const p of (state.primitives || [])) {
@@ -7415,6 +7438,7 @@ document.getElementById("project-new").addEventListener("click", async () => {
 		);
 		if (!ok) return;
 	}
+	resetResultUI();
 	// Race-fix: previously this fired up to 3 overlapping saves —
 	//   1) deserialize(EMPTY).finally → saveScene (empty scene)
 	//   2) addPrimitive → internal saveScene (cube at origin)
