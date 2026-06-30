@@ -890,7 +890,7 @@ ASSISTANT_SYSTEM = (
 EDITOR_TOOLS = [
     {
         "name": "add_primitive",
-        "description": "Add a primitive object to the scene. Returns the new object's name.",
+        "description": "Add a SINGLE primitive object to the scene. For multiple at once, use batch_add_primitives instead — it's ~10x faster than calling this in a loop.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -908,6 +908,42 @@ EDITOR_TOOLS = [
                 },
             },
             "required": ["kind"],
+        },
+    },
+    {
+        "name": "batch_add_primitives",
+        "description": "Add MANY primitives in one call — use this for arrays, grids, patterns, or any multi-object placement. Massively faster than looping add_primitive.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "kind": {
+                                "type": "string",
+                                "enum": ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "particles"],
+                            },
+                            "color": {"type": "string", "description": "Optional hex like #ff5fbf"},
+                            "position": {
+                                "type": "array",
+                                "items": {"type": "number"},
+                                "minItems": 3, "maxItems": 3,
+                            },
+                            "scale": {
+                                "type": "array",
+                                "items": {"type": "number"},
+                                "minItems": 1, "maxItems": 3,
+                                "description": "Optional [x,y,z] or [uniform] scale",
+                            },
+                        },
+                        "required": ["kind"],
+                    },
+                },
+            },
+            "required": ["items"],
         },
     },
     {

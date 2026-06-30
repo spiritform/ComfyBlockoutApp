@@ -3512,6 +3512,38 @@ const ASSISTANT_TOOLS = {
 		return `added ${obj.name} (${kind}) at (${obj.position.x.toFixed(2)}, ${obj.position.y.toFixed(2)}, ${obj.position.z.toFixed(2)})`;
 	},
 
+	batch_add_primitives({ items }) {
+		if (!Array.isArray(items) || items.length === 0) return "error: items[] is required";
+		const allowed = ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "particles"];
+		const added = [];
+		const errors = [];
+		for (let i = 0; i < items.length; i++) {
+			const it = items[i] || {};
+			if (!allowed.includes(it.kind)) { errors.push(`#${i}: bad kind '${it.kind}'`); continue; }
+			const obj = addPrimitive(it.kind);
+			if (!obj) { errors.push(`#${i}: addPrimitive returned null`); continue; }
+			if (Array.isArray(it.position) && it.position.length === 3) {
+				obj.position.set(+it.position[0] || 0, +it.position[1] || 0, +it.position[2] || 0);
+			} else {
+				obj.position.set(0, 0.5, 0);
+			}
+			if (Array.isArray(it.scale) && it.scale.length >= 1) {
+				const sx = Math.max(0.001, +it.scale[0] || 1);
+				const sy = it.scale.length > 1 ? Math.max(0.001, +it.scale[1] || sx) : sx;
+				const sz = it.scale.length > 2 ? Math.max(0.001, +it.scale[2] || sx) : sx;
+				obj.scale.set(sx, sy, sz);
+			}
+			if (it.color && obj.material?.color) {
+				try { obj.material.color.setStyle(it.color); } catch {}
+			}
+			added.push(obj.name);
+		}
+		refreshOutliner();
+		saveScene?.();
+		const summary = `added ${added.length} of ${items.length}: ${added.join(", ")}`;
+		return errors.length ? `${summary}\nerrors: ${errors.join("; ")}` : summary;
+	},
+
 	list_objects() {
 		if (objects.length === 0) return "scene is empty";
 		return JSON.stringify(objects.map(o => ({
@@ -6115,7 +6147,12 @@ function showProjectPicker() {
 				del.onmouseleave = () => { del.style.opacity = "0.4"; del.style.color = ""; };
 				del.onclick = async (e) => {
 					e.stopPropagation();
-					if (!confirm(`Delete project "${name}"? This removes the saved scene and its asset copies.`)) return;
+					const okDel = await showConfirm(
+					"Delete project?",
+					`<strong style="color:#fff">${name}</strong><br>This removes the saved scene and its asset copies.`,
+					{ confirmText: "Delete", danger: true },
+				);
+				if (!okDel) return;
 					await deleteProject(name);
 					row.remove();
 				};
@@ -6147,7 +6184,14 @@ function showProjectPicker() {
 }
 
 document.getElementById("project-new").addEventListener("click", async () => {
-	if (objects.length > 0 && !confirm("Start a new scene? Unsaved changes to the current node will be replaced.")) return;
+	if (objects.length > 0) {
+		const ok = await showConfirm(
+			"Start a new scene?",
+			"Unsaved changes to the current node will be replaced.",
+			{ confirmText: "Start new" },
+		);
+		if (!ok) return;
+	}
 	await deserializeScene(EMPTY_SCENE);
 	// Drop a starter cube so "New" matches the fresh-node experience instead of leaving
 	// the user staring at an empty grid. addPrimitive picks the next palette color.
@@ -6173,6 +6217,63 @@ document.getElementById("project-open").addEventListener("click", async () => {
 	// can miss when the preview was minted with a different NODE_ID than the editor.
 	try { window.parent?.postMessage({ source: "comfy3d-editor", type: "preview-refresh", node_id: NODE_ID }, "*"); } catch {}
 });
+
+function showConfirm(title, message, opts = {}) {
+	const { confirmText = "OK", cancelText = "Cancel", danger = false } = opts;
+	return new Promise((resolve) => {
+		const backdrop = document.createElement("div");
+		Object.assign(backdrop.style, {
+			position: "fixed", inset: "0", zIndex: "9998",
+			background: "rgba(0,0,0,0.65)", display: "flex",
+			alignItems: "center", justifyContent: "center",
+		});
+		const card = document.createElement("div");
+		Object.assign(card.style, {
+			background: "#15151c", border: "1px solid rgba(255,255,255,0.08)",
+			borderRadius: "10px", padding: "18px", minWidth: "320px", maxWidth: "420px",
+			color: "#ddd", fontFamily: "Inter, sans-serif", fontSize: "12px",
+		});
+		card.innerHTML = `
+			<div style="font-size:13px;font-weight:600;margin-bottom:8px">${title}</div>
+			<div style="color:rgba(255,255,255,0.65);line-height:1.5">${message}</div>
+		`;
+		const row = document.createElement("div");
+		Object.assign(row.style, { display: "flex", justifyContent: "flex-end", gap: "6px", marginTop: "16px" });
+		const cancel = document.createElement("button");
+		cancel.textContent = cancelText;
+		const ok = document.createElement("button");
+		ok.textContent = confirmText;
+		for (const b of [cancel, ok]) {
+			Object.assign(b.style, {
+				border: "none", padding: "6px 14px", borderRadius: "6px",
+				cursor: "pointer", fontFamily: "inherit", fontSize: "11px",
+			});
+		}
+		cancel.style.background = "rgba(255,255,255,0.08)";
+		cancel.style.color = "#fff";
+		if (danger) {
+			ok.style.background = "rgba(255,80,80,0.22)";
+			ok.style.color = "#ff8a8a";
+		} else {
+			ok.style.background = "rgba(255,180,84,0.28)";
+			ok.style.color = "#ffd28a";
+		}
+		row.append(cancel, ok);
+		card.appendChild(row);
+		backdrop.appendChild(card);
+		document.body.appendChild(backdrop);
+		setTimeout(() => ok.focus(), 0);
+		const cleanup = (val) => { document.removeEventListener("keydown", onKey); backdrop.remove(); resolve(val); };
+		const onKey = (e) => {
+			if (e.key === "Escape") cleanup(false);
+			else if (e.key === "Enter") cleanup(true);
+		};
+		document.addEventListener("keydown", onKey);
+		cancel.onclick = () => cleanup(false);
+		ok.onclick = () => cleanup(true);
+		backdrop.addEventListener("click", e => { if (e.target === backdrop) cleanup(false); });
+	});
+}
 
 function showNamePrompt(title, suggested) {
 	return new Promise((resolve) => {
