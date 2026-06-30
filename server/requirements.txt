@@ -6,3 +6,5 @@ pillow>=10.0
 imageio-ffmpeg>=0.4
 opencv-python>=4.8
 comfy-cli>=1.5
+anthropic>=0.88
+python-dotenv>=1.0

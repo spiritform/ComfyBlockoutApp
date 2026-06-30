@@ -60,6 +60,30 @@ def _load_env_file(*, override: bool = True) -> bool:
 _load_env_file()
 
 
+def _read_env_kv() -> dict[str, str]:
+    """Parse the current .env into a dict so we can update one key without
+    blowing away the others."""
+    out: dict[str, str] = {}
+    if not ENV_PATH.exists():
+        return out
+    for raw in ENV_PATH.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k = k.strip()
+        if not k:
+            continue
+        out[k] = v.strip().strip('"').strip("'")
+    return out
+
+
+def _write_env_kv(kv: dict[str, str]) -> None:
+    """Persist the kv dict back to .env, preserving order of keys we set."""
+    lines = [f"{k}={v}" for k, v in kv.items() if v]
+    ENV_PATH.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+
+
 def _resolve_comfy_bin() -> str | None:
     """Find the comfy console-script even when subprocess PATH doesn't match the
     activated venv. Prefer the venv's Scripts dir, then PATH, then sys.executable
@@ -604,19 +628,50 @@ async def auth_key(request: Request):
     if not key.startswith("comfyui-"):
         raise HTTPException(400, "key should start with 'comfyui-'")
     os.environ["COMFY_API_KEY"] = key
-    ENV_PATH.write_text(f"COMFY_API_KEY={key}\n", encoding="utf-8")
+    kv = _read_env_kv()
+    kv["COMFY_API_KEY"] = key
+    _write_env_kv(kv)
     return {"saved": True}
 
 
 @app.delete("/api/auth/key")
 async def auth_key_clear():
     os.environ.pop("COMFY_API_KEY", None)
-    if ENV_PATH.exists():
-        try:
-            ENV_PATH.unlink()
-        except Exception:
-            pass
+    kv = _read_env_kv()
+    kv.pop("COMFY_API_KEY", None)
+    _write_env_kv(kv)
     return {"cleared": True}
+
+
+@app.post("/api/llm/key")
+async def llm_key(request: Request):
+    """Persist the Anthropic API key alongside the Comfy key in .env."""
+    body = await request.json()
+    key = str(body.get("key", "")).strip()
+    if not key:
+        raise HTTPException(400, "key is required")
+    if not key.startswith("sk-ant-"):
+        raise HTTPException(400, "key should start with 'sk-ant-'")
+    os.environ["ANTHROPIC_API_KEY"] = key
+    kv = _read_env_kv()
+    kv["ANTHROPIC_API_KEY"] = key
+    _write_env_kv(kv)
+    return {"saved": True}
+
+
+@app.delete("/api/llm/key")
+async def llm_key_clear():
+    os.environ.pop("ANTHROPIC_API_KEY", None)
+    kv = _read_env_kv()
+    kv.pop("ANTHROPIC_API_KEY", None)
+    _write_env_kv(kv)
+    return {"cleared": True}
+
+
+@app.get("/api/llm/status")
+async def llm_status():
+    _load_env_file()
+    return {"api_key_set": bool(os.environ.get("ANTHROPIC_API_KEY"))}
 
 
 # ---------- reference upload (signed-URL via comfy-cli) ----------
@@ -805,6 +860,153 @@ async def run_module(module_id: str, request: Request):
     except ValueError:
         result["url"] = None
     return result
+
+
+# ---------- LLM assistant (Claude + Comfy Cloud MCP) ----------
+#
+# Per-node conversation memory. ComfyBlockout is single-user-per-process so a
+# plain dict is fine; if this ever runs multi-tenant move to a TTL store.
+_chat_history: dict[str, list[dict]] = {}
+
+ASSISTANT_SYSTEM = (
+    "You are an in-editor assistant for ComfyBlockout, a 3D blockout tool that "
+    "feeds scenes to generative image/video models via Comfy Cloud. You help "
+    "the user refine prompts, build generation JSONs, and reason about their "
+    "scene. When useful, call Comfy Cloud MCP tools to inspect or run workflows.\n\n"
+    "Keep responses tight. Quote object names with brackets like [Cube.001] when "
+    "referring to scene objects — the editor renders those tokens in the object's "
+    "color and uses them to attach the per-object reference image at generate time."
+)
+
+
+def _format_scene_context(ctx: dict) -> str:
+    """Render the scene state as a compact block we prepend to the conversation
+    on every turn (separately cached from the system prompt so model + scene
+    cache hits accrue independently)."""
+    if not ctx:
+        return ""
+    parts = ["<scene_context>"]
+    objs = ctx.get("objects") or []
+    if objs:
+        parts.append(f"Objects ({len(objs)}):")
+        for o in objs:
+            name = o.get("name") or "?"
+            kind = o.get("kind") or "object"
+            ref = " [has refImage]" if o.get("hasRef") else ""
+            notes = f" — notes: {o['notes']}" if o.get("notes") else ""
+            parts.append(f"  - {name} ({kind}){ref}{notes}")
+    cells = ctx.get("genCells") or []
+    if cells:
+        parts.append(f"Generators ({len(cells)}):")
+        for c in cells:
+            model = c.get("model") or "?"
+            prompt = (c.get("prompt") or "").strip()
+            prompt_preview = (prompt[:120] + "…") if len(prompt) > 120 else prompt
+            parts.append(f"  - {model}: {prompt_preview or '(empty)'}")
+    parts.append("</scene_context>")
+    return "\n".join(parts)
+
+
+@app.post("/api/llm/chat")
+async def llm_chat(request: Request):
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise HTTPException(400, "Anthropic API key not set — add it in Settings.")
+
+    body = await request.json()
+    message = str(body.get("message", "")).strip()
+    if not message:
+        raise HTTPException(400, "empty message")
+    node_id = str(body.get("node_id", "")).strip() or "default"
+    ctx = body.get("context") or {}
+
+    # Build the user message: scene context + their question. Scene context
+    # cached separately so caching survives across turns when the scene hasn't
+    # changed; the question itself is the volatile tail.
+    scene_block = _format_scene_context(ctx)
+    user_content = [
+        {"type": "text", "text": scene_block, "cache_control": {"type": "ephemeral"}},
+        {"type": "text", "text": message},
+    ] if scene_block else message
+
+    history = _chat_history.setdefault(node_id, [])
+    history.append({"role": "user", "content": user_content})
+
+    # Comfy Cloud MCP. The connector only supports an OAuth-style Authorization
+    # Bearer; Comfy's published header for headless is X-API-Key, so this works
+    # only if Comfy MCP also accepts Bearer. If a 401 comes back, fall through
+    # to no-MCP so chat still functions.
+    comfy_key = os.environ.get("COMFY_API_KEY")
+    mcp_servers = []
+    tools = []
+    if comfy_key:
+        mcp_servers.append({
+            "type": "url",
+            "url": "https://cloud.comfy.org/mcp",
+            "name": "comfy-cloud",
+            "authorization_token": comfy_key,
+        })
+        tools.append({"type": "mcp_toolset", "mcp_server_name": "comfy-cloud"})
+
+    try:
+        import anthropic  # imported here so server still starts if pkg missing pre-install
+        client = anthropic.Anthropic()
+        kwargs = dict(
+            model="claude-sonnet-4-6",
+            max_tokens=2048,
+            system=[{
+                "type": "text",
+                "text": ASSISTANT_SYSTEM,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            messages=history,
+        )
+        if mcp_servers:
+            kwargs["mcp_servers"] = mcp_servers
+            kwargs["tools"] = tools
+            kwargs["betas"] = ["mcp-client-2025-11-20"]
+            response = client.beta.messages.create(**kwargs)
+        else:
+            response = client.messages.create(**kwargs)
+    except Exception as e:
+        # Don't poison history with a failed turn
+        history.pop()
+        msg = str(e)[:500]
+        print(f"[cb-app] llm_chat error: {msg}")
+        raise HTTPException(502, f"Claude API call failed: {msg}")
+
+    # Pull text blocks for the reply; persist the full content (including
+    # mcp_tool_use / mcp_tool_result blocks) into history so the next turn has
+    # the full tool-call context.
+    reply_parts = []
+    for block in response.content:
+        if getattr(block, "type", None) == "text":
+            reply_parts.append(block.text)
+    reply_text = "\n".join(p for p in reply_parts if p).strip() or "(no text reply)"
+
+    history.append({"role": "assistant", "content": response.content})
+
+    # Trim history aggressively — Claude's MCP toolset definitions are heavy.
+    if len(history) > 40:
+        # keep the last 20 turns
+        _chat_history[node_id] = history[-20:]
+
+    return {
+        "reply": reply_text,
+        "usage": {
+            "input_tokens": getattr(response.usage, "input_tokens", 0),
+            "output_tokens": getattr(response.usage, "output_tokens", 0),
+            "cache_read_input_tokens": getattr(response.usage, "cache_read_input_tokens", 0),
+            "cache_creation_input_tokens": getattr(response.usage, "cache_creation_input_tokens", 0),
+        },
+    }
+
+
+@app.post("/api/llm/reset")
+async def llm_reset(request: Request):
+    body = await request.json()
+    node_id = str(body.get("node_id", "")).strip() or "default"
+    _chat_history.pop(node_id, None)
+    return {"cleared": True}
 
 
 # ---------- data static mount (must be defined after all explicit routes) ----------

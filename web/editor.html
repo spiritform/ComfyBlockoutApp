@@ -33,6 +33,10 @@
 		color: rgba(255,255,255,0.4); font-weight: 400; font-size: 10px;
 		letter-spacing: 0.06em; text-transform: uppercase;
 	}
+	#top-header .th-brand .th-sep { color: rgba(255,255,255,0.25); }
+	#top-header .th-brand .th-project-name {
+		text-transform: none; font-size: 11px; letter-spacing: 0.02em;
+	}
 	#top-header .th-right { display: flex; align-items: center; gap: 6px; }
 	#top-header .th-left { display: flex; align-items: center; gap: 28px; }
 	#top-header .th-gen { display: flex; align-items: center; gap: 8px; }
@@ -213,9 +217,9 @@
 	#renderCanvas { display: block; }
 
 	#timeline {
-		flex: 0 0 auto; height: 72px;
-		background: #050508;
-		display: flex; align-items: center; gap: 8px; padding: 14px 14px 8px;
+		flex: 0 0 auto; height: 78px;
+		background: #0a0a10;
+		display: flex; align-items: flex-end; gap: 8px; padding: 14px 24px 14px 14px;
 		font-family: inherit; user-select: none;
 	}
 
@@ -348,8 +352,8 @@
 	.pv-trim-handle:hover { background: #ffb454; box-shadow: 0 0 4px rgba(255,180,80,0.7); }
 	.pv-trim-handle.dragging { background: #ffd28a; }
 	.tl-btn {
-		background: rgba(255,255,255,0.06); border: none; border-radius: 6px;
-		color: #ccc; font-size: 16px; font-weight: 700; cursor: pointer;
+		background: rgba(255,255,255,0.08); border: none; border-radius: 6px;
+		color: #e0e0e6; font-size: 16px; font-weight: 700; cursor: pointer;
 		width: 32px; height: 32px;
 		display: flex; align-items: center; justify-content: center;
 		font-family: inherit; line-height: 1;
@@ -400,7 +404,7 @@
 	#tl-scrub-wrap:hover { cursor: ew-resize; }
 	/* Keyframe = small diamond above the bar (grabbable) + thin grey line inside the bar. */
 	.tl-key {
-		position: absolute; top: -14px;
+		position: absolute; top: -20px;
 		width: 10px; height: 10px;
 		background: #38d977;
 		transform: translateX(-50%) rotate(45deg);
@@ -451,16 +455,31 @@
 
 	#panel {
 		position: relative; z-index: 100;
-		flex: 0 0 280px; height: 100%;
+		flex: 0 0 320px; height: 100%;
 		background: rgba(14,14,18,0.95);
-		overflow-y: auto; overflow-x: hidden; padding: 24px 20px 28px;
+		overflow-y: auto; overflow-x: hidden; padding: 0 20px 28px;
 		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+	}
+	#panel > .section:first-of-type > .section-head-row {
+		min-height: 40px; align-items: center;
+	}
+	#panel > .section:first-of-type > .section-head-row > .section-label {
+		font-size: 11px;
 	}
 	#panel::-webkit-scrollbar { width: 4px; }
 	#panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
 
 	.section { margin-bottom: 32px; }
 	.section:last-child { margin-bottom: 0; }
+	/* Left-panel sections behave as collapsible "modules" with full-width dividers.
+	   Bleed past the panel's 20px horizontal padding so the line spans the column. */
+	#panel .section {
+		margin: 0 -20px 0;
+		padding: 16px 20px;
+		border-bottom: 1px solid rgba(255,255,255,0.06);
+	}
+	#panel .section:first-of-type { padding-top: 0; }
+	#panel .section:last-child { border-bottom: none; padding-bottom: 28px; }
 
 	/* Collapsible sections — click the head-row to fold the body */
 	.section.collapsible .section-head-row {
@@ -468,13 +487,21 @@
 		margin-bottom: 14px;
 	}
 	.section.collapsible.collapsed .section-head-row { margin-bottom: 0; }
+	.section.collapsible.collapsed { padding-bottom: 14px; }
 	.section.collapsible .collapse-caret {
-		font-size: 10px; color: rgba(255,255,255,0.4);
+		font-size: 12px; color: rgba(255,255,255,0.4);
 		transition: transform 0.15s ease;
+		display: inline-flex; align-items: center; justify-content: center;
+		width: 18px; height: 18px;
 	}
 	.section.collapsible .section-head-row:hover .collapse-caret { color: #e6e6ea; }
 	.section.collapsible.collapsed .collapse-caret { transform: rotate(-90deg); }
 	.section.collapsible.collapsed > *:not(.section-head-row) { display: none; }
+	/* When there's an inline action button next to the chevron (Clear, + Add, etc.),
+	   group them tight at the end so the chevron always anchors the right edge. */
+	.section-head-row .head-end {
+		display: inline-flex; align-items: center; gap: 8px; margin-left: auto;
+	}
 	.section-label {
 		font-size: 10px; font-weight: 500; text-transform: uppercase;
 		letter-spacing: 0.06em; color: rgba(255,255,255,0.4);
@@ -488,6 +515,49 @@
 		cursor: pointer; font-family: inherit; letter-spacing: 0.06em; text-transform: uppercase;
 	}
 	.mini-btn:hover { background: rgba(255,80,80,0.15); color: #ff8a8a; }
+	.mini-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+	.mini-btn:disabled:hover { background: transparent; color: rgba(255,255,255,0.4); }
+
+	/* Assistant (LLM + MCP) panel */
+	.assistant-status {
+		font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+		color: rgba(255,255,255,0.3);
+	}
+	.assistant-status.busy { color: #ffb454; }
+	.assistant-status.error { color: #ff6a6a; }
+	.assistant-shell {
+		border: 1px solid rgba(255,255,255,0.06);
+		border-radius: 5px; overflow: hidden;
+		display: flex; flex-direction: column;
+	}
+	.assistant-log {
+		max-height: 240px; overflow-y: auto;
+		background: rgba(0,0,0,0.28);
+		padding: 8px;
+		display: flex; flex-direction: column; gap: 8px;
+	}
+	.assistant-msg {
+		font-size: 11px; line-height: 1.5;
+		padding: 6px 8px; border-radius: 4px;
+		white-space: pre-wrap; word-wrap: break-word;
+	}
+	.assistant-msg.system  { color: rgba(255,255,255,0.35); font-style: italic; padding: 4px 0; }
+	.assistant-msg.user    { background: rgba(255,180,84,0.08); color: rgba(255,255,255,0.9); }
+	.assistant-msg.user::before    { content: "you · "; color: #ffb454; font-weight: 600; }
+	.assistant-msg.bot     { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.85); }
+	.assistant-msg.bot::before     { content: "assistant · "; color: rgba(255,255,255,0.4); font-weight: 600; }
+	.assistant-msg.error   { background: rgba(255,80,80,0.08); color: #ff8a8a; }
+	.assistant-input {
+		width: 100%; height: 56px; resize: none;
+		background: rgba(255,255,255,0.03);
+		border: none; border-top: 1px solid rgba(255,255,255,0.05);
+		padding: 8px 10px;
+		color: rgba(255,255,255,0.85); font: inherit; font-size: 11px;
+		box-sizing: border-box; overflow-y: auto;
+		display: block;
+	}
+	.assistant-input:focus { outline: none; background: rgba(255,255,255,0.05); }
+	.assistant-shell:focus-within { border-color: rgba(255,180,84,0.35); }
 
 	.prim-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 	.prim-btn {
@@ -499,6 +569,102 @@
 	.prim-btn svg { width: 18px; height: 18px; }
 
 	.gen-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+	.gen-cells { display: flex; flex-direction: column; gap: 4px; }
+	.gen-cell {
+		display: flex; flex-direction: column;
+		padding: 6px 8px; border-radius: 5px;
+		background: rgba(255,255,255,0.04);
+	}
+	.gen-cell.expanded { background: rgba(255,255,255,0.05); }
+	.gen-head {
+		display: grid; grid-template-columns: 26px 1fr auto;
+		align-items: center; gap: 8px; cursor: pointer;
+	}
+	.gen-head-end { display: flex; align-items: center; gap: 0; }
+	.gen-del {
+		width: 22px; height: 22px; border: none; background: transparent;
+		border-radius: 4px; cursor: pointer; color: rgba(255,255,255,0.35);
+		display: flex; align-items: center; justify-content: center; font-size: 12px;
+		opacity: 0; transition: opacity 0.12s;
+	}
+	.gen-cell:hover .gen-del, .gen-cell.active .gen-del { opacity: 1; }
+	.gen-del:hover { background: rgba(255,255,255,0.06); color: #ff5a5a; }
+	.gen-icon {
+		width: 26px; height: 26px; border-radius: 4px;
+		background: rgba(255,255,255,0.06);
+		display: flex; align-items: center; justify-content: center;
+		color: rgba(255,255,255,0.7);
+	}
+	.gen-icon svg { width: 14px; height: 14px; }
+	.gen-name {
+		color: rgba(255,255,255,0.85); font-size: 11px; font-weight: 500;
+	}
+	.gen-cell .out-expand { margin-top: 8px; gap: 6px; }
+	.gen-cell.expanded .out-expand { display: flex; }
+	.gen-model-pick { display: flex; gap: 4px; }
+	.gen-pick-btn {
+		flex: 1; padding: 6px 8px; border-radius: 4px;
+		background: rgba(255,255,255,0.04); border: 1px solid transparent;
+		color: rgba(255,255,255,0.6); font: inherit; font-size: 10px;
+		text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer;
+		display: flex; align-items: center; justify-content: center; gap: 6px;
+	}
+	.gen-pick-btn:hover { background: rgba(255,255,255,0.07); color: #fff; }
+	.gen-pick-btn.active { color: #ffb454; border-color: rgba(255,180,84,0.35); background: rgba(255,180,84,0.08); }
+	.gen-pick-btn svg { width: 12px; height: 12px; }
+	.gen-prompt-wrap { position: relative; }
+	.gen-ref-suggest {
+		position: absolute; left: 0; right: 0; top: 100%;
+		margin-top: 2px; z-index: 50;
+		background: #15151c; border: 1px solid rgba(255,255,255,0.08);
+		border-radius: 5px; padding: 3px; max-height: 180px; overflow-y: auto;
+		box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+	}
+	.gen-ref-suggest div {
+		padding: 5px 8px; border-radius: 3px;
+		color: rgba(255,255,255,0.7); font-size: 11px;
+		display: flex; align-items: center; gap: 8px; cursor: pointer;
+	}
+	.gen-ref-suggest div.active, .gen-ref-suggest div:hover {
+		background: rgba(255,180,84,0.15); color: #ffb454;
+	}
+	.gen-ref-suggest .swatch {
+		width: 14px; height: 14px; border-radius: 3px; flex: 0 0 14px;
+		background: rgba(255,255,255,0.1) center/cover no-repeat;
+	}
+	.gen-prompt {
+		position: relative; z-index: 2;
+		width: 100%; min-height: 70px;
+		background: transparent; border: 1px solid rgba(255,255,255,0.06);
+		border-radius: 4px; padding: 6px 8px;
+		color: transparent; caret-color: #fff;
+		font: inherit; font-size: 11px;
+		resize: vertical; box-sizing: border-box;
+		-webkit-text-fill-color: transparent;
+	}
+	.gen-prompt::selection { background: rgba(255,180,84,0.25); color: transparent; -webkit-text-fill-color: transparent; }
+	.gen-prompt:focus { outline: none; border-color: rgba(255,180,84,0.4); }
+	.gen-prompt-hl {
+		position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+		padding: 6px 8px;
+		background: rgba(0,0,0,0.25); border: 1px solid transparent;
+		border-radius: 4px; pointer-events: none;
+		color: rgba(255,255,255,0.85);
+		font: inherit; font-size: 11px;
+		white-space: pre-wrap; word-wrap: break-word; overflow: hidden;
+		box-sizing: border-box; z-index: 1;
+	}
+	.gen-prompt-hl .ref-tag { color: var(--ref-color, #ffb454); font-weight: 500; }
+	.gen-run-btn {
+		width: 100%; padding: 8px; border-radius: 4px; border: none;
+		background: rgba(255,180,84,0.15); color: #ffb454;
+		font: inherit; font-size: 11px; font-weight: 600;
+		text-transform: uppercase; letter-spacing: 0.06em; cursor: pointer;
+	}
+	.gen-run-btn:hover { background: rgba(255,180,84,0.25); color: #fff; }
+	.gen-run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+	.gen-cell .out-expand-toggle { font-size: 14px; }
+	.gen-cell.expanded .out-expand-toggle { transform: rotate(180deg); color: #ffb454; }
 	.gen-btn {
 		aspect-ratio: 1; border: none; border-radius: 5px;
 		display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
@@ -516,16 +682,61 @@
 	.gen-btn svg { width: 22px; height: 22px; }
 
 	.outliner { display: flex; flex-direction: column; gap: 4px; min-height: 30px; }
+	.out-empty {
+		padding: 14px 12px; border-radius: 5px;
+		border: 1px dashed rgba(255,255,255,0.1);
+		color: rgba(255,255,255,0.35);
+		font-size: 11px; text-align: center; letter-spacing: 0.02em;
+	}
 	.out-row {
-		display: grid;
-		grid-template-columns: 26px 26px 1fr auto auto;
-		align-items: center; gap: 8px;
+		display: flex; flex-direction: column;
 		padding: 6px 8px; border-radius: 5px;
 		cursor: pointer;
 		background: rgba(255,255,255,0.04);
 	}
+	.out-head {
+		display: grid;
+		grid-template-columns: 26px 26px 1fr auto;
+		align-items: center; gap: 8px;
+	}
+	.out-head-end { display: flex; align-items: center; gap: 0; }
+	.out-expand {
+		display: none;
+		margin-top: 8px;
+		gap: 6px; flex-direction: column;
+	}
+	.out-row.expanded .out-expand { display: flex; }
+	.out-expand textarea {
+		width: 100%; min-height: 60px;
+		background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06);
+		border-radius: 4px; padding: 6px 8px;
+		color: rgba(255,255,255,0.85); font: inherit; font-size: 11px;
+		resize: vertical; box-sizing: border-box;
+	}
+	.out-expand textarea:focus { outline: none; border-color: rgba(255,180,84,0.4); }
+	.out-expand-toggle {
+		width: 22px; height: 22px; border: none; background: transparent;
+		border-radius: 4px; cursor: pointer; color: rgba(255,255,255,0.4);
+		display: flex; align-items: center; justify-content: center;
+		font-size: 14px; line-height: 1; transition: transform 0.15s ease;
+	}
+	.out-expand-toggle:hover { background: rgba(255,255,255,0.06); color: #e6e6ea; }
+	.out-row.expanded .out-expand-toggle { transform: rotate(180deg); color: #ffb454; }
+	.out-img {
+		width: 26px; height: 26px; border-radius: 4px;
+		background: rgba(255,255,255,0.04) center/cover no-repeat;
+		border: 1px dashed rgba(255,255,255,0.18);
+		display: flex; align-items: center; justify-content: center;
+		cursor: pointer; color: rgba(255,255,255,0.4);
+		overflow: hidden; box-sizing: border-box;
+	}
+	.out-img:hover { border-color: rgba(255,180,84,0.5); color: #ffb454; }
+	.out-img.has-image { border-style: solid; border-color: rgba(255,255,255,0.12); }
+	.out-img svg { width: 12px; height: 12px; }
+	.out-img.has-image svg { display: none; }
+	.out-row.hidden .out-img { opacity: 0.45; }
 	.out-row:hover { background: rgba(255,255,255,0.07); }
-	.out-row.selected { background: rgba(255,255,255,0.07); }
+	.out-row.selected { background: rgba(255,180,84,0.12); box-shadow: inset 0 0 0 1px rgba(255,180,84,0.35); }
 	.out-row.selected .out-name { color: #ffb454; }
 	.out-row.hidden .out-name { opacity: 0.35; text-decoration: line-through; }
 	.out-row.hidden .out-color, .out-row.hidden .out-ref { opacity: 0.45; }
@@ -554,9 +765,11 @@
 		color: rgba(255,255,255,0.85);
 		font-size: 11px; font-family: inherit;
 		padding: 2px 4px; border-radius: 3px;
-		width: 100%; min-width: 0;
+		display: block; flex: 1; min-width: 0;
 		overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+		cursor: text;
 	}
+	span.out-name { cursor: default; }
 	.out-name:hover { background: rgba(255,255,255,0.04); }
 	.out-name:focus { background: rgba(255,255,255,0.08); color: #fff; text-overflow: clip; }
 
@@ -752,13 +965,13 @@
 		flex: 0 0 40px;
 		display: flex; align-items: center; gap: 4px;
 		padding: 0 14px;
-		background: #050508;
+		background: #0a0a10;
 	}
 	.vt-group { display: flex; align-items: center; gap: 2px; }
 	.vt-group + .vt-group { margin-left: 18px; }
 	.vt-btn {
 		height: 26px; padding: 0 12px; border-radius: 5px; border: none;
-		background: transparent; color: #8e8e95;
+		background: transparent; color: #b0b0b8;
 		font-size: 11px; cursor: pointer; letter-spacing: 0;
 		display: inline-flex; align-items: center; gap: 6px;
 		font-family: inherit;
@@ -766,6 +979,15 @@
 	.vt-btn:hover { background: #14141a; color: #e6e6ea; }
 	.vt-btn.active { background: #14141a; color: #ffb454; }
 	.vt-sep { flex: 1; }
+	.vt-generate {
+		background: rgba(255,180,84,0.12) !important;
+		color: #ffb454 !important;
+		padding: 0 14px;
+		margin-left: 4px;
+	}
+	.vt-generate:hover { background: rgba(255,180,84,0.22) !important; color: #fff !important; }
+	.vt-generate:disabled { opacity: 0.45; cursor: not-allowed; }
+	.gen-cell.active { box-shadow: inset 0 0 0 1px rgba(255,180,84,0.35); background: rgba(255,180,84,0.06); }
 	/* BG picker — now lives in the Scene properties pane */
 	.rp-bg-row {
 		display: inline-flex; align-items: center; gap: 10px;
@@ -780,23 +1002,42 @@
 	}
 	.rp-bg-row input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
 	.rp-bg-row input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
+	.rp-bg-pair { display: flex; gap: 6px; }
+	.rp-bg-pair .rp-bg-row { flex: 1; min-width: 0; justify-content: flex-start; }
+	.rp-bg-img-btn {
+		border: none; font: inherit; color: rgba(255,255,255,0.75);
+		text-align: left;
+	}
+	.rp-bg-img-btn.has-image { color: #ffb454; }
+	.rp-bg-row.active-bg { background: rgba(255,180,84,0.08); color: #fff; }
+	.rp-bg-thumb {
+		width: 26px; height: 26px; flex: 0 0 26px; border-radius: 4px;
+		background: rgba(255,255,255,0.08) center/cover no-repeat;
+		display: flex; align-items: center; justify-content: center;
+		color: rgba(255,255,255,0.45); font-size: 13px;
+	}
+	.rp-bg-thumb::before { content: "+"; }
+	.rp-bg-thumb.has-image::before { content: ""; }
+	.rp-vt-group { gap: 4px; }
+	.rp-vt-group .vt-btn { flex: 1; }
 
 	/* Right properties panel */
 	#right-panel {
 		position: relative; z-index: 100;
-		flex: 0 0 280px; height: 100%;
+		flex: 0 0 320px; height: 100%;
 		background: rgba(14,14,18,0.95);
 		overflow: hidden; display: flex; flex-direction: column;
 	}
+	#right-panel[hidden] { display: none; }
 	#rp-header {
-		flex: 0 0 auto;
-		padding: 22px 20px 16px;
-		display: flex; align-items: baseline; gap: 6px;
+		flex: 0 0 40px;
+		padding: 0 20px;
+		display: flex; align-items: center; gap: 6px;
 		white-space: nowrap; overflow: hidden;
 	}
 	.rp-kicker, .rp-sep, #rp-title {
-		font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
-		font-weight: 500;
+		font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+		font-weight: 500; line-height: 26px;
 	}
 	.rp-kicker { color: rgba(255,255,255,0.4); }
 	.rp-sep    { color: rgba(255,255,255,0.25); }
@@ -845,16 +1086,11 @@
 		<div class="th-left">
 			<div class="th-brand">
 				<span>ComfyBlockout</span>
-				<small>app · v0.1</small>
-			</div>
-			<div class="th-gen">
-				<span class="th-group-label">Generate</span>
-				<button class="th-btn" id="th-run-nb" disabled title="Generate edited image with Nano Banana">Nano Banana</button>
-				<button class="th-btn secondary" id="th-run-sd" disabled title="Generate video with Seedance">Seedance</button>
+				<small class="th-sep">:</small>
+				<small id="project-name" class="th-project-name">Untitled</small>
 			</div>
 		</div>
 		<div class="th-right">
-			<span class="th-project">Project · <span id="project-name" style="color:rgba(255,255,255,0.9);font-weight:500">untitled</span></span>
 			<button class="th-btn-mini" id="project-new" title="Clear scene and start fresh">New</button>
 			<button class="th-btn-mini" id="project-open" title="Open a saved project">Open</button>
 			<button class="th-btn-mini" id="project-save" title="Save (Ctrl+S)">Save</button>
@@ -884,6 +1120,16 @@
 					<button class="modal-btn-primary" id="settings-save">Save</button>
 				</div>
 			</div>
+			<div class="modal-section">
+				<div class="section-label">Anthropic API Key (Assistant)</div>
+				<div class="modal-status" id="llm-key-status"></div>
+				<input class="modal-input" type="password" id="llm-key-input" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
+				<div class="modal-hint">Powers the in-editor Assistant. Get yours at <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com/settings/keys</a></div>
+				<div class="modal-actions">
+					<button class="modal-btn-secondary" id="llm-key-clear">Clear</button>
+					<button class="modal-btn-primary" id="llm-key-save">Save</button>
+				</div>
+			</div>
 		</div>
 	</div>
 
@@ -905,12 +1151,14 @@
 
 		<input type="file" id="import-file" accept=".glb,.gltf,.fbx,.obj,.ply,.splat,.ksplat,.spz" hidden multiple>
 
-		<div class="section">
+		<div class="section collapsible" data-section="objects">
 			<div class="section-head-row">
-				<span class="section-label">Objects · <span id="obj-count">0</span></span>
-				<button class="mini-btn" id="clear-btn" title="Clear all objects">Clear</button>
+				<span class="section-label">Objects</span>
+				<span class="head-end">
+					<span class="collapse-caret">▾</span>
+				</span>
 			</div>
-			<div class="prim-grid" style="margin-bottom:14px">
+			<div class="prim-grid">
 				<button class="prim-btn" data-prim="cube" title="Cube"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12L4 7.5M12 12l8-4.5M12 12v9"/></svg></button>
 				<button class="prim-btn" data-prim="sphere" title="Sphere"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8"/><ellipse cx="12" cy="12" rx="8" ry="3"/></svg></button>
 				<button class="prim-btn" data-prim="capsule" title="Capsule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="8" y="4" width="8" height="16" rx="4"/></svg></button>
@@ -920,37 +1168,51 @@
 				<button class="prim-btn" data-prim="custom" title="Custom Import (GLB · FBX · OBJ · PLY · SPLAT · SPZ)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 6v6M9 9l3-3 3 3" stroke="#ffb454"/></svg></button>
 				<button class="prim-btn" data-prim="particles" title="Particle System (three.js)"><svg viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="1.3" fill="currentColor"/><circle cx="12" cy="4" r="0.9" fill="currentColor"/><circle cx="18" cy="7" r="1.1" fill="currentColor"/><circle cx="5" cy="13" r="0.9" fill="currentColor"/><circle cx="11" cy="11" r="1.4" fill="currentColor"/><circle cx="17" cy="14" r="1" fill="currentColor"/><circle cx="8" cy="18" r="1.1" fill="currentColor"/><circle cx="15" cy="20" r="0.9" fill="currentColor"/><circle cx="20" cy="17" r="0.8" fill="currentColor"/></svg></button>
 			</div>
+		</div>
+
+		<div class="section collapsible" data-section="outliner">
+			<div class="section-head-row">
+				<span class="section-label">Outliner</span>
+				<span class="head-end">
+					<button class="mini-btn" id="clear-btn" title="Clear all objects">Clear</button>
+					<span class="collapse-caret">▾</span>
+				</span>
+			</div>
 			<div class="outliner" id="outliner"></div>
 		</div>
 
-		<div class="section">
-			<div class="section-label">Generate</div>
-			<div class="gen-grid">
-				<button class="gen-btn primary" id="gen-nb" data-gen="nano-banana" disabled title="Generate edited image with Nano Banana">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-						<rect x="3" y="5" width="18" height="14" rx="2"/>
-						<circle cx="8.5" cy="10.5" r="1.5"/>
-						<path d="M21 17l-6-6-8 8"/>
-					</svg>
-					<span>Nano Banana</span>
-				</button>
-				<button class="gen-btn" id="gen-sd" data-gen="seedance" disabled title="Generate video with Seedance">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-						<rect x="3" y="6" width="13" height="12" rx="2"/>
-						<path d="M16 10l5-3v10l-5-3z"/>
-					</svg>
-					<span>Seedance</span>
-				</button>
+		<div class="section collapsible" data-section="generate">
+			<div class="section-head-row">
+				<span class="section-label">Generate</span>
+				<span class="head-end">
+					<button class="mini-btn" id="gen-add" title="Add a generator">+ Add</button>
+					<span class="collapse-caret">▾</span>
+				</span>
+			</div>
+			<div class="gen-cells" id="gen-cells"></div>
+			<!-- Hidden legacy buttons — runModule still routes through these so the top-header
+			     auth gating + status reuse work unchanged. Inline display:none because .gen-btn
+			     sets display:flex which would override the [hidden] attribute. -->
+			<button class="gen-btn primary" id="gen-nb" data-gen="nano-banana" disabled style="display:none"></button>
+			<button class="gen-btn" id="gen-sd" data-gen="seedance" disabled style="display:none"></button>
+		</div>
+
+		<div class="section collapsible" id="assistant-section" data-section="assistant">
+			<div class="section-head-row">
+				<span class="section-label">Assistant</span>
+				<span class="head-end">
+					<span class="assistant-status" id="assistant-status">MCP · idle</span>
+					<span class="collapse-caret">▾</span>
+				</span>
+			</div>
+			<div class="assistant-shell">
+				<div class="assistant-log" id="assistant-log">
+					<div class="assistant-msg system">Ask me to refine a prompt, structure a generation JSON, or call a Comfy MCP tool.</div>
+				</div>
+				<textarea class="assistant-input" id="assistant-input" rows="2" placeholder="Ask the assistant… (Enter to send · Shift+Enter for new line)"></textarea>
 			</div>
 		</div>
 
-		<div class="section collapsible collapsed" id="sys-prompt-section">
-			<div class="section-head-row" onclick="this.parentElement.classList.toggle('collapsed')">
-				<span class="section-label">System Prompt</span>
-				<span class="collapse-caret">▾</span>
-			</div>
-			<textarea id="prompt-text" rows="10" placeholder="Render this blockout scene. Match the exact camera angle, composition, scale, aspect ration and object orientations — but do not use the blockout to define the style, colors, or creative direction. Only use the grid as reference for the scene perspective and not as an element to include in the generated image or video"></textarea>
-		</div>
 	</div>
 
 	<div id="viewport-area">
@@ -961,20 +1223,18 @@
 				<button class="vt-btn" id="mode-scale" data-mode="scale">Scale</button>
 				<button class="vt-btn" id="mode-anchor" title="Move the pivot — geometry shifts inside the object so its visible position stays put. Future rotation/scale happen around the new pivot.">Pivot</button>
 			</div>
-			<div class="vt-group">
-				<button class="vt-btn active" id="toggle-grid">Grid</button>
-				<button class="vt-btn" id="toggle-guides">Guides</button>
-				<button class="vt-btn active" id="toggle-ar" title="Toggle aspect ratio overlay (frame + letterbox)">AR</button>
-			</div>
 			<div class="vt-sep"></div>
-			<button class="vt-btn" data-rp-tab="camera" title="Camera properties">Camera</button>
-			<button class="vt-btn" data-rp-tab="scene" title="Scene properties">Scene</button>
+			<button class="vt-btn active" id="toggle-grid" title="Show/hide ground grid">Grid</button>
+			<button class="vt-btn vt-generate" id="vp-generate" title="Generate with active model">
+				<span id="vp-generate-icon" style="display:flex;align-items:center;margin-right:6px"></span>
+				<span>Generate</span>
+			</button>
 		</div>
 		<div id="canvas-wrap">
 			<canvas id="renderCanvas"></canvas>
 			<div id="aspect-frame" class="no-guides"><span class="v1"></span><span class="v2"></span></div>
 			<div id="status">idle · 0 objects</div>
-			<div id="info-block" style="position:absolute;top:6px;left:6px;background:rgba(20,20,24,0.85);border-radius:6px;z-index:11;display:flex;flex-direction:column;align-items:flex-start">
+			<div id="info-block" style="display:none;position:absolute;top:6px;left:6px;background:rgba(20,20,24,0.85);border-radius:6px;z-index:11;flex-direction:column;align-items:flex-start">
 				<button id="info-btn" title="Scene info" style="width:24px;height:24px;border:none;background:transparent;color:rgba(255,255,255,0.55);font:11px serif;font-style:italic;font-weight:600;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center">i</button>
 				<div id="debug-hud" style="color:rgba(255,255,255,0.45);font:10px ui-monospace,monospace;padding:0 12px 10px 12px;line-height:1.6;white-space:pre;display:none;min-width:200px"></div>
 			</div>
@@ -1032,25 +1292,81 @@
 
 			<!-- ===== OBJECT TAB ===== -->
 			<div class="rp-pane" id="rp-pane-object" hidden>
+				<div class="section" id="obj-appearance-section">
+					<div class="section-label">Appearance</div>
+					<div class="rp-bg-pair">
+						<label class="rp-bg-row" id="obj-color-btn" title="Object color">
+							<input type="color" id="obj-color" value="#ffffff">
+							<span class="rp-bg-label">Color</span>
+						</label>
+						<button type="button" class="rp-bg-row rp-bg-img-btn" id="obj-image-btn" title="Image reference for prompting">
+							<span class="rp-bg-thumb" id="obj-image-thumb"></span>
+							<span class="rp-bg-label" id="obj-image-label">Image</span>
+						</button>
+						<input type="file" id="obj-image-file" accept="image/*" hidden>
+					</div>
+				</div>
+
 				<div class="section">
 					<div class="section-label">Transform</div>
 					<div class="sub-label">Position</div>
 					<div class="drag-row">
-						<div class="drag-num"><span class="drag-label">X</span><span class="drag-val">0.00</span></div>
-						<div class="drag-num"><span class="drag-label">Y</span><span class="drag-val">0.00</span></div>
-						<div class="drag-num"><span class="drag-label">Z</span><span class="drag-val">0.00</span></div>
+						<div class="drag-num" id="obj-px"><span class="drag-label">X</span><span class="drag-val">0.00</span></div>
+						<div class="drag-num" id="obj-py"><span class="drag-label">Y</span><span class="drag-val">0.00</span></div>
+						<div class="drag-num" id="obj-pz"><span class="drag-label">Z</span><span class="drag-val">0.00</span></div>
 					</div>
 					<div class="sub-label" style="margin-top:10px">Rotation</div>
 					<div class="drag-row">
-						<div class="drag-num"><span class="drag-label">X</span><span class="drag-val">0°</span></div>
-						<div class="drag-num"><span class="drag-label">Y</span><span class="drag-val">0°</span></div>
-						<div class="drag-num"><span class="drag-label">Z</span><span class="drag-val">0°</span></div>
+						<div class="drag-num" id="obj-rx"><span class="drag-label">X</span><span class="drag-val">0°</span></div>
+						<div class="drag-num" id="obj-ry"><span class="drag-label">Y</span><span class="drag-val">0°</span></div>
+						<div class="drag-num" id="obj-rz"><span class="drag-label">Z</span><span class="drag-val">0°</span></div>
 					</div>
 					<div class="sub-label" style="margin-top:10px">Scale</div>
 					<div class="drag-row">
-						<div class="drag-num"><span class="drag-label">X</span><span class="drag-val">1.00</span></div>
-						<div class="drag-num"><span class="drag-label">Y</span><span class="drag-val">1.00</span></div>
-						<div class="drag-num"><span class="drag-label">Z</span><span class="drag-val">1.00</span></div>
+						<div class="drag-num" id="obj-sx"><span class="drag-label">X</span><span class="drag-val">1.00</span></div>
+						<div class="drag-num" id="obj-sy"><span class="drag-label">Y</span><span class="drag-val">1.00</span></div>
+						<div class="drag-num" id="obj-sz"><span class="drag-label">Z</span><span class="drag-val">1.00</span></div>
+					</div>
+				</div>
+
+				<div class="section" id="obj-particles-section" hidden>
+					<div class="section-label">Particles</div>
+					<div class="rp-bg-pair">
+						<label class="rp-bg-row" id="ps-color-btn" title="Particle color">
+							<input type="color" id="ps-color" value="#ffaa44">
+							<span class="rp-bg-label">Color</span>
+						</label>
+						<button type="button" class="rp-bg-row rp-bg-img-btn" id="ps-sprite-btn" title="Sprite texture (overrides soft dot)">
+							<span class="rp-bg-thumb" id="ps-sprite-thumb"></span>
+							<span class="rp-bg-label" id="ps-sprite-label">Sprite</span>
+						</button>
+						<input type="file" id="ps-sprite-file" accept="image/*" hidden>
+					</div>
+					<div class="select-row" style="margin-top:8px">
+						<select id="ps-blending">
+							<option value="additive">Additive blending</option>
+							<option value="normal">Normal blending</option>
+						</select>
+					</div>
+					<div class="sub-label" style="margin-top:10px">Emission</div>
+					<div class="drag-row">
+						<div class="drag-num" id="ps-count"><span class="drag-label">Count</span><span class="drag-val">1000</span></div>
+						<div class="drag-num" id="ps-life"><span class="drag-label">Life</span><span class="drag-val">2.0</span></div>
+						<div class="drag-num" id="ps-size"><span class="drag-label">Size</span><span class="drag-val">0.10</span></div>
+					</div>
+					<div class="drag-row" style="margin-top:6px">
+						<div class="drag-num" id="ps-speed"><span class="drag-label">Speed</span><span class="drag-val">1.00</span></div>
+						<div class="drag-num" id="ps-spread"><span class="drag-label">Spread</span><span class="drag-val">17°</span></div>
+						<div class="drag-num" id="ps-grav"><span class="drag-label">Grav</span><span class="drag-val">-1.00</span></div>
+					</div>
+					<div class="sub-label" style="margin-top:10px">Wind</div>
+					<div class="drag-row">
+						<div class="drag-num" id="ps-wx"><span class="drag-label">X</span><span class="drag-val">0.00</span></div>
+						<div class="drag-num" id="ps-wy"><span class="drag-label">Y</span><span class="drag-val">0.00</span></div>
+						<div class="drag-num" id="ps-wz"><span class="drag-label">Z</span><span class="drag-val">0.00</span></div>
+					</div>
+					<div class="drag-row" style="margin-top:6px">
+						<div class="drag-num" id="ps-turb" style="flex:1"><span class="drag-label">Turbulence</span><span class="drag-val">0.00</span></div>
 					</div>
 				</div>
 
@@ -1060,8 +1376,8 @@
 				</div>
 			</div>
 
-			<!-- ===== CAMERA TAB (filled by JS-bound IDs moved from left panel) ===== -->
-			<div class="rp-pane" id="rp-pane-camera" hidden>
+			<!-- ===== SCENE TAB (default) ===== -->
+			<div class="rp-pane" id="rp-pane-scene">
 				<div class="section">
 					<div class="section-head-row">
 						<div class="section-label">Camera</div>
@@ -1086,16 +1402,28 @@
 					</div>
 					<div class="hint">drag a value sideways to scrub · click to type · Shift = fine · F focus · Alt+drag look · Alt+RMB roll</div>
 				</div>
-			</div>
 
-			<!-- ===== SCENE TAB (default) ===== -->
-			<div class="rp-pane" id="rp-pane-scene">
 				<div class="section">
 					<div class="section-label">Background</div>
-					<label class="rp-bg-row" title="Background color">
-						<input type="color" id="bg-color" value="#07080b">
-						<span class="rp-bg-label">Color</span>
-					</label>
+					<div class="rp-bg-pair">
+						<label class="rp-bg-row" id="bg-color-btn" title="Solid color background">
+							<input type="color" id="bg-color" value="#07080b">
+							<span class="rp-bg-label">Color</span>
+						</label>
+						<button type="button" class="rp-bg-row rp-bg-img-btn" id="bg-image-btn" title="Image background — fills the entire viewport">
+							<span class="rp-bg-thumb" id="bg-image-thumb"></span>
+							<span class="rp-bg-label" id="bg-image-label">Image</span>
+						</button>
+						<input type="file" id="bg-image-file" accept="image/*" hidden>
+					</div>
+				</div>
+
+				<div class="section">
+					<div class="section-label">Viewport</div>
+					<div class="vt-group rp-vt-group">
+						<button class="vt-btn" id="toggle-guides">Guides</button>
+						<button class="vt-btn active" id="toggle-ar" title="Toggle aspect ratio overlay (frame + letterbox)">AR</button>
+					</div>
 				</div>
 
 				<div class="section">
@@ -1142,6 +1470,14 @@
 						<span class="slider-val" id="fps-val">30</span>
 					</div>
 				</div>
+
+				<div class="section collapsible collapsed" id="sys-prompt-section">
+					<div class="section-head-row" onclick="this.parentElement.classList.toggle('collapsed')">
+						<span class="section-label">System Prompt</span>
+						<span class="collapse-caret">▾</span>
+					</div>
+					<textarea id="prompt-text" rows="10" placeholder="Render this blockout scene. Match the exact camera angle, composition, scale, aspect ration and object orientations — but do not use the blockout to define the style, colors, or creative direction. Only use the grid as reference for the scene perspective and not as an element to include in the generated image or video"></textarea>
+				</div>
 			</div>
 
 		</div><!-- /#rp-body -->
@@ -1163,12 +1499,8 @@
 	// Top-header cloud wiring (auth, refs, run buttons, result toast). Lives
 	// outside the main editor module so it can boot independently of three.js.
 	(function () {
-		const btnNB = document.getElementById("th-run-nb");
-		const btnSD = document.getElementById("th-run-sd");
-		const btnNB2 = document.getElementById("gen-nb");
-		const btnSD2 = document.getElementById("gen-sd");
-		if (btnNB2) btnNB2.addEventListener("click", () => btnNB.click());
-		if (btnSD2) btnSD2.addEventListener("click", () => btnSD.click());
+		const btnNB = document.getElementById("gen-nb");
+		const btnSD = document.getElementById("gen-sd");
 		const refsStrip = document.getElementById("refs-strip");
 		const refsAdd = document.getElementById("refs-add");
 		const refsFile = document.getElementById("refs-file");
@@ -1191,12 +1523,8 @@
 				const s = await r.json();
 				const ready = !!s.ready;
 				btnNB.disabled = !ready; btnSD.disabled = !ready;
-				if (btnNB2) btnNB2.disabled = !ready;
-				if (btnSD2) btnSD2.disabled = !ready;
 			} catch (e) {
 				btnNB.disabled = true; btnSD.disabled = true;
-				if (btnNB2) btnNB2.disabled = true;
-				if (btnSD2) btnSD2.disabled = true;
 			}
 		}
 
@@ -1259,6 +1587,48 @@
 				settingsStatus.className = "modal-status success";
 				settingsStatus.textContent = "Cleared";
 				refreshStatus();
+			} catch (e) { /* swallow */ }
+		});
+
+		// ---------- Anthropic key (Assistant) ----------
+		const llmKeyInput = document.getElementById("llm-key-input");
+		const llmKeySave = document.getElementById("llm-key-save");
+		const llmKeyClear = document.getElementById("llm-key-clear");
+		const llmKeyStatus = document.getElementById("llm-key-status");
+		function flashLlmStatus(kind, text, hideMs = 1800) {
+			llmKeyStatus.className = `modal-status ${kind}`;
+			llmKeyStatus.textContent = text;
+			if (hideMs) {
+				setTimeout(() => {
+					llmKeyStatus.className = "modal-status";
+					llmKeyStatus.textContent = "";
+				}, hideMs);
+			}
+		}
+		llmKeySave.addEventListener("click", async () => {
+			const key = llmKeyInput.value.trim();
+			if (!key) { flashLlmStatus("error", "Enter an API key first"); return; }
+			try {
+				const r = await fetch("/api/llm/key", {
+					method: "POST", headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ key }),
+				});
+				if (!r.ok) {
+					const err = await r.json().catch(() => ({ detail: r.statusText }));
+					flashLlmStatus("error", err.detail || "save failed", 4000);
+					return;
+				}
+				llmKeyInput.value = "";
+				flashLlmStatus("success", "Saved");
+			} catch (e) {
+				flashLlmStatus("error", e.message, 4000);
+			}
+		});
+		llmKeyClear.addEventListener("click", async () => {
+			try {
+				await fetch("/api/llm/key", { method: "DELETE" });
+				llmKeyInput.value = "";
+				flashLlmStatus("success", "Cleared");
 			} catch (e) { /* swallow */ }
 		});
 
@@ -1339,6 +1709,7 @@
 		});
 
 		// ---------- module runs ----------
+		window.runGenerateModule = (id, btn, inputs, resultKind) => runModule(id, btn, inputs, resultKind);
 		async function runModule(id, btn, inputs, resultKind) {
 			const label = btn.textContent;
 			btn.disabled = true; btn.textContent = "running…";
@@ -1380,7 +1751,7 @@
 		// ---------- right-panel context ----------
 		const rpTitleEl = document.getElementById("rp-title");
 		const rpPanes = document.querySelectorAll(".rp-pane");
-		const RP_LABELS = { object: "No selection", camera: "Camera", scene: "Scene" };
+		const RP_LABELS = { object: "No selection", scene: "Scene" };
 		// Make available globally so the editor's selection logic can also switch the panel.
 		window.setRPContext = function (id, label) {
 			rpPanes.forEach(p => p.hidden = p.id !== `rp-pane-${id}`);
@@ -1429,13 +1800,12 @@ const canvas = document.getElementById("renderCanvas");
 const canvasWrap = document.getElementById("canvas-wrap");
 const statusEl = document.getElementById("status");
 const outlinerEl = document.getElementById("outliner");
-const objCountEl = document.getElementById("obj-count");
 
 function viewportSize() {
 	return { w: canvasWrap.clientWidth, h: canvasWrap.clientHeight };
 }
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 const vs0 = viewportSize();
 // Initial size will be re-tightened to the aspect rectangle by handleResize after the
@@ -1537,6 +1907,196 @@ const PRIM_DEFS = {
 
 const primCounters = {};
 
+// ── Particle system (GPU) ──────────────────────────────────────────
+// Pure-GPU: per-particle constants (seed, lifeOffset, randomized initial velocity)
+// live in static buffer attributes; per-frame state is just a single uTime uniform.
+// Vertex shader integrates motion deterministically (origin + v*t + 0.5*a*t² + noise).
+// No CPU per-particle loop — just uniform updates. Wind, gravity, turbulence, color,
+// size, lifetime, sprite texture are all uniforms — change them on the fly.
+const DEFAULT_PARTICLE_CONFIG = {
+	count: 1000,
+	size: 0.1,
+	lifetime: 2.0,
+	initialSpeed: 1.0,
+	spread: 0.3,            // cone half-angle, radians (0 = straight up beam, PI = full sphere)
+	gravity: -1.0,
+	wind: [0, 0, 0],
+	turbulence: 0,
+	color: 0xffaa44,
+	blending: "additive",   // "additive" | "normal"
+	image: null,            // { assetId, ext } | null
+};
+
+const particleSystems = []; // active emitters; we only bump their uTime per frame
+
+const PARTICLE_VERT = `
+attribute float aSeed;          // per-particle stable random (0..1)
+attribute float aLifeOffset;    // staggered birth time so the stream is continuous
+attribute vec3  aInitVel;       // randomized initial velocity (unit-ish)
+varying float vAlpha;
+uniform float uTime;
+uniform float uLifetime;
+uniform float uSize;
+uniform float uInitialSpeed;
+uniform vec3  uGravity;         // includes wind+gravity merged on CPU
+uniform float uTurbulence;
+uniform float uPixelRatio;
+
+vec3 turbulenceField(vec3 p, float t) {
+	return vec3(
+		sin(p.y * 4.0 + t * 3.0 + aSeed * 17.0),
+		sin(p.z * 4.0 + t * 3.7 + aSeed * 23.0),
+		sin(p.x * 4.0 + t * 2.3 + aSeed * 31.0)
+	);
+}
+
+void main() {
+	float age = mod(uTime + aLifeOffset, uLifetime);
+	float life = age / uLifetime;
+
+	vec3 v0 = aInitVel * uInitialSpeed;
+	vec3 pos = v0 * age + 0.5 * uGravity * age * age;
+	if (uTurbulence > 0.0) {
+		// integrate noise position offset (cheap approximation)
+		pos += turbulenceField(v0 * age, age) * uTurbulence * age;
+	}
+
+	vAlpha = 1.0 - life;
+	float size = uSize * (0.7 + aSeed * 0.6);
+
+	vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+	gl_Position = projectionMatrix * mvPosition;
+	gl_PointSize = size * 300.0 * uPixelRatio / max(0.001, -mvPosition.z);
+}`;
+
+const PARTICLE_FRAG = `
+uniform vec3 uColor;
+uniform sampler2D uTexture;
+uniform int uHasTexture;
+varying float vAlpha;
+void main() {
+	vec4 col;
+	if (uHasTexture == 1) {
+		col = texture2D(uTexture, gl_PointCoord);
+		col.rgb *= uColor;
+	} else {
+		float d = distance(gl_PointCoord, vec2(0.5));
+		float a = smoothstep(0.5, 0.0, d);
+		col = vec4(uColor, a);
+	}
+	col.a *= vAlpha;
+	if (col.a < 0.01) discard;
+	gl_FragColor = col;
+}`;
+
+function buildParticleAttributes(N, cfg) {
+	const positions   = new Float32Array(N * 3); // unused at runtime (shader computes), kept for THREE.Points
+	const seeds       = new Float32Array(N);
+	const lifeOffsets = new Float32Array(N);
+	const initVels    = new Float32Array(N * 3);
+	for (let i = 0; i < N; i++) {
+		seeds[i] = Math.random();
+		// stagger births uniformly across lifetime → continuous stream from t=0
+		lifeOffsets[i] = (i / N) * cfg.lifetime;
+		const theta = Math.random() * Math.PI * 2;
+		const phi   = Math.random() * cfg.spread;
+		const sp = (0.7 + Math.random() * 0.6); // ±speed jitter
+		const ai = i * 3;
+		initVels[ai]     = Math.sin(phi) * Math.cos(theta) * sp;
+		initVels[ai + 1] = Math.cos(phi) * sp;
+		initVels[ai + 2] = Math.sin(phi) * Math.sin(theta) * sp;
+	}
+	return { positions, seeds, lifeOffsets, initVels };
+}
+
+function buildParticleSystem(initialConfig) {
+	const cfg = { ...DEFAULT_PARTICLE_CONFIG, ...initialConfig, wind: [...(initialConfig?.wind || DEFAULT_PARTICLE_CONFIG.wind)] };
+	const N = Math.max(1, cfg.count | 0);
+	const { positions, seeds, lifeOffsets, initVels } = buildParticleAttributes(N, cfg);
+
+	const geom = new THREE.BufferGeometry();
+	geom.setAttribute("position",    new THREE.BufferAttribute(positions, 3));
+	geom.setAttribute("aSeed",       new THREE.BufferAttribute(seeds, 1));
+	geom.setAttribute("aLifeOffset", new THREE.BufferAttribute(lifeOffsets, 1));
+	geom.setAttribute("aInitVel",    new THREE.BufferAttribute(initVels, 3));
+	geom.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6); // skip culling
+
+	const mat = new THREE.ShaderMaterial({
+		uniforms: {
+			uTime:         { value: 0 },
+			uLifetime:     { value: cfg.lifetime },
+			uSize:         { value: cfg.size },
+			uInitialSpeed: { value: cfg.initialSpeed },
+			uGravity:      { value: new THREE.Vector3(cfg.wind[0], cfg.wind[1] + cfg.gravity, cfg.wind[2]) },
+			uTurbulence:   { value: cfg.turbulence },
+			uColor:        { value: new THREE.Color(cfg.color) },
+			uTexture:      { value: null },
+			uHasTexture:   { value: 0 },
+			uPixelRatio:   { value: window.devicePixelRatio || 1 },
+		},
+		vertexShader: PARTICLE_VERT,
+		fragmentShader: PARTICLE_FRAG,
+		transparent: true,
+		depthWrite: false,
+		blending: cfg.blending === "additive" ? THREE.AdditiveBlending : THREE.NormalBlending,
+	});
+
+	const points = new THREE.Points(geom, mat);
+	points.frustumCulled = false;
+	points.userData.particleSystem = { config: cfg, geom, mat, points };
+	return points;
+}
+
+function rebuildParticleAttributes(points) {
+	const ps = points.userData.particleSystem;
+	const cfg = ps.config;
+	const N = Math.max(1, cfg.count | 0);
+	const { positions, seeds, lifeOffsets, initVels } = buildParticleAttributes(N, cfg);
+	ps.geom.setAttribute("position",    new THREE.BufferAttribute(positions, 3));
+	ps.geom.setAttribute("aSeed",       new THREE.BufferAttribute(seeds, 1));
+	ps.geom.setAttribute("aLifeOffset", new THREE.BufferAttribute(lifeOffsets, 1));
+	ps.geom.setAttribute("aInitVel",    new THREE.BufferAttribute(initVels, 3));
+}
+
+function syncParticleUniforms(points) {
+	const ps = points.userData.particleSystem;
+	const cfg = ps.config;
+	const u = ps.mat.uniforms;
+	u.uLifetime.value     = cfg.lifetime;
+	u.uSize.value         = cfg.size;
+	u.uInitialSpeed.value = cfg.initialSpeed;
+	u.uTurbulence.value   = cfg.turbulence;
+	u.uGravity.value.set(cfg.wind[0], cfg.wind[1] + cfg.gravity, cfg.wind[2]);
+	u.uColor.value.setHex(cfg.color);
+	ps.mat.blending = cfg.blending === "additive" ? THREE.AdditiveBlending : THREE.NormalBlending;
+	ps.mat.needsUpdate = true;
+}
+
+function applyParticleImage(points, image) {
+	const ps = points.userData.particleSystem;
+	if (!ps) return;
+	ps.config.image = image || null;
+	if (!image) {
+		ps.mat.uniforms.uTexture.value = null;
+		ps.mat.uniforms.uHasTexture.value = 0;
+		return;
+	}
+	const url = `/comfyblockout/asset/${encodeURIComponent(NODE_ID)}/${encodeURIComponent(image.assetId)}.${image.ext}`;
+	new THREE.TextureLoader().load(url, (tex) => {
+		tex.colorSpace = THREE.SRGBColorSpace;
+		ps.mat.uniforms.uTexture.value = tex;
+		ps.mat.uniforms.uHasTexture.value = 1;
+	});
+}
+
+function tickParticleSystems(dt) {
+	for (const points of particleSystems) {
+		const ps = points.userData?.particleSystem;
+		if (!ps) continue;
+		ps.mat.uniforms.uTime.value += dt;
+	}
+}
+
 let gltfLoader = null;
 let objLoader = null;
 let fbxLoader = null;
@@ -1574,6 +2134,38 @@ function registerImported(obj, kind, filename) {
 
 function newAssetId() {
 	return (crypto.randomUUID?.() || `a_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`).replace(/-/g, "");
+}
+
+// Upload an object reference image — goes through /api/refs/upload so we get back
+// both a local URL (for the thumbnail) and a signed Comfy Cloud URL (for passing
+// to nano-banana via --image when the prompt mentions the object via [name]).
+async function uploadObjectRefImage(file) {
+	const fd = new FormData();
+	fd.append("node_id", NODE_ID);
+	fd.append("file", file);
+	const r = await fetch("/api/refs/upload", { method: "POST", body: fd });
+	if (!r.ok) {
+		const j = await r.json().catch(() => ({}));
+		throw new Error(j.detail || `upload failed (${r.status})`);
+	}
+	const j = await r.json();
+	return {
+		refId: j.id,
+		filename: j.filename || file.name,
+		localUrl: j.local_url,
+		signedUrl: j.signed_url,
+	};
+}
+
+// URL for displaying a refImage thumbnail. Supports both the new shape
+// {refId, localUrl, signedUrl} and the legacy {assetId, ext} from older saves.
+function refImageThumbUrl(ri) {
+	if (!ri) return null;
+	if (ri.localUrl) return ri.localUrl;
+	if (ri.assetId && ri.ext) {
+		return `/comfyblockout/asset/${encodeURIComponent(NODE_ID)}/${encodeURIComponent(ri.assetId)}.${ri.ext}`;
+	}
+	return null;
 }
 
 async function uploadAsset(filename, arrayBuffer) {
@@ -1995,6 +2587,14 @@ function deleteObject(obj) {
 	if (selected === obj) {
 		transform.detach();
 		selected = null;
+		forceRightPane("scene", "Scene");
+	}
+	if (obj.userData.primKind === "particles") {
+		const i = particleSystems.indexOf(obj);
+		if (i >= 0) particleSystems.splice(i, 1);
+		const ps = obj.userData.particleSystem;
+		ps?.geom?.dispose();
+		ps?.mat?.dispose();
 	}
 	if (obj.userData.mixer) {
 		const idx = fbxMixers.indexOf(obj.userData.mixer);
@@ -2047,7 +2647,25 @@ function pickNamedBlockColor() {
 	return NAMED_BLOCK_COLORS[idx];
 }
 
+function addParticleEmitter(initialConfig) {
+	snapshotForUndo();
+	primCounters.particles = (primCounters.particles || 0) + 1;
+	const points = buildParticleSystem(initialConfig || {});
+	points.name = `Particles.${String(primCounters.particles).padStart(3, "0")}`;
+	points.position.set(0, 0.5, 0);
+	points.userData.primKind = "particles";
+	scene.add(points);
+	objects.push(points);
+	particleSystems.push(points);
+	select(points);
+	refreshOutliner();
+	updateStatus();
+	if (typeof saveScene === "function") saveScene();
+	return points;
+}
+
 function addPrimitive(kind) {
+	if (kind === "particles") return addParticleEmitter();
 	snapshotForUndo();
 	primCounters[kind] = (primCounters[kind] || 0) + 1;
 	const geom = PRIM_DEFS[kind]();
@@ -2079,6 +2697,22 @@ function duplicateObject(obj) {
 	dup.material.color.copy(obj.material.color);
 }
 
+function forceRightPane(which, label) {
+	// Direct DOM swap, bypassing the captured rpPanes NodeList — guarantees the panes
+	// reflect current selection even if the IIFE-scoped helper somehow gets out of sync.
+	const objPane = document.getElementById("rp-pane-object");
+	const scnPane = document.getElementById("rp-pane-scene");
+	const titleEl = document.getElementById("rp-title");
+	if (which === "object") {
+		if (objPane) objPane.hidden = false;
+		if (scnPane) scnPane.hidden = true;
+	} else {
+		if (objPane) objPane.hidden = true;
+		if (scnPane) scnPane.hidden = false;
+	}
+	if (titleEl) titleEl.textContent = label || (which === "scene" ? "Scene" : "Object");
+}
+
 function select(obj) {
 	selected = obj;
 	if (obj) transform.attach(obj);
@@ -2086,6 +2720,13 @@ function select(obj) {
 	if (anchorMode) {
 		if (obj) tintGizmo(0xffb454);
 		else pivotMarker.visible = false;
+	}
+	if (obj) {
+		const label = obj.name || obj.userData.primKind || "Object";
+		forceRightPane("object", label);
+		refreshObjectInspector?.();
+	} else {
+		forceRightPane("scene", "Scene");
 	}
 	refreshOutliner();
 }
@@ -2098,64 +2739,145 @@ function toggleVisibility(obj) {
 
 function refreshOutliner() {
 	outlinerEl.innerHTML = "";
-	// Keep the right-panel header in sync with the current selection.
-	// Default to the Scene pane when nothing is selected.
-	if (window.setRPContext) {
-		if (selected) window.setRPContext("object", selected.name);
-		else window.setRPContext("scene", "Scene");
+	if (objects.length === 0) {
+		const empty = document.createElement("div");
+		empty.className = "out-empty";
+		empty.textContent = "Add an object from above";
+		outlinerEl.appendChild(empty);
+		return;
 	}
 	for (const obj of objects) {
 		const row = document.createElement("div");
 		row.className = "out-row" + (obj === selected ? " selected" : "") + (obj.visible === false ? " hidden" : "");
-		const hex = obj.material?.color ? "#" + obj.material.color.getHexString() : "#ffffff";
+		const ps = obj.userData.particleSystem;
+		const hex = ps
+			? "#" + ps.config.color.toString(16).padStart(6, "0")
+			: (obj.material?.color ? "#" + obj.material.color.getHexString() : "#ffffff");
+		const ri = obj.userData.refImage;
+		const imgUrl = refImageThumbUrl(ri) || "";
+		const expanded = obj.userData._outExpanded === true;
+		if (expanded) row.classList.add("expanded");
 		row.innerHTML = `
-			<input type="color" class="out-color" value="${hex}" title="Change color">
-			<span class="out-ref" title="Add image reference (semantic texture)">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
-			</span>
-			<input class="out-name" type="text" maxlength="40" title="Click to rename">
-			<button class="out-vis" title="Show/hide">${obj.visible === false ? "○" : "◉"}</button>
-			<button class="out-del" title="Delete">✕</button>
+			<div class="out-head">
+				<input type="color" class="out-color" value="${hex}" title="Change color">
+				<label class="out-img${ri ? " has-image" : ""}" title="${ri ? "Click to change · right-click to remove" : "Upload reference image"}" style="${imgUrl ? `background-image:url('${imgUrl}')` : ""}">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+					<input type="file" class="out-img-input" accept="image/*" hidden>
+				</label>
+				<span class="out-name" title="Double-click to rename"></span>
+				<div class="out-head-end">
+					<button class="out-vis" title="Show/hide">${obj.visible === false ? "○" : "◉"}</button>
+					<button class="out-expand-toggle" title="Expand for prompting context">▾</button>
+				</div>
+			</div>
+			<div class="out-expand">
+				<textarea class="out-context" placeholder="Prompting context for this object (style, material, role in scene…)" rows="3"></textarea>
+			</div>
 		`;
 
 		const swatch = row.querySelector(".out-color");
 		swatch.addEventListener("click", e => e.stopPropagation());
 		swatch.addEventListener("input", e => {
-			if (obj.material?.color) obj.material.color.setStyle(e.target.value);
+			const v = e.target.value;
+			if (ps) {
+				ps.config.color = parseInt(v.slice(1), 16);
+				syncParticleUniforms(obj);
+			} else if (obj.material?.color) {
+				obj.material.color.setStyle(v);
+			}
+			if (selected === obj) refreshObjectInspector?.();
 			saveScene?.();
 		});
 
-		const nameInput = row.querySelector(".out-name");
-		nameInput.value = obj.name;
-		nameInput.addEventListener("click", e => e.stopPropagation());
-		nameInput.addEventListener("keydown", e => {
-			if (e.key === "Enter") { e.preventDefault(); nameInput.blur(); }
-			if (e.key === "Escape") { nameInput.value = obj.name; nameInput.blur(); }
-		});
-		nameInput.addEventListener("blur", () => {
-			const v = nameInput.value.trim();
-			if (!v) { nameInput.value = obj.name; return; }
-			obj.name = v;
-			saveScene?.();
-		});
-
-		const refSlot = row.querySelector(".out-ref");
-		refSlot.addEventListener("click", e => {
+		const imgCell = row.querySelector(".out-img");
+		const imgInput = row.querySelector(".out-img-input");
+		imgCell.addEventListener("click", e => e.stopPropagation());
+		imgCell.addEventListener("contextmenu", e => {
+			e.preventDefault();
 			e.stopPropagation();
-			// TODO: per-object image reference upload (task #7) — wire to a hidden
-			// file input + POST /api/refs/upload tagged with obj.id.
+			if (!obj.userData.refImage) return;
+			obj.userData.refImage = null;
+			if (selected === obj) refreshObjectInspector?.();
+			refreshOutliner();
+			saveScene?.();
+		});
+		imgInput.addEventListener("click", e => e.stopPropagation());
+		imgInput.addEventListener("change", async () => {
+			const f = imgInput.files?.[0];
+			imgInput.value = "";
+			if (!f) return;
+			try {
+				obj.userData.refImage = await uploadObjectRefImage(f);
+				if (selected === obj) refreshObjectInspector?.();
+				refreshOutliner();
+				saveScene?.();
+			} catch (err) {
+				console.error("[out-img] upload failed", err);
+				alert(`Reference image upload failed: ${err.message || err}`);
+			}
+		});
+
+		const nameSpan = row.querySelector(".out-name");
+		nameSpan.textContent = obj.name;
+		nameSpan.addEventListener("dblclick", e => {
+			e.stopPropagation();
+			const input = document.createElement("input");
+			input.type = "text";
+			input.className = "out-name out-name-edit";
+			input.maxLength = 40;
+			input.value = obj.name;
+			nameSpan.replaceWith(input);
+			input.focus();
+			input.select();
+			input.addEventListener("click", ev => ev.stopPropagation());
+			input.addEventListener("dblclick", ev => ev.stopPropagation());
+			let done = false;
+			function commit(save) {
+				if (done) return;
+				done = true;
+				if (save) {
+					const v = input.value.trim();
+					if (v) {
+						obj.name = v;
+						if (selected === obj) forceRightPane("object", obj.name);
+						saveScene?.();
+					}
+				}
+				refreshOutliner();
+			}
+			input.addEventListener("blur", () => commit(true));
+			input.addEventListener("keydown", ev => {
+				if (ev.key === "Enter") { ev.preventDefault(); commit(true); }
+				else if (ev.key === "Escape") { ev.preventDefault(); commit(false); }
+			});
+		});
+
+		const expandToggle = row.querySelector(".out-expand-toggle");
+		expandToggle.addEventListener("click", e => {
+			e.stopPropagation();
+			obj.userData._outExpanded = !row.classList.contains("expanded");
+			row.classList.toggle("expanded", obj.userData._outExpanded);
+			if (obj.userData._outExpanded) contextArea.value = obj.userData.notes || "";
+		});
+
+		const contextArea = row.querySelector(".out-context");
+		contextArea.value = obj.userData.notes || "";
+		contextArea.addEventListener("click", e => e.stopPropagation());
+		contextArea.addEventListener("input", () => {
+			obj.userData.notes = contextArea.value;
+			if (selected === obj && objNotes) objNotes.value = contextArea.value;
+			maybeSaveDebounced();
 		});
 
 		row.addEventListener("click", (e) => {
-			if (e.target.closest(".out-del")) { deleteObject(obj); return; }
 			if (e.target.closest(".out-vis")) { toggleVisibility(obj); return; }
-			if (e.target.closest(".out-name, .out-color, .out-ref")) return;
+			if (e.target.closest(".out-expand-toggle, .out-context")) return;
+			if (e.target.closest(".out-color, .out-img, .out-name-edit")) return;
 			select(obj);
 		});
 
 		outlinerEl.appendChild(row);
 	}
-	objCountEl.textContent = objects.length;
 }
 
 function updateStatus(extra) {
@@ -2213,6 +2935,495 @@ document.querySelectorAll(".prim-btn").forEach(b => {
 		}
 		addPrimitive(kind);
 	});
+});
+
+// ── Generate cells ─────────────────────────────────────────────────
+const GEN_MODELS = {
+	"nano-banana": {
+		name: "Nano Banana",
+		kind: "image",
+		placeholder: "turn this blockout into a cinematic photo, neon-lit dusk, photoreal",
+		iconSvg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.5"/><path d="M21 17l-6-6-8 8"/></svg>`,
+		legacyBtnId: "gen-nb",
+	},
+	"seedance": {
+		name: "Seedance",
+		kind: "video",
+		placeholder: "smooth cinematic camera move through a futuristic city street",
+		iconSvg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>`,
+		legacyBtnId: "gen-sd",
+	},
+};
+
+const genCells = [];
+let activeGenCellId = null;
+
+function getActiveGenCell() {
+	return genCells.find(c => c.id === activeGenCellId) || genCells[0] || null;
+}
+
+function setActiveGenCell(id) {
+	activeGenCellId = id;
+	refreshGenCells();
+	refreshViewportGenerateBtn();
+}
+
+const KIND_ICONS = {
+	image: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.5"/><path d="M21 17l-6-6-8 8"/></svg>`,
+	video: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>`,
+};
+
+function refreshViewportGenerateBtn() {
+	const btn = document.getElementById("vp-generate");
+	const iconEl = document.getElementById("vp-generate-icon");
+	if (!btn || !iconEl) return;
+	const cell = getActiveGenCell();
+	if (!cell) {
+		iconEl.innerHTML = "";
+		btn.disabled = true;
+		return;
+	}
+	const m = GEN_MODELS[cell.model];
+	iconEl.innerHTML = m ? (KIND_ICONS[m.kind] || "") : "";
+	// Always enabled as long as a model cell exists — if auth isn't ready when the
+	// user clicks, the click handler shows a clear prompt to sign in (no need to
+	// pre-emptively dim the button while the auth poller is still warming up).
+	btn.disabled = false;
+}
+
+function newGenCellId() {
+	return (crypto.randomUUID?.() || `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+}
+
+// Wrapped reference — saveSceneDebounced is a `const` declared later in the file,
+// so any early callers (the seed gen cells on module load) would hit a TDZ error.
+// Even `typeof` throws on a TDZ binding, so we have to defer evaluation entirely.
+let _saveSceneDebouncedRef = null;
+function maybeSaveDebounced() {
+	if (_saveSceneDebouncedRef) _saveSceneDebouncedRef();
+}
+
+function addGenCell(init = {}) {
+	const cell = {
+		id: init.id || newGenCellId(),
+		model: init.model || "nano-banana",
+		prompt: init.prompt ?? "",
+		expanded: init.expanded !== undefined ? init.expanded : true,
+	};
+	// Enforce one cell per model (at least for now — user can delete and re-add).
+	if (genCells.some(c => c.model === cell.model)) return genCells.find(c => c.model === cell.model);
+	genCells.push(cell);
+	if (!activeGenCellId) activeGenCellId = cell.id;
+	refreshGenCells();
+	refreshViewportGenerateBtn();
+	refreshGenAddBtn();
+	maybeSaveDebounced();
+	return cell;
+}
+
+function removeGenCell(id) {
+	const i = genCells.findIndex(c => c.id === id);
+	if (i >= 0) genCells.splice(i, 1);
+	if (activeGenCellId === id) activeGenCellId = genCells[0]?.id || null;
+	refreshGenCells();
+	refreshViewportGenerateBtn();
+	refreshGenAddBtn();
+	maybeSaveDebounced();
+}
+
+function refreshGenAddBtn() {
+	const btn = document.getElementById("gen-add");
+	if (!btn) return;
+	const missing = Object.keys(GEN_MODELS).find(id => !genCells.some(c => c.model === id));
+	btn.disabled = !missing;
+	btn.title = missing ? `Add ${GEN_MODELS[missing].name}` : "All models added";
+}
+
+// ── Color naming for prompt expansion ─────────────────────────────
+const NAMED_COLOR_TABLE = [
+	{ name: "red",     rgb: [220, 40, 40] },
+	{ name: "orange",  rgb: [240, 130, 30] },
+	{ name: "yellow",  rgb: [240, 210, 60] },
+	{ name: "lime",    rgb: [180, 230, 60] },
+	{ name: "green",   rgb: [60, 200, 80] },
+	{ name: "teal",    rgb: [40, 200, 200] },
+	{ name: "cyan",    rgb: [60, 220, 220] },
+	{ name: "blue",    rgb: [50, 110, 240] },
+	{ name: "purple",  rgb: [160, 70, 240] },
+	{ name: "magenta", rgb: [230, 50, 200] },
+	{ name: "pink",    rgb: [255, 95, 190] },
+	{ name: "white",   rgb: [240, 240, 240] },
+	{ name: "grey",    rgb: [128, 128, 128] },
+	{ name: "black",   rgb: [25, 25, 25] },
+];
+function nearestColorName(hex) {
+	const r = (hex >> 16) & 0xff, g = (hex >> 8) & 0xff, b = hex & 0xff;
+	let best = NAMED_COLOR_TABLE[0], bestD = Infinity;
+	for (const c of NAMED_COLOR_TABLE) {
+		const dr = r - c.rgb[0], dg = g - c.rgb[1], db = b - c.rgb[2];
+		const d = dr * dr + dg * dg + db * db;
+		if (d < bestD) { bestD = d; best = c; }
+	}
+	return best.name;
+}
+function describeObject(obj) {
+	if (!obj) return "the object";
+	let colorHex = 0xffffff;
+	if (obj.userData.particleSystem) colorHex = obj.userData.particleSystem.config.color;
+	else if (obj.material?.color) colorHex = obj.material.color.getHex();
+	const color = nearestColorName(colorHex);
+	const kind = obj.userData.primKind || "object";
+	const kindWord = kind === "particles" ? "particle emitter" : kind;
+	// rough position description on the dominant axis
+	const p = obj.position;
+	const pos = [];
+	if (Math.abs(p.x) > 0.6) pos.push(p.x > 0 ? "right" : "left");
+	if (Math.abs(p.y - 0.5) > 0.6) pos.push(p.y > 0.5 ? "above" : "below");
+	if (Math.abs(p.z) > 0.6) pos.push(p.z > 0 ? "front" : "back");
+	const where = pos.length ? `to the ${pos.join("-")}` : "at center";
+	return `the ${color} ${kindWord} ${where}`;
+}
+
+// Build the prompt + references to send. Walks [name] tokens once:
+//  - Replaces each token with a verbose description so the model knows what
+//    "Cube.001" refers to (color, shape, position in the scene).
+//  - Appends a per-token "reference image #N" hint when the object has an uploaded
+//    refImage, and collects the signed URL into the references list.
+function buildGenPayload(promptText) {
+	if (!promptText) return { prompt: "", references: [] };
+	const refs = [];
+	const seen = new Map(); // url → index (1-based)
+	function refIndex(url) {
+		if (!seen.has(url)) {
+			refs.push(url);
+			seen.set(url, refs.length);
+		}
+		return seen.get(url);
+	}
+	const expanded = promptText.replace(/\[([^\]\n]+)\]/g, (_, raw) => {
+		const name = raw.trim();
+		const obj = objects.find(o => (o.name || "").toLowerCase() === name.toLowerCase());
+		if (!obj) return `[${name}]`; // unknown — leave literal
+		const desc = describeObject(obj);
+		const url = obj.userData?.refImage?.signedUrl;
+		if (url) {
+			const n = refIndex(url);
+			return `${name} (${desc}; styled per reference image #${n + 1})`;
+		}
+		return `${name} (${desc})`;
+	});
+	return { prompt: expanded, references: refs };
+}
+
+// Back-compat: still exported in case anything calls it directly.
+function resolveGenReferences(promptText) {
+	return buildGenPayload(promptText).references;
+}
+
+function refreshGenCells() {
+	const container = document.getElementById("gen-cells");
+	if (!container) return;
+	container.innerHTML = "";
+	for (const cell of genCells) {
+		const m = GEN_MODELS[cell.model] || GEN_MODELS["nano-banana"];
+		const row = document.createElement("div");
+		row.className = "gen-cell" + (cell.expanded ? " expanded" : "") + (cell.id === activeGenCellId ? " active" : "");
+		row.innerHTML = `
+			<div class="gen-head">
+				<div class="gen-icon">${m.iconSvg}</div>
+				<span class="gen-name">${m.name}</span>
+				<div class="gen-head-end">
+					<button class="gen-del" title="Remove this generator">✕</button>
+					<button class="out-expand-toggle" title="Expand">▾</button>
+				</div>
+			</div>
+			<div class="out-expand">
+				<div class="gen-prompt-wrap">
+					<div class="gen-prompt-hl" aria-hidden="true"></div>
+					<textarea class="gen-prompt" placeholder="${m.placeholder}" spellcheck="false">${cell.prompt.replace(/</g, "&lt;")}</textarea>
+					<div class="gen-ref-suggest" hidden></div>
+				</div>
+			</div>
+		`;
+
+		const head = row.querySelector(".gen-head");
+		head.addEventListener("click", (e) => {
+			if (e.target.closest(".gen-del")) {
+				removeGenCell(cell.id);
+				return;
+			}
+			cell.expanded = !cell.expanded;
+			row.classList.toggle("expanded", cell.expanded);
+			setActiveGenCell(cell.id);
+		});
+
+		const promptEl = row.querySelector(".gen-prompt");
+		const suggestEl = row.querySelector(".gen-ref-suggest");
+		const hlEl = row.querySelector(".gen-prompt-hl");
+		let suggestActiveIdx = 0;
+		let suggestMatches = [];
+
+		function escHtml(s) {
+			return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+		}
+		function objColorHex(o) {
+			if (!o) return "#ffb454";
+			if (o.userData.particleSystem) return "#" + o.userData.particleSystem.config.color.toString(16).padStart(6, "0");
+			if (o.material?.color) return "#" + o.material.color.getHexString();
+			return "#ffb454";
+		}
+		function renderHighlight() {
+			const v = promptEl.value;
+			let html = "";
+			let i = 0;
+			const re = /\[([^\]\n]+)\]/g;
+			let m;
+			while ((m = re.exec(v)) !== null) {
+				if (m.index > i) html += escHtml(v.slice(i, m.index));
+				const name = m[1].trim();
+				const obj = objects.find(o => (o.name || "").toLowerCase() === name.toLowerCase());
+				if (obj) {
+					const col = objColorHex(obj);
+					html += `<span class="ref-tag" style="--ref-color:${col}">${escHtml(m[0])}</span>`;
+				} else {
+					html += escHtml(m[0]);
+				}
+				i = m.index + m[0].length;
+			}
+			if (i < v.length) html += escHtml(v.slice(i));
+			// Trailing newline trick: textarea wraps an empty trailing line, our div doesn't —
+			// append a zero-width space line so heights match for scroll sync.
+			if (v.endsWith("\n")) html += " ";
+			hlEl.innerHTML = html;
+		}
+		function syncScroll() {
+			hlEl.scrollTop = promptEl.scrollTop;
+			hlEl.scrollLeft = promptEl.scrollLeft;
+		}
+		renderHighlight();
+
+		function findOpenBracket() {
+			const v = promptEl.value;
+			const c = promptEl.selectionStart;
+			const slice = v.slice(0, c);
+			const open = slice.lastIndexOf("[");
+			if (open < 0) return null;
+			const close = slice.lastIndexOf("]");
+			if (close > open) return null;
+			// Stop if newline between [ and caret — keeps multiline prompts sane
+			if (slice.slice(open).includes("\n")) return null;
+			return { open, partial: slice.slice(open + 1) };
+		}
+
+		function renderSuggestions() {
+			const ctx = findOpenBracket();
+			if (!ctx) { suggestEl.hidden = true; suggestMatches = []; return; }
+			const q = ctx.partial.toLowerCase();
+			suggestMatches = objects
+				.filter(o => (o.name || "").toLowerCase().includes(q))
+				.slice(0, 8);
+			if (suggestMatches.length === 0) { suggestEl.hidden = true; return; }
+			suggestActiveIdx = Math.min(suggestActiveIdx, suggestMatches.length - 1);
+			suggestEl.innerHTML = suggestMatches.map((o, i) => {
+				const ri = o.userData.refImage;
+				const thumb = refImageThumbUrl(ri);
+				const colorHex = o.userData.particleSystem
+					? "#" + o.userData.particleSystem.config.color.toString(16).padStart(6, "0")
+					: (o.material?.color ? "#" + o.material.color.getHexString() : "#888888");
+				const sw = thumb
+					? `<span class="swatch" style="background-image:url('${thumb}')"></span>`
+					: `<span class="swatch" style="background:${colorHex}"></span>`;
+				return `<div data-idx="${i}"${i === suggestActiveIdx ? ' class="active"' : ""}>${sw}<span>${o.name}</span></div>`;
+			}).join("");
+			suggestEl.hidden = false;
+		}
+
+		function insertSuggestion(obj) {
+			const ctx = findOpenBracket();
+			if (!ctx || !obj) return;
+			const v = promptEl.value;
+			const before = v.slice(0, ctx.open);
+			const afterCaret = v.slice(promptEl.selectionStart);
+			const insert = `[${obj.name}] `;
+			promptEl.value = before + insert + afterCaret;
+			const newCaret = (before + insert).length;
+			promptEl.setSelectionRange(newCaret, newCaret);
+			cell.prompt = promptEl.value;
+			suggestEl.hidden = true;
+			suggestMatches = [];
+			renderHighlight();
+			maybeSaveDebounced();
+		}
+
+		promptEl.addEventListener("click", e => { e.stopPropagation(); renderSuggestions(); });
+		promptEl.addEventListener("input", () => {
+			cell.prompt = promptEl.value;
+			renderHighlight();
+			renderSuggestions();
+			maybeSaveDebounced();
+		});
+		promptEl.addEventListener("scroll", syncScroll);
+		promptEl.addEventListener("keydown", e => {
+			if (suggestEl.hidden || !suggestMatches.length) return;
+			if (e.key === "ArrowDown") {
+				e.preventDefault();
+				suggestActiveIdx = (suggestActiveIdx + 1) % suggestMatches.length;
+				renderSuggestions();
+			} else if (e.key === "ArrowUp") {
+				e.preventDefault();
+				suggestActiveIdx = (suggestActiveIdx - 1 + suggestMatches.length) % suggestMatches.length;
+				renderSuggestions();
+			} else if (e.key === "Enter" || e.key === "Tab") {
+				e.preventDefault();
+				insertSuggestion(suggestMatches[suggestActiveIdx]);
+			} else if (e.key === "Escape") {
+				e.preventDefault();
+				suggestEl.hidden = true;
+			}
+		});
+		promptEl.addEventListener("blur", () => setTimeout(() => { suggestEl.hidden = true; }, 120));
+		suggestEl.addEventListener("mousedown", e => {
+			const target = e.target.closest("[data-idx]");
+			if (!target) return;
+			e.preventDefault();
+			insertSuggestion(suggestMatches[parseInt(target.dataset.idx, 10)]);
+			promptEl.focus();
+		});
+
+
+		container.appendChild(row);
+	}
+}
+
+document.getElementById("gen-add")?.addEventListener("click", () => {
+	// One cell per model — fill in the next missing one (typically reinstates a
+	// previously-deleted default like Seedance or Nano Banana).
+	const nextModel = Object.keys(GEN_MODELS).find(id => !genCells.some(c => c.model === id));
+	if (!nextModel) return;
+	const cell = addGenCell({ model: nextModel, expanded: true });
+	setActiveGenCell(cell.id);
+});
+
+document.getElementById("vp-generate")?.addEventListener("click", async () => {
+	const cell = getActiveGenCell();
+	if (!cell) return;
+	const m = GEN_MODELS[cell.model];
+	if (!m) return;
+	const rawPrompt = (cell.prompt || "").trim() || m.placeholder;
+	const { prompt, references } = buildGenPayload(rawPrompt);
+	const inputs = cell.model === "seedance"
+		? { prompt, resolution: "1080p", duration: 5 }
+		: { prompt };
+	inputs.references = references;
+	const legacy = document.getElementById(m.legacyBtnId);
+	if (legacy && legacy.disabled) {
+		alert("Sign in to Comfy Cloud (settings) before generating.");
+		return;
+	}
+	if (window.runGenerateModule) {
+		await window.runGenerateModule(cell.model, document.getElementById("vp-generate"), inputs, m.kind);
+		refreshViewportGenerateBtn();
+	}
+});
+
+// Mirror the legacy auth-driven disabled state onto the viewport button.
+new MutationObserver(refreshViewportGenerateBtn).observe(
+	document.getElementById("gen-nb"), { attributes: true, attributeFilter: ["disabled"] }
+);
+new MutationObserver(refreshViewportGenerateBtn).observe(
+	document.getElementById("gen-sd"), { attributes: true, attributeFilter: ["disabled"] }
+);
+
+// Seed default cells on first render so the section ships with the built-in modules.
+if (genCells.length === 0) {
+	addGenCell({ model: "nano-banana", expanded: false });
+	addGenCell({ model: "seedance",    expanded: false });
+}
+refreshViewportGenerateBtn();
+refreshGenAddBtn();
+
+// ── Section collapse toggles ──────────────────────────────────────
+// Click the head-row (label or chevron) to collapse the module. Inline action
+// buttons inside the head-end (Clear, + Add, status pill) ignore the click so
+// they keep working without folding the section.
+for (const section of document.querySelectorAll("#panel .section.collapsible")) {
+	const head = section.querySelector(".section-head-row");
+	if (!head) continue;
+	head.addEventListener("click", e => {
+		if (e.target.closest("button, input, select, textarea, .assistant-status")) return;
+		section.classList.toggle("collapsed");
+	});
+}
+
+// ── Assistant (LLM + Comfy MCP) ───────────────────────────────────
+const assistantLog = document.getElementById("assistant-log");
+const assistantInput = document.getElementById("assistant-input");
+const assistantStatus = document.getElementById("assistant-status");
+
+function pushAssistantMsg(kind, text) {
+	const el = document.createElement("div");
+	el.className = `assistant-msg ${kind}`;
+	el.textContent = text;
+	assistantLog.appendChild(el);
+	assistantLog.scrollTop = assistantLog.scrollHeight;
+	return el;
+}
+
+let assistantBusy = false;
+async function sendAssistant(message) {
+	if (assistantBusy) return;
+	const text = (message ?? assistantInput.value).trim();
+	if (!text) return;
+	pushAssistantMsg("user", text);
+	assistantInput.value = "";
+	assistantBusy = true;
+	assistantInput.disabled = true;
+	assistantStatus.textContent = "MCP · thinking";
+	assistantStatus.className = "assistant-status busy";
+	try {
+		const r = await fetch("/api/llm/chat", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				node_id: NODE_ID,
+				message: text,
+				context: {
+					objects: objects.map(o => ({
+						name: o.name,
+						kind: o.userData.primKind || "object",
+						notes: o.userData.notes || null,
+						hasRef: !!o.userData.refImage?.signedUrl,
+					})),
+					activeGenCellId,
+					genCells: genCells.map(c => ({ model: c.model, prompt: c.prompt })),
+				},
+			}),
+		});
+		if (!r.ok) {
+			const e = await r.json().catch(() => ({}));
+			throw new Error(e.detail || `chat failed (${r.status})`);
+		}
+		const j = await r.json();
+		pushAssistantMsg("bot", j.reply || "(empty reply)");
+		assistantStatus.textContent = "MCP · idle";
+		assistantStatus.className = "assistant-status";
+	} catch (err) {
+		pushAssistantMsg("error", err.message || String(err));
+		assistantStatus.textContent = "MCP · error";
+		assistantStatus.className = "assistant-status error";
+	} finally {
+		assistantBusy = false;
+		assistantInput.disabled = false;
+		assistantInput.focus();
+	}
+}
+
+// Enter = send · Shift+Enter = newline · also accept Cmd/Ctrl+Enter
+assistantInput.addEventListener("keydown", e => {
+	if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+		e.preventDefault();
+		sendAssistant();
+	}
 });
 
 // Alt-held camera modifier: layers cinematic moves on top of the default
@@ -2601,7 +3812,7 @@ function setupDragField(el, opts) {
 				const num = parseFloat(input.value);
 				if (isFinite(num)) {
 					opts.set(clamp(num));
-					saveSceneDebounced?.();
+					maybeSaveDebounced();
 				}
 			}
 			el.classList.remove("editing");
@@ -2649,6 +3860,228 @@ function updateCameraSliders() {
 	for (const el of dragFields) el._refresh?.();
 }
 
+// ── Object inspector (right panel) ─────────────────────────────────
+const objColorInput = document.getElementById("obj-color");
+const objColorBtn = document.getElementById("obj-color-btn");
+const objImageBtn = document.getElementById("obj-image-btn");
+const objImageFile = document.getElementById("obj-image-file");
+const objImageThumb = document.getElementById("obj-image-thumb");
+const objImageLabel = document.getElementById("obj-image-label");
+const objNotes = document.getElementById("rp-notes");
+const objAppearance = document.getElementById("obj-appearance-section");
+
+function setObjAxis(prop, axis, v) {
+	if (!selected) return;
+	selected[prop][axis] = v;
+	if (prop === "rotation") selected.rotation.set(selected.rotation.x, selected.rotation.y, selected.rotation.z);
+}
+const RAD = Math.PI / 180;
+function deg(v) { return v / RAD; }
+setupDragField(document.getElementById("obj-px"), { get: () => selected ? selected.position.x : 0, set: v => setObjAxis("position", "x", v), sens: 0.01 });
+setupDragField(document.getElementById("obj-py"), { get: () => selected ? selected.position.y : 0, set: v => setObjAxis("position", "y", v), sens: 0.01 });
+setupDragField(document.getElementById("obj-pz"), { get: () => selected ? selected.position.z : 0, set: v => setObjAxis("position", "z", v), sens: 0.01 });
+setupDragField(document.getElementById("obj-rx"), { get: () => selected ? deg(selected.rotation.x) : 0, set: v => setObjAxis("rotation", "x", v * RAD), sens: 0.5, format: v => `${v.toFixed(0)}°` });
+setupDragField(document.getElementById("obj-ry"), { get: () => selected ? deg(selected.rotation.y) : 0, set: v => setObjAxis("rotation", "y", v * RAD), sens: 0.5, format: v => `${v.toFixed(0)}°` });
+setupDragField(document.getElementById("obj-rz"), { get: () => selected ? deg(selected.rotation.z) : 0, set: v => setObjAxis("rotation", "z", v * RAD), sens: 0.5, format: v => `${v.toFixed(0)}°` });
+setupDragField(document.getElementById("obj-sx"), { get: () => selected ? selected.scale.x : 1, set: v => setObjAxis("scale", "x", v), sens: 0.01, min: 0.001 });
+setupDragField(document.getElementById("obj-sy"), { get: () => selected ? selected.scale.y : 1, set: v => setObjAxis("scale", "y", v), sens: 0.01, min: 0.001 });
+setupDragField(document.getElementById("obj-sz"), { get: () => selected ? selected.scale.z : 1, set: v => setObjAxis("scale", "z", v), sens: 0.01, min: 0.001 });
+
+function objImageUrl(img) { return refImageThumbUrl(img); }
+
+function refreshObjectInspector() {
+	if (!selected) return;
+	for (const el of dragFields) el._refresh?.();
+	const hex = selected.material?.color ? "#" + selected.material.color.getHexString() : "#ffffff";
+	objColorInput.value = hex;
+	const hasColor = !!selected.material?.color;
+	objAppearance.style.display = (hasColor || true) ? "" : "none"; // appearance always visible; image works on any object
+	objColorBtn.style.display = hasColor ? "" : "none";
+	const img = selected.userData.refImage;
+	if (img) {
+		const url = objImageUrl(img);
+		objImageThumb.style.backgroundImage = `url("${url}")`;
+		objImageThumb.classList.add("has-image");
+		objImageBtn.classList.add("has-image");
+		objImageLabel.textContent = "Remove";
+	} else {
+		objImageThumb.style.backgroundImage = "";
+		objImageThumb.classList.remove("has-image");
+		objImageBtn.classList.remove("has-image");
+		objImageLabel.textContent = "Image";
+	}
+	objNotes.value = selected.userData.notes || "";
+	refreshParticlesInspector?.();
+}
+
+objColorInput.addEventListener("input", e => {
+	if (!selected?.material?.color) return;
+	selected.material.color.setStyle(e.target.value);
+	refreshOutliner();
+});
+objColorInput.addEventListener("change", () => saveScene?.());
+
+objImageBtn.addEventListener("click", () => {
+	if (!selected) return;
+	if (selected.userData.refImage) {
+		selected.userData.refImage = null;
+		refreshObjectInspector();
+		saveScene?.();
+	} else {
+		objImageFile.click();
+	}
+});
+objImageFile.addEventListener("change", async () => {
+	const f = objImageFile.files?.[0];
+	objImageFile.value = "";
+	if (!f || !selected) return;
+	try {
+		selected.userData.refImage = await uploadObjectRefImage(f);
+		refreshObjectInspector();
+		saveScene?.();
+	} catch (err) {
+		console.error("[obj-image] upload failed", err);
+		alert(`Image upload failed: ${err.message || err}`);
+	}
+});
+
+objNotes.addEventListener("input", () => {
+	if (!selected) return;
+	selected.userData.notes = objNotes.value;
+	saveSceneDebounced?.();
+});
+
+// ── Particles inspector ───────────────────────────────────────────
+const psSection      = document.getElementById("obj-particles-section");
+const psColorInput   = document.getElementById("ps-color");
+const psSpriteBtn    = document.getElementById("ps-sprite-btn");
+const psSpriteFile   = document.getElementById("ps-sprite-file");
+const psSpriteThumb  = document.getElementById("ps-sprite-thumb");
+const psSpriteLabel  = document.getElementById("ps-sprite-label");
+const psBlendingSel  = document.getElementById("ps-blending");
+
+function currentParticleCfg() {
+	return selected?.userData?.primKind === "particles"
+		? selected.userData.particleSystem.config
+		: null;
+}
+
+function pushParticleUniforms() {
+	if (selected?.userData?.primKind === "particles") syncParticleUniforms(selected);
+}
+
+let psRebuildTimer = null;
+function scheduleParticleRebuild() {
+	clearTimeout(psRebuildTimer);
+	psRebuildTimer = setTimeout(() => {
+		if (selected?.userData?.primKind === "particles") rebuildParticleAttributes(selected);
+	}, 80);
+}
+
+function setupPSField(id, getter, setter, opts = {}) {
+	setupDragField(document.getElementById(id), {
+		get: () => { const c = currentParticleCfg(); return c ? getter(c) : 0; },
+		set: v => {
+			const c = currentParticleCfg();
+			if (!c) return;
+			setter(c, v);
+			if (opts.rebuild) scheduleParticleRebuild();
+			pushParticleUniforms();
+		},
+		sens: opts.sens, min: opts.min, max: opts.max, format: opts.format,
+	});
+}
+
+setupPSField("ps-count", c => c.count, (c, v) => { c.count = Math.max(1, Math.round(v)); },
+	{ sens: 5, min: 1, max: 50000, format: v => `${Math.round(v)}`, rebuild: true });
+setupPSField("ps-life", c => c.lifetime, (c, v) => { c.lifetime = Math.max(0.1, v); },
+	{ sens: 0.02, min: 0.1, format: v => v.toFixed(2) });
+setupPSField("ps-size", c => c.size, (c, v) => { c.size = Math.max(0.001, v); },
+	{ sens: 0.002, min: 0.001, format: v => v.toFixed(3) });
+setupPSField("ps-speed", c => c.initialSpeed, (c, v) => { c.initialSpeed = v; },
+	{ sens: 0.02, format: v => v.toFixed(2) });
+const DEG = Math.PI / 180;
+setupPSField("ps-spread", c => c.spread / DEG, (c, v) => { c.spread = Math.max(0, Math.min(180, v)) * DEG; },
+	{ sens: 0.5, min: 0, max: 180, format: v => `${Math.round(v)}°`, rebuild: true });
+setupPSField("ps-grav", c => c.gravity, (c, v) => { c.gravity = v; },
+	{ sens: 0.02, format: v => v.toFixed(2) });
+setupPSField("ps-wx", c => c.wind[0], (c, v) => { c.wind[0] = v; }, { sens: 0.02, format: v => v.toFixed(2) });
+setupPSField("ps-wy", c => c.wind[1], (c, v) => { c.wind[1] = v; }, { sens: 0.02, format: v => v.toFixed(2) });
+setupPSField("ps-wz", c => c.wind[2], (c, v) => { c.wind[2] = v; }, { sens: 0.02, format: v => v.toFixed(2) });
+setupPSField("ps-turb", c => c.turbulence, (c, v) => { c.turbulence = Math.max(0, v); },
+	{ sens: 0.01, min: 0, format: v => v.toFixed(2) });
+
+psColorInput.addEventListener("input", e => {
+	const c = currentParticleCfg();
+	if (!c) return;
+	c.color = parseInt(e.target.value.slice(1), 16);
+	pushParticleUniforms();
+});
+psColorInput.addEventListener("change", () => saveScene?.());
+
+psBlendingSel.addEventListener("change", () => {
+	const c = currentParticleCfg();
+	if (!c) return;
+	c.blending = psBlendingSel.value;
+	pushParticleUniforms();
+	saveScene?.();
+});
+
+psSpriteBtn.addEventListener("click", () => {
+	const c = currentParticleCfg();
+	if (!c) return;
+	if (c.image) {
+		applyParticleImage(selected, null);
+		refreshParticlesInspector();
+		saveScene?.();
+	} else {
+		psSpriteFile.click();
+	}
+});
+psSpriteFile.addEventListener("change", async () => {
+	const f = psSpriteFile.files?.[0];
+	psSpriteFile.value = "";
+	if (!f || !selected) return;
+	try {
+		const buf = await f.arrayBuffer();
+		const { assetId, ext } = await uploadAsset(f.name, buf);
+		applyParticleImage(selected, { assetId, ext });
+		refreshParticlesInspector();
+		saveScene?.();
+	} catch (err) {
+		console.error("[ps-sprite] upload failed", err);
+		alert(`Sprite upload failed: ${err.message || err}`);
+	}
+});
+
+function refreshParticlesInspector() {
+	const isParticles = selected?.userData?.primKind === "particles";
+	psSection.hidden = !isParticles;
+	objAppearance.hidden = isParticles;
+	if (!isParticles) return;
+	const cfg = currentParticleCfg();
+	psColorInput.value = "#" + cfg.color.toString(16).padStart(6, "0");
+	psBlendingSel.value = cfg.blending;
+	const img = cfg.image;
+	if (img) {
+		const url = `/comfyblockout/asset/${encodeURIComponent(NODE_ID)}/${encodeURIComponent(img.assetId)}.${img.ext}`;
+		psSpriteThumb.style.backgroundImage = `url("${url}")`;
+		psSpriteThumb.classList.add("has-image");
+		psSpriteBtn.classList.add("has-image");
+		psSpriteLabel.textContent = "Remove";
+	} else {
+		psSpriteThumb.style.backgroundImage = "";
+		psSpriteThumb.classList.remove("has-image");
+		psSpriteBtn.classList.remove("has-image");
+		psSpriteLabel.textContent = "Sprite";
+	}
+	for (const el of dragFields) el._refresh?.();
+}
+
+transform.addEventListener("objectChange", () => {
+	if (selected) for (const el of dragFields) el._refresh?.();
+});
+
 document.getElementById("cam-reset").addEventListener("click", () => {
 	try { snapshotForUndo(); } catch {}
 	suppressSliderSync = true;
@@ -2675,6 +4108,8 @@ gridToggle.addEventListener("click", () => {
 	saveScene?.();
 });
 
+const rightPanel = document.getElementById("right-panel");
+
 const guidesToggle = document.getElementById("toggle-guides");
 let guidesVisible = false;
 guidesToggle.addEventListener("click", () => {
@@ -2694,12 +4129,108 @@ arToggle.addEventListener("click", () => {
 });
 
 const bgColorInput = document.getElementById("bg-color");
+const bgColorBtn = document.getElementById("bg-color-btn");
+const bgImageBtn = document.getElementById("bg-image-btn");
+const bgImageFile = document.getElementById("bg-image-file");
+const bgImageThumb = document.getElementById("bg-image-thumb");
+const bgImageLabel = document.getElementById("bg-image-label");
+
+let bgMode = "color"; // "color" | "image"
+let bgImage = null;   // { assetId, ext } | null
+
+const DEFAULT_BG_GRADIENT =
+	"radial-gradient(ellipse 80% 60% at 50% 35%, rgba(60,80,110,0.18), transparent 70%)," +
+	"linear-gradient(180deg, #0c0d12 0%, #07080b 100%)";
+
 function applyBgColor(hex) {
-	renderer.setClearColor(hex);
-	canvasWrap.style.background = hex;
+	renderer.setClearColor(hex, 1);
+	canvasWrap.style.backgroundImage = "none";
+	canvasWrap.style.backgroundColor = hex;
 }
-bgColorInput.addEventListener("input", e => applyBgColor(e.target.value));
+
+function applyBgImage(url) {
+	renderer.setClearColor(0x000000, 0);
+	canvasWrap.style.backgroundColor = "#000";
+	canvasWrap.style.backgroundImage = url ? `url("${url}")` : DEFAULT_BG_GRADIENT;
+	canvasWrap.style.backgroundSize = "cover";
+	canvasWrap.style.backgroundPosition = "center";
+	canvasWrap.style.backgroundRepeat = "no-repeat";
+}
+
+function bgImageUrl(img) {
+	if (!img) return null;
+	return `/comfyblockout/asset/${encodeURIComponent(NODE_ID)}/${encodeURIComponent(img.assetId)}.${img.ext}`;
+}
+
+function refreshBgImageUI() {
+	const url = bgImageUrl(bgImage);
+	if (url) {
+		bgImageThumb.style.backgroundImage = `url("${url}")`;
+		bgImageThumb.classList.add("has-image");
+		bgImageBtn.classList.add("has-image");
+		bgImageLabel.textContent = "Remove";
+	} else {
+		bgImageThumb.style.backgroundImage = "";
+		bgImageThumb.classList.remove("has-image");
+		bgImageBtn.classList.remove("has-image");
+		bgImageLabel.textContent = "Image";
+	}
+	bgColorBtn.classList.toggle("active-bg", bgMode === "color");
+	bgImageBtn.classList.toggle("active-bg", bgMode === "image");
+}
+
+function applyBgMode() {
+	if (bgMode === "image" && bgImage) {
+		applyBgImage(bgImageUrl(bgImage));
+	} else {
+		bgMode = "color";
+		applyBgColor(bgColorInput.value);
+	}
+	refreshBgImageUI();
+}
+
+bgColorInput.addEventListener("input", e => {
+	bgMode = "color";
+	applyBgColor(e.target.value);
+	refreshBgImageUI();
+});
 bgColorInput.addEventListener("change", () => saveScene?.());
+bgColorBtn.addEventListener("click", e => {
+	// only switch mode when the label is clicked, not the color swatch itself
+	if (e.target === bgColorInput) return;
+	if (bgMode !== "color") {
+		bgMode = "color";
+		applyBgMode();
+		saveScene?.();
+	}
+});
+
+bgImageBtn.addEventListener("click", () => {
+	if (bgImage) {
+		bgImage = null;
+		bgMode = "color";
+		applyBgMode();
+		saveScene?.();
+	} else {
+		bgImageFile.click();
+	}
+});
+bgImageFile.addEventListener("change", async () => {
+	const f = bgImageFile.files?.[0];
+	bgImageFile.value = "";
+	if (!f) return;
+	try {
+		const buf = await f.arrayBuffer();
+		const { assetId, ext } = await uploadAsset(f.name, buf);
+		bgImage = { assetId, ext };
+		bgMode = "image";
+		applyBgMode();
+		saveScene?.();
+	} catch (err) {
+		console.error("[bg-image] upload failed", err);
+		alert(`Background image upload failed: ${err.message || err}`);
+	}
+});
 
 
 function frameScene() {
@@ -3020,6 +4551,7 @@ function loop() {
 	try {
 		const dt = animClock.getDelta();
 		if (fbxMixers.length) for (const m of fbxMixers) m.update(dt);
+		if (particleSystems.length) tickParticleSystems(dt);
 		tickFlyMovement(dt);
 		orbit.update();
 		if (anchorMode) updatePivotMarker();
@@ -3100,7 +4632,7 @@ function makeTrimHandle(el, scrubEl, getter, setter, minGap) {
 			el.classList.remove("dragging");
 			el.removeEventListener("pointermove", onMove);
 			el.removeEventListener("pointerup", onUp);
-			saveSceneDebounced?.();
+			maybeSaveDebounced();
 		};
 		el.addEventListener("pointermove", onMove);
 		el.addEventListener("pointerup", onUp);
@@ -3243,7 +4775,7 @@ function showEaseMenu(k, anchor) {
 			try { snapshotForUndo(); } catch {}
 			for (const kk of targets) kk.ease = opt.id;
 			renderKeyframeMarkers();
-			saveSceneDebounced?.();
+			maybeSaveDebounced();
 			cleanup();
 		};
 		menu.appendChild(row);
@@ -3365,7 +4897,7 @@ function renderKeyframeMarkers() {
 				if (didDrag) {
 					keyframes.sort((a, b) => a.t - b.t);
 					renderKeyframeMarkers();
-					saveSceneDebounced?.();
+					maybeSaveDebounced();
 				} else {
 					// Click without drag = select + jump playhead to this keyframe.
 					stopPreview();
@@ -3434,7 +4966,7 @@ function renderKeyframeMarkers() {
 			if (didDrag) {
 				keyframes.sort((a, b) => a.t - b.t);
 				renderKeyframeMarkers();
-				saveSceneDebounced?.();
+				maybeSaveDebounced();
 			} else {
 				// Click without drag = select + jump playhead to the keyframe.
 				stopPreview();
@@ -3808,6 +5340,8 @@ function serializeScene() {
 			scale: o.scale.toArray(),
 			color: o.material?.color?.getHex?.() ?? 0xffffff,
 			visible: o.visible !== false,
+			notes: o.userData.notes || undefined,
+			refImage: o.userData.refImage || undefined,
 		})),
 		imports: objects.filter(o => o.userData.assetId).map(o => ({
 			kind: o.userData.primKind,
@@ -3819,6 +5353,19 @@ function serializeScene() {
 			scale: o.scale.toArray(),
 			quaternion: [o.quaternion.x, o.quaternion.y, o.quaternion.z, o.quaternion.w],
 			visible: o.visible !== false,
+			notes: o.userData.notes || undefined,
+			refImage: o.userData.refImage || undefined,
+		})),
+		genCells: genCells.map(c => ({ id: c.id, model: c.model, prompt: c.prompt, expanded: c.expanded })),
+		activeGenCellId,
+		particles: objects.filter(o => o.userData.primKind === "particles").map(o => ({
+			name: o.name,
+			position: o.position.toArray(),
+			rotation: [o.rotation.x, o.rotation.y, o.rotation.z],
+			scale: o.scale.toArray(),
+			visible: o.visible !== false,
+			notes: o.userData.notes || undefined,
+			config: o.userData.particleSystem.config,
 		})),
 		camera: {
 			position: camera.position.toArray(),
@@ -3837,6 +5384,8 @@ function serializeScene() {
 			grid: grid.visible,
 			guides: guidesVisible,
 			bg: bgColorInput.value,
+			bgMode,
+			bgImage,
 			ar: arVisible,
 		},
 		trim: { start: trimStart, end: trimEnd },
@@ -3868,6 +5417,8 @@ async function deserializeScene(state, opts = {}) {
 		mesh.scale.fromArray(p.scale);
 		if (p.color !== undefined) mesh.material.color.setHex(p.color);
 		if (p.visible === false) mesh.visible = false;
+		if (p.notes) mesh.userData.notes = p.notes;
+		if (p.refImage) mesh.userData.refImage = p.refImage;
 	}
 
 	for (const im of (state.imports || [])) {
@@ -3890,10 +5441,42 @@ async function deserializeScene(state, opts = {}) {
 			});
 			const obj = objects[objects.length - 1];
 			if (obj && im.visible === false) obj.visible = false;
+			if (obj && im.notes) obj.userData.notes = im.notes;
+			if (obj && im.refImage) obj.userData.refImage = im.refImage;
 			console.log(`[ComfyBlockout] restored import ${im.kind || ext} ${im.filename} (${buf.byteLength} bytes) from ${url}`);
 		} catch (e) {
 			console.error(`[ComfyBlockout] failed to restore import ${im.assetId} (${im.filename}) from ${url}:`, e);
 		}
+	}
+
+	if (Array.isArray(state.genCells)) {
+		genCells.length = 0;
+		for (const c of state.genCells) {
+			if (!c || !c.model) continue;
+			genCells.push({
+				id: c.id || newGenCellId(),
+				model: GEN_MODELS[c.model] ? c.model : "nano-banana",
+				prompt: c.prompt || "",
+				expanded: c.expanded === true,
+			});
+		}
+		activeGenCellId = state.activeGenCellId && genCells.some(c => c.id === state.activeGenCellId)
+			? state.activeGenCellId
+			: (genCells[0]?.id || null);
+		refreshGenCells();
+		refreshViewportGenerateBtn();
+		refreshGenAddBtn();
+	}
+
+	for (const pp of (state.particles || [])) {
+		const obj = addParticleEmitter(pp.config || {});
+		if (pp.name) obj.name = pp.name;
+		if (pp.position) obj.position.fromArray(pp.position);
+		if (pp.rotation) obj.rotation.set(pp.rotation[0], pp.rotation[1], pp.rotation[2]);
+		if (pp.scale) obj.scale.fromArray(pp.scale);
+		if (pp.visible === false) obj.visible = false;
+		if (pp.notes) obj.userData.notes = pp.notes;
+		if (pp.config?.image) applyParticleImage(obj, pp.config.image);
 	}
 
 	if (state.camera) {
@@ -3944,8 +5527,10 @@ async function deserializeScene(state, opts = {}) {
 		}
 		if (typeof state.viewport.bg === "string") {
 			bgColorInput.value = state.viewport.bg;
-			applyBgColor(state.viewport.bg);
 		}
+		bgImage = (state.viewport.bgImage && state.viewport.bgImage.assetId) ? state.viewport.bgImage : null;
+		bgMode = state.viewport.bgMode === "image" ? "image" : "color";
+		applyBgMode();
 		if (typeof state.viewport.ar === "boolean") {
 			arVisible = state.viewport.ar;
 			arToggle.classList.toggle("active", arVisible);
@@ -3973,6 +5558,7 @@ async function deserializeScene(state, opts = {}) {
 
 	transform.detach();
 	selected = null;
+	forceRightPane("scene", "Scene");
 	refreshOutliner();
 	// Always clamp the playhead into the trim region with the gap so the yellow line never
 	// sits directly on top of an orange trim handle at scene start
@@ -4090,6 +5676,8 @@ const saveSceneDebounced = (() => {
 		t = setTimeout(saveScene, 600);
 	};
 })();
+// Wire the forward-reference so early callers (gen-cell seed, etc.) can route through.
+_saveSceneDebouncedRef = saveSceneDebounced;
 
 const autoSnapshotDebounced = (() => {
 	let t = null;
@@ -4161,8 +5749,10 @@ let currentProjectName = null;
 const projectNameEl = document.getElementById("project-name");
 function applyProjectName(name) {
 	currentProjectName = name || null;
-	projectNameEl.textContent = currentProjectName || "untitled";
-	projectNameEl.style.color = currentProjectName ? "#ffd28a" : "rgba(255,255,255,0.85)";
+	if (projectNameEl) {
+		projectNameEl.textContent = currentProjectName || "Untitled";
+		projectNameEl.style.color = currentProjectName ? "#ffd28a" : "rgba(255,255,255,0.55)";
+	}
 }
 
 const EMPTY_SCENE = {
@@ -4530,20 +6120,21 @@ async function autoSnapshot() {
 
 		const gridWasVisible = grid.visible;
 		const helperWasVisible = transformHelper.visible;
-		grid.visible = false;
-		transformHelper.visible = false;
-
 		const prevAspect = camera.aspect;
-		camera.aspect = w / h;
-		camera.updateProjectionMatrix();
-		renderer.setRenderTarget(snapshotTarget);
-		renderer.render(scene, camera);
-		renderer.setRenderTarget(null);
-		camera.aspect = prevAspect;
-		camera.updateProjectionMatrix();
-
-		grid.visible = gridWasVisible;
-		transformHelper.visible = helperWasVisible;
+		try {
+			grid.visible = false;
+			transformHelper.visible = false;
+			camera.aspect = w / h;
+			camera.updateProjectionMatrix();
+			renderer.setRenderTarget(snapshotTarget);
+			renderer.render(scene, camera);
+		} finally {
+			renderer.setRenderTarget(null);
+			camera.aspect = prevAspect;
+			camera.updateProjectionMatrix();
+			grid.visible = gridWasVisible;
+			transformHelper.visible = helperWasVisible;
+		}
 
 		renderer.readRenderTargetPixels(snapshotTarget, 0, 0, w, h, snapshotPixels);
 		// WebGL pixels arrive bottom-up; canvas expects top-down. Flip rows in place.
@@ -4608,13 +6199,23 @@ async function loadPrompt() {
 
 (async () => {
 	await loadPrompt();
-	await loadScene();
-	// (Removed the editor "if loadScene returned falsy → addPrimitive('cube') + saveScene"
-	//  fallback. If /load_scene transiently failed or returned empty for any reason, that
-	//  fallback would clobber a real saved scene with a fresh cube. Empty scene on load
-	//  failure is now silent — the user can hit Add Block if they actually want a cube.)
-	// Refresh the IMAGE output once after init so freshly-seeded scenes (or just-reopened
-	// nodes) don't return the 512x512 black placeholder when the workflow is queued.
+	const loaded = await loadScene();
+	// Seed a starter cube when there's nothing on disk yet so the user lands on a populated
+	// scene with something selectable in the outliner — matches what the viewport shows by
+	// default. Only fires when load_scene returned no scene at all (j.scene === null), so a
+	// real saved scene that just happens to be empty is left alone.
+	if (!loaded && objects.length === 0) {
+		const cube = addPrimitive("cube");
+		if (cube) {
+			cube.position.set(0, 0.5, 0);
+			await saveScene();
+		}
+	}
+	// Force-render the outliner from current objects[] (deserialize's end already does this,
+	// but the seed-cube path may add the object after the last refresh) and land on the first
+	// object so the right panel shows its properties instead of the scene placeholder.
+	refreshOutliner();
+	if (!selected && objects.length > 0) select(objects[0]);
 	await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 	autoSnapshot().catch(() => {});
 })();
