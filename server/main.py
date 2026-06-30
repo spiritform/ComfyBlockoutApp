@@ -994,8 +994,12 @@ ASSISTANT_SYSTEM = (
     "delete_object, set_object_color, set_object_position, set_object_rotation, "
     "set_object_scale, rename_object, list_objects, set_generator_prompt). "
     "When the user asks to add/move/recolor/delete something, call the tool — "
-    "don't just describe how they could do it manually. You can also call "
-    "Comfy Cloud MCP tools to inspect or run workflows.\n\n"
+    "don't just describe how they could do it manually.\n\n"
+    "TO ACTUALLY GENERATE: prefer the `trigger_generate` editor tool over the "
+    "raw Comfy MCP tools. trigger_generate uses the editor's own pipeline, so the "
+    "result lands in the viewport overlay AND in the user's Assets pane "
+    "(double-clickable, draggable, persistent). The raw MCP tools should only be "
+    "used for inspection or for advanced flows the editor doesn't expose.\n\n"
     "Keep responses tight. Quote object names with brackets like [Cube.001] when "
     "referring to scene objects — the editor renders those tokens in the object's "
     "color and uses them to attach the per-object reference image at generate time."
@@ -1154,6 +1158,27 @@ EDITOR_TOOLS = [
                 "prompt": {"type": "string"},
             },
             "required": ["model", "prompt"],
+        },
+    },
+    {
+        "name": "trigger_generate",
+        "description": (
+            "Run the named generator cell through the editor's own pipeline (same as "
+            "the user clicking the viewport Generate button). The result lands in the "
+            "viewport overlay AND in the Assets pane (persisted to disk). Prefer this "
+            "over raw Comfy MCP tools when the user asks to generate something — the "
+            "raw MCP tools' output won't be saved to the Assets pane."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "model": {"type": "string", "enum": ["nano-banana", "seedance"]},
+                "prompt": {
+                    "type": "string",
+                    "description": "Optional. If provided, sets the cell prompt first, then runs. Omit to use the cell's existing prompt.",
+                },
+            },
+            "required": ["model"],
         },
     },
 ]

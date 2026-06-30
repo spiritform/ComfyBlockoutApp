@@ -543,6 +543,10 @@
 	.section.collapsible .section-head-row:hover .collapse-caret { color: #e6e6ea; }
 	.section.collapsible.collapsed .collapse-caret { transform: rotate(-90deg); }
 	.section.collapsible.collapsed > *:not(.section-head-row) { display: none; }
+	/* Inline action buttons in the head row don't make sense when the section is
+	   folded — hide them too so the head shows only the label + caret. */
+	.section.collapsible.collapsed .head-end .mini-btn,
+	.section.collapsible.collapsed .head-end .gen-add-btn { display: none; }
 	/* When there's an inline action button next to the chevron (Clear, + Add, etc.),
 	   group them tight at the end so the chevron always anchors the right edge. */
 	.section-head-row .head-end {
@@ -583,11 +587,21 @@
 		display: flex; flex-direction: column;
 	}
 	.assistant-log {
-		max-height: 240px; overflow-y: auto;
+		height: 240px; min-height: 120px;
+		resize: vertical;
+		overflow-y: auto; overflow-x: hidden;
 		background: rgba(0,0,0,0.28);
 		padding: 8px;
 		display: flex; flex-direction: column; gap: 8px;
 	}
+	/* Anything injected by the agent — markdown, images, code — must stay inside the
+	   chat width. No horizontal scroll on the outer panel. */
+	.assistant-msg, .assistant-md { max-width: 100%; min-width: 0; }
+	.assistant-md img, .assistant-md video {
+		max-width: 100%; height: auto; border-radius: 4px; display: block;
+	}
+	.assistant-md pre, .assistant-md table { max-width: 100%; }
+	.assistant-md pre { white-space: pre-wrap; word-break: break-word; }
 	.assistant-msg {
 		font-size: 11px; line-height: 1.5;
 		padding: 6px 8px; border-radius: 4px;
@@ -722,6 +736,56 @@
 	.gen-pick-btn.active { color: #ffb454; border-color: rgba(255,180,84,0.35); background: rgba(255,180,84,0.08); }
 	.gen-pick-btn svg { width: 12px; height: 12px; }
 	.gen-prompt-wrap { position: relative; }
+	/* Seedance reference slots — sit above the prompt textarea. */
+	.gen-slots { display: flex; gap: 6px; margin-bottom: 3px; }
+	.gen-slot {
+		flex: 1; min-width: 0;
+		position: relative;
+		background: rgba(255,255,255,0.04);
+		border: 1px dashed rgba(255,255,255,0.14);
+		border-radius: 5px;
+		padding: 6px;
+		display: flex; align-items: center; gap: 8px;
+		cursor: copy; min-height: 48px;
+		transition: border-color 0.12s, background 0.12s;
+	}
+	.gen-slot:hover { border-color: rgba(255,180,84,0.5); }
+	.gen-slot.filled { border-style: solid; border-color: rgba(255,255,255,0.12); cursor: default; }
+	.gen-slot.drop-target {
+		border-color: #ffb454 !important; border-style: solid !important;
+		background: rgba(255,180,84,0.12) !important;
+	}
+	.gen-slot-thumb {
+		width: 36px; height: 36px; flex: 0 0 36px; border-radius: 3px;
+		background: rgba(0,0,0,0.35) center/cover no-repeat;
+		border: 1px solid rgba(255,255,255,0.06);
+	}
+	.gen-slot-thumb.has-image { border-color: transparent; }
+	.gen-slot-label {
+		flex: 1; min-width: 0;
+		font-size: 10px; color: rgba(255,255,255,0.55);
+		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+	}
+	.gen-slot.filled .gen-slot-label { color: #e6e6ea; }
+	.gen-slot-clear {
+		width: 18px; height: 18px; border-radius: 3px;
+		background: transparent; border: none; padding: 0;
+		color: rgba(255,255,255,0.45); cursor: pointer;
+		display: inline-flex; align-items: center; justify-content: center;
+		font-size: 14px; line-height: 1;
+	}
+	.gen-slot-clear:hover { background: rgba(255,80,80,0.22); color: #ff8a8a; }
+	/* Upload-hint icon — only shown when the slot is empty; the whole empty slot
+	   is the click target so the icon is purely a visual affordance. */
+	.gen-slot-upload {
+		width: 14px; height: 14px; flex: 0 0 14px;
+		color: rgba(255,255,255,0.45);
+		margin-left: 2px;
+	}
+	.gen-slot:hover .gen-slot-upload { color: #ffd28a; }
+	.gen-slot.filled .gen-slot-upload { display: none; }
+	/* Brief opacity-pulse while the file uploads through /api/refs/upload. */
+	.gen-slot.uploading { opacity: 0.55; pointer-events: none; }
 	.gen-ref-suggest {
 		position: absolute; left: 0; right: 0; top: 100%;
 		margin-top: 2px; z-index: 50;
@@ -876,14 +940,15 @@
 		background: none; border: none; outline: none;
 		color: rgba(255,255,255,0.85);
 		font-size: 11px; font-family: inherit;
-		padding: 2px 4px; border-radius: 3px;
+		padding: 0; border-radius: 0;
 		display: block; flex: 1; min-width: 0;
 		overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 		cursor: text;
 	}
 	span.out-name { cursor: default; }
-	.out-name:hover { background: rgba(255,255,255,0.04); }
-	.out-name:focus { background: rgba(255,255,255,0.08); color: #fff; text-overflow: clip; }
+	/* When the rename input is active, it inherits .out-name styles so the swap
+	   is invisible — no rectangle highlight, no padding shift, just the text. */
+	.out-name-edit:focus { color: #fff; text-overflow: clip; }
 
 	.out-vis, .out-del {
 		width: 22px; height: 22px; border: none; background: transparent;
@@ -1158,6 +1223,10 @@
 		color: rgba(255,255,255,0.7) !important;
 		padding: 0 12px; margin-left: 2px;
 	}
+	/* The .vt-btn { display: inline-flex } rule otherwise beats the user-agent
+	   [hidden] { display: none } so the Save button stayed visible even after we
+	   set its hidden attribute. Override at higher specificity. */
+	.vt-btn[hidden] { display: none !important; }
 	.vt-save-render:hover { background: rgba(255,255,255,0.1) !important; color: #fff !important; }
 	/* Assets modal */
 	.assets-grid {
@@ -1173,19 +1242,22 @@
 		padding: 16px 4px; text-align: center;
 	}
 	.assets-filter {
-		display: flex; align-items: center; justify-content: flex-end;
-		gap: 6px; margin-bottom: 10px;
+		display: flex; align-items: baseline; gap: 4px;
+		margin-left: auto;
 	}
+	.assets-filter[hidden] { display: none; }
 	.assets-filter-btn {
-		background: none; border: none; padding: 2px 4px;
-		font-family: inherit; font-size: 10px; font-weight: 500;
-		text-transform: uppercase; letter-spacing: 0.06em;
+		background: none; border: none; padding: 0 2px;
+		font-family: inherit; font-size: 9px; font-weight: 400;
+		text-transform: uppercase; letter-spacing: 0.08em;
 		color: rgba(255,255,255,0.35); cursor: pointer;
+		line-height: 26px;
 	}
 	.assets-filter-btn:hover { color: rgba(255,255,255,0.7); }
 	.assets-filter-btn.active { color: #ffd28a; }
 	.assets-filter-sep {
-		color: rgba(255,255,255,0.18); font-size: 10px; user-select: none;
+		color: rgba(255,255,255,0.18); font-size: 9px;
+		user-select: none; line-height: 26px;
 	}
 	.assets-tile {
 		position: relative; aspect-ratio: 1;
@@ -1195,7 +1267,37 @@
 	}
 	.assets-tile:hover { border-color: rgba(255,180,84,0.4); }
 	.assets-tile:active { cursor: grabbing; }
-	.assets-tile.dragging { opacity: 0.4; }
+	.assets-tile.dragging {
+		opacity: 0.25;
+		border: 1px dashed rgba(255,180,84,0.5) !important;
+	}
+	/* Drag-ghost — smaller chip that follows the cursor so it visually reads as
+	   "the asset is in flight", and roughly matches the drop-target footprint. */
+	.asset-drag-ghost {
+		position: fixed; top: -9999px; left: -9999px;
+		width: 56px; height: 56px;
+		border: 1.5px solid #ffb454; border-radius: 6px;
+		overflow: hidden;
+		background: rgba(0,0,0,0.5);
+		box-shadow: 0 6px 18px rgba(0,0,0,0.55);
+	}
+	.asset-drag-ghost img, .asset-drag-ghost video {
+		width: 100%; height: 100%; object-fit: cover; display: block;
+		pointer-events: none;
+	}
+	/* Fullscreen asset viewer — opened by double-clicking a tile. */
+	.asset-viewer-backdrop {
+		position: fixed; inset: 0;
+		background: rgba(0,0,0,0.88);
+		display: flex; align-items: center; justify-content: center;
+		z-index: 10000; cursor: zoom-out;
+		padding: 40px;
+	}
+	.asset-viewer-backdrop img, .asset-viewer-backdrop video {
+		max-width: 100%; max-height: 100%; object-fit: contain;
+		box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+		border-radius: 4px;
+	}
 	.assets-tile img, .assets-tile video {
 		width: 100%; height: 100%; object-fit: cover; display: block;
 		pointer-events: none;
@@ -1255,6 +1357,16 @@
 		text-align: left;
 	}
 	.rp-bg-img-btn.has-image { color: #ffb454; }
+	#obj-image-btn { cursor: pointer; }
+	.rp-bg-clear {
+		margin-left: auto;
+		width: 20px; height: 20px; border-radius: 3px;
+		background: transparent; border: none;
+		color: rgba(255,255,255,0.45); cursor: pointer;
+		display: inline-flex; align-items: center; justify-content: center;
+		font-size: 15px; line-height: 1; padding: 0;
+	}
+	.rp-bg-clear:hover { background: rgba(255,80,80,0.22); color: #ff8a8a; }
 	.rp-bg-row.active-bg { background: rgba(255,180,84,0.08); color: #fff; }
 	.rp-bg-thumb {
 		width: 26px; height: 26px; flex: 0 0 26px; border-radius: 4px;
@@ -1425,7 +1537,7 @@
 			<div class="section-head-row">
 				<span class="section-label">Outliner</span>
 				<span class="head-end">
-					<button class="mini-btn" id="clear-btn" title="Clear all objects">Clear</button>
+					<button class="mini-btn" id="clear-btn" title="Clear all objects" hidden>Clear</button>
 					<span class="collapse-caret">▾</span>
 				</span>
 			</div>
@@ -1482,10 +1594,10 @@
 			</div>
 			<div class="vt-sep"></div>
 			<button class="vt-btn vt-icon-btn" id="toggle-snap" title="Snap — pivot snaps to nearest vertex/face, objects snap to each other">
-				<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13V7a5 5 0 0 1 10 0v6"/><line x1="3" y1="10" x2="6" y2="10"/><line x1="10" y1="10" x2="13" y2="10"/></svg>
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 15 4 4"/><path d="M2.352 10.648a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.029-6.029a1 1 0 1 1 3 3l-6.029 6.029a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.365-6.367A1 1 0 0 0 8.716 4.282z"/><path d="m5 8 4 4"/></svg>
 			</button>
 			<button class="vt-btn vt-icon-btn active" id="toggle-grid" title="Show/hide ground grid">
-				<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2" y="2" width="12" height="12"/><line x1="6" y1="2" x2="6" y2="14"/><line x1="10" y1="2" x2="10" y2="14"/><line x1="2" y1="6" x2="14" y2="6"/><line x1="2" y1="10" x2="14" y2="10"/></svg>
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M3 12h18"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
 			</button>
 			<button class="vt-btn vt-generate" id="vp-generate" title="Generate with active model">
 				<span id="vp-generate-icon" style="display:flex;align-items:center;margin-right:6px"></span>
@@ -1571,6 +1683,13 @@
 			<span class="rp-kicker" id="rp-kicker">Properties</span>
 			<span class="rp-sep" id="rp-sep">:</span>
 			<span id="rp-title">Scene</span>
+			<div class="assets-filter" id="assets-filter" hidden>
+				<button class="assets-filter-btn active" data-filter="recent">Recent</button>
+				<span class="assets-filter-sep">|</span>
+				<button class="assets-filter-btn" data-filter="image">Images</button>
+				<span class="assets-filter-sep">|</span>
+				<button class="assets-filter-btn" data-filter="video">Videos</button>
+			</div>
 		</div>
 
 		<div id="rp-body">
@@ -1584,10 +1703,11 @@
 							<input type="color" id="obj-color" value="#ffffff">
 							<span class="rp-bg-label">Color</span>
 						</label>
-						<button type="button" class="rp-bg-row rp-bg-img-btn" id="obj-image-btn" title="Image reference for prompting">
+						<div class="rp-bg-row rp-bg-img-btn" id="obj-image-btn" title="Image reference for prompting">
 							<span class="rp-bg-thumb" id="obj-image-thumb"></span>
 							<span class="rp-bg-label" id="obj-image-label">Image</span>
-						</button>
+							<button type="button" class="rp-bg-clear" id="obj-image-clear" title="Remove image" hidden>×</button>
+						</div>
 						<input type="file" id="obj-image-file" accept="image/*" hidden>
 					</div>
 				</div>
@@ -1686,6 +1806,10 @@
 						<div class="drag-num" id="cam-roll"><span class="drag-label">Roll</span><span class="drag-val">0°</span></div>
 					</div>
 					<div class="hint">drag a value sideways to scrub · click to type · Shift = fine · F focus · Alt+drag look · Alt+RMB roll</div>
+					<div class="vt-group rp-vt-group" style="margin-top:10px">
+						<button class="vt-btn" id="toggle-guides">Guides</button>
+						<button class="vt-btn active" id="toggle-ar" title="Toggle aspect ratio overlay (frame + letterbox)">AR</button>
+					</div>
 				</div>
 
 				<div class="section">
@@ -1695,19 +1819,12 @@
 							<input type="color" id="bg-color" value="#07080b">
 							<span class="rp-bg-label">Color</span>
 						</label>
-						<button type="button" class="rp-bg-row rp-bg-img-btn" id="bg-image-btn" title="Image background — fills the entire viewport">
+						<div class="rp-bg-row rp-bg-img-btn" id="bg-image-btn" title="Image background — fills the entire viewport">
 							<span class="rp-bg-thumb" id="bg-image-thumb"></span>
 							<span class="rp-bg-label" id="bg-image-label">Image</span>
-						</button>
+							<button type="button" class="rp-bg-clear" id="bg-image-clear" title="Remove background" hidden>×</button>
+						</div>
 						<input type="file" id="bg-image-file" accept="image/*" hidden>
-					</div>
-				</div>
-
-				<div class="section">
-					<div class="section-label">Viewport</div>
-					<div class="vt-group rp-vt-group">
-						<button class="vt-btn" id="toggle-guides">Guides</button>
-						<button class="vt-btn active" id="toggle-ar" title="Toggle aspect ratio overlay (frame + letterbox)">AR</button>
 					</div>
 				</div>
 
@@ -1772,13 +1889,6 @@
 			<!-- ===== ASSETS TAB ===== -->
 			<div class="rp-pane" id="rp-pane-assets" hidden>
 				<div class="section">
-					<div class="assets-filter" id="assets-filter">
-						<button class="assets-filter-btn active" data-filter="recent">Recent</button>
-						<span class="assets-filter-sep">|</span>
-						<button class="assets-filter-btn" data-filter="image">Images</button>
-						<span class="assets-filter-sep">|</span>
-						<button class="assets-filter-btn" data-filter="video">Videos</button>
-					</div>
 					<div class="assets-empty" id="assets-empty" hidden>
 						No generated images yet — hit Generate to create some.
 					</div>
@@ -1942,10 +2052,26 @@
 				e.dataTransfer.effectAllowed = "copy";
 				// Outliner image cells (.out-img) listen for this class to highlight as drop targets.
 				document.body.classList.add("dragging-asset");
+				// Custom drag ghost — smaller framed chip, centered on the cursor so it feels
+				// like you're carrying the asset rather than a giant clipping of the tile.
+				const ghost = document.createElement("div");
+				ghost.className = "asset-drag-ghost";
+				ghost.innerHTML = asset.kind === "video"
+					? `<video src="${asset.url}" muted preload="metadata"></video>`
+					: `<img src="${asset.url}" alt="">`;
+				document.body.appendChild(ghost);
+				e.dataTransfer.setDragImage(ghost, 28, 28); // 28 = half of 56 → centered on cursor
+				tile._dragGhost = ghost;
 			});
 			tile.addEventListener("dragend", () => {
 				tile.classList.remove("dragging");
 				document.body.classList.remove("dragging-asset");
+				if (tile._dragGhost) { tile._dragGhost.remove(); tile._dragGhost = null; }
+			});
+			// Double-click → fullscreen viewer. Click backdrop or press Escape to close.
+			tile.addEventListener("dblclick", e => {
+				e.stopPropagation();
+				openAssetViewer(asset);
 			});
 			tile.querySelector(".dl").addEventListener("click", async (e) => {
 				e.stopPropagation();
@@ -1977,6 +2103,26 @@
 
 		// Expose so other parts (post-Generate hook) can refresh the listing without reopening.
 		window.refreshAssets = refreshAssets;
+
+		// Fullscreen viewer — created per-open and torn down on close (no lingering DOM).
+		window.openAssetViewer = openAssetViewer;
+		function openAssetViewer(asset) {
+			// Tear down any prior viewer first (rapid double-clicks shouldn't stack).
+			document.querySelectorAll(".asset-viewer-backdrop").forEach(el => el.remove());
+			const backdrop = document.createElement("div");
+			backdrop.className = "asset-viewer-backdrop";
+			backdrop.innerHTML = asset.kind === "video"
+				? `<video src="${asset.url}" controls autoplay loop></video>`
+				: `<img src="${asset.url}" alt="${asset.filename}">`;
+			const close = () => {
+				backdrop.remove();
+				document.removeEventListener("keydown", onKey);
+			};
+			const onKey = (e) => { if (e.key === "Escape") close(); };
+			backdrop.addEventListener("click", e => { if (e.target === backdrop) close(); });
+			document.addEventListener("keydown", onKey);
+			document.body.appendChild(backdrop);
+		}
 
 		function openSettings() {
 			settingsModal.classList.add("open");
@@ -3200,6 +3346,10 @@ function forceRightPane(which, label) {
 	// Keep the top-header Assets button in sync with whether the pane is the active one.
 	const assetsBtnEl = document.getElementById("th-assets");
 	assetsBtnEl?.classList.toggle("active", isAssets);
+	// Filter chips live in the right-panel header (so they sit on the ASSETS baseline)
+	// — only meaningful while the assets pane is the active one.
+	const filterEl = document.getElementById("assets-filter");
+	if (filterEl) filterEl.hidden = !isAssets;
 }
 
 function select(obj) {
@@ -3229,6 +3379,9 @@ function toggleVisibility(obj) {
 
 function refreshOutliner() {
 	outlinerEl.innerHTML = "";
+	// Clear button is only meaningful when the list isn't empty.
+	const clearBtn = document.getElementById("clear-btn");
+	if (clearBtn) clearBtn.hidden = objects.length === 0;
 	if (objects.length === 0) {
 		const empty = document.createElement("div");
 		empty.className = "out-empty";
@@ -3577,6 +3730,9 @@ function addGenCell(init = {}) {
 		model: init.model || "nano-banana",
 		prompt: init.prompt ?? "",
 		expanded: init.expanded !== undefined ? init.expanded : true,
+		startFrame: init.startFrame ?? null,   // seedance: { url, filename, kind:"image" }
+		refVideo:   init.refVideo   ?? null,   // seedance: { url, filename, kind:"video" }
+		styleRef:   init.styleRef   ?? null,   // nano-banana: { url, filename, kind:"image" } — aesthetic only, not subject
 	};
 	// Enforce one cell per model (at least for now — user can delete and re-add).
 	if (genCells.some(c => c.model === cell.model)) return genCells.find(c => c.model === cell.model);
@@ -3749,6 +3905,46 @@ function refreshGenCells() {
 		const m = GEN_MODELS[cell.model] || GEN_MODELS["nano-banana"];
 		const row = document.createElement("div");
 		row.className = "gen-cell" + (cell.expanded ? " expanded" : "") + (cell.id === activeGenCellId ? " active" : "");
+		// Per-model reference slots above the prompt. Each slot is a drop target for
+		// assets from the right-panel Assets pane (drag-and-drop).
+		//   nano-banana: 1 slot — style reference (aesthetic only, not subject/content)
+		//   seedance:    2 slots — start frame + reference video
+		let slotsHtml = "";
+		// Each slot accepts both drag-from-Assets AND click-to-upload-from-desktop. The
+		// upload icon is a visual hint; clicking anywhere on an empty slot opens the picker.
+		const uploadIcon = `<svg class="gen-slot-upload" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2"/><path d="M8 9V2.5"/><path d="m5 5 3-3 3 3"/></svg>`;
+		if (cell.model === "seedance") {
+			slotsHtml = `
+				<div class="gen-slots">
+					<div class="gen-slot" data-slot="startFrame" data-accepts="image" title="Start frame — drag an image from Assets, or click to upload">
+						<div class="gen-slot-thumb"></div>
+						<div class="gen-slot-label">Start frame</div>
+						${uploadIcon}
+						<button type="button" class="gen-slot-clear" hidden>×</button>
+						<input type="file" class="gen-slot-file" accept="image/*" hidden>
+					</div>
+					<div class="gen-slot" data-slot="refVideo" data-accepts="video" title="Reference video — drag from Assets or click to upload; matches motion / timing">
+						<div class="gen-slot-thumb"></div>
+						<div class="gen-slot-label">Ref video</div>
+						${uploadIcon}
+						<button type="button" class="gen-slot-clear" hidden>×</button>
+						<input type="file" class="gen-slot-file" accept="video/*" hidden>
+					</div>
+				</div>
+			`;
+		} else if (cell.model === "nano-banana") {
+			slotsHtml = `
+				<div class="gen-slots">
+					<div class="gen-slot" data-slot="styleRef" data-accepts="image" title="Style reference — aesthetic only (cartoon, anime, paint, etc.) not the subject. Drag from Assets or click to upload.">
+						<div class="gen-slot-thumb"></div>
+						<div class="gen-slot-label">Style ref</div>
+						${uploadIcon}
+						<button type="button" class="gen-slot-clear" hidden>×</button>
+						<input type="file" class="gen-slot-file" accept="image/*" hidden>
+					</div>
+				</div>
+			`;
+		}
 		row.innerHTML = `
 			<div class="gen-head">
 				<div class="gen-icon">${m.iconSvg}</div>
@@ -3758,6 +3954,7 @@ function refreshGenCells() {
 				</div>
 			</div>
 			<div class="out-expand">
+				${slotsHtml}
 				<div class="gen-prompt-wrap">
 					<div class="gen-prompt-hl" aria-hidden="true"></div>
 					<textarea class="gen-prompt" placeholder="Enter prompt here…" spellcheck="false">${cell.prompt.replace(/</g, "&lt;")}</textarea>
@@ -3772,6 +3969,97 @@ function refreshGenCells() {
 			row.classList.toggle("expanded", cell.expanded);
 			setActiveGenCell(cell.id);
 		});
+
+		// Wire ref slots (no-op for cells that didn't get slot markup).
+		for (const slot of row.querySelectorAll(".gen-slot")) {
+			const key = slot.dataset.slot;            // "startFrame" | "refVideo" | "styleRef"
+			const accepts = slot.dataset.accepts;     // "image" | "video"
+			const thumb = slot.querySelector(".gen-slot-thumb");
+			const labelEl = slot.querySelector(".gen-slot-label");
+			const clearBtn = slot.querySelector(".gen-slot-clear");
+			const fileInput = slot.querySelector(".gen-slot-file");
+			const paintSlot = () => {
+				const asset = cell[key];
+				if (asset) {
+					thumb.style.backgroundImage = `url("${asset.url}")`;
+					thumb.classList.add("has-image");
+					slot.classList.add("filled");
+					labelEl.textContent = asset.filename || labelEl.dataset.empty || labelEl.textContent;
+					if (clearBtn) clearBtn.hidden = false;
+				} else {
+					thumb.style.backgroundImage = "";
+					thumb.classList.remove("has-image");
+					slot.classList.remove("filled");
+					labelEl.textContent = labelEl.dataset.empty || labelEl.textContent;
+					if (clearBtn) clearBtn.hidden = true;
+				}
+			};
+			labelEl.dataset.empty = labelEl.textContent;
+			paintSlot();
+			// Click an empty slot → open file picker. (Filled slots ignore the click so
+			// the user can interact with × / drag-out without re-opening the picker.)
+			slot.addEventListener("click", e => {
+				if (e.target.closest(".gen-slot-clear")) return;
+				if (cell[key]) return;
+				fileInput?.click();
+			});
+			fileInput?.addEventListener("change", async () => {
+				const f = fileInput.files?.[0];
+				fileInput.value = "";
+				if (!f) return;
+				try {
+					slot.classList.add("uploading");
+					const ref = await uploadObjectRefImage(f);
+					cell[key] = {
+						url: ref.signedUrl || ref.localUrl,
+						filename: ref.filename || f.name,
+						kind: accepts,
+					};
+					paintSlot();
+					maybeSaveDebounced();
+				} catch (err) {
+					console.error("[gen-slot] upload failed", err);
+					window.showAlert?.("Upload failed", err.message || String(err));
+				} finally {
+					slot.classList.remove("uploading");
+				}
+			});
+			// Drag from the Assets pane → land here.
+			slot.addEventListener("dragover", e => {
+				if (!e.dataTransfer?.types?.includes("application/x-cb-asset")) return;
+				e.preventDefault();
+				e.dataTransfer.dropEffect = "copy";
+				slot.classList.add("drop-target");
+			});
+			slot.addEventListener("dragleave", () => slot.classList.remove("drop-target"));
+			slot.addEventListener("drop", e => {
+				slot.classList.remove("drop-target");
+				const raw = e.dataTransfer?.getData("application/x-cb-asset");
+				if (!raw) return;
+				e.preventDefault();
+				let asset;
+				try { asset = JSON.parse(raw); } catch { return; }
+				if (asset.kind !== accepts) {
+					window.showAlert?.("Wrong kind", `This slot only accepts ${accepts}s.`);
+					return;
+				}
+				cell[key] = { url: asset.url, filename: asset.filename, kind: asset.kind };
+				paintSlot();
+				maybeSaveDebounced();
+			});
+			clearBtn?.addEventListener("click", e => {
+				e.stopPropagation();
+				cell[key] = null;
+				paintSlot();
+				maybeSaveDebounced();
+			});
+			// Double-click → fullscreen viewer if there's a value.
+			slot.addEventListener("dblclick", e => {
+				if (!cell[key]) return;
+				e.stopPropagation();
+				window.openAssetViewer?.(cell[key]);
+			});
+		}
 
 		const promptEl = row.querySelector(".gen-prompt");
 		const suggestEl = row.querySelector(".gen-ref-suggest");
@@ -3951,6 +4239,18 @@ document.getElementById("vp-generate")?.addEventListener("click", async () => {
 	const inputs = cell.model === "seedance"
 		? { prompt, resolution: "1080p", duration: 5 }
 		: { prompt };
+	// Seedance ref slots — start frame = first frame of the generated video; video
+	// reference matches motion / timing.
+	if (cell.model === "seedance") {
+		if (cell.startFrame?.url) inputs.image = cell.startFrame.url;
+		if (cell.refVideo?.url) inputs.video = cell.refVideo.url;
+	}
+	// Nano style ref — surface-only aesthetic transfer. Sent alongside per-object
+	// material swatches so the server can prepend a "style only" instruction in the
+	// prompt. The server treats it differently from per-object refs (no spatial mapping).
+	if (cell.model === "nano-banana" && cell.styleRef?.url) {
+		inputs.style_reference = cell.styleRef.url;
+	}
 	inputs.references = references;
 	inputs.scene_objects = sceneObjects;
 	// Camera metadata so the prompt can anchor the model's lens/perspective.
@@ -4213,6 +4513,23 @@ const ASSISTANT_TOOLS = {
 		refreshGenCells();
 		maybeSaveDebounced();
 		return `updated ${model} prompt`;
+	},
+
+	async trigger_generate({ model, prompt }) {
+		const cell = genCells.find(c => c.model === model);
+		if (!cell) return `error: no generator cell for ${model}`;
+		if (typeof prompt === "string" && prompt.length) {
+			cell.prompt = prompt;
+			refreshGenCells();
+		}
+		// Activate the cell so the viewport Generate button targets the right model,
+		// then fire it exactly like a manual click — busy state + viewport overlay +
+		// Assets refresh all run through their normal handlers.
+		setActiveGenCell(cell.id);
+		const btn = document.getElementById("vp-generate");
+		if (!btn) return "error: viewport generate button missing";
+		btn.click();
+		return `generation submitted (${model}) — landing in viewport + assets when ready`;
 	},
 };
 
@@ -4933,18 +5250,20 @@ function refreshObjectInspector() {
 	objAppearance.style.display = (hasColor || true) ? "" : "none"; // appearance always visible; image works on any object
 	objColorBtn.style.display = hasColor ? "" : "none";
 	const img = selected.userData.refImage;
+	const clearBtn = document.getElementById("obj-image-clear");
 	if (img) {
 		const url = objImageUrl(img);
 		objImageThumb.style.backgroundImage = `url("${url}")`;
 		objImageThumb.classList.add("has-image");
 		objImageBtn.classList.add("has-image");
-		objImageLabel.textContent = "Remove";
+		if (clearBtn) clearBtn.hidden = false;
 	} else {
 		objImageThumb.style.backgroundImage = "";
 		objImageThumb.classList.remove("has-image");
 		objImageBtn.classList.remove("has-image");
-		objImageLabel.textContent = "Image";
+		if (clearBtn) clearBtn.hidden = true;
 	}
+	objImageLabel.textContent = "Image";
 	objNotes.value = selected.userData.notes || "";
 	refreshParticlesInspector?.();
 }
@@ -4956,15 +5275,18 @@ objColorInput.addEventListener("input", e => {
 });
 objColorInput.addEventListener("change", () => saveScene?.());
 
-objImageBtn.addEventListener("click", () => {
+objImageBtn.addEventListener("click", (e) => {
 	if (!selected) return;
-	if (selected.userData.refImage) {
-		selected.userData.refImage = null;
-		refreshObjectInspector();
-		saveScene?.();
-	} else {
-		objImageFile.click();
-	}
+	// The × button has its own click handler with stopPropagation, so this only fires
+	// when the user clicks the row body itself — open the picker (add OR replace).
+	objImageFile.click();
+});
+document.getElementById("obj-image-clear")?.addEventListener("click", (e) => {
+	e.stopPropagation();
+	if (!selected || !selected.userData.refImage) return;
+	selected.userData.refImage = null;
+	refreshObjectInspector();
+	saveScene?.();
 });
 objImageFile.addEventListener("change", async () => {
 	const f = objImageFile.files?.[0];
@@ -5199,17 +5521,19 @@ function bgImageUrl(img) {
 
 function refreshBgImageUI() {
 	const url = bgImageUrl(bgImage);
+	const clearBtn = document.getElementById("bg-image-clear");
 	if (url) {
 		bgImageThumb.style.backgroundImage = `url("${url}")`;
 		bgImageThumb.classList.add("has-image");
 		bgImageBtn.classList.add("has-image");
-		bgImageLabel.textContent = "Remove";
+		if (clearBtn) clearBtn.hidden = false;
 	} else {
 		bgImageThumb.style.backgroundImage = "";
 		bgImageThumb.classList.remove("has-image");
 		bgImageBtn.classList.remove("has-image");
-		bgImageLabel.textContent = "Image";
+		if (clearBtn) clearBtn.hidden = true;
 	}
+	bgImageLabel.textContent = "Image";
 	bgColorBtn.classList.toggle("active-bg", bgMode === "color");
 	bgImageBtn.classList.toggle("active-bg", bgMode === "image");
 }
@@ -5241,14 +5565,17 @@ bgColorBtn.addEventListener("click", e => {
 });
 
 bgImageBtn.addEventListener("click", () => {
-	if (bgImage) {
-		bgImage = null;
-		bgMode = "color";
-		applyBgMode();
-		saveScene?.();
-	} else {
-		bgImageFile.click();
-	}
+	// The × clear has its own stopPropagation handler — this fires for clicks on the
+	// thumb / label only, so always open the picker (add OR replace).
+	bgImageFile.click();
+});
+document.getElementById("bg-image-clear")?.addEventListener("click", e => {
+	e.stopPropagation();
+	if (!bgImage) return;
+	bgImage = null;
+	bgMode = "color";
+	applyBgMode();
+	saveScene?.();
 });
 bgImageFile.addEventListener("change", async () => {
 	const f = bgImageFile.files?.[0];
@@ -6902,7 +7229,12 @@ function serializeScene() {
 			refImage: o.userData.refImage || undefined,
 			keyframes: serializeObjectKeyframes(o),
 		})),
-		genCells: genCells.map(c => ({ id: c.id, model: c.model, prompt: c.prompt, expanded: c.expanded })),
+		genCells: genCells.map(c => ({
+			id: c.id, model: c.model, prompt: c.prompt, expanded: c.expanded,
+			startFrame: c.startFrame || undefined,
+			refVideo: c.refVideo || undefined,
+			styleRef: c.styleRef || undefined,
+		})),
 		activeGenCellId,
 		particles: objects.filter(o => o.userData.primKind === "particles").map(o => ({
 			name: o.name,
@@ -7010,6 +7342,9 @@ async function deserializeScene(state, opts = {}) {
 				model: GEN_MODELS[c.model] ? c.model : "nano-banana",
 				prompt: c.prompt || "",
 				expanded: c.expanded === true,
+				startFrame: c.startFrame || null,
+				refVideo: c.refVideo || null,
+				styleRef: c.styleRef || null,
 			});
 		}
 		activeGenCellId = state.activeGenCellId && genCells.some(c => c.id === state.activeGenCellId)
@@ -7885,6 +8220,10 @@ async function loadPrompt() {
 }
 
 (async () => {
+	// Paint the empty-state placeholder immediately so the outliner doesn't show as a
+	// blank section while loadScene() is still flying. refreshOutliner is called again
+	// at the end of deserializeScene with the real state.
+	refreshOutliner();
 	await loadPrompt();
 	const loaded = await loadScene();
 	// Seed a starter cube when there's nothing on disk yet so the user lands on a populated
