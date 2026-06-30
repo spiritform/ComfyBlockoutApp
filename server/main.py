@@ -869,75 +869,199 @@ async def run_module(module_id: str, request: Request):
 _chat_history: dict[str, list[dict]] = {}
 
 ASSISTANT_SYSTEM = (
-    "You are an in-editor assistant for ComfyBlockout, a 3D blockout tool that "
+    "You are an in-editor agent for ComfyBlockout, a 3D blockout tool that "
     "feeds scenes to generative image/video models via Comfy Cloud. You help "
-    "the user refine prompts, build generation JSONs, and reason about their "
-    "scene. When useful, call Comfy Cloud MCP tools to inspect or run workflows.\n\n"
+    "the user refine prompts, build generation JSONs, reason about their "
+    "scene, AND directly manipulate the scene via editor tools (add_primitive, "
+    "delete_object, set_object_color, set_object_position, set_object_rotation, "
+    "set_object_scale, rename_object, list_objects, set_generator_prompt). "
+    "When the user asks to add/move/recolor/delete something, call the tool — "
+    "don't just describe how they could do it manually. You can also call "
+    "Comfy Cloud MCP tools to inspect or run workflows.\n\n"
     "Keep responses tight. Quote object names with brackets like [Cube.001] when "
     "referring to scene objects — the editor renders those tokens in the object's "
     "color and uses them to attach the per-object reference image at generate time."
 )
 
 
+# Editor tools — Claude calls these via tool_use; the frontend executes them
+# and posts the result back via /api/llm/chat with tool_results. Schemas mirror
+# what the JS dispatcher in editor.html knows how to run.
+EDITOR_TOOLS = [
+    {
+        "name": "add_primitive",
+        "description": "Add a primitive object to the scene. Returns the new object's name.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "enum": ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "particles"],
+                    "description": "Primitive type to add",
+                },
+                "color": {"type": "string", "description": "Optional hex color like #ff5fbf"},
+                "position": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "minItems": 3, "maxItems": 3,
+                    "description": "Optional [x,y,z] world position",
+                },
+            },
+            "required": ["kind"],
+        },
+    },
+    {
+        "name": "list_objects",
+        "description": "List all objects in the scene with their names, kinds, positions, and colors.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "delete_object",
+        "description": "Delete an object by name.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "rename_object",
+        "description": "Rename an object.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Current name"},
+                "new_name": {"type": "string"},
+            },
+            "required": ["name", "new_name"],
+        },
+    },
+    {
+        "name": "set_object_color",
+        "description": "Set an object's color (hex string like #ff5fbf).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "color": {"type": "string"},
+            },
+            "required": ["name", "color"],
+        },
+    },
+    {
+        "name": "set_object_position",
+        "description": "Set an object's world position.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "x": {"type": "number"},
+                "y": {"type": "number"},
+                "z": {"type": "number"},
+            },
+            "required": ["name", "x", "y", "z"],
+        },
+    },
+    {
+        "name": "set_object_rotation",
+        "description": "Set an object's rotation in degrees (Euler XYZ).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "x": {"type": "number"},
+                "y": {"type": "number"},
+                "z": {"type": "number"},
+            },
+            "required": ["name", "x", "y", "z"],
+        },
+    },
+    {
+        "name": "set_object_scale",
+        "description": "Set an object's scale (uniform if only x given, or per-axis).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "x": {"type": "number"},
+                "y": {"type": "number"},
+                "z": {"type": "number"},
+            },
+            "required": ["name", "x"],
+        },
+    },
+    {
+        "name": "set_generator_prompt",
+        "description": "Set the prompt text on a generator cell (nano-banana or seedance).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "model": {"type": "string", "enum": ["nano-banana", "seedance"]},
+                "prompt": {"type": "string"},
+            },
+            "required": ["model", "prompt"],
+        },
+    },
+]
+
+
 def _format_scene_context(ctx: dict) -> str:
     """Render the scene state as a compact block we prepend to the conversation
-    on every turn (separately cached from the system prompt so model + scene
-    cache hits accrue independently)."""
+    on every turn. Objects[] is the SINGLE source of truth for what exists —
+    names mentioned in generator prompts may reference deleted objects."""
     if not ctx:
         return ""
     parts = ["<scene_context>"]
     objs = ctx.get("objects") or []
     if objs:
-        parts.append(f"Objects ({len(objs)}):")
+        parts.append(f"Objects in scene ({len(objs)}):")
         for o in objs:
             name = o.get("name") or "?"
             kind = o.get("kind") or "object"
             ref = " [has refImage]" if o.get("hasRef") else ""
             notes = f" — notes: {o['notes']}" if o.get("notes") else ""
             parts.append(f"  - {name} ({kind}){ref}{notes}")
+    else:
+        parts.append("Objects in scene (0): NONE — the scene is empty.")
     cells = ctx.get("genCells") or []
     if cells:
-        parts.append(f"Generators ({len(cells)}):")
+        parts.append(f"Generator cells ({len(cells)}):")
         for c in cells:
             model = c.get("model") or "?"
             prompt = (c.get("prompt") or "").strip()
             prompt_preview = (prompt[:120] + "…") if len(prompt) > 120 else prompt
             parts.append(f"  - {model}: {prompt_preview or '(empty)'}")
+    parts.append(
+        "NOTE: Objects above is authoritative. [Name] tokens inside generator "
+        "prompts are saved text and may reference objects that were deleted — "
+        "don't assume those exist unless the name also appears in Objects."
+    )
     parts.append("</scene_context>")
     return "\n".join(parts)
 
 
-@app.post("/api/llm/chat")
-async def llm_chat(request: Request):
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        raise HTTPException(400, "Anthropic API key not set — add it in Settings.")
+_EDITOR_TOOL_NAMES = {t["name"] for t in EDITOR_TOOLS}
 
-    body = await request.json()
-    message = str(body.get("message", "")).strip()
-    if not message:
-        raise HTTPException(400, "empty message")
-    node_id = str(body.get("node_id", "")).strip() or "default"
-    ctx = body.get("context") or {}
 
-    # Build the user message: scene context + their question. Scene context
-    # cached separately so caching survives across turns when the scene hasn't
-    # changed; the question itself is the volatile tail.
-    scene_block = _format_scene_context(ctx)
-    user_content = [
-        {"type": "text", "text": scene_block, "cache_control": {"type": "ephemeral"}},
-        {"type": "text", "text": message},
-    ] if scene_block else message
+def _serialize_content_blocks(content) -> list[dict]:
+    """Serialize Anthropic SDK ContentBlock objects to dicts so they survive a
+    JSON round-trip through the API response and the next request body."""
+    out = []
+    for block in content:
+        d = block.model_dump() if hasattr(block, "model_dump") else block
+        # Strip cache_control on round-trip — not valid on assistant blocks anyway.
+        if isinstance(d, dict):
+            d.pop("cache_control", None)
+        out.append(d)
+    return out
 
-    history = _chat_history.setdefault(node_id, [])
-    history.append({"role": "user", "content": user_content})
 
-    # Comfy Cloud MCP. The connector only supports an OAuth-style Authorization
-    # Bearer; Comfy's published header for headless is X-API-Key, so this works
-    # only if Comfy MCP also accepts Bearer. If a 401 comes back, fall through
-    # to no-MCP so chat still functions.
+def _call_claude(history, ctx_block_for_caching):
+    """Single Claude turn with full Comfy MCP + editor tool surface. Returns
+    the raw response. History is mutated in-place by the caller."""
     comfy_key = os.environ.get("COMFY_API_KEY")
     mcp_servers = []
-    tools = []
+    tools = list(EDITOR_TOOLS)  # editor tools always available
     if comfy_key:
         mcp_servers.append({
             "type": "url",
@@ -947,51 +1071,98 @@ async def llm_chat(request: Request):
         })
         tools.append({"type": "mcp_toolset", "mcp_server_name": "comfy-cloud"})
 
+    import anthropic
+    client = anthropic.Anthropic()
+    kwargs = dict(
+        model="claude-sonnet-4-6",
+        max_tokens=2048,
+        system=[{
+            "type": "text",
+            "text": ASSISTANT_SYSTEM,
+            "cache_control": {"type": "ephemeral"},
+        }],
+        messages=history,
+        tools=tools,
+    )
+    if mcp_servers:
+        kwargs["mcp_servers"] = mcp_servers
+        kwargs["betas"] = ["mcp-client-2025-11-20"]
+        return client.beta.messages.create(**kwargs)
+    return client.messages.create(**kwargs)
+
+
+@app.post("/api/llm/chat")
+async def llm_chat(request: Request):
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise HTTPException(400, "Anthropic API key not set — add it in Settings.")
+
+    body = await request.json()
+    node_id = str(body.get("node_id", "")).strip() or "default"
+    ctx = body.get("context") or {}
+    message = str(body.get("message", "")).strip()
+    tool_results = body.get("tool_results")  # list of {tool_use_id, content, is_error?}
+
+    if not message and not tool_results:
+        raise HTTPException(400, "empty message")
+
+    history = _chat_history.setdefault(node_id, [])
+
+    if tool_results:
+        # Continuation turn — frontend ran the editor tools we asked for and is
+        # now sending back the results. Append as a user message containing
+        # tool_result content blocks (one per pending tool_use), then re-invoke
+        # Claude so it can react to the results.
+        content_blocks = [{
+            "type": "tool_result",
+            "tool_use_id": r["tool_use_id"],
+            "content": r.get("content", ""),
+            **({"is_error": True} if r.get("is_error") else {}),
+        } for r in tool_results]
+        history.append({"role": "user", "content": content_blocks})
+    else:
+        # New user turn — prepend scene context (cached separately).
+        scene_block = _format_scene_context(ctx)
+        user_content = [
+            {"type": "text", "text": scene_block, "cache_control": {"type": "ephemeral"}},
+            {"type": "text", "text": message},
+        ] if scene_block else message
+        history.append({"role": "user", "content": user_content})
+
     try:
-        import anthropic  # imported here so server still starts if pkg missing pre-install
-        client = anthropic.Anthropic()
-        kwargs = dict(
-            model="claude-sonnet-4-6",
-            max_tokens=2048,
-            system=[{
-                "type": "text",
-                "text": ASSISTANT_SYSTEM,
-                "cache_control": {"type": "ephemeral"},
-            }],
-            messages=history,
-        )
-        if mcp_servers:
-            kwargs["mcp_servers"] = mcp_servers
-            kwargs["tools"] = tools
-            kwargs["betas"] = ["mcp-client-2025-11-20"]
-            response = client.beta.messages.create(**kwargs)
-        else:
-            response = client.messages.create(**kwargs)
+        response = _call_claude(history, ctx)
     except Exception as e:
-        # Don't poison history with a failed turn
         history.pop()
         msg = str(e)[:500]
         print(f"[cb-app] llm_chat error: {msg}")
         raise HTTPException(502, f"Claude API call failed: {msg}")
 
-    # Pull text blocks for the reply; persist the full content (including
-    # mcp_tool_use / mcp_tool_result blocks) into history so the next turn has
-    # the full tool-call context.
-    reply_parts = []
-    for block in response.content:
-        if getattr(block, "type", None) == "text":
-            reply_parts.append(block.text)
-    reply_text = "\n".join(p for p in reply_parts if p).strip() or "(no text reply)"
+    # Persist assistant turn (with tool_use blocks so we can continue the loop).
+    assistant_blocks = _serialize_content_blocks(response.content)
+    history.append({"role": "assistant", "content": assistant_blocks})
 
-    history.append({"role": "assistant", "content": response.content})
+    # Extract text + editor tool_uses (anything Claude wants the frontend to run).
+    reply_parts, pending_tools = [], []
+    for block in assistant_blocks:
+        t = block.get("type")
+        if t == "text":
+            reply_parts.append(block.get("text", ""))
+        elif t == "tool_use" and block.get("name") in _EDITOR_TOOL_NAMES:
+            pending_tools.append({
+                "id": block.get("id"),
+                "name": block.get("name"),
+                "input": block.get("input") or {},
+            })
+    reply_text = "\n".join(p for p in reply_parts if p).strip()
+    if not reply_text and not pending_tools:
+        reply_text = "(no reply)"
 
-    # Trim history aggressively — Claude's MCP toolset definitions are heavy.
     if len(history) > 40:
-        # keep the last 20 turns
         _chat_history[node_id] = history[-20:]
 
     return {
         "reply": reply_text,
+        "pending_tools": pending_tools,
+        "stop_reason": getattr(response, "stop_reason", None),
         "usage": {
             "input_tokens": getattr(response.usage, "input_tokens", 0),
             "output_tokens": getattr(response.usage, "output_tokens", 0),

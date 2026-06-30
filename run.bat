@@ -16,8 +16,11 @@ if not exist .venv (
 
 echo.
 echo [cb-app] starting on http://127.0.0.1:8765
-echo [cb-app] open that in a browser to use the editor
 echo.
+
+REM Open the editor in the default browser ~2s after the server starts.
+REM `start /b` runs in background so the wait + browser open don't block uvicorn.
+start "" /b cmd /c "timeout /t 2 /nobreak >nul && start http://127.0.0.1:8765"
 
 python -m uvicorn server.main:app --host 127.0.0.1 --port 8765 --reload
 exit /b 0

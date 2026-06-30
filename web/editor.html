@@ -484,7 +484,7 @@
 	/* Collapsible sections — click the head-row to fold the body */
 	.section.collapsible .section-head-row {
 		cursor: pointer; user-select: none;
-		margin-bottom: 14px;
+		margin-bottom: 8px;
 	}
 	.section.collapsible.collapsed .section-head-row { margin-bottom: 0; }
 	.section.collapsible.collapsed { padding-bottom: 14px; }
@@ -525,6 +525,12 @@
 	}
 	.assistant-status.busy { color: #ffb454; }
 	.assistant-status.error { color: #ff6a6a; }
+	.assistant-reset {
+		background: transparent; border: none; cursor: pointer;
+		color: rgba(255,255,255,0.35); font-size: 12px;
+		padding: 0 4px; line-height: 1;
+	}
+	.assistant-reset:hover { color: #ffb454; }
 	.assistant-shell {
 		border: 1px solid rgba(255,255,255,0.06);
 		border-radius: 5px; overflow: hidden;
@@ -545,28 +551,99 @@
 	.assistant-msg.user    { background: rgba(255,180,84,0.08); color: rgba(255,255,255,0.9); }
 	.assistant-msg.user::before    { content: "you · "; color: #ffb454; font-weight: 600; }
 	.assistant-msg.bot     { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.85); }
-	.assistant-msg.bot::before     { content: "assistant · "; color: rgba(255,255,255,0.4); font-weight: 600; }
+	.assistant-msg.bot::before     { content: "agent · "; color: rgba(255,255,255,0.4); font-weight: 600; }
+	/* Rendered-markdown body inside bot messages */
+	.assistant-md { display: block; }
+	.assistant-md > :first-child { margin-top: 0; }
+	.assistant-md > :last-child { margin-bottom: 0; }
+	.assistant-md p { margin: 6px 0; }
+	.assistant-md h1, .assistant-md h2, .assistant-md h3, .assistant-md h4 {
+		margin: 10px 0 4px; font-weight: 600; color: #fff;
+		letter-spacing: 0; text-transform: none;
+	}
+	.assistant-md h1 { font-size: 13px; }
+	.assistant-md h2 { font-size: 12px; color: #ffb454; }
+	.assistant-md h3, .assistant-md h4 { font-size: 11px; color: #ffd28a; }
+	.assistant-md hr { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 8px 0; }
+	.assistant-md ul, .assistant-md ol { margin: 4px 0 6px; padding-left: 18px; }
+	.assistant-md li { margin: 2px 0; }
+	.assistant-md strong { color: #fff; font-weight: 600; }
+	.assistant-md em { color: rgba(255,255,255,0.9); }
+	.assistant-md a { color: #ffb454; text-decoration: underline; text-underline-offset: 2px; }
+	.assistant-md code {
+		background: rgba(0,0,0,0.35); border-radius: 3px;
+		padding: 1px 5px; font: 10px ui-monospace, "SFMono-Regular", Menlo, monospace;
+		color: #ffd28a;
+	}
+	.assistant-md pre {
+		background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.05);
+		border-radius: 4px; padding: 8px 10px; margin: 6px 0;
+		overflow-x: auto;
+	}
+	.assistant-md pre code { background: transparent; padding: 0; color: rgba(255,255,255,0.9); }
+	.assistant-md blockquote {
+		border-left: 2px solid rgba(255,180,84,0.5); padding-left: 8px;
+		color: rgba(255,255,255,0.7); margin: 6px 0;
+	}
+	.assistant-md table {
+		border-collapse: collapse; width: 100%; font-size: 10px;
+		margin: 6px 0; display: block; overflow-x: auto;
+	}
+	.assistant-md th, .assistant-md td {
+		border: 1px solid rgba(255,255,255,0.08);
+		padding: 4px 6px; text-align: left; vertical-align: top;
+	}
+	.assistant-md th {
+		background: rgba(255,255,255,0.04); color: #ffd28a; font-weight: 600;
+	}
 	.assistant-msg.error   { background: rgba(255,80,80,0.08); color: #ff8a8a; }
+	.assistant-input-row {
+		position: relative;
+		background: rgba(255,255,255,0.03);
+		border-top: 1px solid rgba(255,255,255,0.05);
+	}
+	.assistant-prompt-arrow {
+		position: absolute; left: 10px; top: 9px;
+		color: #ffb454; font-size: 12px; font-weight: 700;
+		line-height: 1; pointer-events: none; user-select: none;
+		font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+	}
 	.assistant-input {
 		width: 100%; height: 56px; resize: none;
-		background: rgba(255,255,255,0.03);
-		border: none; border-top: 1px solid rgba(255,255,255,0.05);
-		padding: 8px 10px;
+		background: transparent;
+		border: none;
+		padding: 8px 10px 8px 24px;
 		color: rgba(255,255,255,0.85); font: inherit; font-size: 11px;
 		box-sizing: border-box; overflow-y: auto;
 		display: block;
 	}
-	.assistant-input:focus { outline: none; background: rgba(255,255,255,0.05); }
+	.assistant-input:focus { outline: none; }
+	.assistant-input-row:focus-within { background: rgba(255,255,255,0.05); }
 	.assistant-shell:focus-within { border-color: rgba(255,180,84,0.35); }
 
-	.prim-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+	.prim-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; position: relative; }
 	.prim-btn {
-		aspect-ratio: 1; background: rgba(255,255,255,0.04); border: none;
+		position: relative;
+		height: 40px; background: rgba(255,255,255,0.04); border: none;
 		border-radius: 5px; display: flex; align-items: center; justify-content: center;
 		color: rgba(255,255,255,0.55); cursor: pointer; transition: background 0.12s, color 0.12s;
 	}
 	.prim-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
-	.prim-btn svg { width: 18px; height: 18px; }
+	.prim-btn svg { width: 16px; height: 16px; }
+	/* Inline label on hover — replaces the native tooltip. Pseudo-element pops
+	   below the button so the icon stays visible above it. */
+	.prim-btn::after {
+		content: attr(data-label);
+		position: absolute; top: calc(100% + 4px); left: 50%;
+		transform: translateX(-50%); white-space: nowrap;
+		background: #15151c; border: 1px solid rgba(255,255,255,0.08);
+		color: #ffb454; font-size: 10px;
+		letter-spacing: 0.04em; text-transform: uppercase;
+		padding: 3px 7px; border-radius: 4px;
+		pointer-events: none; opacity: 0; z-index: 30;
+		transition: opacity 0.1s;
+	}
+	.prim-btn:hover::after { opacity: 1; }
 
 	.gen-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
 	.gen-cells { display: flex; flex-direction: column; gap: 4px; }
@@ -1159,14 +1236,14 @@
 				</span>
 			</div>
 			<div class="prim-grid">
-				<button class="prim-btn" data-prim="cube" title="Cube"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12L4 7.5M12 12l8-4.5M12 12v9"/></svg></button>
-				<button class="prim-btn" data-prim="sphere" title="Sphere"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8"/><ellipse cx="12" cy="12" rx="8" ry="3"/></svg></button>
-				<button class="prim-btn" data-prim="capsule" title="Capsule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="8" y="4" width="8" height="16" rx="4"/></svg></button>
-				<button class="prim-btn" data-prim="cylinder" title="Cylinder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="6" rx="6" ry="2"/><path d="M6 6v12a6 2 0 0 0 12 0V6"/></svg></button>
-				<button class="prim-btn" data-prim="cone" title="Cone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="20" rx="7" ry="2"/><path d="M5 20L12 3l7 17"/></svg></button>
-				<button class="prim-btn" data-prim="plane" title="Plane"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 16l9-4 9 4-9 4-9-4z"/></svg></button>
-				<button class="prim-btn" data-prim="custom" title="Custom Import (GLB · FBX · OBJ · PLY · SPLAT · SPZ)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 6v6M9 9l3-3 3 3" stroke="#ffb454"/></svg></button>
-				<button class="prim-btn" data-prim="particles" title="Particle System (three.js)"><svg viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="1.3" fill="currentColor"/><circle cx="12" cy="4" r="0.9" fill="currentColor"/><circle cx="18" cy="7" r="1.1" fill="currentColor"/><circle cx="5" cy="13" r="0.9" fill="currentColor"/><circle cx="11" cy="11" r="1.4" fill="currentColor"/><circle cx="17" cy="14" r="1" fill="currentColor"/><circle cx="8" cy="18" r="1.1" fill="currentColor"/><circle cx="15" cy="20" r="0.9" fill="currentColor"/><circle cx="20" cy="17" r="0.8" fill="currentColor"/></svg></button>
+				<button class="prim-btn" data-prim="cube" data-label="Cube"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12L4 7.5M12 12l8-4.5M12 12v9"/></svg></button>
+				<button class="prim-btn" data-prim="sphere" data-label="Sphere"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8"/><ellipse cx="12" cy="12" rx="8" ry="3"/></svg></button>
+				<button class="prim-btn" data-prim="capsule" data-label="Capsule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="8" y="4" width="8" height="16" rx="4"/></svg></button>
+				<button class="prim-btn" data-prim="cylinder" data-label="Cylinder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="6" rx="6" ry="2"/><path d="M6 6v12a6 2 0 0 0 12 0V6"/></svg></button>
+				<button class="prim-btn" data-prim="cone" data-label="Cone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="20" rx="7" ry="2"/><path d="M5 20L12 3l7 17"/></svg></button>
+				<button class="prim-btn" data-prim="plane" data-label="Plane"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 16l9-4 9 4-9 4-9-4z"/></svg></button>
+				<button class="prim-btn" data-prim="custom" data-label="Import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 6v6M9 9l3-3 3 3" stroke="#ffb454"/></svg></button>
+				<button class="prim-btn" data-prim="particles" data-label="Particles"><svg viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="1.3" fill="currentColor"/><circle cx="12" cy="4" r="0.9" fill="currentColor"/><circle cx="18" cy="7" r="1.1" fill="currentColor"/><circle cx="5" cy="13" r="0.9" fill="currentColor"/><circle cx="11" cy="11" r="1.4" fill="currentColor"/><circle cx="17" cy="14" r="1" fill="currentColor"/><circle cx="8" cy="18" r="1.1" fill="currentColor"/><circle cx="15" cy="20" r="0.9" fill="currentColor"/><circle cx="20" cy="17" r="0.8" fill="currentColor"/></svg></button>
 			</div>
 		</div>
 
@@ -1199,17 +1276,21 @@
 
 		<div class="section collapsible" id="assistant-section" data-section="assistant">
 			<div class="section-head-row">
-				<span class="section-label">Assistant</span>
+				<span class="section-label">AI Agent</span>
 				<span class="head-end">
+					<button class="assistant-reset" id="assistant-reset" title="Clear chat history">↻</button>
 					<span class="assistant-status" id="assistant-status">MCP · idle</span>
 					<span class="collapse-caret">▾</span>
 				</span>
 			</div>
 			<div class="assistant-shell">
 				<div class="assistant-log" id="assistant-log">
-					<div class="assistant-msg system">Ask me to refine a prompt, structure a generation JSON, or call a Comfy MCP tool.</div>
+					<div class="assistant-msg system" id="assistant-intro">Ask the agent to refine a prompt, structure a generation JSON, or call a Comfy MCP tool.</div>
 				</div>
-				<textarea class="assistant-input" id="assistant-input" rows="2" placeholder="Ask the assistant… (Enter to send · Shift+Enter for new line)"></textarea>
+				<div class="assistant-input-row">
+					<span class="assistant-prompt-arrow" aria-hidden="true">&gt;</span>
+					<textarea class="assistant-input" id="assistant-input" rows="2" placeholder="Ask the AI agent… (Enter to send · Shift+Enter for new line)"></textarea>
+				</div>
 			</div>
 		</div>
 
@@ -1789,6 +1870,8 @@ import { PLYLoader } from "three/addons/loaders/PLYLoader.js";
 import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
+import { marked } from "https://esm.sh/marked@12";
+import DOMPurify from "https://esm.sh/dompurify@3";
 
 const params = new URLSearchParams(location.search);
 const NODE_ID = params.get("node_id") || "preview";
@@ -3360,13 +3443,176 @@ const assistantLog = document.getElementById("assistant-log");
 const assistantInput = document.getElementById("assistant-input");
 const assistantStatus = document.getElementById("assistant-status");
 
+// Markdown rendering for bot replies — Claude returns GFM with headings,
+// tables, lists, bold/italic, code. We parse via marked then sanitize with
+// DOMPurify so the LLM can't inject scripts via the chat surface.
+marked.setOptions({ breaks: true, gfm: true });
+function renderMarkdown(text) {
+	return DOMPurify.sanitize(marked.parse(text || ""));
+}
+
 function pushAssistantMsg(kind, text) {
+	// Drop the placeholder intro the first time a real message lands.
+	document.getElementById("assistant-intro")?.remove();
 	const el = document.createElement("div");
 	el.className = `assistant-msg ${kind}`;
-	el.textContent = text;
+	if (kind === "bot") {
+		const body = document.createElement("div");
+		body.className = "assistant-md";
+		body.innerHTML = renderMarkdown(text);
+		el.appendChild(body);
+	} else {
+		el.textContent = text;
+	}
 	assistantLog.appendChild(el);
 	assistantLog.scrollTop = assistantLog.scrollHeight;
 	return el;
+}
+
+// Snapshot the current scene state for the assistant's context block.
+function assistantSceneContext() {
+	return {
+		objects: objects.map(o => ({
+			name: o.name,
+			kind: o.userData.primKind || "object",
+			notes: o.userData.notes || null,
+			hasRef: !!o.userData.refImage?.signedUrl,
+		})),
+		activeGenCellId,
+		genCells: genCells.map(c => ({ model: c.model, prompt: c.prompt })),
+	};
+}
+
+// ── Editor tools — Claude calls these via tool_use ────────────────
+// Each handler returns a string (or object stringified) — that becomes the
+// tool_result content sent back to Claude on the next turn.
+function findObjByName(name) {
+	if (!name) return null;
+	const target = String(name).toLowerCase();
+	return objects.find(o => (o.name || "").toLowerCase() === target) || null;
+}
+
+const ASSISTANT_TOOLS = {
+	add_primitive({ kind, color, position }) {
+		if (!kind) return "error: kind is required";
+		const allowed = ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "particles"];
+		if (!allowed.includes(kind)) return `error: unknown kind '${kind}'`;
+		const obj = addPrimitive(kind);
+		if (!obj) return "error: addPrimitive returned null";
+		if (Array.isArray(position) && position.length === 3) {
+			obj.position.set(+position[0] || 0, +position[1] || 0, +position[2] || 0);
+		} else {
+			obj.position.set(0, 0.5, 0);
+		}
+		if (color && obj.material?.color) {
+			try { obj.material.color.setStyle(color); } catch {}
+		}
+		refreshOutliner();
+		saveScene?.();
+		return `added ${obj.name} (${kind}) at (${obj.position.x.toFixed(2)}, ${obj.position.y.toFixed(2)}, ${obj.position.z.toFixed(2)})`;
+	},
+
+	list_objects() {
+		if (objects.length === 0) return "scene is empty";
+		return JSON.stringify(objects.map(o => ({
+			name: o.name,
+			kind: o.userData.primKind || "object",
+			position: [+o.position.x.toFixed(3), +o.position.y.toFixed(3), +o.position.z.toFixed(3)],
+			color: o.userData.particleSystem
+				? "#" + o.userData.particleSystem.config.color.toString(16).padStart(6, "0")
+				: (o.material?.color ? "#" + o.material.color.getHexString() : null),
+		})));
+	},
+
+	delete_object({ name }) {
+		const obj = findObjByName(name);
+		if (!obj) return `error: no object named '${name}'`;
+		deleteObject(obj);
+		return `deleted ${name}`;
+	},
+
+	rename_object({ name, new_name }) {
+		const obj = findObjByName(name);
+		if (!obj) return `error: no object named '${name}'`;
+		const v = String(new_name || "").trim();
+		if (!v) return "error: new_name is empty";
+		obj.name = v;
+		if (selected === obj) forceRightPane("object", obj.name);
+		refreshOutliner();
+		saveScene?.();
+		return `renamed to ${v}`;
+	},
+
+	set_object_color({ name, color }) {
+		const obj = findObjByName(name);
+		if (!obj) return `error: no object named '${name}'`;
+		const ps = obj.userData.particleSystem;
+		if (ps) {
+			try {
+				ps.config.color = parseInt(String(color).replace("#", ""), 16);
+				syncParticleUniforms(obj);
+			} catch { return "error: invalid color"; }
+		} else if (obj.material?.color) {
+			try { obj.material.color.setStyle(color); } catch { return "error: invalid color"; }
+		} else {
+			return `error: ${name} has no color channel`;
+		}
+		refreshOutliner();
+		if (selected === obj) refreshObjectInspector?.();
+		saveScene?.();
+		return `set color to ${color}`;
+	},
+
+	set_object_position({ name, x, y, z }) {
+		const obj = findObjByName(name);
+		if (!obj) return `error: no object named '${name}'`;
+		obj.position.set(+x || 0, +y || 0, +z || 0);
+		if (selected === obj) refreshObjectInspector?.();
+		saveScene?.();
+		return `moved to (${obj.position.x}, ${obj.position.y}, ${obj.position.z})`;
+	},
+
+	set_object_rotation({ name, x, y, z }) {
+		const obj = findObjByName(name);
+		if (!obj) return `error: no object named '${name}'`;
+		const RAD = Math.PI / 180;
+		obj.rotation.set((+x || 0) * RAD, (+y || 0) * RAD, (+z || 0) * RAD);
+		if (selected === obj) refreshObjectInspector?.();
+		saveScene?.();
+		return `rotated to (${x}°, ${y}°, ${z}°)`;
+	},
+
+	set_object_scale({ name, x, y, z }) {
+		const obj = findObjByName(name);
+		if (!obj) return `error: no object named '${name}'`;
+		const sx = Math.max(0.001, +x || 1);
+		const sy = (y === undefined) ? sx : Math.max(0.001, +y);
+		const sz = (z === undefined) ? sx : Math.max(0.001, +z);
+		obj.scale.set(sx, sy, sz);
+		if (selected === obj) refreshObjectInspector?.();
+		saveScene?.();
+		return `scaled to (${sx}, ${sy}, ${sz})`;
+	},
+
+	set_generator_prompt({ model, prompt }) {
+		const cell = genCells.find(c => c.model === model);
+		if (!cell) return `error: no generator cell for ${model}`;
+		cell.prompt = String(prompt || "");
+		refreshGenCells();
+		maybeSaveDebounced();
+		return `updated ${model} prompt`;
+	},
+};
+
+async function runAssistantTool(tu) {
+	const fn = ASSISTANT_TOOLS[tu.name];
+	if (!fn) return { tool_use_id: tu.id, content: `error: unknown tool ${tu.name}`, is_error: true };
+	try {
+		const result = await fn(tu.input || {});
+		return { tool_use_id: tu.id, content: String(result ?? "ok") };
+	} catch (err) {
+		return { tool_use_id: tu.id, content: `error: ${err.message || err}`, is_error: true };
+	}
 }
 
 let assistantBusy = false;
@@ -3380,31 +3626,40 @@ async function sendAssistant(message) {
 	assistantInput.disabled = true;
 	assistantStatus.textContent = "MCP · thinking";
 	assistantStatus.className = "assistant-status busy";
+
+	let payload = {
+		node_id: NODE_ID,
+		message: text,
+		context: assistantSceneContext(),
+	};
+
 	try {
-		const r = await fetch("/api/llm/chat", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				node_id: NODE_ID,
-				message: text,
-				context: {
-					objects: objects.map(o => ({
-						name: o.name,
-						kind: o.userData.primKind || "object",
-						notes: o.userData.notes || null,
-						hasRef: !!o.userData.refImage?.signedUrl,
-					})),
-					activeGenCellId,
-					genCells: genCells.map(c => ({ model: c.model, prompt: c.prompt })),
-				},
-			}),
-		});
-		if (!r.ok) {
-			const e = await r.json().catch(() => ({}));
-			throw new Error(e.detail || `chat failed (${r.status})`);
+		// Agentic loop — keep posting tool results until Claude stops asking.
+		for (let hop = 0; hop < 10; hop++) {
+			const r = await fetch("/api/llm/chat", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(payload),
+			});
+			if (!r.ok) {
+				const e = await r.json().catch(() => ({}));
+				throw new Error(e.detail || `chat failed (${r.status})`);
+			}
+			const j = await r.json();
+			if (j.reply) pushAssistantMsg("bot", j.reply);
+			const pending = j.pending_tools || [];
+			if (pending.length === 0) break;
+
+			assistantStatus.textContent = `MCP · running ${pending.length} tool${pending.length === 1 ? "" : "s"}`;
+			const tool_results = [];
+			for (const tu of pending) {
+				const res = await runAssistantTool(tu);
+				tool_results.push(res);
+			}
+			// Continue the loop — send tool_results (no new user message).
+			payload = { node_id: NODE_ID, tool_results };
+			assistantStatus.textContent = "MCP · thinking";
 		}
-		const j = await r.json();
-		pushAssistantMsg("bot", j.reply || "(empty reply)");
 		assistantStatus.textContent = "MCP · idle";
 		assistantStatus.className = "assistant-status";
 	} catch (err) {
@@ -3424,6 +3679,28 @@ assistantInput.addEventListener("keydown", e => {
 		e.preventDefault();
 		sendAssistant();
 	}
+});
+
+// Reset chat — flush server-side history + clear the log so stale references
+// (e.g. an object name from a previous session) don't poison new turns.
+document.getElementById("assistant-reset")?.addEventListener("click", async (e) => {
+	e.stopPropagation();
+	try {
+		await fetch("/api/llm/reset", {
+			method: "POST", headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ node_id: NODE_ID }),
+		});
+	} catch {}
+	assistantLog.innerHTML = `<div class="assistant-msg system" id="assistant-intro">Ask the agent to refine a prompt, structure a generation JSON, or call a Comfy MCP tool.</div>`;
+});
+
+// Hide the placeholder the moment the user focuses the input so it feels
+// ready-to-type instead of "read the suggestion first". Restored on blur if
+// nothing was typed.
+const ASSISTANT_PLACEHOLDER = assistantInput.placeholder;
+assistantInput.addEventListener("focus", () => { assistantInput.placeholder = ""; });
+assistantInput.addEventListener("blur", () => {
+	if (!assistantInput.value) assistantInput.placeholder = ASSISTANT_PLACEHOLDER;
 });
 
 // Alt-held camera modifier: layers cinematic moves on top of the default
