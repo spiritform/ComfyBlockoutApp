@@ -1,0 +1,4666 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+<title>ComfyBlockout · 3D Editor Node</title>
+<style>
+	* { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; letter-spacing: -0.01em; }
+	html, body { height: 100%; background: #0a0a0e; color: #e0e0e0; font-family: "Inter", -apple-system, "Segoe UI", sans-serif; font-size: 12px; overflow: hidden; }
+	body { display: flex; flex-direction: column; }
+
+	/* Top header — brand left, status + module actions right. */
+	#top-header {
+		flex: 0 0 52px;
+		display: flex; align-items: center; justify-content: space-between;
+		padding: 0 24px;
+		background: #020203;
+		z-index: 200;
+	}
+	#top-header .th-brand {
+		display: flex; align-items: center; gap: 10px;
+		font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
+		color: rgba(255,255,255,0.9);
+	}
+	#top-header .th-brand .th-dot {
+		width: 8px; height: 8px; border-radius: 50%;
+		background: linear-gradient(135deg, #ffb454, #ff7a00);
+		box-shadow: 0 0 8px rgba(255,180,84,0.5);
+	}
+	#top-header .th-brand small {
+		color: rgba(255,255,255,0.4); font-weight: 400; font-size: 10px;
+		letter-spacing: 0.06em; text-transform: uppercase;
+	}
+	#top-header .th-right { display: flex; align-items: center; gap: 6px; }
+	#top-header .th-left { display: flex; align-items: center; gap: 28px; }
+	#top-header .th-gen { display: flex; align-items: center; gap: 8px; }
+	#top-header .th-group-label, #top-header .th-project {
+		font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+		color: rgba(255,255,255,0.4);
+	}
+	#top-header .th-project { margin-right: 4px; text-transform: none; letter-spacing: 0; font-size: 11px; }
+	#top-header .th-btn-mini {
+		padding: 6px 12px; border-radius: 5px; border: none;
+		background: transparent; color: rgba(255,255,255,0.7);
+		font-size: 11px; cursor: pointer; font-family: inherit;
+	}
+	#top-header .th-btn-mini:hover { background: rgba(255,255,255,0.06); color: #fff; }
+	.th-icon-btn {
+		width: 32px; height: 32px; border-radius: 6px; border: none;
+		background: transparent; color: rgba(255,255,255,0.55); cursor: pointer;
+		display: inline-flex; align-items: center; justify-content: center;
+	}
+	.th-icon-btn:hover { background: rgba(255,255,255,0.08); color: #e6e6ea; }
+	.th-icon-btn svg { width: 16px; height: 16px; }
+
+	/* ---- settings modal ---- */
+	.modal-backdrop {
+		position: fixed; inset: 0; z-index: 500;
+		background: rgba(0,0,0,0.55); backdrop-filter: blur(6px);
+		display: none; align-items: center; justify-content: center;
+	}
+	.modal-backdrop.open { display: flex; }
+	.modal-card {
+		width: min(340px, 92vw);
+		background: #0e0e12; border-radius: 10px;
+		padding: 22px 22px 20px;
+		box-shadow: 0 30px 80px rgba(0,0,0,0.55);
+	}
+	.modal-head {
+		display: flex; justify-content: space-between; align-items: center;
+		margin-bottom: 20px;
+	}
+	.modal-title { font-size: 12px; font-weight: 500; color: #e6e6ea; letter-spacing: 0; }
+	.modal-close {
+		width: 24px; height: 24px; border-radius: 5px; border: none;
+		background: transparent; color: rgba(255,255,255,0.4);
+		font-size: 16px; line-height: 1; cursor: pointer; font-family: inherit;
+	}
+	.modal-close:hover { background: rgba(255,255,255,0.06); color: #e6e6ea; }
+	.modal-section { padding-bottom: 0; }
+	.modal-section .section-label { margin-bottom: 10px; }
+	.modal-input {
+		width: 100%; border: none; outline: none;
+		background: rgba(255,255,255,0.04); color: #e6e6ea;
+		padding: 9px 12px; border-radius: 5px;
+		font-family: inherit; font-size: 11px; letter-spacing: 0;
+	}
+	.modal-input:focus { background: rgba(255,255,255,0.07); }
+	.modal-hint { margin-top: 10px; font-size: 10px; color: rgba(255,255,255,0.35); line-height: 1.4; }
+	.modal-hint a { color: rgba(255,180,84,0.75); text-decoration: none; }
+	.modal-hint a:hover { color: #ffb454; }
+	.modal-actions { display: flex; gap: 6px; margin-top: 16px; }
+	.modal-btn-primary {
+		flex: 1; padding: 8px 14px; border-radius: 5px; border: none;
+		background: #ffb454; color: #1a1208;
+		font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit;
+	}
+	.modal-btn-primary:hover { background: #ffc066; }
+	.modal-btn-secondary {
+		padding: 8px 14px; border-radius: 5px; border: none;
+		background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.7);
+		font-size: 11px; cursor: pointer; font-family: inherit;
+	}
+	.modal-btn-secondary:hover { background: rgba(255,255,255,0.07); color: #fff; }
+	.modal-status {
+		font-size: 10px; padding: 7px 10px; border-radius: 4px;
+		margin-bottom: 12px; display: none;
+	}
+	.modal-status.success { display: block; background: rgba(56,217,119,0.12); color: #5ce594; }
+	.modal-status.error { display: block; background: rgba(255,90,90,0.12); color: #ff8a8a; }
+	.th-btn {
+		padding: 6px 14px; border-radius: 6px; border: 1px solid rgba(255,180,84,0.4);
+		background: linear-gradient(180deg, rgba(255,180,84,0.18), rgba(255,122,0,0.10));
+		color: #ffb454; font-size: 11px; font-weight: 600;
+		letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
+	}
+	.th-btn:hover { background: linear-gradient(180deg, rgba(255,180,84,0.32), rgba(255,122,0,0.20)); color: #fff; }
+	.th-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+	.th-btn.secondary {
+		border-color: rgba(255,255,255,0.12);
+		background: rgba(255,255,255,0.04);
+		color: rgba(255,255,255,0.7);
+	}
+	.th-btn.secondary:hover { background: rgba(255,255,255,0.08); color: #fff; }
+
+	#main-row { flex: 1; min-height: 0; display: flex; }
+
+	/* Floating result viewer — shows the latest generation. */
+	#result-toast {
+		position: fixed; right: 20px; bottom: 20px; z-index: 400;
+		max-width: 420px; max-height: 420px;
+		background: rgba(20,20,26,0.95);
+		border: 1px solid rgba(255,180,84,0.4);
+		border-radius: 10px;
+		box-shadow: 0 18px 50px rgba(0,0,0,0.5);
+		overflow: hidden;
+		display: none; flex-direction: column;
+	}
+	#result-toast.show { display: flex; }
+	#result-toast .rt-head {
+		display: flex; justify-content: space-between; align-items: center;
+		padding: 8px 12px;
+		background: rgba(0,0,0,0.4);
+		border-bottom: 1px solid rgba(255,255,255,0.06);
+		font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+		color: rgba(255,180,84,0.9); font-weight: 600;
+	}
+	#result-toast .rt-close {
+		background: none; border: none; color: rgba(255,255,255,0.5);
+		font-size: 16px; line-height: 1; cursor: pointer; padding: 2px 4px;
+	}
+	#result-toast .rt-close:hover { color: #fff; }
+	#result-toast .rt-body { padding: 8px; background: #0a0a0e; display: flex; align-items: center; justify-content: center; }
+	#result-toast img, #result-toast video { display: block; max-width: 100%; max-height: 360px; border-radius: 4px; }
+	#result-toast .rt-foot {
+		padding: 6px 12px; font-size: 10px; color: rgba(255,255,255,0.4);
+		border-top: 1px solid rgba(255,255,255,0.06);
+		display: flex; justify-content: space-between; align-items: center;
+	}
+	#result-toast .rt-foot a { color: rgba(255,180,84,0.8); text-decoration: none; }
+	#result-toast .rt-foot a:hover { color: #ffb454; }
+
+	/* References row — inline reference image management in the header. */
+	#refs-strip {
+		display: flex; align-items: center; gap: 6px;
+		max-width: 320px; overflow-x: auto; overflow-y: hidden;
+		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+	}
+	#refs-strip::-webkit-scrollbar { height: 4px; }
+	#refs-strip::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+	.ref-chip {
+		flex: 0 0 auto;
+		display: flex; align-items: center; gap: 4px;
+		padding: 2px 4px 2px 2px;
+		background: rgba(255,255,255,0.06);
+		border: 1px solid rgba(255,255,255,0.08);
+		border-radius: 6px;
+		position: relative;
+	}
+	.ref-chip img { width: 26px; height: 26px; object-fit: cover; border-radius: 4px; display: block; }
+	.ref-chip .ref-x {
+		background: none; border: none; color: rgba(255,255,255,0.4);
+		cursor: pointer; font-size: 12px; padding: 0 4px; line-height: 1;
+	}
+	.ref-chip .ref-x:hover { color: #ff5a5a; }
+	#refs-add {
+		flex: 0 0 auto;
+		padding: 4px 10px;
+		background: rgba(255,255,255,0.04);
+		border: 1px dashed rgba(255,255,255,0.15);
+		border-radius: 6px;
+		font-size: 10px; color: rgba(255,255,255,0.55);
+		letter-spacing: 0.04em; text-transform: uppercase;
+		cursor: pointer; user-select: none;
+	}
+	#refs-add:hover { background: rgba(255,255,255,0.07); color: #fff; border-color: rgba(255,180,84,0.35); }
+
+	#viewport-area {
+		position: relative;
+		flex: 1; min-width: 0; height: 100%;
+		display: flex; flex-direction: column;
+	}
+	#canvas-wrap {
+		position: relative; flex: 1; min-height: 0;
+		overflow: hidden;
+		display: flex; align-items: center; justify-content: center;
+		background:
+			radial-gradient(ellipse 80% 60% at 50% 35%, rgba(60,80,110,0.18), transparent 70%),
+			linear-gradient(180deg, #0c0d12 0%, #07080b 100%);
+	}
+	#renderCanvas { display: block; }
+
+	#timeline {
+		flex: 0 0 auto; height: 72px;
+		background: #050508;
+		display: flex; align-items: center; gap: 8px; padding: 14px 14px 8px;
+		font-family: inherit; user-select: none;
+	}
+
+	/* Preview-mode (in-node iframe): hide chrome, expose tiny floating transport */
+	body.preview-mode #panel,
+	body.preview-mode #timeline,
+	body.preview-mode #status,
+	body.preview-mode #info-block,
+	body.preview-mode #drop-overlay,
+	body.preview-mode #aspect-frame .label { display: none !important; }
+	body.preview-mode #aspect-frame { border-color: rgba(255,255,255,0.05); }
+	body.preview-mode #viewport-area { padding: 0; }
+	body.preview-mode #canvas-wrap { padding: 0; }
+	/* Preview footer: transport on top, brand/time row below, grouped inside a
+	   single padded container so the whole group has equal space around it.
+	   canvas-wrap shrinks naturally above so the scene never renders behind it. */
+	#pv-footer {
+		display: none; flex-direction: column; gap: 4px;
+		padding: 6px; flex-shrink: 0;
+	}
+	body.preview-mode #pv-footer { display: flex; }
+	#preview-transport {
+		display: flex; align-items: center; gap: 3px;
+		background: rgba(14,14,18,0.92);
+		border-radius: 6px; backdrop-filter: blur(6px);
+		padding: 12px 4px 4px; /* extra top padding leaves room for keyframe diamonds above the bar */
+	}
+	.pv-btn {
+		background: rgba(255,255,255,0.06); border: none; border-radius: 4px;
+		cursor: pointer; color: #ccc;
+		width: 22px; height: 22px; flex-shrink: 0;
+		display: flex; align-items: center; justify-content: center;
+		font-family: inherit; font-weight: 700; font-size: 13px; line-height: 1;
+		user-select: none; -webkit-user-select: none;
+	}
+	.pv-btn:hover { background: rgba(255,255,255,0.12); }
+	.pv-btn.active { background: rgba(255,180,84,0.18); color: #ffd28a; }
+	/* Text glyph buttons (+ ×) — tuned individually so they balance the icon buttons. */
+	#pv-addkey { font-size: 14px; }
+	#pv-clearkey { font-size: 9px; margin-right: 4px; }
+	#pv-addkey.flash-green { animation: pvFlashGreen 0.5s ease-out; }
+	@keyframes pvFlashGreen {
+		0%   { background: #38d977; color: #fff; }
+		100% { background: rgba(255,255,255,0.06); color: #ccc; }
+	}
+	.pv-btn.rec { color: #ff7a7a; }
+	.pv-btn.rec.recording { background: rgba(255,80,80,0.22); color: #fff; animation: pulse 1s infinite; }
+	.pv-icon {
+		width: 12px; height: 12px; display: block;
+		filter: brightness(0) invert(0.8);
+		transition: filter 0.12s;
+	}
+	.pv-btn:hover .pv-icon { filter: brightness(0) invert(1); }
+	.pv-btn.active .pv-icon { filter: brightness(0) invert(0.85) sepia(1) saturate(6) hue-rotate(330deg); }
+	.pv-btn.rec .pv-icon { filter: brightness(0) invert(0.55) sepia(1) saturate(8) hue-rotate(330deg); }
+	.pv-btn.rec.recording .pv-icon { filter: brightness(0) invert(1) sepia(1) saturate(8) hue-rotate(330deg); }
+	/* Brand + time row sits below the transport, no chrome of its own. */
+	#pv-time-strip {
+		display: flex; align-items: baseline; justify-content: space-between;
+		pointer-events: none;
+		padding: 0 4px;
+		user-select: none; -webkit-user-select: none;
+	}
+	#pv-time-strip .pv-brand {
+		font: 10px "Inter", -apple-system, sans-serif;
+		letter-spacing: 0.01em;
+		color: rgba(255,255,255,0.7);
+	}
+	#pv-time-strip .pv-brand-by {
+		color: rgba(255,255,255,0.35);
+	}
+	#pv-time-strip #pv-time {
+		font: 10px ui-monospace, monospace; letter-spacing: 0.04em;
+		color: rgba(255,255,255,0.55);
+	}
+	#pv-scrub-wrap {
+		flex: 1; min-width: 20px; position: relative; height: 22px;
+		background: #2a2a32; border-radius: 4px;
+		/* overflow visible — so playhead + keyframes extend full bar height even at
+		   the rounded corners instead of being clipped to a chevron sliver. */
+		overflow: visible; cursor: ew-resize;
+		user-select: none; -webkit-user-select: none;
+	}
+	#pv-playhead {
+		position: absolute; top: 0; bottom: 0; width: 4px;
+		background: #ffd700; z-index: 10;
+		transform: translateX(-50%);
+		cursor: ew-resize;
+		user-select: none; -webkit-user-select: none;
+		-webkit-user-drag: none;
+	}
+	/* Invisible hit zone so the playhead is grabbable beyond its 4px visible bar. */
+	#pv-playhead::after {
+		content: ""; position: absolute; left: -5px; top: 0; bottom: 0;
+		width: 14px; cursor: ew-resize;
+	}
+	/* Keyframes render as a small green diamond ABOVE the bar (the click target) +
+	   a thin vertical line INSIDE the bar (visual only, doesn't block playhead grabs). */
+	.pv-key {
+		position: absolute; top: -11px;
+		width: 6px; height: 6px;
+		background: #38d977;
+		transform: translateX(-50%) rotate(45deg);
+		cursor: grab; z-index: 12;
+		user-select: none; -webkit-user-select: none;
+	}
+	.pv-key:hover { background: #5ce594; }
+	.pv-key.selected { background: #fff; }
+	.pv-key.dragging { cursor: grabbing; }
+	.pv-key-line {
+		position: absolute; top: 0; bottom: 0;
+		width: 1px; background: rgba(255,255,255,0.22);
+		transform: translateX(-50%);
+		pointer-events: none; z-index: 4;
+	}
+	/* Trim region — dimmed pre/post + 3px orange handles, scaled down from the editor */
+	#pv-trim-pre, #pv-trim-post {
+		position: absolute; top: 0; bottom: 0;
+		background: rgba(0, 0, 0, 0.85);
+		pointer-events: none; z-index: 2; border-radius: 4px;
+	}
+	#pv-trim-pre { left: 0; }
+	#pv-trim-post { right: 0; }
+	.pv-trim-handle {
+		position: absolute; top: 0; bottom: 0; width: 3px;
+		background: #ff8c1a; cursor: ew-resize; z-index: 6;
+	}
+	#pv-trim-start { transform: translateX(-100%); }
+	#pv-trim-end { transform: translateX(0); }
+	.pv-trim-handle:hover { background: #ffb454; box-shadow: 0 0 4px rgba(255,180,80,0.7); }
+	.pv-trim-handle.dragging { background: #ffd28a; }
+	.tl-btn {
+		background: rgba(255,255,255,0.06); border: none; border-radius: 6px;
+		color: #ccc; font-size: 16px; font-weight: 700; cursor: pointer;
+		width: 32px; height: 32px;
+		display: flex; align-items: center; justify-content: center;
+		font-family: inherit; line-height: 1;
+	}
+	#tl-addkey { font-size: 24px; }
+	.tl-btn.flash-green { animation: tlFlashGreen 0.5s ease-out; }
+	@keyframes tlFlashGreen {
+		0%   { background: #38d977; color: #fff; }
+		100% { background: rgba(255,255,255,0.06); color: #ccc; }
+	}
+	#tl-rewind { font-size: 11px; letter-spacing: -2px; }
+	.tl-btn:hover { background: rgba(255,255,255,0.12); }
+	.tl-btn:focus, .tl-btn:focus-visible { outline: none; }
+	.pv-btn:focus, .pv-btn:focus-visible { outline: none; }
+	.tl-btn.active { background: rgba(255,180,84,0.18); color: #ffd28a; }
+	.tl-btn.rec { color: #ff7a7a; }
+	.tl-btn.rec.recording { background: rgba(255,80,80,0.22); color: #fff; animation: pulse 1s infinite; }
+	.tl-btn.rec.rec-done { background: rgba(56,217,119,0.32); color: #fff; box-shadow: 0 0 12px rgba(56,217,119,0.6); animation: recDone 1.1s ease-out; }
+	@keyframes pulse { 50% { opacity: 0.6; } }
+	@keyframes recDone { 0% { transform: scale(1.15); } 100% { transform: scale(1); } }
+
+	#tl-scrub-wrap {
+		flex: 1; position: relative; height: 36px;
+		background: #2a2a32; border-radius: 6px;
+		overflow: visible; cursor: pointer;
+	}
+	#tl-ruler {
+		position: absolute; inset: 0;
+		background-image:
+			linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px),
+			linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px);
+		background-size: 5% 100%, 25% 100%;
+		border-radius: 6px;
+	}
+	#tl-playhead {
+		position: absolute; top: 0; bottom: 0; width: 5px;
+		background: #ffd700; box-shadow: 0 0 4px rgba(255,215,0,0.6);
+		pointer-events: none; z-index: 10;
+		transform: translateX(-50%);
+	}
+	/* Invisible hit zone for the yellow line — narrower than a keyframe (15px)
+	   so a key sitting under the playhead still has grabbable edges. */
+	#tl-playhead .head {
+		position: absolute; left: -2px; top: 0; bottom: 0;
+		width: 9px; background: transparent;
+		cursor: ew-resize; pointer-events: auto;
+	}
+	#tl-scrub-wrap:hover { cursor: ew-resize; }
+	/* Keyframe = small diamond above the bar (grabbable) + thin grey line inside the bar. */
+	.tl-key {
+		position: absolute; top: -14px;
+		width: 10px; height: 10px;
+		background: #38d977;
+		transform: translateX(-50%) rotate(45deg);
+		cursor: grab; z-index: 12;
+		user-select: none; -webkit-user-select: none;
+	}
+	.tl-key:hover { background: #5ce594; }
+	.tl-key.selected { background: #fff; }
+	.tl-key.dragging { cursor: grabbing; }
+	.tl-key-line {
+		position: absolute; top: 0; bottom: 0;
+		width: 1px; background: rgba(255,255,255,0.22);
+		transform: translateX(-50%);
+		pointer-events: none; z-index: 4;
+	}
+
+	/* Dim the bar OUTSIDE the trim region so the selected range pops */
+	#tl-trim-pre, #tl-trim-post {
+		position: absolute; top: 0; bottom: 0;
+		background: rgba(0, 0, 0, 0.92);
+		pointer-events: none; z-index: 2;
+	}
+	#tl-trim-pre { left: 0; }
+	#tl-trim-post { right: 0; }
+	.tl-trim-handle {
+		position: absolute; top: 0; bottom: 0; width: 5px;
+		background: #ff8c1a;
+		cursor: ew-resize; z-index: 6;
+	}
+	/* Start handle sits just left of trimStart, end handle just right of trimEnd — never overlap */
+	#tl-trim-start { transform: translateX(-100%); }
+	#tl-trim-end { transform: translateX(0); }
+	.tl-trim-handle:hover { background: #ffb454; box-shadow: 0 0 6px rgba(255,180,80,0.7); }
+	.tl-trim-handle.dragging { background: #ffd28a; }
+
+	#tl-time { display: none; }
+
+	#status {
+		position: absolute; top: 14px; right: 14px; z-index: 10;
+		font-size: 10px; color: rgba(255,255,255,0.5);
+		letter-spacing: 0.08em; text-transform: uppercase;
+		background: rgba(10,10,14,0.6); backdrop-filter: blur(8px);
+		border: 1px solid rgba(255,255,255,0.08); border-radius: 20px;
+		padding: 5px 14px;
+		display: none; /* hidden — info was redundant; recording state shows on the rec button */
+	}
+	#status.recording { display: block; color: #ff8a8a; border-color: rgba(255,80,80,0.3); }
+
+	#panel {
+		position: relative; z-index: 100;
+		flex: 0 0 280px; height: 100%;
+		background: rgba(14,14,18,0.95);
+		overflow-y: auto; overflow-x: hidden; padding: 24px 20px 28px;
+		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+	}
+	#panel::-webkit-scrollbar { width: 4px; }
+	#panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+	.section { margin-bottom: 32px; }
+	.section:last-child { margin-bottom: 0; }
+	.section-label {
+		font-size: 10px; font-weight: 500; text-transform: uppercase;
+		letter-spacing: 0.06em; color: rgba(255,255,255,0.4);
+		margin-bottom: 14px; display: block;
+	}
+	.section-head-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+	.section-head-row .section-label { margin-bottom: 0; }
+	.mini-btn {
+		background: rgba(255,255,255,0.05); border: none; border-radius: 4px;
+		color: rgba(255,255,255,0.5); font-size: 9px; padding: 3px 8px;
+		cursor: pointer; font-family: inherit; letter-spacing: 0.06em; text-transform: uppercase;
+	}
+	.mini-btn:hover { background: rgba(255,80,80,0.15); color: #ff8a8a; }
+
+	.prim-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+	.prim-btn {
+		aspect-ratio: 1; background: rgba(255,255,255,0.04); border: none;
+		border-radius: 5px; display: flex; align-items: center; justify-content: center;
+		color: rgba(255,255,255,0.55); cursor: pointer; transition: background 0.12s, color 0.12s;
+	}
+	.prim-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+	.prim-btn svg { width: 18px; height: 18px; }
+
+	.outliner { display: flex; flex-direction: column; gap: 4px; min-height: 30px; }
+	.out-row {
+		display: grid;
+		grid-template-columns: 26px 26px 1fr auto auto;
+		align-items: center; gap: 8px;
+		padding: 6px 8px; border-radius: 5px;
+		cursor: pointer;
+		background: rgba(255,255,255,0.04);
+	}
+	.out-row:hover { background: rgba(255,255,255,0.07); }
+	.out-row.selected { background: rgba(255,255,255,0.07); }
+	.out-row.selected .out-name { color: #ffb454; }
+	.out-row.hidden .out-name { opacity: 0.35; text-decoration: line-through; }
+	.out-row.hidden .out-color, .out-row.hidden .out-ref { opacity: 0.45; }
+
+	.out-color {
+		width: 26px; height: 26px; padding: 0; border: none;
+		border-radius: 4px; background: none; cursor: pointer;
+	}
+	.out-color::-webkit-color-swatch-wrapper { padding: 0; }
+	.out-color::-webkit-color-swatch { border: none; border-radius: 4px; }
+
+	.out-ref {
+		width: 26px; height: 26px; border-radius: 4px;
+		background: rgba(0,0,0,0.35);
+		display: flex; align-items: center; justify-content: center;
+		overflow: hidden; cursor: pointer;
+		color: rgba(255,255,255,0.3);
+		transition: background 0.12s, color 0.12s;
+	}
+	.out-ref:hover { background: rgba(255,255,255,0.06); color: #ffb454; }
+	.out-ref svg { width: 12px; height: 12px; }
+	.out-ref img { width: 100%; height: 100%; object-fit: cover; }
+
+	.out-name {
+		background: none; border: none; outline: none;
+		color: rgba(255,255,255,0.85);
+		font-size: 11px; font-family: inherit;
+		padding: 2px 4px; border-radius: 3px;
+		width: 100%; min-width: 0;
+		overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+	}
+	.out-name:hover { background: rgba(255,255,255,0.04); }
+	.out-name:focus { background: rgba(255,255,255,0.08); color: #fff; text-overflow: clip; }
+
+	.out-vis, .out-del {
+		width: 22px; height: 22px; border: none; background: transparent;
+		border-radius: 4px; cursor: pointer; color: rgba(255,255,255,0.4);
+		display: flex; align-items: center; justify-content: center;
+		font-size: 11px; line-height: 1; font-family: inherit;
+	}
+	.out-vis:hover { background: rgba(255,255,255,0.06); color: #e6e6ea; }
+	.out-del:hover { background: rgba(255,255,255,0.06); color: #ff5a5a; }
+
+	.slider-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+	.slider-row label { flex: 0 0 auto; font-size: 11px; color: rgba(255,255,255,0.5); }
+	.slider-row input[type="range"] {
+		flex: 1; -webkit-appearance: none; appearance: none; height: 3px;
+		background: rgba(255,255,255,0.1); border-radius: 2px; outline: none;
+	}
+	.slider-row input[type="range"]::-webkit-slider-thumb {
+		-webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+		background: rgba(255,255,255,0.7); cursor: pointer;
+	}
+	.slider-val { flex: 0 0 32px; text-align: right; font-size: 10px; color: rgba(255,255,255,0.35); font-variant-numeric: tabular-nums; }
+
+	.drag-row { display: flex; gap: 6px; margin-bottom: 6px; }
+	.drag-num {
+		flex: 1; min-width: 0;
+		background: rgba(255,255,255,0.04);
+		border: none;
+		border-radius: 5px;
+		padding: 8px 9px;
+		display: flex; align-items: center; justify-content: space-between; gap: 4px;
+		cursor: ew-resize;
+		user-select: none;
+		font-size: 10px;
+		font-variant-numeric: tabular-nums;
+		color: rgba(255,255,255,0.85);
+		transition: background 0.1s;
+		overflow: hidden;
+	}
+	.drag-num:hover { background: rgba(255,255,255,0.08); }
+	.drag-num.dragging { background: rgba(255,180,84,0.18); color: #ffd28a; }
+	.drag-num.editing { background: rgba(0,0,0,0.3); cursor: text; }
+	.drag-num .drag-label { color: rgba(255,255,255,0.4); font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; flex-shrink: 0; }
+	.drag-num .drag-val { text-align: right; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+	.drag-num input {
+		background: none; border: none; color: inherit; font: inherit; outline: none;
+		width: 100%; text-align: right;
+		font-variant-numeric: tabular-nums; padding: 0;
+	}
+
+	.row { display: flex; gap: 6px; }
+	.btn {
+		flex: 1; background: rgba(255,255,255,0.04); border: none; border-radius: 5px;
+		color: #c8c8cc; font-size: 11px; padding: 8px 12px; cursor: pointer; font-family: inherit;
+	}
+	.btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+	.btn.primary {
+		background: linear-gradient(135deg, #ffb454, #ff7a3a);
+		color: #1a1208; font-weight: 600;
+	}
+	.btn.primary:hover { filter: brightness(1.1); }
+	.btn.active { background: rgba(255,180,84,0.18); color: #ffd28a; }
+	.btn.rec { color: #ff8a8a; background: rgba(255,80,80,0.12); }
+	.btn.rec.recording { background: rgba(255,80,80,0.28); color: #fff; }
+
+	.hint { font-size: 10px; color: rgba(255,255,255,0.3); line-height: 1.5; margin-top: 6px; }
+	#prompt-text {
+		width: 100%; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06);
+		border-radius: 6px; color: #ddd; font-family: inherit; font-size: 11px;
+		padding: 8px 10px; outline: none; resize: vertical; min-height: 180px;
+		line-height: 1.45;
+	}
+	#prompt-text:focus { border-color: rgba(255,180,84,0.4); background: rgba(0,0,0,0.35); }
+
+	.select-row { margin-bottom: 5px; }
+	.select-row select {
+		width: 100%; background: rgba(255,255,255,0.06); border: none; border-radius: 6px;
+		color: #ccc; font-size: 11px; padding: 6px 8px; outline: none; cursor: pointer;
+		font-family: inherit;
+	}
+	.select-row select:focus { background: rgba(255,255,255,0.10); }
+	.select-row select option { background: #1a1a20; }
+
+	#aspect-frame {
+		position: absolute; z-index: 5; pointer-events: none;
+		border: 1px solid rgba(255,255,255,0.12);
+		box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
+		display: none;
+	}
+	#aspect-frame::before, #aspect-frame::after,
+	#aspect-frame .v1, #aspect-frame .v2 {
+		content: ""; position: absolute; pointer-events: none;
+		/* difference blend → guide lines stay visible on both light and dark backgrounds */
+		background: rgba(255,255,255,0.22); mix-blend-mode: difference;
+	}
+	#aspect-frame.no-guides::before,
+	#aspect-frame.no-guides::after,
+	#aspect-frame.no-guides .v1,
+	#aspect-frame.no-guides .v2 { display: none; }
+
+	.bg-row {
+		display: flex; align-items: center; justify-content: center; gap: 8px;
+		background: rgba(255,255,255,0.08); border-radius: 6px;
+		padding: 0 10px; font-size: 11px; color: #ccc;
+		cursor: pointer; flex: 1;
+	}
+	.bg-row:hover { background: rgba(255,255,255,0.14); }
+	.bg-row span { font-size: 11px; }
+	.bg-row input[type="color"] {
+		width: 20px; height: 18px; border: none; border-radius: 3px;
+		background: none; padding: 0; cursor: pointer; flex-shrink: 0;
+	}
+	.bg-row input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+	.bg-row input[type="color"]::-webkit-color-swatch { border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; }
+	#aspect-frame::before { left: 0; right: 0; top: 33.333%; height: 1px; }
+	#aspect-frame::after  { left: 0; right: 0; top: 66.666%; height: 1px; }
+	#aspect-frame .v1 { top: 0; bottom: 0; left: 33.333%; width: 1px; }
+	#aspect-frame .v2 { top: 0; bottom: 0; left: 66.666%; width: 1px; }
+	#aspect-frame .label {
+		position: absolute; top: -22px; left: 0;
+		font-size: 10px; color: rgba(255,180,84,0.85);
+		letter-spacing: 0.08em; text-transform: uppercase;
+		text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+	}
+
+	#drop-overlay {
+		position: fixed; inset: 0; z-index: 200;
+		background: rgba(255,180,84,0.08); backdrop-filter: blur(2px);
+		border: 2px dashed rgba(255,180,84,0.5);
+		display: none; align-items: center; justify-content: center;
+		pointer-events: none;
+	}
+	#drop-overlay.active { display: flex; }
+	.drop-card {
+		background: rgba(10,10,14,0.92);
+		border: 1px solid rgba(255,180,84,0.4);
+		border-radius: 12px; padding: 24px 36px;
+		text-align: center;
+	}
+	.drop-card-icon { font-size: 28px; color: #ffb454; margin-bottom: 8px; }
+	.drop-card-text {
+		font-size: 12px; color: #fff;
+		letter-spacing: 0.08em; text-transform: uppercase; font-weight: 500;
+	}
+
+	#loading-overlay {
+		position: fixed; inset: 0; z-index: 300;
+		background: rgba(7, 8, 11, 0.78); backdrop-filter: blur(4px);
+		display: none; align-items: center; justify-content: center;
+		pointer-events: none;
+	}
+	#loading-overlay.active { display: flex; }
+	.load-card {
+		background: rgba(20,20,26,0.95);
+		border: 1px solid rgba(255,255,255,0.08);
+		border-radius: 12px; padding: 28px 36px;
+		text-align: center; max-width: 380px;
+		pointer-events: auto;
+	}
+	.load-spinner {
+		width: 36px; height: 36px; margin: 0 auto 14px;
+		border-radius: 50%;
+		border: 3px solid rgba(255,180,84,0.18);
+		border-top-color: #ffb454;
+		animation: spin 0.9s linear infinite;
+	}
+	.load-title {
+		font-size: 12px; color: #fff; font-weight: 600;
+		letter-spacing: 0.08em; text-transform: uppercase;
+		margin-bottom: 6px;
+	}
+	.load-sub {
+		font-size: 10px; color: rgba(255,255,255,0.45);
+		line-height: 1.5;
+	}
+	@keyframes spin { to { transform: rotate(360deg); } }
+	.btn.save-flash {
+		background: rgba(56,217,119,0.36) !important;
+		color: #fff !important;
+		box-shadow: 0 0 10px rgba(56,217,119,0.6);
+		animation: saveFlash 0.7s ease-out;
+	}
+	@keyframes saveFlash {
+		0%   { transform: scale(1.08); }
+		100% { transform: scale(1); }
+	}
+
+	/* ============ NEW: 3-column layout (mockup port) ============ */
+
+	/* Viewport toolbar — Blender-style strip above the canvas */
+	#viewport-toolbar {
+		flex: 0 0 40px;
+		display: flex; align-items: center; gap: 4px;
+		padding: 0 14px;
+		background: #050508;
+	}
+	.vt-group { display: flex; align-items: center; gap: 2px; }
+	.vt-group + .vt-group { margin-left: 18px; }
+	.vt-btn {
+		height: 26px; padding: 0 12px; border-radius: 5px; border: none;
+		background: transparent; color: #8e8e95;
+		font-size: 11px; cursor: pointer; letter-spacing: 0;
+		display: inline-flex; align-items: center; gap: 6px;
+		font-family: inherit;
+	}
+	.vt-btn:hover { background: #14141a; color: #e6e6ea; }
+	.vt-btn.active { background: #14141a; color: #ffb454; }
+	.vt-sep { flex: 1; }
+	.vt-bg-row {
+		display: inline-flex; align-items: center; gap: 6px;
+		height: 26px; padding: 0 10px; border-radius: 5px;
+		color: #8e8e95; font-size: 11px; cursor: pointer;
+	}
+	.vt-bg-row:hover { background: #14141a; color: #e6e6ea; }
+	.vt-bg-row input[type="color"] {
+		width: 16px; height: 16px; padding: 0; border: none;
+		background: none; cursor: pointer; outline: none;
+	}
+	.vt-bg-row input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+	.vt-bg-row input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
+
+	/* Right properties panel */
+	#right-panel {
+		position: relative; z-index: 100;
+		flex: 0 0 280px; height: 100%;
+		background: rgba(14,14,18,0.95);
+		overflow: hidden; display: flex; flex-direction: column;
+	}
+	#rp-header {
+		flex: 0 0 auto;
+		padding: 22px 20px 16px;
+		display: flex; align-items: baseline; gap: 6px;
+		white-space: nowrap; overflow: hidden;
+	}
+	.rp-kicker, .rp-sep, #rp-title {
+		font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+		font-weight: 500;
+	}
+	.rp-kicker { color: rgba(255,255,255,0.4); }
+	.rp-sep    { color: rgba(255,255,255,0.25); }
+	#rp-title  { color: #e6e6ea; overflow: hidden; text-overflow: ellipsis; }
+	#rp-body {
+		flex: 1; min-height: 0;
+		overflow-y: auto; overflow-x: hidden;
+		padding: 16px 20px 28px;
+		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+	}
+	#rp-body::-webkit-scrollbar { width: 4px; }
+	#rp-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+	.selected-pill {
+		display: inline-flex; align-items: center; gap: 8px;
+		padding: 7px 12px; border-radius: 6px;
+		background: rgba(255,255,255,0.04); color: #ffb454;
+		font-size: 11px; font-weight: 500;
+	}
+	.selected-pill .sp-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff7a00; }
+
+	.sub-label {
+		font-size: 10px; color: rgba(255,255,255,0.45);
+		letter-spacing: 0.04em; margin: 0 0 6px;
+	}
+
+	.swatch-row { display: flex; gap: 6px; }
+	.swatch { flex: 1; aspect-ratio: 1.6; border-radius: 5px; cursor: pointer; }
+	.swatch.active { outline: 2px solid #ffb454; outline-offset: 2px; }
+
+	#rp-notes {
+		width: 100%; resize: vertical; min-height: 64px;
+		background: rgba(255,255,255,0.04); border: none; color: #e6e6ea;
+		padding: 10px 12px; border-radius: 5px;
+		font-family: inherit; font-size: 11px; line-height: 1.5; outline: none;
+	}
+	#rp-notes:focus { background: rgba(255,255,255,0.07); }
+
+	/* Strip the strokes on the left panel to match the no-borders direction */
+	#panel { border-right: none !important; }
+</style>
+</head>
+<body>
+
+	<header id="top-header">
+		<div class="th-left">
+			<div class="th-brand">
+				<span>ComfyBlockout</span>
+				<small>app · v0.1</small>
+			</div>
+			<div class="th-gen">
+				<span class="th-group-label">Generate</span>
+				<button class="th-btn" id="th-run-nb" disabled title="Generate edited image with Nano Banana">Nano Banana</button>
+				<button class="th-btn secondary" id="th-run-sd" disabled title="Generate video with Seedance">Seedance</button>
+			</div>
+		</div>
+		<div class="th-right">
+			<span class="th-project">Project · <span id="project-name" style="color:rgba(255,255,255,0.9);font-weight:500">untitled</span></span>
+			<button class="th-btn-mini" id="project-new" title="Clear scene and start fresh">New</button>
+			<button class="th-btn-mini" id="project-open" title="Open a saved project">Open</button>
+			<button class="th-btn-mini" id="project-save" title="Save (Ctrl+S)">Save</button>
+			<button class="th-btn-mini" id="project-save-as" title="Save as a new project" hidden>Save As</button>
+			<button class="th-icon-btn" id="th-settings" title="Settings">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+					<circle cx="12" cy="12" r="3"/>
+					<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+				</svg>
+			</button>
+		</div>
+	</header>
+
+	<div class="modal-backdrop" id="settings-modal">
+		<div class="modal-card">
+			<div class="modal-head">
+				<span class="modal-title">Settings</span>
+				<button class="modal-close" id="settings-close">×</button>
+			</div>
+			<div class="modal-section">
+				<div class="section-label">Comfy Cloud API Key</div>
+				<div class="modal-status" id="settings-status"></div>
+				<input class="modal-input" type="password" id="settings-key" placeholder="comfyui-…" autocomplete="off" spellcheck="false">
+				<div class="modal-hint">Get yours at <a href="https://platform.comfy.org/profile/api-keys" target="_blank">platform.comfy.org/profile/api-keys</a></div>
+				<div class="modal-actions">
+					<button class="modal-btn-secondary" id="settings-clear">Clear</button>
+					<button class="modal-btn-primary" id="settings-save">Save</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div id="result-toast">
+		<div class="rt-head">
+			<span id="rt-title">Result</span>
+			<button class="rt-close" id="rt-close" title="Close">×</button>
+		</div>
+		<div class="rt-body" id="rt-body"></div>
+		<div class="rt-foot">
+			<span id="rt-name"></span>
+			<a id="rt-open" href="#" target="_blank">open full size →</a>
+		</div>
+	</div>
+
+	<div id="main-row">
+
+	<div id="panel">
+
+		<input type="file" id="import-file" accept=".glb,.gltf,.fbx,.obj,.ply,.splat,.ksplat,.spz" hidden multiple>
+
+		<div class="section">
+			<div class="section-head-row">
+				<span class="section-label">Objects · <span id="obj-count">0</span></span>
+				<button class="mini-btn" id="clear-btn" title="Clear all objects">Clear</button>
+			</div>
+			<div class="prim-grid" style="margin-bottom:14px">
+				<button class="prim-btn" data-prim="cube" title="Cube"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12L4 7.5M12 12l8-4.5M12 12v9"/></svg></button>
+				<button class="prim-btn" data-prim="sphere" title="Sphere"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8"/><ellipse cx="12" cy="12" rx="8" ry="3"/></svg></button>
+				<button class="prim-btn" data-prim="capsule" title="Capsule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="8" y="4" width="8" height="16" rx="4"/></svg></button>
+				<button class="prim-btn" data-prim="cylinder" title="Cylinder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="6" rx="6" ry="2"/><path d="M6 6v12a6 2 0 0 0 12 0V6"/></svg></button>
+				<button class="prim-btn" data-prim="cone" title="Cone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="20" rx="7" ry="2"/><path d="M5 20L12 3l7 17"/></svg></button>
+				<button class="prim-btn" data-prim="plane" title="Plane"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 16l9-4 9 4-9 4-9-4z"/></svg></button>
+				<button class="prim-btn" data-prim="custom" title="Custom Import (GLB · FBX · OBJ · PLY · SPLAT · SPZ)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 6v6M9 9l3-3 3 3" stroke="#ffb454"/></svg></button>
+				<button class="prim-btn" data-prim="particles" title="Particle System (three.js)"><svg viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="1.3" fill="currentColor"/><circle cx="12" cy="4" r="0.9" fill="currentColor"/><circle cx="18" cy="7" r="1.1" fill="currentColor"/><circle cx="5" cy="13" r="0.9" fill="currentColor"/><circle cx="11" cy="11" r="1.4" fill="currentColor"/><circle cx="17" cy="14" r="1" fill="currentColor"/><circle cx="8" cy="18" r="1.1" fill="currentColor"/><circle cx="15" cy="20" r="0.9" fill="currentColor"/><circle cx="20" cy="17" r="0.8" fill="currentColor"/></svg></button>
+			</div>
+			<div class="outliner" id="outliner"></div>
+		</div>
+
+
+
+		<div class="section">
+			<div class="section-label">System Prompt (String Output)</div>
+			<textarea id="prompt-text" rows="10" placeholder="Render this blockout scene. Match the exact camera angle, composition, scale, aspect ration and object orientations — but do not use the blockout to define the style, colors, or creative direction. Only use the grid as reference for the scene perspective and not as an element to include in the generated image or video"></textarea>
+		</div>
+	</div>
+
+	<div id="viewport-area">
+		<div id="viewport-toolbar">
+			<div class="vt-group">
+				<button class="vt-btn" id="mode-translate" data-mode="translate">Move</button>
+				<button class="vt-btn" id="mode-rotate" data-mode="rotate">Rotate</button>
+				<button class="vt-btn" id="mode-scale" data-mode="scale">Scale</button>
+				<button class="vt-btn" id="mode-anchor" title="Move the pivot — geometry shifts inside the object so its visible position stays put. Future rotation/scale happen around the new pivot.">Pivot</button>
+			</div>
+			<div class="vt-group">
+				<button class="vt-btn active" id="toggle-grid">Grid</button>
+				<button class="vt-btn" id="toggle-guides">Guides</button>
+				<button class="vt-btn active" id="toggle-ar" title="Toggle aspect ratio overlay (frame + letterbox)">AR</button>
+			</div>
+			<div class="vt-sep"></div>
+			<button class="vt-btn" data-rp-tab="camera" title="Camera properties">Camera</button>
+			<button class="vt-btn" data-rp-tab="scene" title="Scene properties">Scene</button>
+			<label class="vt-bg-row" title="Background color">
+				<input type="color" id="bg-color" value="#07080b">
+				<span>BG</span>
+			</label>
+		</div>
+		<div id="canvas-wrap">
+			<canvas id="renderCanvas"></canvas>
+			<div id="aspect-frame" class="no-guides"><span class="v1"></span><span class="v2"></span></div>
+			<div id="status">idle · 0 objects</div>
+			<div id="info-block" style="position:absolute;top:6px;left:6px;background:rgba(20,20,24,0.85);border-radius:6px;z-index:11;display:flex;flex-direction:column;align-items:flex-start">
+				<button id="info-btn" title="Scene info" style="width:24px;height:24px;border:none;background:transparent;color:rgba(255,255,255,0.55);font:11px serif;font-style:italic;font-weight:600;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center">i</button>
+				<div id="debug-hud" style="color:rgba(255,255,255,0.45);font:10px ui-monospace,monospace;padding:0 12px 10px 12px;line-height:1.6;white-space:pre;display:none;min-width:200px"></div>
+			</div>
+		</div>
+		<div id="pv-footer">
+			<div id="preview-transport">
+				<button id="pv-edit" class="pv-btn" title="Edit Scene"><img class="pv-icon" src="/extensions/ComfyBlockout/icons/edit.png" alt="edit"></button>
+				<button class="pv-btn rec" id="pv-rec" title="Record video"><img class="pv-icon" src="/extensions/ComfyBlockout/icons/record.svg" alt="record"></button>
+				<button class="pv-btn" id="pv-play" title="Play / pause"><img class="pv-icon" src="/extensions/ComfyBlockout/icons/play.svg" alt="play"></button>
+				<button class="pv-btn" id="pv-rewind" title="Rewind"><img class="pv-icon" src="/extensions/ComfyBlockout/icons/rewind.svg" alt="rewind"></button>
+				<button class="pv-btn pv-glyph" id="pv-addkey" title="Add keyframe at playhead">+</button>
+				<button class="pv-btn pv-glyph" id="pv-clearkey" title="Delete selected keyframe (or all)">✕</button>
+				<div id="pv-scrub-wrap">
+					<div id="pv-trim-pre" style="width:0%"></div>
+					<div id="pv-trim-post" style="width:0%"></div>
+					<div id="pv-keys"></div>
+					<div class="pv-trim-handle" id="pv-trim-start" style="left:0%" title="Trim start"></div>
+					<div class="pv-trim-handle" id="pv-trim-end" style="left:100%" title="Trim end"></div>
+					<div id="pv-playhead" style="left:0"></div>
+				</div>
+			</div>
+			<div id="pv-time-strip">
+				<span class="pv-brand">ComfyBlockout 1.0 <span class="pv-brand-by">by</span> spiritform</span>
+				<span id="pv-time">0.00s / 5s</span>
+			</div>
+		</div>
+		<div id="timeline">
+			<button class="tl-btn rec" id="tl-rec" title="Record (auto-tween if keyframes exist)">●</button>
+			<button class="tl-btn" id="tl-play" title="Play / pause (space)">▶</button>
+			<button class="tl-btn" id="tl-rewind" title="Rewind to start">◀◀</button>
+			<button class="tl-btn" id="tl-addkey" title="Add keyframe at playhead">+</button>
+			<button class="tl-btn" id="tl-clearkey" title="Delete selected keyframe (or all if none selected)">✕</button>
+			<div style="width: 12px"></div>
+			<div id="tl-scrub-wrap">
+				<div id="tl-ruler"></div>
+				<div id="tl-trim-pre" style="width:0%"></div>
+				<div id="tl-trim-post" style="width:0%"></div>
+				<div id="tl-keys"></div>
+				<div id="tl-playhead" style="left:0"><div class="head"></div></div>
+				<div class="tl-trim-handle" id="tl-trim-start" style="left:0%" title="Trim start"></div>
+				<div class="tl-trim-handle" id="tl-trim-end" style="left:100%" title="Trim end"></div>
+			</div>
+			<span id="tl-time">0.00s / 4.00s</span>
+		</div>
+	</div>
+
+	<aside id="right-panel">
+		<div id="rp-header">
+			<span class="rp-kicker">Properties</span>
+			<span class="rp-sep">:</span>
+			<span id="rp-title">No selection</span>
+		</div>
+
+		<div id="rp-body">
+
+			<!-- ===== OBJECT TAB ===== -->
+			<div class="rp-pane" id="rp-pane-object">
+				<div class="section">
+					<div class="section-label">Transform</div>
+					<div class="sub-label">Position</div>
+					<div class="drag-row">
+						<div class="drag-num"><span class="drag-label">X</span><span class="drag-val">0.00</span></div>
+						<div class="drag-num"><span class="drag-label">Y</span><span class="drag-val">0.00</span></div>
+						<div class="drag-num"><span class="drag-label">Z</span><span class="drag-val">0.00</span></div>
+					</div>
+					<div class="sub-label" style="margin-top:10px">Rotation</div>
+					<div class="drag-row">
+						<div class="drag-num"><span class="drag-label">X</span><span class="drag-val">0°</span></div>
+						<div class="drag-num"><span class="drag-label">Y</span><span class="drag-val">0°</span></div>
+						<div class="drag-num"><span class="drag-label">Z</span><span class="drag-val">0°</span></div>
+					</div>
+					<div class="sub-label" style="margin-top:10px">Scale</div>
+					<div class="drag-row">
+						<div class="drag-num"><span class="drag-label">X</span><span class="drag-val">1.00</span></div>
+						<div class="drag-num"><span class="drag-label">Y</span><span class="drag-val">1.00</span></div>
+						<div class="drag-num"><span class="drag-label">Z</span><span class="drag-val">1.00</span></div>
+					</div>
+				</div>
+
+				<div class="section">
+					<div class="section-label">Notes</div>
+					<textarea id="rp-notes" rows="3" placeholder="Per-object notes for prompting…"></textarea>
+				</div>
+			</div>
+
+			<!-- ===== CAMERA TAB (filled by JS-bound IDs moved from left panel) ===== -->
+			<div class="rp-pane" id="rp-pane-camera" hidden>
+				<div class="section">
+					<div class="section-head-row">
+						<div class="section-label">Camera</div>
+						<button class="mini-btn" id="cam-reset" title="Reset camera to default view">Reset</button>
+					</div>
+					<div class="slider-row">
+						<label>FOV</label>
+						<input type="range" id="fov" min="20" max="120" value="55">
+						<span class="slider-val" id="fov-val">55°</span>
+					</div>
+					<div class="sub-label" style="margin-top:10px">Position</div>
+					<div class="drag-row">
+						<div class="drag-num" id="cam-px"><span class="drag-label">X</span><span class="drag-val">2.20</span></div>
+						<div class="drag-num" id="cam-py"><span class="drag-label">Y</span><span class="drag-val">1.60</span></div>
+						<div class="drag-num" id="cam-pz"><span class="drag-label">Z</span><span class="drag-val">2.80</span></div>
+					</div>
+					<div class="sub-label" style="margin-top:10px">Rotation</div>
+					<div class="drag-row">
+						<div class="drag-num" id="cam-yaw"><span class="drag-label">Yaw</span><span class="drag-val">0°</span></div>
+						<div class="drag-num" id="cam-pitch"><span class="drag-label">Pitch</span><span class="drag-val">0°</span></div>
+						<div class="drag-num" id="cam-roll"><span class="drag-label">Roll</span><span class="drag-val">0°</span></div>
+					</div>
+					<div class="hint">drag a value sideways to scrub · click to type · Shift = fine · F focus · Alt+drag look · Alt+RMB roll</div>
+				</div>
+			</div>
+
+			<!-- ===== SCENE TAB ===== -->
+			<div class="rp-pane" id="rp-pane-scene" hidden>
+				<div class="section">
+					<div class="section-label">Environment</div>
+					<div class="select-row">
+						<select id="env-preset">
+							<option value="studio">Studio (built-in)</option>
+							<option value="studio2">Studio HDR</option>
+							<option value="sunset">Sunset</option>
+							<option value="daylight">Daylight Sky</option>
+							<option value="forest">Forest</option>
+							<option value="night">Night</option>
+							<option value="none">None</option>
+						</select>
+					</div>
+					<div class="slider-row">
+						<label>Intensity</label>
+						<input type="range" id="env-intensity" min="0" max="3" step="0.05" value="0.2">
+						<span class="slider-val" id="env-intensity-val">0.20</span>
+					</div>
+				</div>
+
+				<div class="section">
+					<div class="section-label">Render</div>
+					<div class="select-row" style="margin-bottom:6px">
+						<select id="aspect">
+							<option value="free">Free · no crop</option>
+							<option value="16:9" selected>16:9</option>
+							<option value="9:16">9:16</option>
+							<option value="1:1">1:1</option>
+							<option value="4:5">4:5</option>
+							<option value="4:3">4:3</option>
+							<option value="21:9">21:9</option>
+						</select>
+					</div>
+					<div class="slider-row">
+						<label>Duration</label>
+						<input type="range" id="duration" min="1" max="10" step="0.5" value="4">
+						<span class="slider-val" id="duration-val">4.0s</span>
+					</div>
+					<div class="slider-row">
+						<label>FPS</label>
+						<input type="range" id="fps" min="12" max="60" step="6" value="30">
+						<span class="slider-val" id="fps-val">30</span>
+					</div>
+				</div>
+			</div>
+
+		</div><!-- /#rp-body -->
+	</aside>
+
+	</div><!-- /#main-row -->
+
+	<script type="importmap">
+	{
+		"imports": {
+			"three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+			"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+			"@sparkjsdev/spark": "https://esm.sh/@sparkjsdev/spark@2.1.0?external=three"
+		}
+	}
+	</script>
+
+	<script>
+	// Top-header cloud wiring (auth, refs, run buttons, result toast). Lives
+	// outside the main editor module so it can boot independently of three.js.
+	(function () {
+		const btnNB = document.getElementById("th-run-nb");
+		const btnSD = document.getElementById("th-run-sd");
+		const refsStrip = document.getElementById("refs-strip");
+		const refsAdd = document.getElementById("refs-add");
+		const refsFile = document.getElementById("refs-file");
+		const toast = document.getElementById("result-toast");
+		const toastBody = document.getElementById("rt-body");
+		const toastTitle = document.getElementById("rt-title");
+		const toastName = document.getElementById("rt-name");
+		const toastOpen = document.getElementById("rt-open");
+		const toastClose = document.getElementById("rt-close");
+
+		function getNodeId() {
+			const params = new URLSearchParams(location.search);
+			return params.get("node_id") || "preview";
+		}
+
+		// ---------- auth status (silent; modal handles the UI) ----------
+		async function refreshStatus() {
+			try {
+				const r = await fetch("/api/auth/status");
+				const s = await r.json();
+				btnNB.disabled = !s.ready;
+				btnSD.disabled = !s.ready;
+			} catch (e) {
+				btnNB.disabled = true; btnSD.disabled = true;
+			}
+		}
+
+		// ---------- settings modal ----------
+		const settingsBtn = document.getElementById("th-settings");
+		const settingsModal = document.getElementById("settings-modal");
+		const settingsClose = document.getElementById("settings-close");
+		const settingsKey = document.getElementById("settings-key");
+		const settingsSave = document.getElementById("settings-save");
+		const settingsClear = document.getElementById("settings-clear");
+		const settingsStatus = document.getElementById("settings-status");
+
+		function openSettings() {
+			settingsModal.classList.add("open");
+			settingsKey.value = "";
+			settingsStatus.className = "modal-status";
+			setTimeout(() => settingsKey.focus(), 50);
+		}
+		function closeSettings() { settingsModal.classList.remove("open"); }
+
+		settingsBtn.addEventListener("click", openSettings);
+		settingsClose.addEventListener("click", closeSettings);
+		settingsModal.addEventListener("click", (e) => { if (e.target === settingsModal) closeSettings(); });
+		document.addEventListener("keydown", (e) => {
+			if (e.key === "Escape" && settingsModal.classList.contains("open")) closeSettings();
+		});
+
+		settingsSave.addEventListener("click", async () => {
+			const key = settingsKey.value.trim();
+			if (!key) {
+				settingsStatus.className = "modal-status error";
+				settingsStatus.textContent = "Enter an API key first";
+				return;
+			}
+			try {
+				const r = await fetch("/api/auth/key", {
+					method: "POST", headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ key }),
+				});
+				if (!r.ok) {
+					const err = await r.json().catch(() => ({ detail: r.statusText }));
+					settingsStatus.className = "modal-status error";
+					settingsStatus.textContent = err.detail || "save failed";
+					return;
+				}
+				settingsStatus.className = "modal-status success";
+				settingsStatus.textContent = "Saved";
+				refreshStatus();
+				setTimeout(closeSettings, 700);
+			} catch (e) {
+				settingsStatus.className = "modal-status error";
+				settingsStatus.textContent = e.message;
+			}
+		});
+
+		settingsClear.addEventListener("click", async () => {
+			try {
+				await fetch("/api/auth/key", { method: "DELETE" });
+				settingsKey.value = "";
+				settingsStatus.className = "modal-status success";
+				settingsStatus.textContent = "Cleared";
+				refreshStatus();
+			} catch (e) { /* swallow */ }
+		});
+
+		// ---------- result toast ----------
+		function showResult(kind, url, filename) {
+			toastBody.innerHTML = "";
+			const ts = Date.now();
+			const bust = url.includes("?") ? `${url}&t=${ts}` : `${url}?t=${ts}`;
+			if (kind === "video") {
+				const v = document.createElement("video");
+				v.src = bust; v.controls = true; v.autoplay = true; v.loop = true; v.muted = true;
+				toastBody.appendChild(v);
+			} else {
+				const img = document.createElement("img");
+				img.src = bust;
+				toastBody.appendChild(img);
+			}
+			toastTitle.textContent = kind === "video" ? "Seedance · result" : "Nano Banana · result";
+			toastName.textContent = filename || "";
+			toastOpen.href = url;
+			toast.classList.add("show");
+		}
+		toastClose.addEventListener("click", () => toast.classList.remove("show"));
+
+		// ---------- reference images ----------
+		function renderRefs(refs) {
+			// Wipe everything except the "+ Reference" button (always last)
+			[...refsStrip.querySelectorAll(".ref-chip")].forEach(n => n.remove());
+			refs.forEach(ref => {
+				const chip = document.createElement("div");
+				chip.className = "ref-chip";
+				chip.title = ref.filename;
+				const img = document.createElement("img");
+				img.src = ref.local_url;
+				const x = document.createElement("button");
+				x.className = "ref-x"; x.textContent = "×"; x.title = "Remove reference";
+				x.addEventListener("click", async () => {
+					try {
+						await fetch(`/api/refs/${ref.id}?node_id=${encodeURIComponent(getNodeId())}`, { method: "DELETE" });
+						loadRefs();
+					} catch (e) { alert(`delete failed: ${e.message}`); }
+				});
+				chip.appendChild(img); chip.appendChild(x);
+				refsStrip.insertBefore(chip, refsAdd);
+			});
+		}
+
+		async function loadRefs() {
+			try {
+				const r = await fetch(`/api/refs?node_id=${encodeURIComponent(getNodeId())}`);
+				const j = await r.json();
+				renderRefs(j.refs || []);
+			} catch (e) { console.warn("[cb-app] loadRefs failed", e); }
+		}
+
+		refsAdd.addEventListener("click", () => refsFile.click());
+		refsFile.addEventListener("change", async () => {
+			const files = [...refsFile.files];
+			refsFile.value = "";
+			if (!files.length) return;
+			refsAdd.textContent = "uploading…";
+			try {
+				for (const f of files) {
+					const fd = new FormData();
+					fd.append("node_id", getNodeId());
+					fd.append("file", f);
+					const r = await fetch("/api/refs/upload", { method: "POST", body: fd });
+					if (!r.ok) {
+						const err = await r.json().catch(() => ({ detail: r.statusText }));
+						alert(`upload failed: ${err.detail || r.statusText}`);
+						break;
+					}
+				}
+				await loadRefs();
+			} finally {
+				refsAdd.textContent = "+ Reference";
+			}
+		});
+
+		// ---------- module runs ----------
+		async function runModule(id, btn, inputs, resultKind) {
+			const label = btn.textContent;
+			btn.disabled = true; btn.textContent = "running…";
+			try {
+				const r = await fetch(`/api/run/${id}`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ node_id: getNodeId(), inputs }),
+				});
+				if (!r.ok) {
+					const err = await r.json().catch(() => ({ detail: r.statusText }));
+					alert(`${id} failed: ${err.detail || r.statusText}`);
+					return;
+				}
+				const out = await r.json();
+				if (out.url) showResult(resultKind, out.url, out.filename);
+			} catch (e) {
+				alert(`${id} threw: ${e.message}`);
+			} finally {
+				btn.disabled = false; btn.textContent = label;
+			}
+		}
+
+		btnNB.addEventListener("click", () => {
+			const prompt = window.prompt("Nano Banana prompt", "turn this blockout into a cinematic photo, neon-lit dusk, photoreal");
+			if (!prompt) return;
+			runModule("nano-banana", btnNB, { prompt }, "image");
+		});
+
+		btnSD.addEventListener("click", () => {
+			const prompt = window.prompt("Seedance prompt", "smooth cinematic camera move through a futuristic city street");
+			if (!prompt) return;
+			runModule("seedance", btnSD, { prompt, resolution: "1080p", duration: 5 }, "video");
+		});
+
+		refreshStatus();
+		setInterval(refreshStatus, 15000);
+
+		// ---------- right-panel context ----------
+		const rpTitleEl = document.getElementById("rp-title");
+		const rpPanes = document.querySelectorAll(".rp-pane");
+		const RP_LABELS = { object: "No selection", camera: "Camera", scene: "Scene" };
+		// Make available globally so the editor's selection logic can also switch the panel.
+		window.setRPContext = function (id, label) {
+			rpPanes.forEach(p => p.hidden = p.id !== `rp-pane-${id}`);
+			rpTitleEl.textContent = label || RP_LABELS[id] || "";
+		};
+		document.querySelectorAll("[data-rp-tab]").forEach(b => {
+			b.addEventListener("click", () => window.setRPContext(b.dataset.rpTab));
+		});
+	})();
+	</script>
+
+	<div id="drop-overlay">
+		<div class="drop-card">
+			<div class="drop-card-icon">▼</div>
+			<div class="drop-card-text">Drop GLB · FBX · OBJ · PLY · SPLAT · SPZ</div>
+		</div>
+	</div>
+
+	<div id="loading-overlay">
+		<div class="load-card">
+			<div class="load-spinner"></div>
+			<div class="load-title" id="load-title">Loading…</div>
+			<div class="load-sub" id="load-sub">parsing splat — browser may pause for 10–60s on large files</div>
+			<button class="btn" id="load-cancel" style="margin-top:14px;width:auto;padding:6px 16px">Dismiss</button>
+		</div>
+	</div>
+
+	<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { TransformControls } from "three/addons/controls/TransformControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
+import { PLYLoader } from "three/addons/loaders/PLYLoader.js";
+import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
+
+const params = new URLSearchParams(location.search);
+const NODE_ID = params.get("node_id") || "preview";
+// Treat as preview when ?mode=preview is in the URL (string check is bulletproof).
+const IS_PREVIEW = /[?&]mode=preview(\b|&|$)/.test(location.search);
+if (IS_PREVIEW) document.body.classList.add("preview-mode");
+
+const canvas = document.getElementById("renderCanvas");
+const canvasWrap = document.getElementById("canvas-wrap");
+const statusEl = document.getElementById("status");
+const outlinerEl = document.getElementById("outliner");
+const objCountEl = document.getElementById("obj-count");
+
+function viewportSize() {
+	return { w: canvasWrap.clientWidth, h: canvasWrap.clientHeight };
+}
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(window.devicePixelRatio);
+const vs0 = viewportSize();
+// Initial size will be re-tightened to the aspect rectangle by handleResize after the
+// scene loads (currentAspect defaults to 16:9 via the <select selected> attribute).
+renderer.setSize(vs0.w, vs0.h, true);
+renderer.setClearColor(0x07080b);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, vs0.w / vs0.h, 0.1, 1000);
+camera.position.set(2.2, 1.6, 2.8);
+
+const orbit = new OrbitControls(camera, canvas);
+orbit.enableDamping = true;
+orbit.target.set(0, 0, 0);
+
+const transform = new TransformControls(camera, renderer.domElement);
+transform.addEventListener("dragging-changed", (e) => {
+	orbit.enabled = !e.value;
+	if (!e.value) saveSceneDebounced();
+});
+const transformHelper = transform.getHelper ? transform.getHelper() : transform;
+scene.add(transformHelper);
+
+let grid = new THREE.GridHelper(20, 20, 0x888888, 0x888888);
+grid.material.transparent = true;
+grid.material.opacity = 0.18;
+scene.add(grid);
+
+const hemi = new THREE.HemisphereLight(0xb0c4ff, 0x202020, 0.35);
+scene.add(hemi);
+const dir = new THREE.DirectionalLight(0xffffff, 0.45);
+dir.position.set(5, 10, 4);
+scene.add(dir);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+pmrem.compileEquirectangularShader();
+let currentEnvTexture = null;
+
+const HDRI_PRESETS = {
+	"studio":   { label: "Studio (built-in)", url: null },
+	"studio2":  { label: "Studio HDR",  url: "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_03_1k.hdr" },
+	"sunset":   { label: "Sunset",      url: "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/venice_sunset_1k.hdr" },
+	"daylight": { label: "Daylight Sky", url: "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloofendal_48d_partly_cloudy_puresky_1k.hdr" },
+	"forest":   { label: "Forest",      url: "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/forest_slope_1k.hdr" },
+	"night":    { label: "Night",       url: "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/moonless_golf_1k.hdr" },
+	"none":     { label: "None", url: "none" },
+};
+
+function applyEnvTexture(tex) {
+	if (currentEnvTexture) currentEnvTexture.dispose();
+	currentEnvTexture = tex;
+	scene.environment = tex;
+}
+
+function applyRoomEnvironment() {
+	const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+	applyEnvTexture(env);
+}
+
+async function setEnvironment(key) {
+	const preset = HDRI_PRESETS[key];
+	if (!preset) return;
+	if (preset.url === "none") { applyEnvTexture(null); return; }
+	if (preset.url === null) { applyRoomEnvironment(); updateStatus(`env: ${preset.label}`); return; }
+	updateStatus(`loading HDRI: ${preset.label}…`);
+	try {
+		const rgbe = new RGBELoader();
+		rgbe.load(preset.url, (tex) => {
+			tex.mapping = THREE.EquirectangularReflectionMapping;
+			const env = pmrem.fromEquirectangular(tex).texture;
+			tex.dispose();
+			applyEnvTexture(env);
+			updateStatus(`env: ${preset.label}`);
+		}, undefined, (err) => {
+			console.error("[ComfyBlockout] HDRI load failed:", err);
+			updateStatus(`HDRI load failed — using studio`);
+			applyRoomEnvironment();
+		});
+	} catch (e) {
+		console.error("[ComfyBlockout] HDRI threw:", e);
+		applyRoomEnvironment();
+	}
+}
+
+applyRoomEnvironment();
+scene.environmentIntensity = 0.2;
+
+const objects = [];
+let selected = null;
+
+const PRIM_DEFS = {
+	cube:     () => new THREE.BoxGeometry(1, 1, 1),
+	sphere:   () => new THREE.SphereGeometry(0.6, 32, 24),
+	capsule:  () => new THREE.CapsuleGeometry(0.4, 1.2, 8, 16),
+	cylinder: () => new THREE.CylinderGeometry(0.5, 0.5, 1.2, 24),
+	cone:     () => new THREE.ConeGeometry(0.6, 1.4, 24),
+	plane:    () => new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), // lie flat on the grid
+};
+
+const primCounters = {};
+
+let gltfLoader = null;
+let objLoader = null;
+let fbxLoader = null;
+let fbxMixers = [];
+let sparkModulePromise = null;
+let sparkRenderer = null;
+
+async function ensureSpark() {
+	// sparkjs v2.x: SparkRenderer must be in the scene (registers splatDefines shader chunks + hooks render pipeline).
+	// SplatMesh instances are added to scene directly, not to SparkRenderer.
+	if (!sparkModulePromise) sparkModulePromise = import("@sparkjsdev/spark");
+	const mod = await sparkModulePromise;
+	if (!sparkRenderer) {
+		sparkRenderer = new mod.SparkRenderer({ renderer });
+		scene.add(sparkRenderer);
+	}
+	return mod;
+}
+
+function nextName(baseKind) {
+	primCounters[baseKind] = (primCounters[baseKind] || 0) + 1;
+	const cap = baseKind[0].toUpperCase() + baseKind.slice(1);
+	return `${cap}.${String(primCounters[baseKind]).padStart(3,"0")}`;
+}
+
+function registerImported(obj, kind, filename) {
+	obj.userData.primKind = kind;
+	obj.userData.filename = filename;
+	obj.name = filename ? filename.replace(/\.[^.]+$/, "") : nextName(kind);
+	objects.push(obj);
+	if (kind !== "splat") select(obj);
+	refreshOutliner();
+	updateStatus();
+}
+
+function newAssetId() {
+	return (crypto.randomUUID?.() || `a_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`).replace(/-/g, "");
+}
+
+async function uploadAsset(filename, arrayBuffer) {
+	const ext = (filename.split(".").pop() || "bin").toLowerCase();
+	const assetId = newAssetId();
+	const fd = new FormData();
+	fd.append("node_id", NODE_ID);
+	fd.append("asset_id", assetId);
+	fd.append("ext", ext);
+	fd.append("file", new Blob([arrayBuffer], { type: "application/octet-stream" }), filename);
+	const r = await fetch("/comfyblockout/save_asset", { method: "POST", body: fd });
+	const j = await r.json();
+	if (!j.success) throw new Error(j.error || "asset upload failed");
+	return { assetId, ext };
+}
+
+function applySavedTransform(obj, t) {
+	if (!t) return;
+	if (t.position) obj.position.fromArray(t.position);
+	if (t.rotation) obj.rotation.set(t.rotation[0], t.rotation[1], t.rotation[2]);
+	if (t.scale) obj.scale.fromArray(t.scale);
+	if (t.quaternion) obj.quaternion.fromArray(t.quaternion);
+}
+
+async function loadGLB(arrayBuffer, filename, opts = {}) {
+	console.log(`[ComfyBlockout] loadGLB START — ${filename} (${(arrayBuffer.byteLength/1024).toFixed(1)} KB)`);
+	if (!gltfLoader) gltfLoader = new GLTFLoader();
+	updateStatus(`loading ${filename}…`);
+	return new Promise((resolve) => {
+		try {
+			gltfLoader.parse(arrayBuffer, "", (gltf) => {
+				const root = gltf.scene;
+				if (!opts.restoring) {
+					const box = new THREE.Box3().setFromObject(root);
+					const size = box.getSize(new THREE.Vector3()).length();
+					if (size > 0) {
+						const scale = 2 / size;
+						root.scale.setScalar(scale);
+					}
+					root.position.set(0, 0, 0);
+				}
+				applySavedTransform(root, opts.transform);
+				scene.add(root);
+				if (opts.assetId) root.userData.assetId = opts.assetId;
+				registerImported(root, "glb", filename);
+				if (opts.savedName) root.name = opts.savedName;
+				updateStatus(`GLB loaded · ${filename}`);
+				resolve(root);
+			}, (err) => {
+				console.error("[ComfyBlockout] GLB parse failed:", err);
+				updateStatus(`GLB load failed: ${err?.message || err}`);
+				resolve(null);
+			});
+		} catch (e) {
+			console.error("[ComfyBlockout] loadGLB threw:", e);
+			updateStatus(`GLB load threw: ${e.message}`);
+			resolve(null);
+		}
+	});
+}
+
+async function loadFBX(arrayBuffer, filename, opts = {}) {
+	if (!fbxLoader) fbxLoader = new FBXLoader();
+	updateStatus(`loading FBX ${filename}…`);
+	try {
+		const root = fbxLoader.parse(arrayBuffer, "");
+		// FBX usually ships MeshPhongMaterial which barely responds to our hemi/dir setup.
+		// Swap to MeshStandardMaterial so the studio HDRI actually lights the character.
+		root.traverse(c => {
+			if (!c.isMesh) return;
+			const mats = Array.isArray(c.material) ? c.material : [c.material];
+			c.material = mats.map(m => {
+				if (!m || m.isMeshStandardMaterial) return m;
+				const std = new THREE.MeshStandardMaterial({
+					color: m.color?.clone?.() ?? new THREE.Color(0xcccccc),
+					map: m.map || null,
+					normalMap: m.normalMap || null,
+					roughness: 0.7,
+					metalness: 0.0,
+					skinning: c.isSkinnedMesh,
+					transparent: m.transparent,
+					opacity: m.opacity ?? 1,
+				});
+				m.dispose?.();
+				return std;
+			});
+			if (c.material.length === 1) c.material = c.material[0];
+		});
+		// FBX often exports in cm; normalize to a sane size on first import
+		if (!opts.restoring) {
+			const box = new THREE.Box3().setFromObject(root);
+			const size = box.getSize(new THREE.Vector3()).length();
+			if (size > 0) {
+				const scale = 2 / size;
+				root.scale.setScalar(scale);
+			}
+			root.position.set(0, 0, 0);
+		}
+		applySavedTransform(root, opts.transform);
+		// If the FBX shipped animations, prep the first clip — start paused so transport controls drive it
+		if (root.animations?.length) {
+			const mixer = new THREE.AnimationMixer(root);
+			const action = mixer.clipAction(root.animations[0]);
+			action.play();
+			mixer.timeScale = 0; // paused; playPreview() resumes
+			fbxMixers.push(mixer);
+			root.userData.mixer = mixer;
+		}
+		scene.add(root);
+		// Compute pick sphere AFTER scene.add so all matrixWorlds are valid.
+		// (SkinnedMesh raycast is unreliable, and pivot-mode raycasts need a hittable proxy.)
+		root.updateMatrixWorld(true);
+		const worldBox = new THREE.Box3().setFromObject(root);
+		if (isFinite(worldBox.min.x) && worldBox.max.x > worldBox.min.x) {
+			const worldSphere = new THREE.Sphere();
+			worldBox.getBoundingSphere(worldSphere);
+			const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+			worldSphere.applyMatrix4(inv);
+			root.userData.pickSphere = worldSphere;
+		} else {
+			// Fallback: a generous unit sphere centered on the object
+			root.userData.pickSphere = new THREE.Sphere(new THREE.Vector3(0, 1, 0), 1.5);
+		}
+		if (opts.assetId) root.userData.assetId = opts.assetId;
+		registerImported(root, "fbx", filename);
+		if (opts.savedName) root.name = opts.savedName;
+		updateStatus(`FBX loaded · ${filename}`);
+		return root;
+	} catch (e) {
+		console.error("[ComfyBlockout] loadFBX failed:", e);
+		updateStatus(`FBX load failed: ${e.message}`);
+		return null;
+	}
+}
+
+async function loadOBJ(arrayBuffer, filename, opts = {}) {
+	if (!objLoader) objLoader = new OBJLoader();
+	const text = new TextDecoder().decode(arrayBuffer);
+	const root = objLoader.parse(text);
+	root.traverse(c => {
+		if (c.isMesh && (!c.material || c.material.type === "MeshBasicMaterial")) {
+			c.material = new THREE.MeshStandardMaterial({ color: 0x999999, roughness: 0.7 });
+		}
+	});
+	if (!opts.restoring) {
+		const box = new THREE.Box3().setFromObject(root);
+		const size = box.getSize(new THREE.Vector3()).length();
+		if (size > 0) {
+			const scale = 2 / size;
+			root.scale.setScalar(scale);
+		}
+		root.position.set(0, 0, 0);
+	}
+	applySavedTransform(root, opts.transform);
+	scene.add(root);
+	if (opts.assetId) root.userData.assetId = opts.assetId;
+	registerImported(root, "obj", filename);
+	if (opts.savedName) root.name = opts.savedName;
+	return root;
+}
+
+const SPLAT_TARGET_SIZE = 4;
+
+function readBounds(obj) {
+	const splat = obj.userData?.splat || (obj.bounds ? obj : null);
+	if (splat && splat.bounds) {
+		try {
+			const c = splat.bounds.center();
+			const s = splat.bounds.size();
+			if (isFinite(c.x) && isFinite(s.x)) {
+				return { cx: c.x, cy: c.y, cz: c.z, size: Math.max(Math.abs(s.x), Math.abs(s.y), Math.abs(s.z)), src: "gsplat" };
+			}
+		} catch (e) { console.warn("[ComfyBlockout] gsplat bounds read failed:", e); }
+	}
+	const box = new THREE.Box3().setFromObject(obj);
+	if (isFinite(box.min.x) && isFinite(box.max.x) && box.max.x > box.min.x) {
+		const c = box.getCenter(new THREE.Vector3());
+		const s = box.getSize(new THREE.Vector3());
+		return { cx: c.x, cy: c.y, cz: c.z, size: Math.max(s.x, s.y, s.z), src: "Box3" };
+	}
+	return null;
+}
+
+
+function frameSplat(splatMesh) {
+	if (!splatMesh) return;
+
+	const bbox = splatMesh.getBoundingBox ? splatMesh.getBoundingBox(true) : new THREE.Box3().setFromObject(splatMesh);
+	const rawCenter = bbox.getCenter(new THREE.Vector3());
+	const rawSize = bbox.getSize(new THREE.Vector3());
+	const maxDim = Math.max(rawSize.x, rawSize.y, rawSize.z);
+	const baseScale = (maxDim > 0 && isFinite(maxDim)) ? SPLAT_TARGET_SIZE / maxDim : 1;
+	console.log(`[ComfyBlockout] splat bbox: center=(${rawCenter.x.toFixed(2)},${rawCenter.y.toFixed(2)},${rawCenter.z.toFixed(2)}) size=${maxDim.toFixed(2)} → baseScale ${baseScale.toFixed(4)}`);
+
+	splatMesh.scale.set(baseScale, baseScale, baseScale);
+	const rotatedCenter = rawCenter.clone().applyQuaternion(splatMesh.quaternion).multiplyScalar(baseScale);
+	splatMesh.position.set(-rotatedCenter.x, -rotatedCenter.y, -rotatedCenter.z);
+
+	camera.position.set(2.2, 1.6, 2.8);
+	orbit.target.set(0, 0, 0);
+	camera.updateProjectionMatrix();
+	orbit.enabled = true;
+}
+
+const loadingOverlay = document.getElementById("loading-overlay");
+const loadTitle = document.getElementById("load-title");
+const loadSub = document.getElementById("load-sub");
+
+let loadTimeoutId = null;
+function showLoading(title, sub) {
+	loadTitle.textContent = title;
+	loadSub.textContent = sub;
+	loadingOverlay.classList.add("active");
+	clearTimeout(loadTimeoutId);
+	loadTimeoutId = setTimeout(() => {
+		console.warn("[ComfyBlockout] loading overlay auto-dismissed after 90s");
+		hideLoading();
+	}, 90000);
+}
+function hideLoading() {
+	loadingOverlay.classList.remove("active");
+	clearTimeout(loadTimeoutId);
+}
+document.getElementById("load-cancel").addEventListener("click", hideLoading);
+const nextPaint = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+async function loadSplat(arrayBuffer, filename, opts = {}) {
+	const sizeMB = (arrayBuffer.byteLength / 1024 / 1024).toFixed(1);
+	console.log(`[ComfyBlockout] loadSplat START — ${filename} (${sizeMB} MB)`);
+	updateStatus(`loading splat ${filename} (${sizeMB} MB)…`);
+	showLoading(`Loading splat · ${sizeMB} MB`, `Parsing ${filename}.`);
+	await nextPaint();
+	let loaded = false;
+	const failTimer = setTimeout(() => {
+		if (loaded) return;
+		console.error(`[ComfyBlockout] splat ${filename} did not fire onLoad within 30s — likely unsupported format / bad magic bytes`);
+		updateStatus(`splat load timed out · ${filename}`);
+		hideLoading();
+	}, 30000);
+	try {
+		const { SplatMesh } = await ensureSpark();
+
+		const splatMesh = new SplatMesh({
+			fileBytes: new Uint8Array(arrayBuffer),
+			fileName: filename,
+			onLoad: () => {
+				loaded = true;
+				clearTimeout(failTimer);
+				splatMesh.userData.pickSphere = computeSplatPickSphere(splatMesh);
+				updateStatus(`splat loaded · ${filename}`);
+				hideLoading();
+			},
+		});
+		// OpenCV → OpenGL: 180° rotation around X (gaussian-splat captures are Y-down by convention)
+		if (!opts.restoring) splatMesh.quaternion.set(1, 0, 0, 0);
+		splatMesh.userData.splatMesh = splatMesh;
+		splatMesh.userData.pickSphere = new THREE.Sphere(new THREE.Vector3(), 1.5);
+		applySavedTransform(splatMesh, opts.transform);
+		scene.add(splatMesh);
+
+		if (opts.assetId) splatMesh.userData.assetId = opts.assetId;
+		registerImported(splatMesh, "splat", filename);
+		if (opts.savedName) splatMesh.name = opts.savedName;
+		return splatMesh;
+	} catch (e) {
+		clearTimeout(failTimer);
+		console.error("[ComfyBlockout] Splat load failed:", e);
+		updateStatus(`splat load failed: ${e.message}`);
+		hideLoading();
+		return null;
+	}
+}
+
+function computeSplatPickSphere(splatMesh) {
+	// SplatMesh has no triangle geometry; build a click-test sphere from whatever bounds API works.
+	try {
+		if (typeof splatMesh.getBoundingBox === "function") {
+			const bbox = splatMesh.getBoundingBox(true);
+			if (bbox && isFinite(bbox.min.x) && bbox.max.x > bbox.min.x) {
+				const c = bbox.getCenter(new THREE.Vector3());
+				const s = bbox.getSize(new THREE.Vector3());
+				return new THREE.Sphere(c, Math.max(s.x, s.y, s.z) * 0.6);
+			}
+		}
+	} catch (e) { console.warn("[ComfyBlockout] getBoundingBox failed:", e); }
+	return new THREE.Sphere(new THREE.Vector3(), 1.5);
+}
+
+function sniffPlyKindFromBytes(arrayBuffer) {
+	const head = new TextDecoder().decode(new Uint8Array(arrayBuffer, 0, Math.min(arrayBuffer.byteLength, 4096)));
+	const endIdx = head.indexOf("end_header");
+	const header = endIdx >= 0 ? head.slice(0, endIdx) : head;
+	if (/\bproperty\s+\w+\s+(f_dc_0|scale_0|rot_0|opacity)\b/.test(header)) return "splat";
+	if (/\belement\s+face\b/.test(header)) return "mesh";
+	return "mesh";
+}
+
+async function loadPlyMesh(arrayBuffer, filename, opts = {}) {
+	updateStatus(`loading mesh ply ${filename}…`);
+	try {
+		const loader = new PLYLoader();
+		const geom = loader.parse(arrayBuffer);
+		geom.computeVertexNormals?.();
+		let obj;
+		if (geom.index || geom.attributes.normal) {
+			const mat = new THREE.MeshStandardMaterial({
+				color: 0xbfc6d4, roughness: 0.7, metalness: 0.05,
+				vertexColors: !!geom.attributes.color,
+			});
+			obj = new THREE.Mesh(geom, mat);
+		} else {
+			const mat = new THREE.PointsMaterial({
+				size: 0.01, vertexColors: !!geom.attributes.color,
+				color: geom.attributes.color ? 0xffffff : 0xbfc6d4,
+				sizeAttenuation: true,
+			});
+			obj = new THREE.Points(geom, mat);
+		}
+		if (!opts.restoring) obj.position.set(0, 0, 0);
+		applySavedTransform(obj, opts.transform);
+		scene.add(obj);
+		if (opts.assetId) obj.userData.assetId = opts.assetId;
+		registerImported(obj, "ply", filename);
+		if (opts.savedName) obj.name = opts.savedName;
+		updateStatus(`mesh ply loaded · ${filename}`);
+		return obj;
+	} catch (e) {
+		console.error("[ComfyBlockout] mesh PLY load failed:", e);
+		updateStatus(`mesh ply load failed: ${e.message}`);
+		return null;
+	}
+}
+
+async function loadFromBytes(arrayBuffer, filename, opts = {}) {
+	const ext = (filename.split(".").pop() || "").toLowerCase();
+	if (ext === "glb" || ext === "gltf") return loadGLB(arrayBuffer, filename, opts);
+	if (ext === "fbx") return loadFBX(arrayBuffer, filename, opts);
+	if (ext === "obj") return loadOBJ(arrayBuffer, filename, opts);
+	if (ext === "splat" || ext === "ksplat" || ext === "spz") return loadSplat(arrayBuffer, filename, opts);
+	if (ext === "ply") {
+		const kind = sniffPlyKindFromBytes(arrayBuffer);
+		console.log(`[ComfyBlockout] ${filename} sniffed as ${kind} PLY`);
+		return kind === "splat" ? loadSplat(arrayBuffer, filename, opts) : loadPlyMesh(arrayBuffer, filename, opts);
+	}
+	updateStatus(`unsupported: .${ext}`);
+	return null;
+}
+
+async function loadFile(file) {
+	snapshotForUndo();
+	const arrayBuffer = await file.arrayBuffer();
+	const obj = await loadFromBytes(arrayBuffer, file.name);
+	if (!obj) return;
+	// Persist the asset so deserializeScene can replay it on reopen
+	try {
+		const { assetId } = await uploadAsset(file.name, arrayBuffer);
+		obj.userData.assetId = assetId;
+		saveScene?.();
+	} catch (e) {
+		console.warn("[ComfyBlockout] asset upload failed; object won't persist:", e);
+	}
+}
+
+// Undo stack: snapshot-based. Each entry is a serialized scene JSON string.
+// snapshotForUndo() is called at the start of a "commit" action (add/delete
+// object, drop import, add/delete keyframe, project ops) — NOT on continuous
+// changes like camera orbit, since flooding the stack with sub-degree rotations
+// makes a single Ctrl+Z feel useless. isUndoing gates re-entry so deserialize
+// during undo/redo doesn't push its own snapshot.
+const undoStack = [];
+const redoStack = [];
+const MAX_UNDO = 50;
+let isUndoing = false;
+
+function snapshotForUndo() {
+	if (isUndoing || restoringScene) return;
+	try {
+		const json = JSON.stringify(serializeScene());
+		if (undoStack.length && undoStack[undoStack.length - 1] === json) return;
+		undoStack.push(json);
+		if (undoStack.length > MAX_UNDO) undoStack.shift();
+		redoStack.length = 0;
+	} catch {}
+}
+
+async function performUndo() {
+	if (isUndoing || undoStack.length === 0) return;
+	isUndoing = true;
+	try {
+		const currentJson = JSON.stringify(serializeScene());
+		redoStack.push(currentJson);
+		if (redoStack.length > MAX_UNDO) redoStack.shift();
+		const target = undoStack.pop();
+		await deserializeScene(JSON.parse(target));
+		updateStatus("undo");
+	} finally {
+		isUndoing = false;
+	}
+}
+
+async function performRedo() {
+	if (isUndoing || redoStack.length === 0) return;
+	isUndoing = true;
+	try {
+		const currentJson = JSON.stringify(serializeScene());
+		undoStack.push(currentJson);
+		if (undoStack.length > MAX_UNDO) undoStack.shift();
+		const target = redoStack.pop();
+		await deserializeScene(JSON.parse(target));
+		updateStatus("redo");
+	} finally {
+		isUndoing = false;
+	}
+}
+
+function deleteObject(obj) {
+	if (!obj) return;
+	snapshotForUndo();
+	if (selected === obj) {
+		transform.detach();
+		selected = null;
+	}
+	if (obj.userData.mixer) {
+		const idx = fbxMixers.indexOf(obj.userData.mixer);
+		if (idx >= 0) fbxMixers.splice(idx, 1);
+		obj.userData.mixer.stopAllAction();
+	}
+	if (obj.userData.primKind === "splat") {
+		scene.remove(obj);
+		obj.userData.splatMesh?.dispose?.();
+	} else {
+		scene.remove(obj);
+		obj.traverse?.(c => {
+			c.geometry?.dispose?.();
+			if (c.material) {
+				if (Array.isArray(c.material)) c.material.forEach(m => m.dispose?.());
+				else c.material.dispose?.();
+			}
+		});
+	}
+	const idx = objects.indexOf(obj);
+	if (idx >= 0) objects.splice(idx, 1);
+	refreshOutliner();
+	updateStatus();
+	if (typeof saveScene === "function") saveScene();
+}
+
+// Curated palette of clearly nameable colors. Each new block picks one at random
+// (no immediate repeats) so the scene reads as "the red cube is the car,
+// the blue cylinder is the building..." when prompting Seedance / Nano Banana / Flux.
+const NAMED_BLOCK_COLORS = [
+	0xff3838, // red
+	0x3578ff, // blue
+	0x35d854, // green
+	0xffd138, // yellow
+	0xff8a1f, // orange
+	0xa047ff, // purple
+	0xff5fbf, // pink
+	0x2cd9d9, // cyan
+	0xc7e93b, // lime
+	0xe83ad1, // magenta
+	0xffffff, // white
+	0x444444, // dark grey
+];
+let lastNamedColorIdx = -1;
+function pickNamedBlockColor() {
+	let idx;
+	do { idx = Math.floor(Math.random() * NAMED_BLOCK_COLORS.length); }
+	while (idx === lastNamedColorIdx && NAMED_BLOCK_COLORS.length > 1);
+	lastNamedColorIdx = idx;
+	return NAMED_BLOCK_COLORS[idx];
+}
+
+function addPrimitive(kind) {
+	snapshotForUndo();
+	primCounters[kind] = (primCounters[kind] || 0) + 1;
+	const geom = PRIM_DEFS[kind]();
+	const mat = new THREE.MeshStandardMaterial({
+		color: new THREE.Color(pickNamedBlockColor()),
+		roughness: 0.7, metalness: 0.0,
+	});
+	const mesh = new THREE.Mesh(geom, mat);
+	mesh.name = `${kind[0].toUpperCase()}${kind.slice(1)}.${String(primCounters[kind]).padStart(3,"0")}`;
+	mesh.position.set(0, 0, 0);
+	mesh.userData.primKind = kind;
+	scene.add(mesh);
+	objects.push(mesh);
+	select(mesh);
+	refreshOutliner();
+	updateStatus();
+	if (typeof saveScene === "function") saveScene();
+	return mesh;
+}
+
+function duplicateObject(obj) {
+	if (!obj) return;
+	snapshotForUndo();
+	const kind = obj.userData.primKind || "cube";
+	const dup = addPrimitive(kind);
+	dup.position.copy(obj.position).add(new THREE.Vector3(0.5, 0, 0.5));
+	dup.rotation.copy(obj.rotation);
+	dup.scale.copy(obj.scale);
+	dup.material.color.copy(obj.material.color);
+}
+
+function select(obj) {
+	selected = obj;
+	if (obj) transform.attach(obj);
+	else transform.detach();
+	if (anchorMode) {
+		if (obj) tintGizmo(0xffb454);
+		else pivotMarker.visible = false;
+	}
+	refreshOutliner();
+}
+
+function toggleVisibility(obj) {
+	obj.visible = !obj.visible;
+	refreshOutliner();
+	if (typeof saveScene === "function") saveScene();
+}
+
+function refreshOutliner() {
+	outlinerEl.innerHTML = "";
+	// Keep the right-panel header in sync with the current selection.
+	if (window.setRPContext) {
+		if (selected) window.setRPContext("object", selected.name);
+		else window.setRPContext("object", "No selection");
+	}
+	for (const obj of objects) {
+		const row = document.createElement("div");
+		row.className = "out-row" + (obj === selected ? " selected" : "") + (obj.visible === false ? " hidden" : "");
+		const hex = obj.material?.color ? "#" + obj.material.color.getHexString() : "#ffffff";
+		row.innerHTML = `
+			<input type="color" class="out-color" value="${hex}" title="Change color">
+			<span class="out-ref" title="Add image reference (semantic texture)">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+			</span>
+			<input class="out-name" type="text" maxlength="40" title="Click to rename">
+			<button class="out-vis" title="Show/hide">${obj.visible === false ? "○" : "◉"}</button>
+			<button class="out-del" title="Delete">✕</button>
+		`;
+
+		const swatch = row.querySelector(".out-color");
+		swatch.addEventListener("click", e => e.stopPropagation());
+		swatch.addEventListener("input", e => {
+			if (obj.material?.color) obj.material.color.setStyle(e.target.value);
+			saveScene?.();
+		});
+
+		const nameInput = row.querySelector(".out-name");
+		nameInput.value = obj.name;
+		nameInput.addEventListener("click", e => e.stopPropagation());
+		nameInput.addEventListener("keydown", e => {
+			if (e.key === "Enter") { e.preventDefault(); nameInput.blur(); }
+			if (e.key === "Escape") { nameInput.value = obj.name; nameInput.blur(); }
+		});
+		nameInput.addEventListener("blur", () => {
+			const v = nameInput.value.trim();
+			if (!v) { nameInput.value = obj.name; return; }
+			obj.name = v;
+			saveScene?.();
+		});
+
+		const refSlot = row.querySelector(".out-ref");
+		refSlot.addEventListener("click", e => {
+			e.stopPropagation();
+			// TODO: per-object image reference upload (task #7) — wire to a hidden
+			// file input + POST /api/refs/upload tagged with obj.id.
+		});
+
+		row.addEventListener("click", (e) => {
+			if (e.target.closest(".out-del")) { deleteObject(obj); return; }
+			if (e.target.closest(".out-vis")) { toggleVisibility(obj); return; }
+			if (e.target.closest(".out-name, .out-color, .out-ref")) return;
+			select(obj);
+		});
+
+		outlinerEl.appendChild(row);
+	}
+	objCountEl.textContent = objects.length;
+}
+
+function updateStatus(extra) {
+	const base = `${objects.length} objects`;
+	statusEl.textContent = extra ? `${extra} · ${base}` : `idle · ${base}`;
+}
+
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+let pointerDownX = 0, pointerDownY = 0;
+canvas.addEventListener("pointerdown", e => { pointerDownX = e.clientX; pointerDownY = e.clientY; });
+canvas.addEventListener("pointerup", e => {
+	if (transform.dragging || transform.axis) return;
+	if (e.altKey || altCamHeld || altDragging) return;
+	if (Math.abs(e.clientX - pointerDownX) > 4 || Math.abs(e.clientY - pointerDownY) > 4) return;
+	const rect = canvas.getBoundingClientRect();
+	ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+	ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+	raycaster.setFromCamera(ndc, camera);
+	const meshHits = raycaster.intersectObjects(
+		objects.filter(o => o.userData.primKind !== "splat" && o.visible !== false),
+		true,
+	);
+	const meshHit = meshHits[0] || null;
+	// Sphere-pick for objects without reliable triangle raycast (splats, SkinnedMesh inside FBX)
+	let sphereHit = null, sphereHitDist = Infinity;
+	const tmpVec = new THREE.Vector3();
+	for (const o of objects) {
+		if (o.visible === false || !o.userData.pickSphere) continue;
+		o.updateMatrixWorld();
+		const worldSphere = o.userData.pickSphere.clone().applyMatrix4(o.matrixWorld);
+		if (raycaster.ray.intersectSphere(worldSphere, tmpVec)) {
+			const d = tmpVec.distanceTo(camera.position);
+			if (d < sphereHitDist) { sphereHitDist = d; sphereHit = o; }
+		}
+	}
+	if (meshHit && (!sphereHit || meshHit.distance < sphereHitDist)) {
+		let root = meshHit.object;
+		while (root && !objects.includes(root)) root = root.parent;
+		if (root) select(root);
+	} else if (sphereHit) {
+		select(sphereHit);
+	} else {
+		select(null);
+	}
+});
+
+document.querySelectorAll(".prim-btn").forEach(b => {
+	b.addEventListener("click", () => {
+		const kind = b.dataset.prim;
+		// "custom" = open the file dialog for arbitrary GLB/FBX/OBJ/PLY/SPLAT/SPZ imports
+		if (kind === "custom") {
+			document.getElementById("import-file")?.click();
+			return;
+		}
+		addPrimitive(kind);
+	});
+});
+
+// Alt-held camera modifier: layers cinematic moves on top of the default
+// OrbitControls without a mode switch.
+//   Alt+left-drag  = free-look (yaw/pitch the camera in place by rotating
+//                    orbit.target on a sphere around camera.position)
+//   Alt+right-drag = roll (dutch angle) — rotates camera.up around view axis
+// Use F to re-frame + re-center orbit on the selected object.
+let altCamHeld = false;
+let altDragging = false;
+let altDragRoll = false;
+let altLastX = 0, altLastY = 0;
+function setAltCamHeld(on) {
+	if (altCamHeld === on) return;
+	altCamHeld = on;
+	orbit.enabled = !on;
+	canvas.style.cursor = on ? "grab" : "";
+	if (!on && altDragging) altDragging = false;
+}
+window.addEventListener("keydown", e => {
+	if (e.key === "Alt") setAltCamHeld(true);
+});
+window.addEventListener("keyup", e => {
+	if (e.key === "Alt") setAltCamHeld(false);
+});
+window.addEventListener("blur", () => setAltCamHeld(false));
+canvas.addEventListener("pointerdown", e => {
+	// Use e.altKey directly so the very first click after focus-shift works —
+	// the keydown listener doesn't fire when Alt was already held in a parent
+	// frame, but the pointer event always carries the live altKey state.
+	if (!e.altKey) return;
+	if (e.button !== 0 && e.button !== 2) return;
+	// Hard-disable orbit synchronously so OrbitControls' same-element pointerdown
+	// (bubble phase, fires right after this capture-phase one) bails.
+	orbit.enabled = false;
+	altCamHeld = true;
+	altDragging = true;
+	altDragRoll = e.button === 2;
+	altLastX = e.clientX;
+	altLastY = e.clientY;
+	canvas.setPointerCapture(e.pointerId);
+	canvas.style.cursor = "grabbing";
+	try { snapshotForUndo(); } catch {}
+	e.preventDefault();
+	e.stopPropagation();
+}, true);
+canvas.addEventListener("pointermove", e => {
+	if (!altDragging) return;
+	const dx = e.clientX - altLastX;
+	const dy = e.clientY - altLastY;
+	altLastX = e.clientX;
+	altLastY = e.clientY;
+	const sens = 0.005;
+	if (altDragRoll) {
+		const forward = new THREE.Vector3().subVectors(orbit.target, camera.position).normalize();
+		if (forward.lengthSq() > 0) camera.up.applyAxisAngle(forward, -dx * sens).normalize();
+	} else {
+		// Free-look: rotate orbit.target on a sphere around camera.position.
+		const offset = new THREE.Vector3().subVectors(orbit.target, camera.position);
+		const upN = camera.up.clone().normalize();
+		offset.applyAxisAngle(upN, -dx * sens);
+		const right = new THREE.Vector3().crossVectors(offset, upN).normalize();
+		if (right.lengthSq() > 0) offset.applyAxisAngle(right, -dy * sens);
+		orbit.target.copy(camera.position).add(offset);
+	}
+	orbit.update();
+}, true);
+canvas.addEventListener("pointerup", e => {
+	if (!altDragging) return;
+	altDragging = false;
+	try { canvas.releasePointerCapture(e.pointerId); } catch {}
+	canvas.style.cursor = altCamHeld ? "grab" : "";
+	saveSceneDebounced?.();
+}, true);
+canvas.addEventListener("contextmenu", e => {
+	if (altCamHeld || altDragging || flyMode) { e.preventDefault(); e.stopPropagation(); }
+}, true);
+
+// Unreal-style fly mode. Hold RMB (without Alt) to enter:
+//   Mouse move → yaw/pitch the camera in place (FPS look)
+//   W/A/S/D    → fly forward / left / back / right in view-space
+//   Q / E      → down / up (world Y)
+//   Shift      → ×3 boost while held
+//   Wheel      → adjust fly speed (1.15× / 0.87× per tick)
+let flyMode = false;
+let flyLastX = 0, flyLastY = 0;
+let flyPointerId = null;
+let flyShiftHeld = false;
+let flySpeed = 4;
+const flyKeys = new Set();
+const FLY_KEY_RE = /^[wasdqe]$/;
+function setFlyMode(on) {
+	if (flyMode === on) return;
+	flyMode = on;
+	if (on) {
+		orbit.enabled = false;
+		canvas.style.cursor = "crosshair";
+	} else {
+		orbit.enabled = !altCamHeld;
+		canvas.style.cursor = altCamHeld ? "grab" : "";
+		flyKeys.clear();
+	}
+}
+canvas.addEventListener("pointerdown", e => {
+	if (e.altKey) return;       // Alt+RMB is roll, handled above
+	if (e.button !== 2) return; // RMB only — plain LMB stays as orbit, MMB as pan
+	setFlyMode(true);
+	flyPointerId = e.pointerId;
+	flyLastX = e.clientX;
+	flyLastY = e.clientY;
+	canvas.setPointerCapture(e.pointerId);
+	try { snapshotForUndo(); } catch {}
+	e.preventDefault();
+	e.stopPropagation();
+}, true);
+canvas.addEventListener("pointermove", e => {
+	if (!flyMode || e.pointerId !== flyPointerId) return;
+	const dx = e.clientX - flyLastX;
+	const dy = e.clientY - flyLastY;
+	flyLastX = e.clientX;
+	flyLastY = e.clientY;
+	const sens = 0.003;
+	const offset = new THREE.Vector3().subVectors(orbit.target, camera.position);
+	const upN = camera.up.clone().normalize();
+	offset.applyAxisAngle(upN, -dx * sens);
+	const right = new THREE.Vector3().crossVectors(offset, upN).normalize();
+	if (right.lengthSq() > 0) offset.applyAxisAngle(right, -dy * sens);
+	orbit.target.copy(camera.position).add(offset);
+	orbit.update();
+}, true);
+function endFly(e) {
+	if (!flyMode) return;
+	setFlyMode(false);
+	try { canvas.releasePointerCapture(flyPointerId); } catch {}
+	flyPointerId = null;
+	saveSceneDebounced?.();
+}
+canvas.addEventListener("pointerup", e => {
+	if (e.button === 2 && flyMode) endFly(e);
+}, true);
+canvas.addEventListener("pointercancel", endFly, true);
+canvas.addEventListener("wheel", e => {
+	if (!flyMode) return;
+	e.preventDefault();
+	e.stopPropagation();
+	const factor = e.deltaY < 0 ? 1.15 : 0.87;
+	flySpeed = Math.max(0.5, Math.min(50, flySpeed * factor));
+	updateStatus?.(`fly speed: ${flySpeed.toFixed(1)} u/s`);
+}, true);
+// Listen on window so keys land regardless of focus inside the editor.
+window.addEventListener("keydown", e => {
+	if (e.key === "Shift") flyShiftHeld = true;
+	if (!flyMode) return;
+	const k = e.key.toLowerCase();
+	if (FLY_KEY_RE.test(k)) flyKeys.add(k);
+}, true);
+window.addEventListener("keyup", e => {
+	if (e.key === "Shift") flyShiftHeld = false;
+	const k = e.key.toLowerCase();
+	if (FLY_KEY_RE.test(k)) flyKeys.delete(k);
+}, true);
+window.addEventListener("blur", () => { flyKeys.clear(); flyShiftHeld = false; });
+function tickFlyMovement(dt) {
+	if (!flyMode || flyKeys.size === 0) return;
+	const forward = new THREE.Vector3().subVectors(orbit.target, camera.position).normalize();
+	if (forward.lengthSq() === 0) return;
+	const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+	const worldUp = new THREE.Vector3(0, 1, 0);
+	const move = new THREE.Vector3();
+	if (flyKeys.has("w")) move.add(forward);
+	if (flyKeys.has("s")) move.sub(forward);
+	if (flyKeys.has("d")) move.add(right);
+	if (flyKeys.has("a")) move.sub(right);
+	if (flyKeys.has("e")) move.add(worldUp);
+	if (flyKeys.has("q")) move.sub(worldUp);
+	if (move.lengthSq() === 0) return;
+	move.normalize().multiplyScalar(flySpeed * (flyShiftHeld ? 3 : 1) * dt);
+	camera.position.add(move);
+	orbit.target.add(move);
+	updateCameraSliders?.();
+}
+
+let anchorMode = false;
+let anchorStartPos = null;
+
+const pivotMarker = new THREE.Mesh(
+	new THREE.OctahedronGeometry(0.12, 0),
+	new THREE.MeshBasicMaterial({ color: 0xffb454, transparent: true, opacity: 0.9, depthTest: false })
+);
+const pivotMarkerRing = new THREE.Mesh(
+	new THREE.RingGeometry(0.18, 0.21, 24),
+	new THREE.MeshBasicMaterial({ color: 0xffb454, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthTest: false })
+);
+pivotMarker.add(pivotMarkerRing);
+pivotMarker.visible = false;
+pivotMarker.renderOrder = 1000;
+pivotMarkerRing.renderOrder = 1000;
+scene.add(pivotMarker);
+
+function updatePivotMarker() {
+	if (!anchorMode || !selected) { pivotMarker.visible = false; return; }
+	pivotMarker.visible = true;
+	pivotMarker.position.copy(selected.getWorldPosition(new THREE.Vector3()));
+	const dist = camera.position.distanceTo(pivotMarker.position);
+	pivotMarker.scale.setScalar(Math.max(0.3, dist * 0.05));
+	pivotMarkerRing.lookAt(camera.position);
+	pivotMarker.rotation.y += 0.01;
+}
+
+function tintGizmo(color) {
+	const helper = transformHelper || transform;
+	helper.traverse(c => {
+		if (c.material && c.material.color) {
+			if (!c.userData._origColor) c.userData._origColor = c.material.color.clone();
+			if (color) c.material.color.set(color);
+			else c.material.color.copy(c.userData._origColor);
+		}
+	});
+}
+
+const modeButtons = document.querySelectorAll("[data-mode]");
+function setActiveMode(mode) {
+	anchorMode = false;
+	transform.setMode(mode);
+	transform.setSize(1.0);
+	modeButtons.forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
+	document.getElementById("mode-anchor").classList.remove("active");
+	tintGizmo(null);
+	pivotMarker.visible = false;
+}
+modeButtons.forEach(b => b.addEventListener("click", () => setActiveMode(b.dataset.mode)));
+setActiveMode("translate");
+
+document.getElementById("mode-anchor").addEventListener("click", () => {
+	anchorMode = !anchorMode;
+	if (anchorMode) {
+		transform.setMode("translate");
+		transform.setSize(0.65);
+		modeButtons.forEach(b => b.classList.remove("active"));
+		document.getElementById("mode-anchor").classList.add("active");
+		tintGizmo(0xffb454);
+		updatePivotMarker();
+	} else {
+		setActiveMode("translate");
+	}
+});
+
+transform.addEventListener("mouseDown", () => {
+	// Snapshot pre-drag state so Ctrl+Z restores the object's transform from before the
+	// gizmo drag. One snapshot per gesture; objectChange fires per pixel and intentionally
+	// does NOT push, so the stack doesn't flood.
+	try { snapshotForUndo(); } catch {}
+	if (anchorMode && selected) anchorStartPos = selected.position.clone();
+});
+transform.addEventListener("objectChange", () => {
+	if (anchorMode && selected && anchorStartPos) {
+		const delta = new THREE.Vector3().subVectors(selected.position, anchorStartPos);
+		if (selected.geometry) {
+			selected.geometry.translate(-delta.x, -delta.y, -delta.z);
+			selected.geometry.computeBoundingBox?.();
+		} else {
+			selected.traverse(c => {
+				if (c.isMesh && c.geometry) {
+					c.geometry.translate(-delta.x, -delta.y, -delta.z);
+					c.geometry.computeBoundingBox?.();
+				}
+			});
+		}
+		anchorStartPos = selected.position.clone();
+		updatePivotMarker();
+	}
+});
+
+document.getElementById("clear-btn").addEventListener("click", () => {
+	while (objects.length) deleteObject(objects[0]);
+});
+
+const fovSlider = document.getElementById("fov");
+fovSlider.addEventListener("input", e => {
+	camera.fov = parseFloat(e.target.value);
+	camera.updateProjectionMatrix();
+	document.getElementById("fov-val").textContent = `${e.target.value}°`;
+});
+
+// Camera position / rotation drag-fields. Click-drag horizontally on a box to
+// scrub the value (sensitivity is small so micro-adjustments are natural);
+// click without dragging to type a value. Shift = fine (×0.1). Two-way bound:
+// orbit "change" calls updateCameraSliders() which writes the current camera
+// state back into the boxes.
+let suppressSliderSync = false;
+function getYawPitchRoll() {
+	const forward = new THREE.Vector3().subVectors(orbit.target, camera.position);
+	const dist = forward.length();
+	if (dist < 0.0001) return { yaw: 0, pitch: 0, roll: 0, dist: 0, forward: new THREE.Vector3(0, 0, -1) };
+	forward.divideScalar(dist);
+	const yaw = Math.atan2(-forward.x, -forward.z) * 180 / Math.PI;
+	const pitch = Math.asin(Math.max(-1, Math.min(1, forward.y))) * 180 / Math.PI;
+	const worldUp = new THREE.Vector3(0, 1, 0);
+	const canonicalUp = worldUp.clone().sub(forward.clone().multiplyScalar(worldUp.dot(forward)));
+	let roll = 0;
+	if (canonicalUp.lengthSq() > 0.001) {
+		canonicalUp.normalize();
+		const right = new THREE.Vector3().crossVectors(forward, canonicalUp);
+		const upN = camera.up.clone().normalize();
+		roll = Math.atan2(upN.dot(right), upN.dot(canonicalUp)) * 180 / Math.PI;
+	}
+	return { yaw, pitch, roll, dist, forward };
+}
+function applyYawPitchRoll(yawDeg, pitchDeg, rollDeg, dist) {
+	const yaw = yawDeg * Math.PI / 180;
+	const pitch = pitchDeg * Math.PI / 180;
+	const roll = rollDeg * Math.PI / 180;
+	const forward = new THREE.Vector3(
+		-Math.sin(yaw) * Math.cos(pitch),
+		Math.sin(pitch),
+		-Math.cos(yaw) * Math.cos(pitch),
+	);
+	orbit.target.copy(camera.position).add(forward.clone().multiplyScalar(dist));
+	const worldUp = new THREE.Vector3(0, 1, 0);
+	const canonicalUp = worldUp.clone().sub(forward.clone().multiplyScalar(worldUp.dot(forward)));
+	if (canonicalUp.lengthSq() < 0.001) canonicalUp.set(1, 0, 0);
+	canonicalUp.normalize();
+	camera.up.copy(canonicalUp).applyAxisAngle(forward, roll).normalize();
+	orbit.update();
+}
+
+// Drag-field widget: click-drag to scrub, click-without-drag to type.
+const dragFields = [];
+function setupDragField(el, opts) {
+	const valEl = el.querySelector(".drag-val");
+	const fmt = opts.format || (v => v.toFixed(2));
+	function clamp(v) {
+		if (opts.min !== undefined) v = Math.max(opts.min, v);
+		if (opts.max !== undefined) v = Math.min(opts.max, v);
+		return v;
+	}
+	function refresh() { valEl.textContent = fmt(opts.get()); }
+	el._refresh = refresh;
+	dragFields.push(el);
+
+	let startX = 0, startVal = 0, dragged = false, active = false;
+	el.addEventListener("pointerdown", e => {
+		if (el.classList.contains("editing") || e.button !== 0) return;
+		startX = e.clientX;
+		startVal = opts.get();
+		dragged = false;
+		active = true;
+		el.setPointerCapture(e.pointerId);
+		try { snapshotForUndo(); } catch {}
+		e.preventDefault();
+	});
+	el.addEventListener("pointermove", e => {
+		if (!active) return;
+		const dx = e.clientX - startX;
+		if (!dragged && Math.abs(dx) < 3) return;
+		if (!dragged) { dragged = true; el.classList.add("dragging"); }
+		const sens = (opts.sens || 0.01) * (e.shiftKey ? 0.1 : 1);
+		opts.set(clamp(startVal + dx * sens));
+		refresh();
+	});
+	function endDrag(e) {
+		if (!active) return;
+		active = false;
+		try { el.releasePointerCapture(e.pointerId); } catch {}
+		el.classList.remove("dragging");
+		if (!dragged) startEdit();
+		else saveSceneDebounced?.();
+	}
+	el.addEventListener("pointerup", endDrag);
+	el.addEventListener("pointercancel", endDrag);
+
+	function startEdit() {
+		el.classList.add("editing");
+		const input = document.createElement("input");
+		input.type = "text";
+		input.value = String(+opts.get().toFixed(4));
+		valEl.style.display = "none";
+		el.appendChild(input);
+		input.focus();
+		input.select();
+		let done = false;
+		function commit(save) {
+			if (done) return;
+			done = true;
+			if (save) {
+				const num = parseFloat(input.value);
+				if (isFinite(num)) {
+					opts.set(clamp(num));
+					saveSceneDebounced?.();
+				}
+			}
+			el.classList.remove("editing");
+			valEl.style.display = "";
+			input.remove();
+			refresh();
+		}
+		input.addEventListener("blur", () => commit(true));
+		input.addEventListener("keydown", ev => {
+			if (ev.key === "Enter") { ev.preventDefault(); commit(true); }
+			else if (ev.key === "Escape") { ev.preventDefault(); commit(false); }
+		});
+	}
+	refresh();
+}
+
+function setCamPosAxis(axis, v) {
+	suppressSliderSync = true;
+	try {
+		const dv = v - camera.position[axis];
+		camera.position[axis] = v;
+		orbit.target[axis] += dv;
+		orbit.update();
+	} finally { suppressSliderSync = false; }
+}
+function setCamRotAxis(axis, v) {
+	suppressSliderSync = true;
+	try {
+		const ypr = getYawPitchRoll();
+		const dist = ypr.dist || camera.position.distanceTo(orbit.target) || 4;
+		ypr[axis] = v;
+		applyYawPitchRoll(ypr.yaw, ypr.pitch, ypr.roll, dist);
+	} finally { suppressSliderSync = false; }
+}
+
+setupDragField(document.getElementById("cam-px"), { get: () => camera.position.x, set: v => setCamPosAxis("x", v), sens: 0.01 });
+setupDragField(document.getElementById("cam-py"), { get: () => camera.position.y, set: v => setCamPosAxis("y", v), sens: 0.01 });
+setupDragField(document.getElementById("cam-pz"), { get: () => camera.position.z, set: v => setCamPosAxis("z", v), sens: 0.01 });
+setupDragField(document.getElementById("cam-yaw"),   { get: () => getYawPitchRoll().yaw,   set: v => setCamRotAxis("yaw",   v), sens: 0.3, format: v => `${v.toFixed(0)}°` });
+setupDragField(document.getElementById("cam-pitch"), { get: () => getYawPitchRoll().pitch, set: v => setCamRotAxis("pitch", v), sens: 0.3, min: -89, max: 89, format: v => `${v.toFixed(0)}°` });
+setupDragField(document.getElementById("cam-roll"),  { get: () => getYawPitchRoll().roll,  set: v => setCamRotAxis("roll",  v), sens: 0.3, format: v => `${v.toFixed(0)}°` });
+
+function updateCameraSliders() {
+	if (suppressSliderSync) return;
+	for (const el of dragFields) el._refresh?.();
+}
+
+document.getElementById("cam-reset").addEventListener("click", () => {
+	try { snapshotForUndo(); } catch {}
+	suppressSliderSync = true;
+	try {
+		camera.position.set(2.2, 1.6, 2.8);
+		orbit.target.set(0, 0, 0);
+		camera.up.set(0, 1, 0);
+		camera.fov = 55;
+		camera.updateProjectionMatrix();
+		fovSlider.value = 55;
+		document.getElementById("fov-val").textContent = "55°";
+		orbit.update();
+	} finally { suppressSliderSync = false; }
+	updateCameraSliders();
+	saveSceneDebounced?.();
+});
+orbit.addEventListener("change", updateCameraSliders);
+updateCameraSliders();
+
+const gridToggle = document.getElementById("toggle-grid");
+gridToggle.addEventListener("click", () => {
+	grid.visible = !grid.visible;
+	gridToggle.classList.toggle("active", grid.visible);
+	saveScene?.();
+});
+
+const guidesToggle = document.getElementById("toggle-guides");
+let guidesVisible = false;
+guidesToggle.addEventListener("click", () => {
+	guidesVisible = !guidesVisible;
+	guidesToggle.classList.toggle("active", guidesVisible);
+	aspectFrame.classList.toggle("no-guides", !guidesVisible);
+	saveScene?.();
+});
+
+const arToggle = document.getElementById("toggle-ar");
+let arVisible = true;
+arToggle.addEventListener("click", () => {
+	arVisible = !arVisible;
+	arToggle.classList.toggle("active", arVisible);
+	aspectFrame.style.display = arVisible ? "block" : "none";
+	saveScene?.();
+});
+
+const bgColorInput = document.getElementById("bg-color");
+function applyBgColor(hex) {
+	renderer.setClearColor(hex);
+	canvasWrap.style.background = hex;
+}
+bgColorInput.addEventListener("input", e => applyBgColor(e.target.value));
+bgColorInput.addEventListener("change", () => saveScene?.());
+
+
+function frameScene() {
+	const targets = selected ? [selected] : objects;
+	if (targets.length === 0) return;
+	const box = new THREE.Box3();
+	for (const o of targets) {
+		if (o.userData.primKind === "splat") {
+			const b = readBounds(o);
+			if (b) box.expandByPoint(new THREE.Vector3(b.cx - b.size / 2, b.cy - b.size / 2, b.cz - b.size / 2))
+				.expandByPoint(new THREE.Vector3(b.cx + b.size / 2, b.cy + b.size / 2, b.cz + b.size / 2));
+		} else {
+			box.expandByObject(o);
+		}
+	}
+	if (!isFinite(box.min.x)) return;
+	const center = box.getCenter(new THREE.Vector3());
+	const sz = box.getSize(new THREE.Vector3());
+	// Use the largest axis, not the diagonal — flat planes have a long diagonal
+	// but appear small from camera, so .length() over-frames.
+	const maxAxis = Math.max(sz.x, sz.y, sz.z) || 4;
+	const fovRad = camera.fov * Math.PI / 180;
+	// 1.2 × maxAxis / tan(fov/2): comfortable framing for compact objects
+	// without zooming out to the diagonal length for flat ones (planes).
+	const dist = (maxAxis * 1.2) / Math.tan(fovRad / 2);
+	const offset = new THREE.Vector3().subVectors(camera.position, orbit.target).normalize().multiplyScalar(dist);
+	camera.position.copy(center).add(offset);
+	orbit.target.copy(center);
+}
+
+document.getElementById("duration").addEventListener("input", e => {
+	document.getElementById("duration-val").textContent = `${parseFloat(e.target.value).toFixed(1)}s`;
+	saveSceneDebounced?.();
+});
+document.getElementById("fps").addEventListener("input", e => {
+	document.getElementById("fps-val").textContent = e.target.value;
+	saveSceneDebounced?.();
+});
+
+const envSelect = document.getElementById("env-preset");
+const envIntensity = document.getElementById("env-intensity");
+const envIntensityVal = document.getElementById("env-intensity-val");
+
+envSelect.addEventListener("change", () => {
+	setEnvironment(envSelect.value);
+	if (typeof saveScene === "function") saveScene();
+});
+envIntensity.addEventListener("input", e => {
+	const v = parseFloat(e.target.value);
+	scene.environmentIntensity = v;
+	envIntensityVal.textContent = v.toFixed(2);
+});
+envIntensity.addEventListener("change", () => { if (typeof saveSceneDebounced === "function") saveSceneDebounced(); });
+
+const aspectSelect = document.getElementById("aspect");
+const aspectFrame = document.getElementById("aspect-frame");
+
+function currentAspect() {
+	const v = aspectSelect.value;
+	if (v === "free") return null;
+	const [a, b] = v.split(":").map(Number);
+	return { a, b, ratio: a / b, str: v };
+}
+
+function updateAspectFrame() {
+	// The renderer now resizes the canvas itself to the selected aspect (see fitDimensions),
+	// so the wrap's bg gradient naturally letterboxes the scene. The aspect-frame overlay
+	// is kept only as an optional thin border sitting exactly on the canvas edges — toggled
+	// by the AR button. No more inset rectangle drifting from where the crop will be.
+	const asp = currentAspect();
+	if (!asp || !arVisible) { aspectFrame.style.display = "none"; return; }
+	const fit = fitDimensions();
+	const vs = viewportSize();
+	aspectFrame.style.display = "block";
+	aspectFrame.style.width = fit.w + "px";
+	aspectFrame.style.height = fit.h + "px";
+	aspectFrame.style.left = (vs.w - fit.w) / 2 + "px";
+	aspectFrame.style.top = (vs.h - fit.h) / 2 + "px";
+}
+
+aspectSelect.addEventListener("change", () => {
+	handleResize();
+	updateAspectFrame();
+});
+updateAspectFrame();
+
+function cropCanvasToAspect(srcCanvas) {
+	const asp = currentAspect();
+	if (!asp) return srcCanvas;
+	const sw = srcCanvas.width, sh = srcCanvas.height;
+	let cw, ch;
+	if (sw / sh > asp.ratio) { ch = sh; cw = Math.round(sh * asp.ratio); }
+	else { cw = sw; ch = Math.round(sw / asp.ratio); }
+	const sx = Math.round((sw - cw) / 2);
+	const sy = Math.round((sh - ch) / 2);
+	const out = document.createElement("canvas");
+	out.width = cw; out.height = ch;
+	out.getContext("2d").drawImage(srcCanvas, sx, sy, cw, ch, 0, 0, cw, ch);
+	return out;
+}
+
+window.addEventListener("keydown", (e) => {
+	const tag = e.target.tagName;
+	const type = e.target.type;
+	const isTextEdit = tag === "TEXTAREA" || (tag === "INPUT" && (type === "text" || type === "search" || type === "url" || type === "email" || type === "password"));
+	// Text-edit contexts (project name input, prompt textarea, rename) keep ALL keys —
+	// browser's native text editing + native Ctrl+Z take priority for typing.
+	if (isTextEdit) return;
+	// Other form controls (range / color / number / select): pass-through non-shortcut
+	// keys (so arrow keys still adjust a focused slider, Space scrolls a select, etc.)
+	// but let our Ctrl-based shortcuts through — without this Ctrl+Z right after a slider
+	// drag was being swallowed because the slider still held focus.
+	const isOurShortcut = (e.ctrlKey || e.metaKey) && "zyxcvd".includes(e.key.toLowerCase());
+	if ((tag === "INPUT" || tag === "SELECT") && !isOurShortcut) return;
+	if (e.code === "Space") {
+		e.preventDefault();
+		isPlayingPreview ? stopPreview() : playPreview();
+		return;
+	}
+	if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+		e.preventDefault();
+		stopPreview();
+		const fps = parseInt(document.getElementById("fps").value, 10) || 30;
+		const dur = currentDuration();
+		// One-frame step in normalized timeline units, scaled up by Shift for a coarser scrub.
+		const step = (1 / fps / dur) * (e.shiftKey ? 10 : 1);
+		const gap = trimGap();
+		const dir = e.key === "ArrowLeft" ? -1 : 1;
+		const t = Math.max(trimStart + gap, Math.min(trimEnd - gap, playhead + dir * step));
+		setPlayhead(t);
+		const s = sampleCameraAt(t);
+		if (s) applyCameraState(s);
+		return;
+	}
+	// Swallow WASD/QE during fly mode so they drive the camera instead of
+	// firing transform-tool shortcuts (W=translate, E=rotate, R=scale).
+	if (flyMode && FLY_KEY_RE.test(e.key.toLowerCase())) { e.preventDefault(); return; }
+	if (e.key === "w") transform.setMode("translate");
+	else if (e.key === "e") transform.setMode("rotate");
+	else if (e.key === "r") transform.setMode("scale");
+	else if (e.key === "f" || e.key === "F") frameScene();
+	else if (e.key === "Home") { camera.position.set(2.2, 1.6, 2.8); orbit.target.set(0, 0, 0); camera.up.set(0, 1, 0); camera.updateProjectionMatrix(); }
+	else if (e.key === "Delete" || e.key === "Backspace") {
+		if (selectedKeys.size) deleteKeyframes();
+		else deleteObject(selected);
+	}
+	else if (e.key === "d" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); duplicateObject(selected); }
+	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+		e.preventDefault();
+		copySelectedToClipboard();
+	}
+	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "x") {
+		e.preventDefault();
+		if (copySelectedToClipboard()) deleteObject(selected);
+	}
+	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
+		e.preventDefault();
+		pasteFromClipboard();
+	}
+	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+		e.preventDefault();
+		performUndo();
+	}
+	else if ((e.ctrlKey || e.metaKey) && ((e.shiftKey && e.key.toLowerCase() === "z") || e.key.toLowerCase() === "y")) {
+		e.preventDefault();
+		performRedo();
+	}
+});
+
+// In-editor clipboard for objects. Stores a snapshot — not a live reference — so a
+// later cut/delete of the source can't invalidate a paste. Primitives round-trip via
+// PRIM_DEFS; imports aren't covered here (would need an asset-aware clone path).
+let objectClipboard = null;
+function copySelectedToClipboard() {
+	if (!selected) { updateStatus("nothing to copy"); return false; }
+	const kind = selected.userData?.primKind;
+	if (!kind || !(kind in PRIM_DEFS)) { updateStatus("can only copy blocks (imports not supported)"); return false; }
+	objectClipboard = {
+		kind,
+		position: selected.position.toArray(),
+		rotation: [selected.rotation.x, selected.rotation.y, selected.rotation.z],
+		scale: selected.scale.toArray(),
+		color: selected.material?.color?.getHex?.() ?? 0xffffff,
+		visible: selected.visible !== false,
+	};
+	updateStatus("copied");
+	return true;
+}
+function pasteFromClipboard() {
+	if (!objectClipboard) { updateStatus("nothing in clipboard"); return; }
+	const mesh = addPrimitive(objectClipboard.kind);
+	if (!mesh) return;
+	mesh.position.fromArray(objectClipboard.position);
+	mesh.position.x += 0.5; mesh.position.z += 0.5; // nudge so paste doesn't z-fight the source
+	mesh.rotation.set(objectClipboard.rotation[0], objectClipboard.rotation[1], objectClipboard.rotation[2]);
+	mesh.scale.fromArray(objectClipboard.scale);
+	mesh.material.color.setHex(objectClipboard.color);
+	mesh.visible = objectClipboard.visible;
+	select(mesh);
+	refreshOutliner();
+	saveScene();
+	updateStatus("pasted");
+}
+
+// Compute the largest aspect-fit rectangle inside the wrap. When an aspect ratio is
+// selected, the canvas itself IS that rectangle — the wrap's bg gradient fills the
+// letterbox region around it, so the visible scene matches the exported image byte
+// for byte. When "Free" is selected the canvas fills the entire wrap.
+function fitDimensions() {
+	const vs = viewportSize();
+	const asp = currentAspect();
+	const margin = IS_PREVIEW ? 0 : 16;
+	if (!asp) return { w: vs.w, h: vs.h };
+	const maxW = Math.max(1, vs.w - margin * 2);
+	const maxH = Math.max(1, vs.h - margin * 2);
+	let w = maxW, h = w / asp.ratio;
+	if (h > maxH) { h = maxH; w = h * asp.ratio; }
+	return { w: Math.max(1, Math.round(w)), h: Math.max(1, Math.round(h)) };
+}
+
+let resizeRaf = 0;
+let resizePending = false;
+function handleResize() {
+	if (resizeRaf) { resizePending = true; return; }
+	resizeRaf = requestAnimationFrame(function run() {
+		resizeRaf = 0;
+		const vs = viewportSize();
+		if (vs.w < 1 || vs.h < 1) return; // canvasWrap mid-layout — skip to avoid 0-size render
+		const fit = fitDimensions();
+		camera.aspect = fit.w / fit.h;
+		camera.updateProjectionMatrix();
+		renderer.setSize(fit.w, fit.h, true);
+		updateAspectFrame();
+		// If another handleResize call came in during the RAF (eg. deserializeScene
+		// setting aspectSelect.value after ResizeObserver already queued a RAF with the
+		// stale default 16:9), re-run so the new aspect wins.
+		if (resizePending) {
+			resizePending = false;
+			resizeRaf = requestAnimationFrame(run);
+		}
+	});
+}
+new ResizeObserver(handleResize).observe(canvasWrap);
+
+const dropOverlay = document.getElementById("drop-overlay");
+let dragDepth = 0;
+window.addEventListener("dragenter", e => {
+	e.preventDefault();
+	dragDepth++;
+	dropOverlay.classList.add("active");
+});
+window.addEventListener("dragover", e => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
+window.addEventListener("dragleave", e => {
+	dragDepth = Math.max(0, dragDepth - 1);
+	if (dragDepth === 0) dropOverlay.classList.remove("active");
+});
+window.addEventListener("drop", async e => {
+	e.preventDefault();
+	dragDepth = 0;
+	dropOverlay.classList.remove("active");
+	const files = Array.from(e.dataTransfer.files || []);
+	for (const f of files) await loadFile(f);
+});
+
+const importBtn = document.getElementById("import-btn");
+const importInput = document.getElementById("import-file");
+if (importBtn) importBtn.addEventListener("click", () => importInput.click());
+importInput.addEventListener("change", async e => {
+	const files = Array.from(e.target.files || []);
+	for (const f of files) await loadFile(f);
+	e.target.value = "";
+});
+
+let renderErrorCount = 0;
+let lastRenderError = "";
+const debugHud = document.getElementById("debug-hud");
+const infoBtn = document.getElementById("info-btn");
+let infoOpen = false;
+infoBtn.addEventListener("click", () => {
+	infoOpen = !infoOpen;
+	debugHud.style.display = infoOpen ? "block" : "none";
+	infoBtn.style.color = infoOpen ? "#ffd28a" : "rgba(255,255,255,0.55)";
+	if (infoOpen) updateDebugHud();
+});
+let frameCounter = 0;
+function updateDebugHud() {
+	if (!infoOpen) return;
+	const cp = camera.position;
+	const ot = orbit.target;
+	const dist = cp.distanceTo(ot);
+	const sel = selected;
+	let selBlock = "selected: none";
+	if (sel) {
+		const kind = sel.userData?.primKind || sel.type || "?";
+		const p = sel.position;
+		const s = sel.scale;
+		const displayName = sel.userData?.filename || sel.name || "(unnamed)";
+		selBlock =
+			`selected: ${displayName}\n` +
+			`  kind=${kind}\n` +
+			`  pos=(${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})\n` +
+			`  scale=(${s.x.toFixed(2)}, ${s.y.toFixed(2)}, ${s.z.toFixed(2)})`;
+		const b = readBounds(sel);
+		if (b) selBlock += `\n  bounds: center=(${b.cx.toFixed(2)},${b.cy.toFixed(2)},${b.cz.toFixed(2)}) size=${b.size.toFixed(2)}`;
+	}
+	debugHud.textContent =
+		`SCENE\n` +
+		`  objects=${objects.length}\n\n` +
+		`CAMERA\n` +
+		`  pos=(${cp.x.toFixed(2)}, ${cp.y.toFixed(2)}, ${cp.z.toFixed(2)})\n` +
+		`  target=(${ot.x.toFixed(2)}, ${ot.y.toFixed(2)}, ${ot.z.toFixed(2)})\n` +
+		`  dist=${dist.toFixed(2)} fov=${camera.fov.toFixed(0)}°\n\n` +
+		selBlock +
+		(renderErrorCount ? `\n\nRENDER ERRORS · ${renderErrorCount}\n  ${lastRenderError}` : "");
+}
+const animClock = new THREE.Clock();
+function loop() {
+	try {
+		const dt = animClock.getDelta();
+		if (fbxMixers.length) for (const m of fbxMixers) m.update(dt);
+		tickFlyMovement(dt);
+		orbit.update();
+		if (anchorMode) updatePivotMarker();
+		renderer.render(scene, camera);
+	} catch (e) {
+		renderErrorCount++;
+		lastRenderError = String(e?.message || e).slice(0, 200);
+		if (renderErrorCount < 5) console.error("[ComfyBlockout] render error:", e);
+		if (renderErrorCount === 5) console.error("[ComfyBlockout] suppressing further render errors (loop continues)");
+	}
+	frameCounter++;
+	if (frameCounter % 30 === 0) updateDebugHud();
+	requestAnimationFrame(loop);
+}
+loop();
+
+
+// ── Keyframes / timeline ──────────────────────────────────────────
+let keyframes = [];
+let playhead = 0;
+// Set so Shift-click can multi-select keyframes (apply ease to a batch).
+const selectedKeys = new Set();
+let isPlayingPreview = false;
+let trimStart = 0;
+let trimEnd = 1;
+let restoringScene = false;
+
+const tlScrub = document.getElementById("tl-scrub-wrap");
+const tlPlayhead = document.getElementById("tl-playhead");
+const tlKeys = document.getElementById("tl-keys");
+const tlTrimPre = document.getElementById("tl-trim-pre");
+const tlTrimPost = document.getElementById("tl-trim-post");
+const tlTrimStart = document.getElementById("tl-trim-start");
+const tlTrimEnd = document.getElementById("tl-trim-end");
+const pvTrimPre = document.getElementById("pv-trim-pre");
+const pvTrimPost = document.getElementById("pv-trim-post");
+const pvTrimStart = document.getElementById("pv-trim-start");
+const pvTrimEnd = document.getElementById("pv-trim-end");
+
+function refreshTrimUI() {
+	const startPct = `${trimStart * 100}%`;
+	const endPct = `${trimEnd * 100}%`;
+	const postPct = `${(1 - trimEnd) * 100}%`;
+	if (tlTrimStart) tlTrimStart.style.left = startPct;
+	if (tlTrimEnd) tlTrimEnd.style.left = endPct;
+	if (tlTrimPre) tlTrimPre.style.width = startPct;
+	if (tlTrimPost) tlTrimPost.style.width = postPct;
+	if (pvTrimStart) pvTrimStart.style.left = startPct;
+	if (pvTrimEnd) pvTrimEnd.style.left = endPct;
+	if (pvTrimPre) pvTrimPre.style.width = startPct;
+	if (pvTrimPost) pvTrimPost.style.width = postPct;
+}
+
+const TRIM_GAP_PX = 4;
+function trimGap() {
+	const rect = tlScrub.getBoundingClientRect();
+	return rect.width > 0 ? TRIM_GAP_PX / rect.width : 0.004;
+}
+function clampPlayheadToTrim(t) {
+	const gap = trimGap();
+	return Math.max(trimStart + gap, Math.min(trimEnd - gap, t));
+}
+
+function makeTrimHandle(el, scrubEl, getter, setter, minGap) {
+	if (!el || !scrubEl) return;
+	el.addEventListener("pointerdown", e => {
+		e.stopPropagation();
+		const rect = scrubEl.getBoundingClientRect();
+		el.classList.add("dragging");
+		el.setPointerCapture(e.pointerId);
+		const onMove = ev => {
+			const t = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+			setter(t);
+			refreshTrimUI();
+		};
+		const onUp = () => {
+			el.releasePointerCapture(e.pointerId);
+			el.classList.remove("dragging");
+			el.removeEventListener("pointermove", onMove);
+			el.removeEventListener("pointerup", onUp);
+			saveSceneDebounced?.();
+		};
+		el.addEventListener("pointermove", onMove);
+		el.addEventListener("pointerup", onUp);
+	});
+}
+const setTrimStart = t => {
+	trimStart = Math.min(t, trimEnd - 0.01);
+	if (playhead < trimStart) setPlayhead(clampPlayheadToTrim(trimStart));
+};
+const setTrimEnd = t => {
+	trimEnd = Math.max(t, trimStart + 0.01);
+	if (playhead > trimEnd) setPlayhead(clampPlayheadToTrim(trimEnd));
+};
+makeTrimHandle(tlTrimStart, tlScrub, () => trimStart, setTrimStart);
+makeTrimHandle(tlTrimEnd,   tlScrub, () => trimEnd,   setTrimEnd);
+const pvScrubEl = document.getElementById("pv-scrub-wrap");
+makeTrimHandle(pvTrimStart, pvScrubEl, () => trimStart, setTrimStart);
+makeTrimHandle(pvTrimEnd,   pvScrubEl, () => trimEnd,   setTrimEnd);
+refreshTrimUI();
+const tlTime = document.getElementById("tl-time");
+const tlAddKey = document.getElementById("tl-addkey");
+const tlClearKey = document.getElementById("tl-clearkey");
+const tlPlay = document.getElementById("tl-play");
+const tlRec = document.getElementById("tl-rec");
+
+const easings = {
+	linear:    t => t,
+	easeIn:    t => t * t,
+	easeOut:   t => t * (2 - t),
+	easeInOut: t => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
+};
+
+function captureCameraState() {
+	return {
+		pos: camera.position.clone(),
+		target: orbit.target.clone(),
+		up: camera.up.clone(),
+		fov: camera.fov,
+	};
+}
+
+function applyCameraState(state) {
+	camera.position.copy(state.pos);
+	orbit.target.copy(state.target);
+	if (state.up) camera.up.copy(state.up).normalize();
+	camera.fov = state.fov;
+	camera.updateProjectionMatrix();
+}
+
+function currentDuration() {
+	return parseFloat(document.getElementById("duration").value);
+}
+
+function setPlayhead(t) {
+	playhead = Math.max(0, Math.min(1, t));
+	tlPlayhead.style.left = `${playhead * 100}%`;
+	const pvPh = document.getElementById("pv-playhead");
+	if (pvPh) pvPh.style.left = `${playhead * 100}%`;
+	const dur = currentDuration();
+	tlTime.textContent = `${(playhead * dur).toFixed(2)}s / ${dur.toFixed(2)}s`;
+}
+
+function sampleCameraAt(t) {
+	if (keyframes.length === 0) return null;
+	if (keyframes.length === 1 || t <= keyframes[0].t) return keyframes[0];
+	if (t >= keyframes[keyframes.length - 1].t) return keyframes[keyframes.length - 1];
+	for (let i = 0; i < keyframes.length - 1; i++) {
+		const a = keyframes[i], b = keyframes[i + 1];
+		if (t >= a.t && t <= b.t) {
+			const local = (t - a.t) / (b.t - a.t);
+			// b.ease is the INCOMING ease for the segment landing on b (matches
+			// the right-click menu's "INCOMING EASE" header). Previously a.ease
+			// was used, so a "linear" pick on a keyframe applied to the wrong
+			// segment and the incoming move still appeared eased.
+			const eased = (easings[b.ease] || easings.easeInOut)(local);
+			const upA = a.up || new THREE.Vector3(0, 1, 0);
+			const upB = b.up || new THREE.Vector3(0, 1, 0);
+			return {
+				pos: new THREE.Vector3().lerpVectors(a.pos, b.pos, eased),
+				target: new THREE.Vector3().lerpVectors(a.target, b.target, eased),
+				up: new THREE.Vector3().lerpVectors(upA, upB, eased).normalize(),
+				fov: a.fov + (b.fov - a.fov) * eased,
+			};
+		}
+	}
+	return keyframes[keyframes.length - 1];
+}
+
+const EASE_OPTIONS = [
+	{ id: "linear",    label: "linear" },
+	{ id: "easeIn",    label: "ease in" },
+	{ id: "easeOut",   label: "ease out" },
+	{ id: "easeInOut", label: "ease in/out" },
+];
+function showEaseMenu(k, anchor) {
+	// Tear down any existing menu so right-clicking a new key replaces the old one.
+	document.querySelectorAll(".ease-menu").forEach(el => el.remove());
+	// If the right-clicked key is part of a multi-selection, bulk-apply to the
+	// whole selection. Otherwise just edit this key (selection stays untouched).
+	const bulk = selectedKeys.has(k) && selectedKeys.size > 1;
+	const targets = bulk ? Array.from(selectedKeys) : [k];
+	const menu = document.createElement("div");
+	menu.className = "ease-menu";
+	// Render off-screen first so we can measure, then anchor centered above the keyframe.
+	Object.assign(menu.style, {
+		position: "fixed", left: "-9999px", top: "-9999px",
+		zIndex: "9999",
+		background: "#1a1a20", border: "1px solid rgba(255,255,255,0.06)",
+		borderRadius: "6px", padding: "4px 0",
+		minWidth: "160px",
+		boxShadow: "0 8px 28px rgba(0,0,0,0.6)",
+		fontFamily: "Inter, -apple-system, sans-serif", fontSize: "11px", color: "#ddd",
+		userSelect: "none",
+	});
+	const header = document.createElement("div");
+	header.textContent = bulk ? `INCOMING EASE · ${targets.length} keys` : "INCOMING EASE";
+	Object.assign(header.style, {
+		padding: "6px 14px 4px", fontSize: "9px",
+		color: "rgba(255,255,255,0.4)", letterSpacing: "0.12em",
+	});
+	menu.appendChild(header);
+	const current = k.ease || "easeInOut";
+	for (const opt of EASE_OPTIONS) {
+		const row = document.createElement("div");
+		const active = opt.id === current;
+		Object.assign(row.style, {
+			display: "flex", alignItems: "center", gap: "8px",
+			padding: "5px 14px", cursor: "pointer",
+			color: active ? "#ffd28a" : "#ddd",
+		});
+		const tick = document.createElement("span");
+		tick.textContent = active ? "✓" : "";
+		Object.assign(tick.style, { width: "10px", textAlign: "center", fontSize: "10px", color: "#ffd28a" });
+		const label = document.createElement("span");
+		label.textContent = opt.label;
+		row.append(tick, label);
+		row.onmouseenter = () => row.style.background = "rgba(255,255,255,0.06)";
+		row.onmouseleave = () => row.style.background = "transparent";
+		row.onclick = () => {
+			try { snapshotForUndo(); } catch {}
+			for (const kk of targets) kk.ease = opt.id;
+			renderKeyframeMarkers();
+			saveSceneDebounced?.();
+			cleanup();
+		};
+		menu.appendChild(row);
+	}
+	const divider = document.createElement("div");
+	Object.assign(divider.style, {
+		height: "1px", background: "rgba(255,255,255,0.06)", margin: "4px 0",
+	});
+	menu.appendChild(divider);
+	const del = document.createElement("div");
+	del.textContent = "delete keyframe";
+	Object.assign(del.style, {
+		padding: "5px 14px 6px 32px", cursor: "pointer",
+		color: "#ddd",
+	});
+	del.onmouseenter = () => { del.style.background = "rgba(255,80,80,0.14)"; del.style.color = "#ff8a8a"; };
+	del.onmouseleave = () => { del.style.background = "transparent"; del.style.color = "#ddd"; };
+	del.textContent = bulk ? `delete ${targets.length} keyframes` : "delete keyframe";
+	del.onclick = () => {
+		try { snapshotForUndo(); } catch {}
+		const targetSet = new Set(targets);
+		keyframes = keyframes.filter(x => !targetSet.has(x));
+		for (const t of targets) selectedKeys.delete(t);
+		renderKeyframeMarkers();
+		saveSceneDebounced?.();
+		cleanup();
+	};
+	menu.appendChild(del);
+	document.body.appendChild(menu);
+	// Anchor the menu centered above the keyframe diamond. Falls back to below if there's
+	// no room above. Horizontal position is clamped to the viewport.
+	const a = anchor && anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : anchor;
+	const menuRect = menu.getBoundingClientRect();
+	const anchorCx = a ? (a.left + a.width / 2) : window.innerWidth / 2;
+	const anchorTop = a ? a.top : window.innerHeight / 2;
+	const anchorBottom = a ? a.bottom : window.innerHeight / 2;
+	let left = anchorCx - menuRect.width / 2;
+	let top = anchorTop - menuRect.height - 8;
+	if (top < 8) top = anchorBottom + 8; // flip below if above doesn't fit
+	left = Math.max(4, Math.min(window.innerWidth - menuRect.width - 4, left));
+	menu.style.left = `${left}px`;
+	menu.style.top = `${top}px`;
+	const onDocDown = (ev) => { if (!menu.contains(ev.target)) cleanup(); };
+	const onKey = (ev) => { if (ev.key === "Escape") cleanup(); };
+	function cleanup() {
+		menu.remove();
+		document.removeEventListener("pointerdown", onDocDown, true);
+		document.removeEventListener("keydown", onKey);
+	}
+	setTimeout(() => {
+		document.addEventListener("pointerdown", onDocDown, true);
+		document.addEventListener("keydown", onKey);
+	}, 0);
+}
+
+function renderKeyframeMarkers() {
+	tlKeys.innerHTML = "";
+	// Mirror keyframes into the preview transport's mini timeline + wire drag/select.
+	const pvKeysEl = document.getElementById("pv-keys");
+	const pvScrubEl = document.getElementById("pv-scrub-wrap");
+	if (pvKeysEl && pvScrubEl) {
+		pvKeysEl.innerHTML = "";
+		for (const k of keyframes) {
+			// Grey vertical line inside the bar marking the keyframe position (visual only).
+			const line = document.createElement("div");
+			line.className = "pv-key-line";
+			line.style.left = `${k.t * 100}%`;
+			pvKeysEl.appendChild(line);
+
+			// Green diamond above the bar — the interactive target (drag + right-click).
+			const pm = document.createElement("div");
+			pm.className = "pv-key" + (selectedKeys.has(k) ? " selected" : "");
+			pm.style.left = `${k.t * 100}%`;
+			pvKeysEl.appendChild(pm);
+
+			let dragStartX, dragStartT, didDrag = false;
+			pm.addEventListener("pointerdown", e => {
+				if (e.button !== 0) { e.stopPropagation(); return; } // right-click falls through to contextmenu
+				e.stopPropagation();
+				// Snapshot pre-drag so Ctrl+Z restores the keyframe's old time. Click-without-
+				// drag dedupes against the unchanged scene state.
+				try { snapshotForUndo(); } catch {}
+				stopPreview();
+				// Shift-click toggles in/out of the selection set; plain click replaces unless
+				// the key is already part of an existing multi-selection (so drag preserves it).
+				if (e.shiftKey) {
+					if (selectedKeys.has(k)) selectedKeys.delete(k);
+					else selectedKeys.add(k);
+				} else if (!selectedKeys.has(k)) {
+					selectedKeys.clear();
+					selectedKeys.add(k);
+				}
+				for (const el of pvKeysEl.querySelectorAll(".pv-key")) el.classList.remove("selected");
+				if (selectedKeys.has(k)) pm.classList.add("selected");
+				dragStartX = e.clientX;
+				dragStartT = k.t;
+				didDrag = false;
+				pm.classList.add("dragging");
+				pm.setPointerCapture(e.pointerId);
+			});
+			pm.addEventListener("pointermove", e => {
+				if (!pm.hasPointerCapture(e.pointerId)) return;
+				const rect = pvScrubEl.getBoundingClientRect();
+				const dx = (e.clientX - dragStartX) / rect.width;
+				if (Math.abs(dx) > 0.005) didDrag = true;
+				const gap = trimGap();
+				k.t = Math.max(trimStart + gap, Math.min(trimEnd - gap, dragStartT + dx));
+				pm.style.left = `${k.t * 100}%`;
+				line.style.left = `${k.t * 100}%`;
+				// Keep the playhead glued to the keyframe while it's being dragged — feels
+				// like you're scrubbing through time by moving the keyframe itself.
+				setPlayhead(k.t);
+				applyCameraState(k);
+			});
+			pm.addEventListener("pointerup", e => {
+				if (!pm.hasPointerCapture(e.pointerId)) return;
+				pm.releasePointerCapture(e.pointerId);
+				pm.classList.remove("dragging");
+				if (didDrag) {
+					keyframes.sort((a, b) => a.t - b.t);
+					renderKeyframeMarkers();
+					saveSceneDebounced?.();
+				} else {
+					// Click without drag = select + jump playhead to this keyframe.
+					stopPreview();
+					setPlayhead(k.t);
+					applyCameraState(k);
+				}
+			});
+			// Right-click ease menu is an editor-only feature; preview stays focused on playback.
+		}
+	}
+	for (const k of keyframes) {
+		// Grey vertical line inside the bar marking the keyframe position (visual only).
+		const line = document.createElement("div");
+		line.className = "tl-key-line";
+		line.style.left = `${k.t * 100}%`;
+		tlKeys.appendChild(line);
+
+		// Green diamond above the bar — interactive target (drag + right-click).
+		const m = document.createElement("div");
+		m.className = "tl-key" + (selectedKeys.has(k) ? " selected" : "");
+		m.style.left = `${k.t * 100}%`;
+		m.title = `keyframe @ ${(k.t * 100).toFixed(0)}% — click to select · Shift+click to multi-select · drag to retime · right-click for ease · Delete to remove`;
+
+		let dragStartX, dragStartT, didDrag = false;
+		m.addEventListener("pointerdown", e => {
+			if (e.button !== 0) { e.stopPropagation(); return; } // let right-click reach contextmenu cleanly
+			e.stopPropagation();
+			// Snapshot pre-drag so Ctrl+Z restores the keyframe's old time. Click-without-
+			// drag dedupes against the unchanged scene state.
+			try { snapshotForUndo(); } catch {}
+			// Shift-click toggles in/out of the selection set; plain click replaces unless
+			// the key is already part of an existing multi-selection (so drag preserves it).
+			if (e.shiftKey) {
+				if (selectedKeys.has(k)) selectedKeys.delete(k);
+				else selectedKeys.add(k);
+			} else if (!selectedKeys.has(k)) {
+				selectedKeys.clear();
+				selectedKeys.add(k);
+			}
+			for (const el of tlKeys.querySelectorAll(".tl-key")) el.classList.remove("selected");
+			if (selectedKeys.has(k)) m.classList.add("selected");
+			dragStartX = e.clientX;
+			dragStartT = k.t;
+			didDrag = false;
+			m.classList.add("dragging");
+			m.setPointerCapture(e.pointerId);
+		});
+		m.addEventListener("pointermove", e => {
+			if (!m.hasPointerCapture(e.pointerId)) return;
+			const rect = tlScrub.getBoundingClientRect();
+			const dx = (e.clientX - dragStartX) / rect.width;
+			if (Math.abs(dx) > 0.005) didDrag = true;
+			// Clamp into the trim window with the same visual gap as the resting playhead.
+			const gap = trimGap();
+			k.t = Math.max(trimStart + gap, Math.min(trimEnd - gap, dragStartT + dx));
+			m.style.left = `${k.t * 100}%`;
+			line.style.left = `${k.t * 100}%`;
+			// Keep the playhead glued to the keyframe while dragging — scrubbing-by-keyframe.
+			setPlayhead(k.t);
+			applyCameraState(k);
+		});
+		m.addEventListener("pointerup", e => {
+			if (!m.hasPointerCapture(e.pointerId)) return;
+			m.releasePointerCapture(e.pointerId);
+			m.classList.remove("dragging");
+			if (didDrag) {
+				keyframes.sort((a, b) => a.t - b.t);
+				renderKeyframeMarkers();
+				saveSceneDebounced?.();
+			} else {
+				// Click without drag = select + jump playhead to the keyframe.
+				stopPreview();
+				setPlayhead(k.t);
+				applyCameraState(k);
+			}
+		});
+		m.addEventListener("contextmenu", e => {
+			e.preventDefault();
+			e.stopPropagation();
+			showEaseMenu(k, m);
+		});
+
+		tlKeys.appendChild(m);
+	}
+}
+
+function addKeyframe() {
+	snapshotForUndo();
+	const t = playhead;
+	keyframes = keyframes.filter(k => Math.abs(k.t - t) > 0.005);
+	const cap = captureCameraState();
+	keyframes.push({ t, pos: cap.pos, target: cap.target, up: cap.up, fov: cap.fov, ease: "easeInOut" });
+	keyframes.sort((a, b) => a.t - b.t);
+	// Don't auto-select — newly created keys stay green; selection is an explicit user action.
+	selectedKeys.clear();
+	renderKeyframeMarkers();
+	saveSceneDebounced?.();
+}
+
+function deleteKeyframes() {
+	snapshotForUndo();
+	if (selectedKeys.size) {
+		keyframes = keyframes.filter(k => !selectedKeys.has(k));
+		selectedKeys.clear();
+	} else {
+		keyframes = [];
+	}
+	renderKeyframeMarkers();
+	saveSceneDebounced?.();
+}
+
+tlAddKey.addEventListener("click", () => {
+	addKeyframe();
+	tlAddKey.classList.remove("flash-green");
+	void tlAddKey.offsetWidth; // force reflow so the animation restarts on repeat clicks
+	tlAddKey.classList.add("flash-green");
+});
+tlClearKey.addEventListener("click", deleteKeyframes);
+
+tlScrub.addEventListener("pointerdown", e => {
+	if (e.button !== 0) return;
+	// Only drag the playhead — click on empty bar bg does nothing (no snap-scrub).
+	const playheadHead = tlPlayhead.querySelector(".head");
+	const grabbingPlayhead = e.target === tlPlayhead || tlPlayhead.contains(e.target) || e.target === playheadHead;
+	if (!grabbingPlayhead) return;
+	stopPreview();
+	const rect = tlScrub.getBoundingClientRect();
+	const gap = trimGap();
+	const SNAP_PX = 6;
+	const startCursorX = e.clientX;
+	const startPlayheadT = playhead;
+	const drag = ev => {
+		const dx = (ev.clientX - startCursorX) / rect.width;
+		const raw = Math.max(0, Math.min(1, startPlayheadT + dx));
+		let t = Math.max(trimStart + gap, Math.min(trimEnd - gap, raw));
+		if (!ev.shiftKey) {
+			const snapTol = SNAP_PX / rect.width;
+			let bestDist = Infinity, snapped = t;
+			for (const k of keyframes) {
+				const d = Math.abs(k.t - t);
+				if (d < bestDist && d <= snapTol) { bestDist = d; snapped = k.t; }
+			}
+			t = snapped;
+		}
+		setPlayhead(t);
+		const s = sampleCameraAt(t);
+		if (s) applyCameraState(s);
+		const seconds = t * currentDuration();
+		for (const m of fbxMixers) {
+			const prev = m.timeScale;
+			m.timeScale = 1;
+			const cur = m.time || 0;
+			m.update(seconds - cur);
+			m.timeScale = prev;
+		}
+	};
+	const onUp = () => {
+		window.removeEventListener("pointermove", drag);
+		window.removeEventListener("pointerup", onUp);
+	};
+	window.addEventListener("pointermove", drag);
+	window.addEventListener("pointerup", onUp);
+});
+
+function setMixersPlaying(playing) {
+	for (const m of fbxMixers) m.timeScale = playing ? 1 : 0;
+}
+
+async function playPreview() {
+	if (isPlayingPreview) return;
+	const hasCameraTween = keyframes.length >= 2;
+	isPlayingPreview = true;
+	tlPlay.classList.add("active");
+	const dur = currentDuration() * 1000;
+	// Inset the play range by the same visual gap used for the resting playhead so the
+	// yellow line never overlaps the orange trim handles at either end.
+	const gap = trimGap();
+	const playStart = trimStart + gap;
+	const playEnd = trimEnd - gap;
+	// Resume from current playhead when it's inside the play window; otherwise loop back to start.
+	const resumeT = (playhead > playStart && playhead < playEnd - 1e-4) ? playhead : playStart;
+	setPlayhead(resumeT);
+	// Snap camera to the resume frame BEFORE the first paint so the viewer
+	// doesn't see a one-frame flash of the previous (end-of-timeline) state
+	// after playback finished or after a scrub.
+	if (hasCameraTween) {
+		const s0 = sampleCameraAt(resumeT);
+		if (s0) applyCameraState(s0);
+	}
+	// THREE.AnimationMixer.setTime() only advances bones when timeScale != 0
+	// (internally it does update(timeInSeconds * timeScale) → 0 if scale is 0).
+	// Set the scale BEFORE seeking so the rig actually lands on the resume frame.
+	setMixersPlaying(true);
+	for (const m of fbxMixers) m.setTime(resumeT * (dur / 1000));
+	const startMs = performance.now();
+	while (isPlayingPreview) {
+		const elapsed = performance.now() - startMs;
+		// 1ms of real time advances normalized-time by 1/dur
+		const t = Math.min(playEnd, resumeT + elapsed / dur);
+		setPlayhead(t);
+		if (hasCameraTween) {
+			const s = sampleCameraAt(t);
+			if (s) applyCameraState(s);
+		}
+		if (t >= playEnd) break;
+		await new Promise(r => requestAnimationFrame(r));
+	}
+	isPlayingPreview = false;
+	tlPlay.classList.remove("active");
+	setMixersPlaying(false);
+}
+function stopPreview() {
+	isPlayingPreview = false;
+	setMixersPlaying(false);
+}
+
+tlPlay.addEventListener("click", () => isPlayingPreview ? stopPreview() : playPreview());
+
+function rewindTransport() {
+	stopPreview();
+	setPlayhead(clampPlayheadToTrim(trimStart));
+	const dur = currentDuration();
+	// setTime is a no-op while timeScale=0 (see note in playPreview). Force the
+	// mixer active for the seek, then restore the paused state.
+	for (const m of fbxMixers) {
+		const prev = m.timeScale;
+		m.timeScale = 1;
+		m.setTime(trimStart * dur);
+		m.timeScale = prev;
+	}
+	// Snap camera to keyframe at trim start
+	if (keyframes.length) {
+		const s = sampleCameraAt(trimStart);
+		if (s) applyCameraState(s);
+	}
+}
+document.getElementById("tl-rewind").addEventListener("click", rewindTransport);
+
+setPlayhead(clampPlayheadToTrim(0));
+document.getElementById("duration").addEventListener("input", () => setPlayhead(playhead));
+
+// ── Record ────────────────────────────────────────────────────────
+let recordedBlob = null;
+let mediaRecorder = null;
+let recordChunks = [];
+let recording = false;
+
+// Brief toast in the top-right of the viewport so the user knows the mp4 is on disk
+// and the IMAGE/VIDEO outputs are ready to queue. Auto-fades after ~2.4s.
+function flashRecordingDone(text) {
+	let el = document.getElementById("c3d-rec-toast");
+	if (!el) {
+		el = document.createElement("div");
+		el.id = "c3d-rec-toast";
+		Object.assign(el.style, {
+			position: "absolute", top: "14px", right: "14px", zIndex: "20",
+			background: "rgba(20,90,40,0.92)", color: "#d3ffd3",
+			padding: "8px 14px", borderRadius: "20px",
+			font: "11px Inter, sans-serif", letterSpacing: "0.04em",
+			border: "1px solid rgba(80,255,140,0.25)",
+			boxShadow: "0 4px 18px rgba(0,0,0,0.4)",
+			backdropFilter: "blur(8px)",
+			pointerEvents: "none", opacity: "0",
+			transition: "opacity 200ms ease",
+		});
+		(canvasWrap || document.body).appendChild(el);
+	}
+	el.textContent = text;
+	void el.offsetWidth;
+	el.style.opacity = "1";
+	clearTimeout(el._fadeTimer);
+	el._fadeTimer = setTimeout(() => { el.style.opacity = "0"; }, 2400);
+}
+
+function setRecordingMode(on) {
+	// canvas.captureStream() only sees WebGL pixels, NOT HTML overlays — so the
+	// panel, status pill, aspect frame, and timeline are invisible to the recording.
+	// We DO want the grid in the recorded video (it's part of the motion reference
+	// for downstream models). Just hide the transform gizmo so a selection bracket
+	// doesn't get baked into the clip.
+	transformHelper.visible = IS_PREVIEW ? false : !on;
+}
+
+async function startRecording() {
+	if (recording) return;
+	const duration = parseFloat(document.getElementById("duration").value);
+	const fps = parseInt(document.getElementById("fps").value, 10);
+
+	// Respect the trim handles: recording covers [trimStart, trimEnd] of the
+	// timeline, not the full 0..1. Use the same gap inset that playback uses so
+	// the camera tween starts/ends inside the trim handles.
+	const gap = trimGap();
+	const recStartNorm = trimStart + gap;
+	const recEndNorm = Math.max(recStartNorm + 0.001, trimEnd - gap);
+	const recSpanNorm = recEndNorm - recStartNorm;
+	const recDurationMs = recSpanNorm * duration * 1000;
+
+	// Reset every FBX animation mixer to the trim start so the recording
+	// captures the rig from the same point in its clip the camera tween begins.
+	for (const m of fbxMixers) {
+		m.timeScale = 1;
+		m.setTime(recStartNorm * duration);
+	}
+
+	setRecordingMode(true);
+
+	// Bump the renderer backbuffer to a real video resolution. captureStream() picks up
+	// canvas.width/.height — if we recorded from the in-node preview (~480×270) the
+	// resulting mp4 was tiny and Seedance refused it ("too small: 482x272"). Keeping
+	// updateStyle=false means CSS dimensions stay the same so the user doesn't see a
+	// resize jump; the backbuffer just upsamples.
+	const RECORD_TARGET_W = 1280;
+	const asp = currentAspect();
+	const recRatio = asp ? asp.ratio : (canvas.width / canvas.height || 16 / 9);
+	const recW = RECORD_TARGET_W;
+	const recH = Math.max(1, Math.round(recW / recRatio));
+	const prevW = canvas.width;
+	const prevH = canvas.height;
+	const prevStyleW = canvas.style.width;
+	const prevStyleH = canvas.style.height;
+	const prevAspect = camera.aspect;
+	renderer.setSize(recW, recH, false);
+	canvas.style.width = prevStyleW;
+	canvas.style.height = prevStyleH;
+	camera.aspect = recW / recH;
+	camera.updateProjectionMatrix();
+
+	await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+	const useKeyframes = keyframes.length >= 2;
+	const recStartT = performance.now();
+	let tweenRunning = useKeyframes;
+	// Pre-seed playhead + camera to trim-start so the very first captured frame
+	// matches the trimmed window (avoids a one-frame flash from t=last to t=start
+	// when the previous play/record left the camera at the end of the timeline).
+	setPlayhead(recStartNorm);
+	{
+		const s0 = sampleCameraAt(recStartNorm);
+		if (s0) applyCameraState(s0);
+	}
+	if (useKeyframes) {
+		const animate = () => {
+			if (!tweenRunning) return;
+			const elapsed = performance.now() - recStartT;
+			const localT = Math.min(1, elapsed / recDurationMs);
+			const t = recStartNorm + localT * recSpanNorm;
+			setPlayhead(t);
+			const s = sampleCameraAt(t);
+			if (s) applyCameraState(s);
+			if (localT < 1) requestAnimationFrame(animate);
+		};
+		animate();
+	}
+
+	const stream = canvas.captureStream(fps);
+	recordChunks = [];
+	const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9") ? "video/webm;codecs=vp9" : "video/webm";
+	mediaRecorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
+	mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordChunks.push(e.data); };
+	mediaRecorder.onstop = async () => {
+		tweenRunning = false;
+		recordedBlob = new Blob(recordChunks, { type: "video/webm" });
+		recording = false;
+		setRecordingMode(false);
+		// Pause FBX mixers so the rig doesn't keep animating in the viewport after
+		// the recording ends — startRecording sets timeScale=1 to capture motion,
+		// but the mixer would otherwise stay running forever, breaking playhead
+		// sync in both editor and preview.
+		setMixersPlaying(false);
+		// Restore the renderer back to its visible/aspect-fit size now that capture is done.
+		camera.aspect = prevAspect;
+		camera.updateProjectionMatrix();
+		renderer.setSize(prevW, prevH, false);
+		canvas.style.width = prevStyleW;
+		canvas.style.height = prevStyleH;
+		tlRec.classList.remove("recording");
+		statusEl.classList.remove("recording");
+		updateStatus(`uploading ${(recordedBlob.size/1024/1024).toFixed(2)} MB…`);
+		try {
+			const [j] = await Promise.all([uploadVideo(recordedBlob), saveScene()]);
+			if (j.success) {
+				const label = `recording saved · ${j.mp4 ? "mp4" : "webm"} · ${(recordedBlob.size/1024/1024).toFixed(2)} MB`;
+				updateStatus(label);
+				flashRecordingDone(label);
+				// Flash the rec button green for ~1s so the user sees the success near
+				// where they clicked, on top of the toast in the top-right.
+				tlRec.classList.add("rec-done");
+				setTimeout(() => tlRec.classList.remove("rec-done"), 1100);
+				notifyParentSaved();
+			} else {
+				updateStatus(`upload failed: ${j.error}`);
+			}
+		} catch (e) {
+			updateStatus(`upload threw: ${e.message}`);
+		}
+	};
+
+	recording = true;
+	tlRec.classList.add("recording");
+	statusEl.classList.add("recording");
+	statusEl.textContent = `recording · ${duration.toFixed(1)}s @ ${fps}fps${useKeyframes ? ` · ${keyframes.length} keys` : ""}`;
+	mediaRecorder.start();
+	setTimeout(() => { if (mediaRecorder.state === "recording") mediaRecorder.stop(); }, recDurationMs);
+}
+
+tlRec.addEventListener("click", startRecording);
+
+
+async function uploadImage(blob) {
+	const fd = new FormData();
+	fd.append("node_id", NODE_ID);
+	fd.append("image", blob, `comfy3d_${NODE_ID}.png`);
+	const r = await fetch("/comfyblockout/save_image", { method: "POST", body: fd });
+	return r.json();
+}
+
+async function uploadVideo(blob) {
+	const fd = new FormData();
+	fd.append("node_id", NODE_ID);
+	fd.append("video", blob, `comfy3d_${NODE_ID}.webm`);
+	const asp = currentAspect();
+	if (asp) fd.append("aspect", asp.str);
+	const r = await fetch("/comfyblockout/save_video", { method: "POST", body: fd });
+	return r.json();
+}
+
+function notifyParentSaved() {
+	if (window.parent) window.parent.postMessage({ source: "comfy3d-editor", type: "thumbnail-refresh" }, "*");
+}
+
+
+function serializeScene() {
+	return {
+		projectName: currentProjectName,
+		primitives: objects.filter(o => o.userData.primKind && (o.userData.primKind in PRIM_DEFS)).map(o => ({
+			kind: o.userData.primKind,
+			name: o.name,
+			position: o.position.toArray(),
+			rotation: [o.rotation.x, o.rotation.y, o.rotation.z],
+			scale: o.scale.toArray(),
+			color: o.material?.color?.getHex?.() ?? 0xffffff,
+			visible: o.visible !== false,
+		})),
+		imports: objects.filter(o => o.userData.assetId).map(o => ({
+			kind: o.userData.primKind,
+			assetId: o.userData.assetId,
+			filename: o.userData.filename,
+			name: o.name,
+			position: o.position.toArray(),
+			rotation: [o.rotation.x, o.rotation.y, o.rotation.z],
+			scale: o.scale.toArray(),
+			quaternion: [o.quaternion.x, o.quaternion.y, o.quaternion.z, o.quaternion.w],
+			visible: o.visible !== false,
+		})),
+		camera: {
+			position: camera.position.toArray(),
+			target: orbit.target.toArray(),
+			up: camera.up.toArray(),
+			fov: camera.fov,
+		},
+		aspect: aspectSelect.value,
+		duration: parseFloat(document.getElementById("duration").value),
+		fps: parseInt(document.getElementById("fps").value, 10),
+		env: {
+			preset: envSelect.value,
+			intensity: parseFloat(envIntensity.value),
+		},
+		viewport: {
+			grid: grid.visible,
+			guides: guidesVisible,
+			bg: bgColorInput.value,
+			ar: arVisible,
+		},
+		trim: { start: trimStart, end: trimEnd },
+		keyframes: keyframes.map(k => ({
+			t: k.t,
+			pos: k.pos.toArray(),
+			target: k.target.toArray(),
+			up: (k.up || new THREE.Vector3(0, 1, 0)).toArray(),
+			fov: k.fov,
+			ease: k.ease,
+		})),
+	};
+}
+
+async function deserializeScene(state, opts = {}) {
+	if (!state) return false;
+	restoringScene = true;
+	cancelPendingSave();
+	try {
+	applyProjectName(state.projectName || null);
+	while (objects.length) deleteObject(objects[0]);
+
+	for (const p of (state.primitives || [])) {
+		const mesh = addPrimitive(p.kind);
+		if (!mesh) continue;
+		mesh.name = p.name || mesh.name;
+		mesh.position.fromArray(p.position);
+		mesh.rotation.set(p.rotation[0], p.rotation[1], p.rotation[2]);
+		mesh.scale.fromArray(p.scale);
+		if (p.color !== undefined) mesh.material.color.setHex(p.color);
+		if (p.visible === false) mesh.visible = false;
+	}
+
+	for (const im of (state.imports || [])) {
+		const ext = (im.filename?.split(".").pop() || "").toLowerCase();
+		const url = `/comfyblockout/asset/${encodeURIComponent(NODE_ID)}/${encodeURIComponent(im.assetId)}.${ext}`;
+		try {
+			const r = await fetch(url);
+			if (!r.ok) { console.warn(`[ComfyBlockout] missing asset ${im.assetId} (${r.status}) ${url}`); continue; }
+			const buf = await r.arrayBuffer();
+			await loadFromBytes(buf, im.filename, {
+				restoring: true,
+				assetId: im.assetId,
+				savedName: im.name,
+				transform: {
+					position: im.position,
+					rotation: im.rotation,
+					scale: im.scale,
+					quaternion: im.quaternion,
+				},
+			});
+			const obj = objects[objects.length - 1];
+			if (obj && im.visible === false) obj.visible = false;
+			console.log(`[ComfyBlockout] restored import ${im.kind || ext} ${im.filename} (${buf.byteLength} bytes) from ${url}`);
+		} catch (e) {
+			console.error(`[ComfyBlockout] failed to restore import ${im.assetId} (${im.filename}) from ${url}:`, e);
+		}
+	}
+
+	if (state.camera) {
+		camera.position.fromArray(state.camera.position);
+		orbit.target.fromArray(state.camera.target);
+		if (Array.isArray(state.camera.up)) camera.up.fromArray(state.camera.up).normalize();
+		else camera.up.set(0, 1, 0);
+		camera.fov = state.camera.fov;
+		camera.updateProjectionMatrix();
+		const fovInput = document.getElementById("fov");
+		fovInput.value = state.camera.fov;
+		document.getElementById("fov-val").textContent = `${Math.round(state.camera.fov)}°`;
+	}
+	if (state.aspect) {
+		aspectSelect.value = state.aspect;
+		handleResize();
+		updateAspectFrame();
+	}
+	if (typeof state.duration === "number") {
+		const el = document.getElementById("duration");
+		el.value = state.duration;
+		document.getElementById("duration-val").textContent = `${state.duration.toFixed(1)}s`;
+	}
+	if (typeof state.fps === "number") {
+		const el = document.getElementById("fps");
+		el.value = state.fps;
+		const fpsValEl = document.getElementById("fps-val");
+		if (fpsValEl) fpsValEl.textContent = String(state.fps);
+	}
+	if (state.env) {
+		if (state.env.preset) { envSelect.value = state.env.preset; setEnvironment(state.env.preset); }
+		if (typeof state.env.intensity === "number") {
+			envIntensity.value = state.env.intensity;
+			envIntensityVal.textContent = state.env.intensity.toFixed(2);
+			scene.environmentIntensity = state.env.intensity;
+		}
+	}
+
+	if (state.viewport) {
+		if (typeof state.viewport.grid === "boolean") {
+			grid.visible = state.viewport.grid;
+			gridToggle.classList.toggle("active", grid.visible);
+		}
+		if (typeof state.viewport.guides === "boolean") {
+			guidesVisible = state.viewport.guides;
+			guidesToggle.classList.toggle("active", guidesVisible);
+			aspectFrame.classList.toggle("no-guides", !guidesVisible);
+		}
+		if (typeof state.viewport.bg === "string") {
+			bgColorInput.value = state.viewport.bg;
+			applyBgColor(state.viewport.bg);
+		}
+		if (typeof state.viewport.ar === "boolean") {
+			arVisible = state.viewport.ar;
+			arToggle.classList.toggle("active", arVisible);
+			updateAspectFrame();
+		}
+	}
+	if (state.trim && typeof state.trim.start === "number" && typeof state.trim.end === "number") {
+		trimStart = Math.max(0, Math.min(1, state.trim.start));
+		trimEnd = Math.max(trimStart + 0.01, Math.min(1, state.trim.end));
+		refreshTrimUI();
+		setPlayhead(clampPlayheadToTrim(trimStart));
+	}
+
+	if (Array.isArray(state.keyframes)) {
+		keyframes = state.keyframes.map(k => ({
+			t: k.t,
+			pos: new THREE.Vector3().fromArray(k.pos),
+			target: new THREE.Vector3().fromArray(k.target),
+			up: Array.isArray(k.up) ? new THREE.Vector3().fromArray(k.up) : new THREE.Vector3(0, 1, 0),
+			fov: k.fov,
+			ease: k.ease || "easeInOut",
+		}));
+		renderKeyframeMarkers();
+	}
+
+	transform.detach();
+	selected = null;
+	refreshOutliner();
+	// Always clamp the playhead into the trim region with the gap so the yellow line never
+	// sits directly on top of an orange trim handle at scene start
+	setPlayhead(clampPlayheadToTrim(trimStart));
+	return true;
+	} finally {
+		restoringScene = false;
+		cancelPendingSave(); // any orbit-change save queued during restore would now overwrite disk
+		// Flush one save with the fully-restored state so the wipe + per-add saves don't leave
+		// the backend with a partial snapshot. Skipped for remote sync to avoid ping-pong loops
+		// (the sender already persisted; re-saving would echo back through the forwarder).
+		if (!opts.skipSave) {
+			try { await saveScene(); } catch {}
+		}
+	}
+}
+
+async function saveScene() {
+	if (restoringScene) return; // suppress saves triggered by addPrimitive/deleteObject during restore
+	if (IS_PREVIEW && (isPlayingPreview || recording)) return; // don't persist transient playback/record camera frames
+	try {
+		const scene = serializeScene();
+		await fetch("/comfyblockout/save_scene", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ node_id: NODE_ID, scene }),
+		});
+		// Live-sync to the sibling iframe via the parent (editor → preview, or
+		// preview → editor) so both viewports reflect the same state without
+		// having to close + reload anything.
+		try {
+			window.parent?.postMessage({
+				source: "comfy3d-" + (IS_PREVIEW ? "preview" : "editor"),
+				type: "scene-sync",
+				node_id: NODE_ID,
+				scene,
+			}, "*");
+		} catch {}
+		// Refresh the IMAGE output snapshot so queuing the workflow uses the current view
+		// without forcing a record-first. Debounced so orbit drags don't snapshot per-frame.
+		autoSnapshotDebounced();
+	} catch (e) {
+		console.warn("[ComfyBlockout] scene save failed:", e);
+	}
+}
+
+// Apply a remote scene update from the sibling iframe (live sync). For live updates we
+// only mirror camera + viewport — re-running the full deserialize would re-fetch every
+// imported asset (eg a 124MB GLB) every time the editor's orbit ticks, and a second sync
+// landing while a previous reload is still in flight would tear down the iframe before
+// it finished, leaving the preview permanently empty. Structural changes (primitives /
+// imports / project) come through on editor close via __c3dRefresh — which does a
+// proper rebuild from disk.
+function applyLightSync(state) {
+	if (!state) return;
+	if (state.camera) {
+		camera.position.fromArray(state.camera.position);
+		orbit.target.fromArray(state.camera.target);
+		if (Array.isArray(state.camera.up)) camera.up.fromArray(state.camera.up).normalize();
+		if (typeof state.camera.fov === "number") {
+			camera.fov = state.camera.fov;
+			camera.updateProjectionMatrix();
+		}
+	}
+	if (state.aspect && state.aspect !== aspectSelect.value) {
+		aspectSelect.value = state.aspect;
+		handleResize();
+		updateAspectFrame();
+	}
+	if (state.viewport) {
+		if (typeof state.viewport.grid === "boolean") grid.visible = state.viewport.grid;
+		if (typeof state.viewport.bg === "string") applyBgColor(state.viewport.bg);
+	}
+	if (state.trim && typeof state.trim.start === "number" && typeof state.trim.end === "number") {
+		trimStart = Math.max(0, Math.min(1, state.trim.start));
+		trimEnd = Math.max(trimStart + 0.01, Math.min(1, state.trim.end));
+		refreshTrimUI();
+	}
+	// Keyframes are cheap (positions + tween hints) — no asset fetches, so light sync
+	// can swap them in too. Without this the preview's mini-timeline doesn't show
+	// new diamonds until editor close triggered __c3dRefresh.
+	if (Array.isArray(state.keyframes)) {
+		keyframes = state.keyframes.map(k => ({
+			t: k.t,
+			pos: new THREE.Vector3().fromArray(k.pos),
+			target: new THREE.Vector3().fromArray(k.target),
+			up: Array.isArray(k.up) ? new THREE.Vector3().fromArray(k.up) : new THREE.Vector3(0, 1, 0),
+			fov: k.fov,
+			ease: k.ease || "easeInOut",
+		}));
+		renderKeyframeMarkers();
+	}
+}
+
+window.addEventListener("message", async (ev) => {
+	if (!ev.data || ev.data.type !== "scene-sync") return;
+	if (ev.data.source !== "comfy3d-parent-sync") return;
+	if (String(ev.data.node_id) !== NODE_ID) return;
+	if (!ev.data.scene) return;
+	try { applyLightSync(ev.data.scene); } catch {}
+});
+
+// Exposed so deserializeScene can cancel a queued save mid-restore — otherwise the
+// camera.position assignment inside deserialize fires orbit "change", which queues a
+// save that runs ~600ms later after restoringScene has cleared but possibly with a
+// partial scene state (eg if a GLB import async-failed silently). That save then
+// clobbers the on-disk character with imports=[]. Hence the gate.
+let cancelPendingSave = () => {};
+const saveSceneDebounced = (() => {
+	let t = null;
+	cancelPendingSave = () => { clearTimeout(t); t = null; };
+	return () => {
+		if (restoringScene) return; // suppress noisy saves triggered by camera updates during restore
+		clearTimeout(t);
+		t = setTimeout(saveScene, 600);
+	};
+})();
+
+const autoSnapshotDebounced = (() => {
+	let t = null;
+	return () => {
+		if (restoringScene) return;
+		if (recording || isPlayingPreview) return;
+		clearTimeout(t);
+		t = setTimeout(() => { autoSnapshot().catch(() => {}); }, 200);
+	};
+})();
+
+// Parent (comfyblockout.js) hooks app.queuePrompt and asks the preview iframe to
+// flush a fresh snapshot before submitting. Acks back when the upload completes.
+window.addEventListener("message", async (ev) => {
+	if (ev.data?.source !== "comfy3d-parent" || ev.data?.type !== "force-snapshot") return;
+	if (String(ev.data.node_id) !== NODE_ID) return;
+	try { await autoSnapshot(); } catch {}
+	window.parent?.postMessage({
+		source: "comfy3d-" + (IS_PREVIEW ? "preview" : "editor"),
+		type: "force-snapshot-ack",
+		node_id: NODE_ID,
+	}, "*");
+});
+
+// Non-destructive scene reload from disk. Used by the parent when the editor closes —
+// previously the parent tore down + rebuilt the preview iframe to pick up structural
+// changes (primitives/imports that live-sync deliberately skips), which flashed the
+// in-node viewport white during three.js boot. Re-running loadScene() in the existing
+// iframe keeps the WebGL context + textures alive, so the viewport never blanks.
+//
+// Acks back so the parent can confirm the preview actually re-read disk. If no ack
+// arrives in time, the parent falls back to a full iframe rebuild — correctness over
+// flash-free.
+window.addEventListener("message", async (ev) => {
+	if (ev.data?.source !== "comfy3d-parent" || ev.data?.type !== "reload-scene") return;
+	if (String(ev.data.node_id) !== NODE_ID) return;
+	try { await loadScene(); } catch (e) { console.warn("[ComfyBlockout] reload-scene failed:", e); }
+	try {
+		window.parent?.postMessage({
+			source: "comfy3d-" + (IS_PREVIEW ? "preview" : "editor"),
+			type: "reload-scene-ack",
+			node_id: NODE_ID,
+		}, "*");
+	} catch {}
+});
+
+async function loadScene() {
+	try {
+		const url = `/comfyblockout/load_scene?node_id=${encodeURIComponent(NODE_ID)}&t=${Date.now()}`;
+		const r = await fetch(url, { cache: "no-store" });
+		const j = await r.json();
+		console.log(`[ComfyBlockout] load_scene (${IS_PREVIEW ? "preview" : "editor"}) node=${NODE_ID}`,
+			j.scene ? { primitives: j.scene.primitives?.length, imports: j.scene.imports?.length, raw: j.scene } : "(empty)");
+		if (j.scene) {
+			// Initial restore must NOT trigger the post-deserialize saveScene flush — if
+			// any import (asset fetch) fails transiently, the followup save would persist
+			// the now-partial state and permanently corrupt disk. User actions trigger
+			// their own saves; the load path stays read-only.
+			return await deserializeScene(j.scene, { skipSave: true });
+		}
+	} catch (e) {
+		console.warn("[ComfyBlockout] scene load failed:", e);
+	}
+	return false;
+}
+
+// ── Projects ───────────────────────────────────────────────────────
+let currentProjectName = null;
+const projectNameEl = document.getElementById("project-name");
+function applyProjectName(name) {
+	currentProjectName = name || null;
+	projectNameEl.textContent = currentProjectName || "untitled";
+	projectNameEl.style.color = currentProjectName ? "#ffd28a" : "rgba(255,255,255,0.85)";
+}
+
+const EMPTY_SCENE = {
+	primitives: [],
+	camera: { position: [2.2, 1.6, 2.8], target: [0, 0.5, 0], fov: 55 },
+	aspect: "16:9",
+	env: { preset: "studio", intensity: 1.0 },
+	viewport: { grid: true, guides: false, bg: "#07080b" },
+	keyframes: [],
+	imports: [],
+	trim: { start: 0, end: 1 },
+};
+
+async function listProjects() {
+	const r = await fetch("/comfyblockout/projects/list");
+	const j = await r.json();
+	return j.projects || [];
+}
+async function saveProject(name) {
+	const r = await fetch("/comfyblockout/projects/save", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ node_id: NODE_ID, name, scene: serializeScene() }),
+	});
+	return r.json();
+}
+async function loadProject(name) {
+	const r = await fetch("/comfyblockout/projects/load", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ node_id: NODE_ID, name }),
+	});
+	return r.json();
+}
+async function deleteProject(name) {
+	const r = await fetch("/comfyblockout/projects/delete", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ name }),
+	});
+	return r.json();
+}
+
+function showProjectPicker() {
+	return new Promise(async (resolve) => {
+		const projects = await listProjects();
+		const backdrop = document.createElement("div");
+		Object.assign(backdrop.style, {
+			position: "fixed", inset: "0", zIndex: "9998",
+			background: "rgba(0,0,0,0.65)", display: "flex",
+			alignItems: "center", justifyContent: "center",
+		});
+		const card = document.createElement("div");
+		Object.assign(card.style, {
+			background: "#15151c", border: "1px solid rgba(255,255,255,0.08)",
+			borderRadius: "10px", padding: "18px", minWidth: "320px", maxWidth: "440px",
+			maxHeight: "70vh", overflow: "auto",
+			color: "#ddd", fontFamily: "Inter, sans-serif", fontSize: "12px",
+		});
+		card.innerHTML = `<div style="font-size:13px;font-weight:600;margin-bottom:12px">Open Project</div>`;
+		if (projects.length === 0) {
+			const empty = document.createElement("div");
+			empty.textContent = "No saved projects yet — use Save As to create one.";
+			empty.style.color = "rgba(255,255,255,0.45)";
+			empty.style.padding = "12px 0";
+			card.appendChild(empty);
+		} else {
+			for (const name of projects) {
+				const row = document.createElement("div");
+				Object.assign(row.style, {
+					display: "flex", alignItems: "center", gap: "8px",
+					padding: "8px 10px", borderRadius: "6px", cursor: "pointer",
+				});
+				row.onmouseenter = () => row.style.background = "rgba(255,255,255,0.06)";
+				row.onmouseleave = () => row.style.background = "transparent";
+				const label = document.createElement("span");
+				label.textContent = name;
+				label.style.flex = "1";
+				const del = document.createElement("span");
+				del.textContent = "✕";
+				Object.assign(del.style, { opacity: "0.4", padding: "0 6px", cursor: "pointer" });
+				del.onmouseenter = () => { del.style.opacity = "1"; del.style.color = "#ff8a8a"; };
+				del.onmouseleave = () => { del.style.opacity = "0.4"; del.style.color = ""; };
+				del.onclick = async (e) => {
+					e.stopPropagation();
+					if (!confirm(`Delete project "${name}"? This removes the saved scene and its asset copies.`)) return;
+					await deleteProject(name);
+					row.remove();
+				};
+				row.append(label, del);
+				row.onclick = () => { cleanup(); resolve(name); };
+				card.appendChild(row);
+			}
+		}
+		const closeRow = document.createElement("div");
+		Object.assign(closeRow.style, { textAlign: "right", marginTop: "14px" });
+		const closeBtn = document.createElement("button");
+		closeBtn.textContent = "Cancel";
+		Object.assign(closeBtn.style, {
+			background: "rgba(255,255,255,0.08)", border: "none", color: "#fff",
+			padding: "6px 12px", borderRadius: "6px", cursor: "pointer", fontFamily: "inherit", fontSize: "11px",
+		});
+		closeBtn.onclick = () => { cleanup(); resolve(null); };
+		closeRow.appendChild(closeBtn);
+		card.appendChild(closeRow);
+		backdrop.appendChild(card);
+		document.body.appendChild(backdrop);
+		const onKey = (e) => { if (e.key === "Escape") { cleanup(); resolve(null); } };
+		document.addEventListener("keydown", onKey);
+		function cleanup() {
+			document.removeEventListener("keydown", onKey);
+			backdrop.remove();
+		}
+	});
+}
+
+document.getElementById("project-new").addEventListener("click", async () => {
+	if (objects.length > 0 && !confirm("Start a new scene? Unsaved changes to the current node will be replaced.")) return;
+	await deserializeScene(EMPTY_SCENE);
+	// Drop a starter cube so "New" matches the fresh-node experience instead of leaving
+	// the user staring at an empty grid. addPrimitive picks the next palette color.
+	const cube = addPrimitive("cube");
+	if (cube) cube.position.set(0, 0.5, 0);
+	applyProjectName(null);
+	await saveScene();
+	updateStatus("new scene");
+});
+
+document.getElementById("project-open").addEventListener("click", async () => {
+	const name = await showProjectPicker();
+	if (!name) return;
+	updateStatus(`opening ${name}…`);
+	const j = await loadProject(name);
+	if (!j.success) { updateStatus(`open failed: ${j.error || "unknown"}`); return; }
+	// Backend already persisted scene + assets — no need for the post-deserialize save,
+	// and skipping it avoids clobbering disk if any asset fetch transiently fails.
+	await deserializeScene(j.scene, { skipSave: true });
+	applyProjectName(name);
+	updateStatus(`opened · ${name}`);
+	// Ask the parent to fully rebuild the in-node preview iframe — live scene-sync
+	// can miss when the preview was minted with a different NODE_ID than the editor.
+	try { window.parent?.postMessage({ source: "comfy3d-editor", type: "preview-refresh", node_id: NODE_ID }, "*"); } catch {}
+});
+
+function showNamePrompt(title, suggested) {
+	return new Promise((resolve) => {
+		const backdrop = document.createElement("div");
+		Object.assign(backdrop.style, {
+			position: "fixed", inset: "0", zIndex: "9998",
+			background: "rgba(0,0,0,0.65)", display: "flex",
+			alignItems: "center", justifyContent: "center",
+		});
+		const card = document.createElement("div");
+		Object.assign(card.style, {
+			background: "#15151c", border: "1px solid rgba(255,255,255,0.08)",
+			borderRadius: "10px", padding: "18px", minWidth: "320px",
+			color: "#ddd", fontFamily: "Inter, sans-serif", fontSize: "12px",
+		});
+		card.innerHTML = `<div style="font-size:13px;font-weight:600;margin-bottom:12px">${title}</div>`;
+		const input = document.createElement("input");
+		input.type = "text";
+		input.value = suggested || "";
+		Object.assign(input.style, {
+			width: "100%", padding: "8px 10px", borderRadius: "6px",
+			background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.1)",
+			color: "#fff", fontFamily: "inherit", fontSize: "12px", outline: "none",
+		});
+		card.appendChild(input);
+		const row = document.createElement("div");
+		Object.assign(row.style, { display: "flex", justifyContent: "flex-end", gap: "6px", marginTop: "14px" });
+		const cancel = document.createElement("button");
+		cancel.textContent = "Cancel";
+		const ok = document.createElement("button");
+		ok.textContent = "Save";
+		for (const b of [cancel, ok]) {
+			Object.assign(b.style, {
+				border: "none", padding: "6px 14px", borderRadius: "6px",
+				cursor: "pointer", fontFamily: "inherit", fontSize: "11px",
+			});
+		}
+		cancel.style.background = "rgba(255,255,255,0.08)";
+		cancel.style.color = "#fff";
+		ok.style.background = "rgba(255,180,84,0.28)";
+		ok.style.color = "#ffd28a";
+		row.append(cancel, ok);
+		card.appendChild(row);
+		backdrop.appendChild(card);
+		document.body.appendChild(backdrop);
+		setTimeout(() => { input.focus(); input.select(); }, 0);
+		const cleanup = (val) => { document.removeEventListener("keydown", onKey); backdrop.remove(); resolve(val); };
+		const onKey = (e) => {
+			if (e.key === "Escape") cleanup(null);
+			else if (e.key === "Enter") cleanup(input.value.trim() || null);
+		};
+		document.addEventListener("keydown", onKey);
+		cancel.onclick = () => cleanup(null);
+		ok.onclick = () => cleanup(input.value.trim() || null);
+	});
+}
+
+function flashSaveButton(btnId) {
+	const btn = document.getElementById(btnId);
+	if (!btn) return;
+	btn.classList.remove("save-flash");
+	void btn.offsetWidth; // force reflow so the animation can restart on rapid saves
+	btn.classList.add("save-flash");
+	setTimeout(() => btn.classList.remove("save-flash"), 700);
+}
+
+async function doSaveAs() {
+	const suggested = currentProjectName || "untitled";
+	const name = await showNamePrompt("Save project as", suggested);
+	if (!name) return;
+	const j = await saveProject(name);
+	if (!j.success) { updateStatus(`save failed: ${j.error || "unknown"}`); return; }
+	applyProjectName(name);
+	await saveScene();
+	updateStatus(`saved · ${name} · ${j.assets} asset${j.assets === 1 ? "" : "s"}`);
+	flashSaveButton("project-save-as");
+	flashSaveButton("project-save");
+}
+
+document.getElementById("project-save-as").addEventListener("click", doSaveAs);
+document.getElementById("project-save").addEventListener("click", async () => {
+	if (!currentProjectName) { doSaveAs(); return; }
+	const j = await saveProject(currentProjectName);
+	if (!j.success) { updateStatus(`save failed: ${j.error || "unknown"}`); return; }
+	await saveScene();
+	updateStatus(`saved · ${currentProjectName}`);
+	flashSaveButton("project-save");
+});
+
+window.addEventListener("keydown", e => {
+	if ((e.ctrlKey || e.metaKey) && e.key === "s" && !IS_PREVIEW) {
+		e.preventDefault();
+		if (currentProjectName) {
+			saveProject(currentProjectName).then(() => {
+				updateStatus(`saved · ${currentProjectName}`);
+				flashSaveButton("project-save");
+			});
+		} else {
+			doSaveAs();
+		}
+	}
+});
+
+orbit.addEventListener("change", saveSceneDebounced);
+fovSlider.addEventListener("change", saveSceneDebounced);
+aspectSelect.addEventListener("change", saveSceneDebounced);
+// Snapshot on the START of an orbit gesture so Ctrl+Z restores the pre-orbit camera —
+// "point A to point B" undo. One snapshot per gesture (not per pixel) because OrbitControls
+// only fires "start" on pointerdown/wheel begin. Subsequent identical snapshots dedupe.
+orbit.addEventListener("start", () => { try { snapshotForUndo(); } catch {} });
+
+// Snapshot on pointerdown / focusin for any range/color/number/text input + select in
+// the panel — covers FOV, env intensity, duration, fps, bg color, object color swatches,
+// aspect, env preset. One snapshot per gesture (drag or focused-typing session); per-
+// pixel input events dedupe against the unchanged or just-captured state.
+const snapshotInputGesture = (e) => {
+	const t = e.target;
+	if (!t || !(t instanceof HTMLElement)) return;
+	const tag = t.tagName;
+	const type = t.type;
+	const isTrackedInput = tag === "INPUT" && (type === "range" || type === "color" || type === "number" || type === "text");
+	if (tag === "SELECT" || isTrackedInput) {
+		try { snapshotForUndo(); } catch {}
+	}
+};
+document.addEventListener("pointerdown", snapshotInputGesture, true);
+document.addEventListener("focusin", snapshotInputGesture, true);
+
+// Reliable pre-change snapshot for scene-affecting form controls. We can't trust that
+// pointerdown fires on every browser's native form controls (Electron Chromium quirks
+// around <select>, plus the user-agent-drawn dropdown sometimes eats pointer events),
+// so this also hooks `change` and synthesizes the pre-state by briefly reverting the
+// element to its last-known value, serializing the scene at that moment, then putting
+// the new value back. snapshotForUndo's dedupe means a duplicate from pointerdown vs
+// change just no-ops.
+function attachPreChangeSnapshot(el) {
+	if (!el) return;
+	el._undoPrev = el.value;
+	const remember = () => { el._undoPrev = el.value; };
+	el.addEventListener("focusin", remember);
+	el.addEventListener("pointerdown", remember);
+	el.addEventListener("change", () => {
+		const prev = el._undoPrev;
+		const next = el.value;
+		if (prev == null || prev === next) { el._undoPrev = next; return; }
+		// Swap to old → snapshot → swap back. serializeScene reads the live element
+		// values for camera fov, aspect, env intensity, duration, fps, bg color etc.,
+		// so reverting captures the genuine pre-change scene state.
+		el.value = prev;
+		try { snapshotForUndo(); } catch {}
+		el.value = next;
+		el._undoPrev = next;
+	});
+}
+attachPreChangeSnapshot(aspectSelect);
+attachPreChangeSnapshot(document.getElementById("env-preset"));
+attachPreChangeSnapshot(envIntensity);
+attachPreChangeSnapshot(document.getElementById("fov"));
+attachPreChangeSnapshot(document.getElementById("duration"));
+attachPreChangeSnapshot(document.getElementById("fps"));
+attachPreChangeSnapshot(document.getElementById("bg-color"));
+
+// Snapshot on any click inside the side panel before its handler runs — covers toggle
+// buttons (Grid / Guides / AR / transform mode / visibility / outliner X / display
+// presets) that aren't form inputs. Capture phase fires pre-handler so the snapshot is
+// the BEFORE state. Click without scene impact dedupes against the unchanged state.
+//
+// Skip form controls — they're snapshotted via the dedicated focus/pointer/change
+// handlers. Without this guard, a click that fires AFTER a slider release or select
+// change would push a SECOND snapshot of the post-change state, turning one user
+// action into two undo steps (Ctrl+Z #1 restores post → no visible change, Ctrl+Z #2
+// restores pre → actual undo).
+const panelEl = document.getElementById("panel");
+if (panelEl) {
+	panelEl.addEventListener("click", (e) => {
+		const t = e.target;
+		if (t && t instanceof HTMLElement) {
+			const tag = t.tagName;
+			if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+			if (t.closest && t.closest("input,select,textarea,label")) return;
+		}
+		try { snapshotForUndo(); } catch {}
+	}, true);
+}
+
+window.addEventListener("beforeunload", () => {
+	try {
+		const blob = new Blob([JSON.stringify({ node_id: NODE_ID, scene: serializeScene() })], { type: "application/json" });
+		navigator.sendBeacon?.("/comfyblockout/save_scene", blob);
+	} catch {}
+});
+
+// High-res snapshot via a WebGLRenderTarget on the MAIN renderer so the env/PMREM
+// texture (bound to the main renderer's GL context) lights the scene identically to
+// the visible preview. A separate offscreen renderer can't see those GPU textures
+// and ends up rendering an underlit, washed-out frame.
+const SNAPSHOT_TARGET_W = 1920;
+let snapshotTarget = null;
+let snapshotCanvas = null;
+let snapshotCtx = null;
+let snapshotPixels = null;
+
+async function autoSnapshot() {
+	try {
+		const asp = currentAspect();
+		const ratio = asp ? asp.ratio : (canvas.width / canvas.height || 16 / 9);
+		const w = SNAPSHOT_TARGET_W;
+		const h = Math.max(1, Math.round(w / ratio));
+
+		if (!snapshotTarget || snapshotTarget.width !== w || snapshotTarget.height !== h) {
+			snapshotTarget?.dispose();
+			snapshotTarget = new THREE.WebGLRenderTarget(w, h, {
+				type: THREE.UnsignedByteType,
+				colorSpace: THREE.SRGBColorSpace,
+			});
+			snapshotCanvas = document.createElement("canvas");
+			snapshotCanvas.width = w;
+			snapshotCanvas.height = h;
+			snapshotCtx = snapshotCanvas.getContext("2d");
+			snapshotPixels = new Uint8Array(w * h * 4);
+		}
+
+		const gridWasVisible = grid.visible;
+		const helperWasVisible = transformHelper.visible;
+		grid.visible = false;
+		transformHelper.visible = false;
+
+		const prevAspect = camera.aspect;
+		camera.aspect = w / h;
+		camera.updateProjectionMatrix();
+		renderer.setRenderTarget(snapshotTarget);
+		renderer.render(scene, camera);
+		renderer.setRenderTarget(null);
+		camera.aspect = prevAspect;
+		camera.updateProjectionMatrix();
+
+		grid.visible = gridWasVisible;
+		transformHelper.visible = helperWasVisible;
+
+		renderer.readRenderTargetPixels(snapshotTarget, 0, 0, w, h, snapshotPixels);
+		// WebGL pixels arrive bottom-up; canvas expects top-down. Flip rows in place.
+		const imageData = snapshotCtx.createImageData(w, h);
+		const stride = w * 4;
+		for (let y = 0; y < h; y++) {
+			const srcOff = (h - 1 - y) * stride;
+			imageData.data.set(snapshotPixels.subarray(srcOff, srcOff + stride), y * stride);
+		}
+		snapshotCtx.putImageData(imageData, 0, 0);
+
+		const blob = await new Promise(res => snapshotCanvas.toBlob(res, "image/png"));
+		if (!blob) return;
+		await uploadImage(blob);
+	} catch (e) {
+		console.warn("[ComfyBlockout] autoSnapshot failed:", e);
+	}
+}
+
+window.addEventListener("message", async (ev) => {
+	if (ev.data?.source !== "comfy3d-parent" || ev.data?.type !== "flush-save") return;
+	// Make close feel instant: dispatch the save via sendBeacon (fire-and-forget, the
+	// browser delivers it even after the modal/iframe is gone) and ack immediately.
+	// The previous version awaited a full POST round-trip + a high-res autoSnapshot
+	// before acking; after a big GLB load that meant ~1-2s of frozen modal, and the
+	// snapshot render was flashing the viewport. The preview iframe regenerates its
+	// own snapshot on next boot anyway, so no work is actually lost.
+	try {
+		const blob = new Blob([JSON.stringify({ node_id: NODE_ID, scene: serializeScene() })], { type: "application/json" });
+		navigator.sendBeacon?.("/comfyblockout/save_scene", blob);
+	} catch (e) {
+		console.warn("[ComfyBlockout] flush-save failed:", e);
+	}
+	window.parent?.postMessage({ source: "comfy3d-editor", type: "save-complete" }, "*");
+});
+
+const promptEl = document.getElementById("prompt-text");
+const savePromptDebounced = (() => {
+	let t = null;
+	return () => {
+		clearTimeout(t);
+		t = setTimeout(async () => {
+			try {
+				await fetch("/comfyblockout/save_prompt", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ node_id: NODE_ID, prompt: promptEl.value }),
+				});
+			} catch (e) { console.warn("[ComfyBlockout] prompt save failed:", e); }
+		}, 500);
+	};
+})();
+promptEl.addEventListener("input", savePromptDebounced);
+
+async function loadPrompt() {
+	try {
+		const r = await fetch(`/comfyblockout/load_prompt?node_id=${encodeURIComponent(NODE_ID)}`);
+		const j = await r.json();
+		promptEl.value = j.prompt || "";
+	} catch (e) { console.warn("[ComfyBlockout] prompt load failed:", e); }
+}
+
+(async () => {
+	await loadPrompt();
+	await loadScene();
+	// (Removed the editor "if loadScene returned falsy → addPrimitive('cube') + saveScene"
+	//  fallback. If /load_scene transiently failed or returned empty for any reason, that
+	//  fallback would clobber a real saved scene with a fresh cube. Empty scene on load
+	//  failure is now silent — the user can hit Add Block if they actually want a cube.)
+	// Refresh the IMAGE output once after init so freshly-seeded scenes (or just-reopened
+	// nodes) don't return the 512x512 black placeholder when the workflow is queued.
+	await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+	autoSnapshot().catch(() => {});
+})();
+
+if (IS_PREVIEW) {
+	// Preview iframe: orbit only — no click-select, no transform gizmo, no drag-import.
+	// saveScene IS allowed (gated by restoringScene + isPlayingPreview/recording) so orbiting
+	// the preview persists camera back to the same scene.json the editor reads.
+	transform.detach();
+	transform.enabled = false;
+	transformHelper.visible = false;
+	// Override attach to a no-op — addPrimitive → select(mesh) during scene restore would
+	// otherwise re-attach the gizmo. detach() alone gets undone by the next select().
+	transform.attach = () => transform;
+	canvas.style.cursor = "grab";
+	canvas.addEventListener("pointerdown", () => canvas.style.cursor = "grabbing");
+	canvas.addEventListener("pointerup", () => canvas.style.cursor = "grab");
+
+	const pvRewind = document.getElementById("pv-rewind");
+	const pvPlay = document.getElementById("pv-play");
+	const pvRec = document.getElementById("pv-rec");
+	const pvTime = document.getElementById("pv-time");
+	const pvScrub = document.getElementById("pv-scrub-wrap");
+	pvRewind.addEventListener("click", rewindTransport);
+	pvPlay.addEventListener("click", () => isPlayingPreview ? stopPreview() : playPreview());
+	pvRec.addEventListener("click", () => {
+		if (recording) return;
+		pvRec.classList.add("recording");
+		startRecording().finally(() => pvRec.classList.remove("recording"));
+	});
+	document.getElementById("pv-edit").addEventListener("click", async () => {
+		// Flush pending debounced camera save before the editor mounts and reads the file,
+		// otherwise the editor sees a stale camera position.
+		try { await saveScene(); } catch {}
+		window.parent?.postMessage({ source: "comfyblockout-editor", type: "request-edit", node_id: NODE_ID }, "*");
+	});
+	document.getElementById("pv-addkey").addEventListener("click", () => {
+		addKeyframe();
+		const btn = document.getElementById("pv-addkey");
+		btn.classList.remove("flash-green");
+		void btn.offsetWidth; // force reflow so the animation restarts on repeat clicks
+		btn.classList.add("flash-green");
+	});
+	document.getElementById("pv-clearkey").addEventListener("click", deleteKeyframes);
+	// Mini timeline interaction:
+	// - left-click + drag on the playhead: drag from its current position
+	// - left-click on the bar bg: no-op (no snap-scrub)
+	// - keyframes handle their own pointerdown / contextmenu
+	const pvPh = document.getElementById("pv-playhead");
+	pvScrub.addEventListener("pointerdown", e => {
+		if (e.button !== 0) return; // right-click reserved for keyframe contextmenu pass-through
+		if (e.target.closest(".pv-key")) return; // key handles itself
+		const grabbingPlayhead = e.target === pvPh || pvPh.contains(e.target);
+		if (!grabbingPlayhead) return; // only drag the playhead — no click-to-scrub
+		stopPreview();
+		const rect = pvScrub.getBoundingClientRect();
+		const gap = trimGap();
+		const startCursorX = e.clientX;
+		const startPlayheadT = playhead;
+		const SNAP_PX = 6; // pixels — hold Shift to bypass snap for precise scrubs
+		const drag = ev => {
+			const dx = (ev.clientX - startCursorX) / rect.width;
+			const raw = Math.max(0, Math.min(1, startPlayheadT + dx));
+			let t = Math.max(trimStart + gap, Math.min(trimEnd - gap, raw));
+			if (!ev.shiftKey) {
+				const snapTol = SNAP_PX / rect.width;
+				let bestDist = Infinity, snapped = t;
+				for (const k of keyframes) {
+					const d = Math.abs(k.t - t);
+					if (d < bestDist && d <= snapTol) { bestDist = d; snapped = k.t; }
+				}
+				t = snapped;
+			}
+			setPlayhead(t);
+			const s = sampleCameraAt(t);
+			if (s) applyCameraState(s);
+			// Mirror the editor's scrub: also advance every FBX mixer so bones
+			// follow the playhead instead of running on their own clock. Force
+			// timeScale=1 just for the manual update, then restore.
+			const seconds = t * currentDuration();
+			for (const m of fbxMixers) {
+				const prev = m.timeScale;
+				m.timeScale = 1;
+				const cur = m.time || 0;
+				m.update(seconds - cur);
+				m.timeScale = prev;
+			}
+		};
+		const onUp = () => {
+			window.removeEventListener("pointermove", drag);
+			window.removeEventListener("pointerup", onUp);
+		};
+		window.addEventListener("pointermove", drag);
+		window.addEventListener("pointerup", onUp);
+	});
+	const pvPlayIcon = pvPlay.querySelector(".pv-icon");
+	setInterval(() => {
+		const dur = currentDuration();
+		const t = playhead * dur;
+		const durStr = Number.isInteger(dur) ? `${dur}s` : `${dur.toFixed(1)}s`;
+		pvTime.textContent = `${t.toFixed(2)}s / ${durStr}`;
+		const want = `/extensions/ComfyBlockout/icons/${isPlayingPreview ? "pause" : "play"}.svg`;
+		if (!pvPlayIcon.src.endsWith(want)) pvPlayIcon.src = want;
+	}, 100);
+
+	// Modal editor postMessages when it closes after a save — reload scene + assets
+	window.addEventListener("message", async (ev) => {
+		if (ev.data?.source === "comfyblockout-parent" && ev.data?.type === "reload-scene") {
+			await loadScene();
+		}
+	});
+}
+
+	</script>
+
+</body>
+</html>

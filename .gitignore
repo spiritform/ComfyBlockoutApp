@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+.env.local
+
+# Runtime / user data — app re-creates on first run
+data/

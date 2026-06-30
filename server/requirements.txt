@@ -1,0 +1,8 @@
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+aiofiles>=23.2
+pillow>=10.0
+imageio-ffmpeg>=0.4
+opencv-python>=4.8
+comfy-cli>=1.5
