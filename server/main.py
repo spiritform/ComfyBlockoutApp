@@ -106,12 +106,59 @@ if COMFY_BIN:
 else:
     print("[cb-app] comfy CLI not resolved — generations will fail until comfy-cli is on PATH")
 
-DEFAULT_PROMPT = (
-    "Render this blockout scene. Match the exact camera angle, composition, scale, "
-    "aspect ratio and object orientations — but do not use the blockout to define "
-    "the style, colors, or creative direction. Only use the grid as reference for "
-    "the scene perspective and not as an element to include in the generated image or video"
+# Immutable base system prompt — fires on every generation, NOT editable from the
+# UI. The editor's "Prompt Tweaks" textarea is appended on top of this, so users
+# can add scene-specific guidance without ever losing the spatial-ControlNet base.
+BASE_PROMPT = (
+    "STRICT SPATIAL REPLACEMENT TASK.\n\n"
+    "IMAGE 1 (always the first attached image) is a 3D blockout — a low-fidelity "
+    "scene render with simple colored shapes that act as stencils for the final "
+    "objects. ANY ADDITIONAL IMAGES (image 2, 3, …) are per-object MATERIAL "
+    "SWATCHES — they show the desired surface/finish/texture for a specific "
+    "colored shape in image 1; the SCENE INVENTORY below tells you which image "
+    "number maps to which named object.\n\n"
+    "Your job: produce a single new image that matches IMAGE 1 spatially "
+    "(camera, perspective, aspect ratio, position and SCALE of every colored "
+    "shape), but renders each colored shape as the subject described in the "
+    "user prompt + scene inventory, with its surface drawn from the matching "
+    "material swatch image.\n\n"
+    "HARD RULES — do not violate:\n"
+    "1. Each colored shape in image 1 has a screen-space footprint (X%, Y%, "
+    "size%). The replacement object occupies that EXACT footprint. Never scale "
+    "up to match what would 'normally' fit the environment. If the blockout "
+    "shows a 15%-of-frame cube on a city street, the cube stays 15% of the "
+    "frame in the output — it does NOT become a building. The blockout WINS "
+    "over semantic expectations.\n"
+    "2. The replacement object's center is at the SAME pixel coordinates as the "
+    "colored shape's center in image 1.\n"
+    "3. Preserve image 1's camera angle, perspective, aspect ratio, and the "
+    "ground plane implied by the perspective grid.\n"
+    "4. The perspective grid lines themselves are scaffolding — do NOT draw "
+    "them in the output.\n"
+    "5. One colored shape → one object. Do not add extra instances.\n"
+    "6. The colored shape's tint is metadata identifying the object — it is NOT "
+    "the final object's color. Pull color/material from the matching material "
+    "swatch image (if any), otherwise from the user prompt.\n\n"
+    "REFERENCE IMAGES (image 2+) ARE MATERIAL SWATCHES, NOT COMPOSITION:\n"
+    "- Pull ONLY surface qualities from them: color, texture, finish, "
+    "micro-detail, weathering, sheen, pattern, motif.\n"
+    "- IGNORE everything else from those images: their framing, scale, camera "
+    "angle, lighting direction, background, any other objects, depth-of-field. "
+    "Treat each reference image as if it were a flat material chip swatched "
+    "from a sample book.\n"
+    "- Do NOT copy the reference image's subject as a whole. If reference image "
+    "2 shows a galaxy nebula scene with planets and stars, only the cosmic "
+    "swirl / color palette / surface texture gets applied to the object — the "
+    "planets, stars, and overall composition stay OUT of the output.\n\n"
+    "WHAT TO INVENT vs PRESERVE:\n"
+    "- Invent from user prompt: lighting, mood, background environment, weather, "
+    "time of day, secondary scene elements around the object.\n"
+    "- Invent from material swatch images (surface only): the object's texture, "
+    "finish, color palette, micro-detail.\n"
+    "- Preserve from image 1: object position, object SCALE (most important), "
+    "object silhouette, camera framing, perspective."
 )
+DEFAULT_PROMPT = BASE_PROMPT  # back-compat alias for any old references
 
 # ---------- ffmpeg ----------
 
@@ -324,17 +371,25 @@ async def save_prompt(request: Request):
 
 @app.get("/comfyblockout/load_prompt")
 async def load_prompt(node_id: str = ""):
+    """Returns the user's saved Prompt Tweaks (defaults to empty). The base
+    system prompt lives in code and is appended automatically at gen time."""
     node_id = node_id.strip()
     if not node_id:
-        return JSONResponse({"prompt": DEFAULT_PROMPT})
+        return JSONResponse({"prompt": "", "base": BASE_PROMPT})
     if node_id in _prompt_store:
-        return JSONResponse({"prompt": _prompt_store[node_id]})
+        return JSONResponse({"prompt": _prompt_store[node_id], "base": BASE_PROMPT})
     p = DATA_DIR / f"node_{node_id}.prompt.txt"
     if p.exists():
         text = p.read_text(encoding="utf-8")
+        # Migrate: anyone whose saved file still contains the base prompt verbatim
+        # gets it stripped so the textarea becomes empty (= no tweaks). The base
+        # always fires regardless; nothing is lost.
+        if text.strip() == BASE_PROMPT.strip():
+            text = ""
+            p.write_text(text, encoding="utf-8")
         _prompt_store[node_id] = text
-        return JSONResponse({"prompt": text})
-    return JSONResponse({"prompt": DEFAULT_PROMPT})
+        return JSONResponse({"prompt": text, "base": BASE_PROMPT})
+    return JSONResponse({"prompt": "", "base": BASE_PROMPT})
 
 
 @app.post("/comfyblockout/save_asset")
@@ -841,6 +896,69 @@ async def run_module(module_id: str, request: Request):
     if refs and "references" not in inputs:
         inputs["references"] = [r["signed_url"] for r in refs if r.get("signed_url")]
 
+    # Pop client-only fields out of inputs so they don't get forwarded to the
+    # module (Nano/Seedance don't accept them as kwargs). We consume them here
+    # to build the SCENE INVENTORY block injected into the prompt.
+    scene_objects = inputs.pop("scene_objects", None) or []
+    camera_meta = inputs.pop("camera", None) or {}
+
+    def _format_inventory(objs: list[dict], cam: dict) -> str:
+        if not objs:
+            return ""
+        lines = ["SCENE INVENTORY (objects shown in image 1):"]
+        fov = cam.get("fov_deg")
+        aspect = cam.get("aspect")
+        cam_bits = []
+        if fov:    cam_bits.append(f"camera FOV {fov}° (use this as the lens — a wider FOV exaggerates near-vs-far size differences, a narrower FOV flattens them)")
+        if aspect: cam_bits.append(f"aspect ratio {aspect}")
+        if cam_bits:
+            lines.append("Camera: " + "; ".join(cam_bits) + ".")
+        for o in objs:
+            name = o.get("name") or "?"
+            kind = o.get("kind") or "object"
+            color = o.get("color") or "untinted"
+            x = o.get("screen_x_pct", 0)
+            y = o.get("screen_y_pct", 0)
+            w = o.get("screen_w_pct", 0)
+            h = o.get("screen_h_pct", 0)
+            ref_idx = o.get("ref_image_index")
+            ref_note = f", surface/material drawn from swatch image {ref_idx}" if ref_idx else ""
+            notes = o.get("notes")
+            notes_note = f" — notes: {notes}" if notes else ""
+            lines.append(
+                f"- {name} ({color} {kind}): centered at x={x}% y={y}% "
+                f"of frame, occupies ~{w}%×{h}% of frame{ref_note}{notes_note}"
+            )
+        lines.append(
+            "Use the screen-space %s above as the exact pixel footprint for each "
+            "object. The tint listed is metadata to identify the colored shape "
+            "in image 1 — not the final color of the rendered object."
+        )
+        if len(objs) > 1:
+            lines.append(
+                "RELATIVE SIZES: When two or more objects appear in image 1, their "
+                "size ratio is significant. If two objects look nearly the same size "
+                "in the blockout, they MUST look nearly the same size in the output. "
+                "Do not exaggerate perspective; respect the perspective, orientation, "
+                "and scale shown by the blockout."
+            )
+        return "\n".join(lines)
+
+    # Prepend BASE_PROMPT (immutable spatial-ControlNet directive) + SCENE INVENTORY
+    # (per-object screen-space metadata + reference-image map) + any user-saved
+    # tweaks + the actual user request.
+    user_prompt = (inputs.get("prompt") or "").strip()
+    if user_prompt:
+        tweaks = (_prompt_store.get(node_id) or "").strip()
+        inventory = _format_inventory(scene_objects, camera_meta)
+        parts = [BASE_PROMPT.strip()]
+        if inventory:
+            parts.append(inventory)
+        if tweaks:
+            parts.append(f"ADDITIONAL TWEAKS:\n{tweaks}")
+        parts.append(f"USER REQUEST: {user_prompt}")
+        inputs["prompt"] = "\n\n".join(parts)
+
     try:
         result = await m.run(data_dir=DATA_DIR, **inputs)
     except ValueError as e:
@@ -1214,6 +1332,58 @@ async def llm_reset(request: Request):
     node_id = str(body.get("node_id", "")).strip() or "default"
     _chat_history.pop(node_id, None)
     return {"cleared": True}
+
+
+# ---------- assets browser (generated outputs) ----------
+#
+# Lists everything in DATA_DIR whose filename starts with `out_` (the prefix
+# the gen modules use). Returns newest-first with the URL the static /data
+# mount serves, plus filename, kind (image|video), size, and mtime. The UI
+# pulls this for the Assets modal so the user can drag previously-generated
+# results back into the editor.
+@app.get("/api/assets/list")
+async def assets_list():
+    items = []
+    for p in DATA_DIR.glob("out_*.*"):
+        if not p.is_file():
+            continue
+        ext = p.suffix.lower().lstrip(".")
+        kind = None
+        if ext in {"png", "jpg", "jpeg", "webp"}:
+            kind = "image"
+        elif ext in {"mp4", "webm", "mov"}:
+            kind = "video"
+        if not kind:
+            continue
+        try:
+            rel = p.relative_to(DATA_DIR).as_posix()
+        except ValueError:
+            continue
+        st = p.stat()
+        items.append({
+            "url": f"/data/{rel}",
+            "filename": p.name,
+            "kind": kind,
+            "size": st.st_size,
+            "mtime": st.st_mtime,
+        })
+    items.sort(key=lambda x: x["mtime"], reverse=True)
+    return {"assets": items[:200]}
+
+
+@app.delete("/api/assets/{filename}")
+async def assets_delete(filename: str):
+    # Safety: only allow deleting files matching the `out_*.{ext}` shape we serve.
+    safe = Path(filename).name  # strip any path components
+    if not safe.startswith("out_"):
+        raise HTTPException(400, "filename outside the assets namespace")
+    p = DATA_DIR / safe
+    if p.exists() and p.is_file():
+        try:
+            p.unlink()
+        except Exception as e:
+            raise HTTPException(500, f"delete failed: {e}")
+    return {"deleted": True, "filename": safe}
 
 
 # ---------- data static mount (must be defined after all explicit routes) ----------

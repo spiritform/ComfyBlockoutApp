@@ -630,20 +630,6 @@
 	}
 	.prim-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
 	.prim-btn svg { width: 16px; height: 16px; }
-	/* Inline label on hover — replaces the native tooltip. Pseudo-element pops
-	   below the button so the icon stays visible above it. */
-	.prim-btn::after {
-		content: attr(data-label);
-		position: absolute; top: calc(100% + 4px); left: 50%;
-		transform: translateX(-50%); white-space: nowrap;
-		background: #15151c; border: 1px solid rgba(255,255,255,0.08);
-		color: #ffb454; font-size: 10px;
-		letter-spacing: 0.04em; text-transform: uppercase;
-		padding: 3px 7px; border-radius: 4px;
-		pointer-events: none; opacity: 0; z-index: 30;
-		transition: opacity 0.1s;
-	}
-	.prim-btn:hover::after { opacity: 1; }
 
 	.gen-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
 	.gen-cells { display: flex; flex-direction: column; gap: 4px; }
@@ -720,6 +706,9 @@
 		-webkit-text-fill-color: transparent;
 	}
 	.gen-prompt::selection { background: rgba(255,180,84,0.25); color: transparent; -webkit-text-fill-color: transparent; }
+	/* Placeholder needs explicit color override — color:transparent on the textarea
+	   (so the highlight overlay shows through) would otherwise hide it too. */
+	.gen-prompt::placeholder { color: rgba(255,255,255,0.35); -webkit-text-fill-color: rgba(255,255,255,0.35); }
 	.gen-prompt:focus { outline: none; border-color: rgba(255,180,84,0.4); }
 	.gen-prompt-hl {
 		position: absolute; top: 0; left: 0; right: 0; bottom: 0;
@@ -917,10 +906,26 @@
 	#prompt-text {
 		width: 100%; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06);
 		border-radius: 6px; color: #ddd; font-family: inherit; font-size: 11px;
-		padding: 8px 10px; outline: none; resize: vertical; min-height: 180px;
+		padding: 8px 10px; outline: none; resize: vertical; min-height: 100px;
 		line-height: 1.45;
 	}
 	#prompt-text:focus { border-color: rgba(255,180,84,0.4); background: rgba(0,0,0,0.35); }
+	.prompt-base-preview {
+		background: rgba(0,0,0,0.18);
+		border: 1px dashed rgba(255,255,255,0.08);
+		border-radius: 6px; padding: 8px 10px; margin-bottom: 8px;
+		max-height: 140px; overflow-y: auto;
+		cursor: default; user-select: text;
+	}
+	.prompt-base-label {
+		font-size: 9px; color: rgba(255,180,84,0.7);
+		letter-spacing: 0.06em; text-transform: uppercase;
+		margin-bottom: 4px;
+	}
+	.prompt-base-text {
+		color: rgba(255,255,255,0.45); font-size: 10px;
+		line-height: 1.45; white-space: pre-wrap;
+	}
 
 	.select-row { margin-bottom: 5px; }
 	.select-row select {
@@ -931,6 +936,31 @@
 	.select-row select:focus { background: rgba(255,255,255,0.10); }
 	.select-row select option { background: #1a1a20; }
 
+	#result-overlay {
+		position: absolute; pointer-events: none; z-index: 8;
+		overflow: hidden; background: #000;
+		box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+	}
+	#result-overlay[hidden] { display: none; }
+	#result-overlay img, #result-overlay video {
+		width: 100%; height: 100%; object-fit: cover; display: block;
+	}
+	#result-overlay video { pointer-events: auto; }
+	#result-toggle {
+		position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+		z-index: 12; display: flex; gap: 0;
+		background: rgba(14,14,18,0.92); border: 1px solid rgba(255,255,255,0.08);
+		border-radius: 5px; overflow: hidden;
+		backdrop-filter: blur(6px);
+	}
+	#result-toggle[hidden] { display: none; }
+	#result-toggle button {
+		background: transparent; border: none; color: rgba(255,255,255,0.55);
+		padding: 5px 14px; font: inherit; font-size: 10px;
+		letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
+	}
+	#result-toggle button:hover { color: #fff; }
+	#result-toggle button.active { background: rgba(255,180,84,0.18); color: #ffb454; }
 	#aspect-frame {
 		position: absolute; z-index: 5; pointer-events: none;
 		border: 1px solid rgba(255,255,255,0.12);
@@ -1064,6 +1094,69 @@
 	}
 	.vt-generate:hover { background: rgba(255,180,84,0.22) !important; color: #fff !important; }
 	.vt-generate:disabled { opacity: 0.45; cursor: not-allowed; }
+	.vt-generate.busy {
+		background: rgba(255,180,84,0.22) !important; color: #ffd28a !important;
+		cursor: progress;
+	}
+	@keyframes vpSpin { to { transform: rotate(360deg); } }
+	.vt-save-render {
+		background: rgba(255,255,255,0.05) !important;
+		color: rgba(255,255,255,0.7) !important;
+		padding: 0 12px; margin-left: 2px;
+	}
+	.vt-save-render:hover { background: rgba(255,255,255,0.1) !important; color: #fff !important; }
+	/* Assets modal */
+	.assets-grid {
+		display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+		max-height: 60vh; overflow-y: auto;
+		padding: 4px 2px;
+	}
+	.assets-tile {
+		position: relative; aspect-ratio: 1;
+		background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.06);
+		border-radius: 6px; overflow: hidden; cursor: grab;
+		transition: border-color 0.12s;
+	}
+	.assets-tile:hover { border-color: rgba(255,180,84,0.4); }
+	.assets-tile:active { cursor: grabbing; }
+	.assets-tile.dragging { opacity: 0.4; }
+	.assets-tile img, .assets-tile video {
+		width: 100%; height: 100%; object-fit: cover; display: block;
+		pointer-events: none;
+	}
+	.assets-tile .badge {
+		position: absolute; top: 6px; left: 6px;
+		background: rgba(0,0,0,0.7); color: #ffb454;
+		font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase;
+		padding: 2px 6px; border-radius: 3px;
+	}
+	.assets-tile .actions {
+		position: absolute; top: 6px; right: 6px;
+		display: flex; gap: 4px; opacity: 0;
+		transition: opacity 0.12s;
+	}
+	.assets-tile:hover .actions { opacity: 1; }
+	.assets-tile .actions button {
+		width: 22px; height: 22px;
+		background: rgba(0,0,0,0.7); border: none; border-radius: 4px;
+		color: rgba(255,255,255,0.8); cursor: pointer;
+		display: flex; align-items: center; justify-content: center;
+		padding: 0;
+	}
+	.assets-tile .actions button:hover { background: rgba(255,180,84,0.3); color: #fff; }
+	.assets-tile .actions button.del:hover { background: rgba(255,80,80,0.3); color: #ff8a8a; }
+	.assets-tile .actions svg { width: 12px; height: 12px; }
+	.assets-empty {
+		padding: 32px; text-align: center; color: rgba(255,255,255,0.4);
+		font-size: 12px;
+	}
+	.assets-hint {
+		margin-top: 10px; font-size: 10px;
+		color: rgba(255,255,255,0.35); text-align: center;
+		letter-spacing: 0.02em;
+	}
+	/* Drop zone highlight on out-img when an asset is being dragged */
+	.out-img.drop-target { border-color: #ffb454 !important; border-style: solid !important; background-color: rgba(255,180,84,0.15) !important; }
 	.gen-cell.active { box-shadow: inset 0 0 0 1px rgba(255,180,84,0.35); background: rgba(255,180,84,0.06); }
 	/* BG picker — now lives in the Scene properties pane */
 	.rp-bg-row {
@@ -1172,6 +1265,13 @@
 			<button class="th-btn-mini" id="project-open" title="Open a saved project">Open</button>
 			<button class="th-btn-mini" id="project-save" title="Save (Ctrl+S)">Save</button>
 			<button class="th-btn-mini" id="project-save-as" title="Save as a new project" hidden>Save As</button>
+			<button class="th-icon-btn" id="th-assets" title="Assets — generated images + videos">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+					<rect x="3" y="5" width="18" height="14" rx="2"/>
+					<circle cx="8.5" cy="10.5" r="1.5"/>
+					<path d="M21 17l-6-6-8 8"/>
+				</svg>
+			</button>
 			<button class="th-icon-btn" id="th-settings" title="Settings">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
 					<circle cx="12" cy="12" r="3"/>
@@ -1180,6 +1280,24 @@
 			</button>
 		</div>
 	</header>
+
+	<!-- Assets modal: shows everything in DATA_DIR/out_*.{png,mp4,webm}.
+	     Tiles are draggable onto the per-object image cells in the outliner
+	     (drop = set as that object's refImage). Save button per tile downloads
+	     to the user's disk. -->
+	<div class="modal-backdrop" id="assets-modal">
+		<div class="modal-card" style="max-width: 760px; width: 90vw;">
+			<div class="modal-head">
+				<span class="modal-title">Assets</span>
+				<button class="modal-close" id="assets-close">×</button>
+			</div>
+			<div class="assets-empty" id="assets-empty" hidden>
+				No generated images yet — hit Generate to create some.
+			</div>
+			<div class="assets-grid" id="assets-grid"></div>
+			<div class="assets-hint">Drag a tile onto an object's image slot in the Outliner to set it as that object's material reference.</div>
+		</div>
+	</div>
 
 	<div class="modal-backdrop" id="settings-modal">
 		<div class="modal-card">
@@ -1310,10 +1428,33 @@
 				<span id="vp-generate-icon" style="display:flex;align-items:center;margin-right:6px"></span>
 				<span>Generate</span>
 			</button>
+			<button class="vt-btn vt-save-render" id="vp-save-render" title="Download the current render" hidden>
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;margin-right:6px">
+					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+					<polyline points="7 10 12 15 17 10"/>
+					<line x1="12" y1="15" x2="12" y2="3"/>
+				</svg>
+				<span>Save</span>
+			</button>
 		</div>
 		<div id="canvas-wrap">
 			<canvas id="renderCanvas"></canvas>
 			<div id="aspect-frame" class="no-guides"><span class="v1"></span><span class="v2"></span></div>
+			<!-- Generated result overlay — sits exactly on the AR rectangle, image
+			     (or first frame of video) shown when "After" is selected. -->
+			<div id="result-overlay" hidden>
+				<img id="result-overlay-img" alt="" draggable="false">
+				<video id="result-overlay-vid" loop muted playsinline></video>
+			</div>
+			<!-- Three-way viewport toggle. All three pills start hidden.
+			     - Blockout appears the moment Generate is clicked (preview the snapshot).
+			     - Viewport + Render appear once the render lands (full A/B/C toggle).
+			     Pre-Generate there are no pills at all — you're looking at the live scene. -->
+			<div id="result-toggle">
+				<button data-result="viewport" class="active" hidden>Viewport</button>
+				<button data-result="blockout" hidden>Blockout</button>
+				<button data-result="render" hidden>Render</button>
+			</div>
 			<div id="status">idle · 0 objects</div>
 			<div id="info-block" style="display:none;position:absolute;top:6px;left:6px;background:rgba(20,20,24,0.85);border-radius:6px;z-index:11;flex-direction:column;align-items:flex-start">
 				<button id="info-btn" title="Scene info" style="width:24px;height:24px;border:none;background:transparent;color:rgba(255,255,255,0.55);font:11px serif;font-style:italic;font-weight:600;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center">i</button>
@@ -1554,10 +1695,14 @@
 
 				<div class="section collapsible collapsed" id="sys-prompt-section">
 					<div class="section-head-row" onclick="this.parentElement.classList.toggle('collapsed')">
-						<span class="section-label">System Prompt</span>
+						<span class="section-label">Prompt Tweaks</span>
 						<span class="collapse-caret">▾</span>
 					</div>
-					<textarea id="prompt-text" rows="10" placeholder="Render this blockout scene. Match the exact camera angle, composition, scale, aspect ration and object orientations — but do not use the blockout to define the style, colors, or creative direction. Only use the grid as reference for the scene perspective and not as an element to include in the generated image or video"></textarea>
+					<div class="prompt-base-preview" id="prompt-base-preview" title="Base system prompt — locked, always sent. Edit your tweaks below.">
+						<div class="prompt-base-label">Base (locked)</div>
+						<div class="prompt-base-text" id="prompt-base-text"></div>
+					</div>
+					<textarea id="prompt-text" rows="6" placeholder="Optional tweaks appended to the base — e.g. 'photoreal, dusk lighting' or scene-specific guidance."></textarea>
 				</div>
 			</div>
 
@@ -1618,13 +1763,121 @@
 		const settingsClear = document.getElementById("settings-clear");
 		const settingsStatus = document.getElementById("settings-status");
 
+		// ---------- assets modal ----------
+		const assetsModal = document.getElementById("assets-modal");
+		const assetsClose = document.getElementById("assets-close");
+		const assetsGrid = document.getElementById("assets-grid");
+		const assetsEmpty = document.getElementById("assets-empty");
+		const assetsBtn = document.getElementById("th-assets");
+
+		function closeAssets() { assetsModal.classList.remove("open"); }
+		async function openAssets() {
+			assetsModal.classList.add("open");
+			await refreshAssets();
+		}
+		async function refreshAssets() {
+			assetsGrid.innerHTML = "";
+			try {
+				const r = await fetch("/api/assets/list");
+				const j = await r.json();
+				const items = j.assets || [];
+				assetsEmpty.hidden = items.length > 0;
+				assetsGrid.style.display = items.length > 0 ? "" : "none";
+				for (const it of items) {
+					assetsGrid.appendChild(renderAssetTile(it));
+				}
+			} catch (e) {
+				assetsEmpty.hidden = false;
+				assetsEmpty.textContent = `Failed to load assets: ${e.message}`;
+			}
+		}
+		function renderAssetTile(asset) {
+			const tile = document.createElement("div");
+			tile.className = "assets-tile";
+			tile.draggable = true;
+			tile.dataset.url = asset.url;
+			tile.dataset.kind = asset.kind;
+			tile.dataset.filename = asset.filename;
+			tile.title = asset.filename;
+			const media = asset.kind === "video"
+				? `<video src="${asset.url}" muted preload="metadata"></video>`
+				: `<img src="${asset.url}" alt="">`;
+			tile.innerHTML = `
+				${media}
+				<span class="badge">${asset.kind}</span>
+				<div class="actions">
+					<button class="dl" title="Download to disk">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+					</button>
+					<button class="del" title="Delete">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg>
+					</button>
+				</div>
+			`;
+			tile.addEventListener("dragstart", e => {
+				tile.classList.add("dragging");
+				e.dataTransfer.setData("application/x-cb-asset", JSON.stringify({
+					url: asset.url, filename: asset.filename, kind: asset.kind,
+				}));
+				e.dataTransfer.effectAllowed = "copy";
+				// Outliner image cells (.out-img) listen for this class to highlight as drop targets.
+				document.body.classList.add("dragging-asset");
+			});
+			tile.addEventListener("dragend", () => {
+				tile.classList.remove("dragging");
+				document.body.classList.remove("dragging-asset");
+			});
+			tile.querySelector(".dl").addEventListener("click", async (e) => {
+				e.stopPropagation();
+				// Trigger a download by adding download attribute + clicking
+				const a = document.createElement("a");
+				a.href = asset.url; a.download = asset.filename;
+				document.body.appendChild(a); a.click(); a.remove();
+			});
+			tile.querySelector(".del").addEventListener("click", async (e) => {
+				e.stopPropagation();
+				const ok = await (window.showConfirm
+					? window.showConfirm("Delete asset?", `<strong style="color:#fff">${asset.filename}</strong>`, { confirmText: "Delete", danger: true })
+					: confirm(`Delete ${asset.filename}?`));
+				if (!ok) return;
+				try {
+					await fetch(`/api/assets/${encodeURIComponent(asset.filename)}`, { method: "DELETE" });
+					await refreshAssets();
+				} catch (err) {
+					window.showAlert?.("Delete failed", err.message);
+				}
+			});
+			return tile;
+		}
+
+		if (assetsBtn) assetsBtn.addEventListener("click", openAssets);
+		if (assetsClose) assetsClose.addEventListener("click", closeAssets);
+		if (assetsModal) assetsModal.addEventListener("click", (e) => { if (e.target === assetsModal) closeAssets(); });
+		document.addEventListener("keydown", (e) => {
+			if (e.key === "Escape" && assetsModal.classList.contains("open")) closeAssets();
+		});
+
+		// Expose so other parts (post-Generate hook) can refresh the listing without reopening.
+		window.refreshAssets = refreshAssets;
+
 		function openSettings() {
 			settingsModal.classList.add("open");
 			settingsKey.value = "";
 			settingsStatus.className = "modal-status";
+			settingsStatus.textContent = "";
 			setTimeout(() => settingsKey.focus(), 50);
 		}
 		function closeSettings() { settingsModal.classList.remove("open"); }
+		function flashSettingsStatus(kind, text, hideMs = 1800) {
+			settingsStatus.className = `modal-status ${kind}`;
+			settingsStatus.textContent = text;
+			if (hideMs) {
+				setTimeout(() => {
+					settingsStatus.className = "modal-status";
+					settingsStatus.textContent = "";
+				}, hideMs);
+			}
+		}
 
 		settingsBtn.addEventListener("click", openSettings);
 		settingsClose.addEventListener("click", closeSettings);
@@ -1635,11 +1888,7 @@
 
 		settingsSave.addEventListener("click", async () => {
 			const key = settingsKey.value.trim();
-			if (!key) {
-				settingsStatus.className = "modal-status error";
-				settingsStatus.textContent = "Enter an API key first";
-				return;
-			}
+			if (!key) { flashSettingsStatus("error", "Enter an API key first"); return; }
 			try {
 				const r = await fetch("/api/auth/key", {
 					method: "POST", headers: { "Content-Type": "application/json" },
@@ -1647,17 +1896,19 @@
 				});
 				if (!r.ok) {
 					const err = await r.json().catch(() => ({ detail: r.statusText }));
-					settingsStatus.className = "modal-status error";
-					settingsStatus.textContent = err.detail || "save failed";
+					flashSettingsStatus("error", err.detail || "save failed", 4000);
 					return;
 				}
-				settingsStatus.className = "modal-status success";
-				settingsStatus.textContent = "Saved";
+				// Optimistically enable the legacy gen buttons so the next click
+				// works immediately — refreshStatus catches up async, but we
+				// don't want to race the user.
+				btnNB.disabled = false; btnSD.disabled = false;
+				settingsKey.value = "";
+				flashSettingsStatus("success", "Saved");
 				refreshStatus();
 				setTimeout(closeSettings, 700);
 			} catch (e) {
-				settingsStatus.className = "modal-status error";
-				settingsStatus.textContent = e.message;
+				flashSettingsStatus("error", e.message, 4000);
 			}
 		});
 
@@ -1665,8 +1916,8 @@
 			try {
 				await fetch("/api/auth/key", { method: "DELETE" });
 				settingsKey.value = "";
-				settingsStatus.className = "modal-status success";
-				settingsStatus.textContent = "Cleared";
+				btnNB.disabled = true; btnSD.disabled = true;
+				flashSettingsStatus("success", "Cleared");
 				refreshStatus();
 			} catch (e) { /* swallow */ }
 		});
@@ -1715,27 +1966,17 @@
 
 		// ---------- result toast ----------
 		function showResult(kind, url, filename) {
-			toastBody.innerHTML = "";
 			const ts = Date.now();
 			const bust = url.includes("?") ? `${url}&t=${ts}` : `${url}?t=${ts}`;
-			if (kind === "video") {
-				const v = document.createElement("video");
-				v.src = bust; v.controls = true; v.autoplay = true; v.loop = true; v.muted = true;
-				toastBody.appendChild(v);
-			} else {
-				const img = document.createElement("img");
-				img.src = bust;
-				toastBody.appendChild(img);
-			}
-			toastTitle.textContent = kind === "video" ? "Seedance · result" : "Nano Banana · result";
-			toastName.textContent = filename || "";
-			toastOpen.href = url;
-			toast.classList.add("show");
+			// Result lands in the viewport overlay (with Before/After toggle).
+			// The old corner toast popup was redundant with that, so it's gone.
+			if (window.showResultInViewport) window.showResultInViewport(kind, bust, filename);
 		}
 		toastClose.addEventListener("click", () => toast.classList.remove("show"));
 
 		// ---------- reference images ----------
 		function renderRefs(refs) {
+			if (!refsStrip || !refsAdd) return; // refs UI removed; per-object refs replace it
 			// Wipe everything except the "+ Reference" button (always last)
 			[...refsStrip.querySelectorAll(".ref-chip")].forEach(n => n.remove());
 			refs.forEach(ref => {
@@ -1765,29 +2006,35 @@
 			} catch (e) { console.warn("[cb-app] loadRefs failed", e); }
 		}
 
-		refsAdd.addEventListener("click", () => refsFile.click());
-		refsFile.addEventListener("change", async () => {
-			const files = [...refsFile.files];
-			refsFile.value = "";
-			if (!files.length) return;
-			refsAdd.textContent = "uploading…";
-			try {
-				for (const f of files) {
-					const fd = new FormData();
-					fd.append("node_id", getNodeId());
-					fd.append("file", f);
-					const r = await fetch("/api/refs/upload", { method: "POST", body: fd });
-					if (!r.ok) {
-						const err = await r.json().catch(() => ({ detail: r.statusText }));
-						alert(`upload failed: ${err.detail || r.statusText}`);
-						break;
+		// The old #refs-strip / #refs-add / #refs-file UI was removed when per-object
+		// reference uploads replaced it. Guard the listener bindings so missing DOM
+		// doesn't throw and abort the rest of this IIFE (which would prevent
+		// window.runGenerateModule from ever being assigned → "Generate unavailable").
+		if (refsAdd && refsFile) {
+			refsAdd.addEventListener("click", () => refsFile.click());
+			refsFile.addEventListener("change", async () => {
+				const files = [...refsFile.files];
+				refsFile.value = "";
+				if (!files.length) return;
+				refsAdd.textContent = "uploading…";
+				try {
+					for (const f of files) {
+						const fd = new FormData();
+						fd.append("node_id", getNodeId());
+						fd.append("file", f);
+						const r = await fetch("/api/refs/upload", { method: "POST", body: fd });
+						if (!r.ok) {
+							const err = await r.json().catch(() => ({ detail: r.statusText }));
+							alert(`upload failed: ${err.detail || r.statusText}`);
+							break;
+						}
 					}
+					await loadRefs();
+				} finally {
+					refsAdd.textContent = "+ Reference";
 				}
-				await loadRefs();
-			} finally {
-				refsAdd.textContent = "+ Reference";
-			}
-		});
+			});
+		}
 
 		// ---------- module runs ----------
 		window.runGenerateModule = (id, btn, inputs, resultKind) => runModule(id, btn, inputs, resultKind);
@@ -1802,13 +2049,30 @@
 				});
 				if (!r.ok) {
 					const err = await r.json().catch(() => ({ detail: r.statusText }));
-					alert(`${id} failed: ${err.detail || r.statusText}`);
+					const msg = err.detail || r.statusText;
+					const looksLikeAuth = /401|unauth|api key|sign in|forbidden/i.test(msg);
+					if (looksLikeAuth && window.showConfirm) {
+						const open = await window.showConfirm(
+							"Sign in required",
+							"Add your Comfy Cloud API key in Settings to run this.",
+							{ confirmText: "Open Settings", cancelText: "Cancel" },
+						);
+						if (open) document.getElementById("th-settings")?.click();
+					} else if (window.showAlert) {
+						await window.showAlert(`${id} failed`, msg);
+					} else {
+						alert(`${id} failed: ${msg}`);
+					}
 					return;
 				}
 				const out = await r.json();
 				if (out.url) showResult(resultKind, out.url, out.filename);
 			} catch (e) {
-				alert(`${id} threw: ${e.message}`);
+				if (window.showAlert) {
+					await window.showAlert(`${id} failed`, e.message || String(e));
+				} else {
+					alert(`${id} threw: ${e.message}`);
+				}
 			} finally {
 				btn.disabled = false; btn.textContent = label;
 			}
@@ -1903,8 +2167,22 @@ camera.position.set(2.2, 1.6, 2.8);
 const orbit = new OrbitControls(camera, canvas);
 orbit.enableDamping = true;
 orbit.target.set(0, 0, 0);
+// Middle-click pans (Maya/Blender muscle memory); left-click still orbits.
+// Right-click is intercepted elsewhere for fly-mode, so leave it unmapped here.
+orbit.mouseButtons = {
+	LEFT: THREE.MOUSE.ROTATE,
+	MIDDLE: THREE.MOUSE.PAN,
+	RIGHT: null,
+};
+// Pan in screen space (intuitive: drag right → scene goes right) instead of
+// across the orbit target plane.
+orbit.screenSpacePanning = true;
 
 const transform = new TransformControls(camera, renderer.domElement);
+// Local space — pivot axes follow the object's own orientation instead of the
+// world XYZ. Once you rotate a cube, dragging the gizmo's red arrow still
+// moves it along the cube's local +X (not world +X).
+transform.setSpace("local");
 transform.addEventListener("dragging-changed", (e) => {
 	orbit.enabled = !e.value;
 	if (!e.value) saveSceneDebounced();
@@ -2900,6 +3178,42 @@ function refreshOutliner() {
 			}
 		});
 
+		// Asset drag-drop — drop a tile from the Assets modal onto this cell to set
+		// it as the object's refImage. The asset already lives on our server; fetch
+		// it as a Blob, then re-upload through the normal refs flow to get a Comfy
+		// Cloud signed URL (Nano needs that, not our localhost path).
+		imgCell.addEventListener("dragover", e => {
+			if (!e.dataTransfer?.types?.includes("application/x-cb-asset")) return;
+			e.preventDefault();
+			e.dataTransfer.dropEffect = "copy";
+			imgCell.classList.add("drop-target");
+		});
+		imgCell.addEventListener("dragleave", () => imgCell.classList.remove("drop-target"));
+		imgCell.addEventListener("drop", async e => {
+			imgCell.classList.remove("drop-target");
+			const raw = e.dataTransfer?.getData("application/x-cb-asset");
+			if (!raw) return;
+			e.preventDefault();
+			let asset;
+			try { asset = JSON.parse(raw); } catch { return; }
+			if (asset.kind !== "image") {
+				window.showAlert?.("Can't use video as a ref", "Drop an image asset onto an object slot.");
+				return;
+			}
+			try {
+				const resp = await fetch(asset.url);
+				const blob = await resp.blob();
+				const file = new File([blob], asset.filename, { type: blob.type || "image/png" });
+				obj.userData.refImage = await uploadObjectRefImage(file);
+				if (selected === obj) refreshObjectInspector?.();
+				refreshOutliner();
+				saveScene?.();
+			} catch (err) {
+				console.error("[out-img] asset drop failed", err);
+				window.showAlert?.("Drop failed", err.message || String(err));
+			}
+		});
+
 		const nameSpan = row.querySelector(".out-name");
 		nameSpan.textContent = obj.name;
 		nameSpan.addEventListener("dblclick", e => {
@@ -3173,29 +3487,82 @@ function describeObject(obj) {
 //  - Appends a per-token "reference image #N" hint when the object has an uploaded
 //    refImage, and collects the signed URL into the references list.
 function buildGenPayload(promptText) {
-	if (!promptText) return { prompt: "", references: [] };
+	if (!promptText) return { prompt: "", references: [], sceneObjects: [] };
+
+	// Auto-include EVERY object with a refImage as a reference, not just the
+	// ones the user explicitly [tagged]. The server-built SCENE INVENTORY tells
+	// the model which image index maps to which object so it has the link.
+	// References are 1-indexed for the model; image 1 is the scene snapshot.
 	const refs = [];
-	const seen = new Map(); // url → index (1-based)
-	function refIndex(url) {
-		if (!seen.has(url)) {
+	const objToRefIndex = new Map(); // obj.uuid → 1-based ref array index
+	for (const o of objects) {
+		const url = o.userData?.refImage?.signedUrl;
+		if (url) {
 			refs.push(url);
-			seen.set(url, refs.length);
+			objToRefIndex.set(o.uuid, refs.length); // 1..N within `refs`
 		}
-		return seen.get(url);
 	}
+
+	// Per-object screen-space metadata so the prompt can name positions/sizes
+	// in fractions of the frame rather than abstract 3D coords.
+	function projectObject(o) {
+		const box = new THREE.Box3().setFromObject(o);
+		if (!isFinite(box.min.x)) return null;
+		const corners = [];
+		for (const cx of [box.min.x, box.max.x])
+			for (const cy of [box.min.y, box.max.y])
+				for (const cz of [box.min.z, box.max.z])
+					corners.push(new THREE.Vector3(cx, cy, cz));
+		let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+		for (const p of corners) {
+			p.project(camera);
+			if (p.x < minX) minX = p.x;
+			if (p.y < minY) minY = p.y;
+			if (p.x > maxX) maxX = p.x;
+			if (p.y > maxY) maxY = p.y;
+		}
+		// NDC → percentage of frame (Y is flipped: NDC +1 = top)
+		const xPct = Math.round(((minX + maxX) / 2 + 1) * 50);
+		const yPct = Math.round((1 - (minY + maxY) / 2) * 50);
+		const wPct = Math.round((maxX - minX) * 50);
+		const hPct = Math.round((maxY - minY) * 50);
+		return { xPct, yPct, wPct, hPct };
+	}
+
+	const sceneObjects = [];
+	for (const o of objects) {
+		if (o.visible === false) continue;
+		const proj = projectObject(o);
+		if (!proj) continue;
+		const colorHex = o.userData.particleSystem
+			? "#" + o.userData.particleSystem.config.color.toString(16).padStart(6, "0")
+			: (o.material?.color ? "#" + o.material.color.getHexString() : null);
+		const colorName = colorHex ? nearestColorName(parseInt(colorHex.slice(1), 16)) : null;
+		const refIdx = objToRefIndex.get(o.uuid) || null; // image # within references list
+		sceneObjects.push({
+			name: o.name,
+			kind: o.userData.primKind || "object",
+			color: colorName,
+			color_hex: colorHex,
+			screen_x_pct: proj.xPct,
+			screen_y_pct: proj.yPct,
+			screen_w_pct: proj.wPct,
+			screen_h_pct: proj.hPct,
+			// 1 = snapshot; ref images start at 2. refIdx is the position WITHIN
+			// references[]; the absolute image index seen by the model is +1.
+			ref_image_index: refIdx ? refIdx + 1 : null,
+			notes: o.userData.notes || null,
+		});
+	}
+
+	// [name] tokens stay supported as inline mentions (rendered in color), but
+	// even users who skip them now get the inventory.
 	const expanded = promptText.replace(/\[([^\]\n]+)\]/g, (_, raw) => {
 		const name = raw.trim();
-		const obj = objects.find(o => (o.name || "").toLowerCase() === name.toLowerCase());
-		if (!obj) return `[${name}]`; // unknown — leave literal
-		const desc = describeObject(obj);
-		const url = obj.userData?.refImage?.signedUrl;
-		if (url) {
-			const n = refIndex(url);
-			return `${name} (${desc}; styled per reference image #${n + 1})`;
-		}
-		return `${name} (${desc})`;
+		return name; // keep the bare name; server inventory carries the metadata
 	});
-	return { prompt: expanded, references: refs };
+
+	return { prompt: expanded, references: refs, sceneObjects };
 }
 
 // Back-compat: still exported in case anything calls it directly.
@@ -3216,14 +3583,13 @@ function refreshGenCells() {
 				<div class="gen-icon">${m.iconSvg}</div>
 				<span class="gen-name">${m.name}</span>
 				<div class="gen-head-end">
-					<button class="gen-del" title="Remove this generator">✕</button>
 					<button class="out-expand-toggle" title="Expand">▾</button>
 				</div>
 			</div>
 			<div class="out-expand">
 				<div class="gen-prompt-wrap">
 					<div class="gen-prompt-hl" aria-hidden="true"></div>
-					<textarea class="gen-prompt" placeholder="${m.placeholder}" spellcheck="false">${cell.prompt.replace(/</g, "&lt;")}</textarea>
+					<textarea class="gen-prompt" placeholder="Enter prompt here…" spellcheck="false">${cell.prompt.replace(/</g, "&lt;")}</textarea>
 					<div class="gen-ref-suggest" hidden></div>
 				</div>
 			</div>
@@ -3231,10 +3597,6 @@ function refreshGenCells() {
 
 		const head = row.querySelector(".gen-head");
 		head.addEventListener("click", (e) => {
-			if (e.target.closest(".gen-del")) {
-				removeGenCell(cell.id);
-				return;
-			}
 			cell.expanded = !cell.expanded;
 			row.classList.toggle("expanded", cell.expanded);
 			setActiveGenCell(cell.id);
@@ -3387,24 +3749,71 @@ document.getElementById("gen-add")?.addEventListener("click", () => {
 	setActiveGenCell(cell.id);
 });
 
+const VP_SPINNER_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:12px;height:12px;animation:vpSpin 0.9s linear infinite"><path d="M21 12a9 9 0 1 1-6.2-8.55"/></svg>`;
+
 document.getElementById("vp-generate")?.addEventListener("click", async () => {
+	console.log("[vp-generate] click");
+	const btn = document.getElementById("vp-generate");
+	if (!btn) { console.warn("[vp-generate] button not found"); return; }
+	if (btn.classList.contains("busy")) { console.warn("[vp-generate] busy"); return; }
 	const cell = getActiveGenCell();
-	if (!cell) return;
+	if (!cell) {
+		console.warn("[vp-generate] no active gen cell");
+		window.showAlert?.("No generator selected", "Open the Generate section and pick a cell first.");
+		return;
+	}
 	const m = GEN_MODELS[cell.model];
-	if (!m) return;
+	if (!m) {
+		console.warn("[vp-generate] unknown model:", cell.model);
+		window.showAlert?.("Unknown model", `Cell model "${cell.model}" is not registered.`);
+		return;
+	}
+	if (!window.runGenerateModule) {
+		console.warn("[vp-generate] runGenerateModule missing");
+		window.showAlert?.("Generate unavailable", "The generate pipeline hasn't loaded yet — refresh the page.");
+		return;
+	}
+	console.log("[vp-generate] firing model=", cell.model);
+
 	const rawPrompt = (cell.prompt || "").trim() || m.placeholder;
-	const { prompt, references } = buildGenPayload(rawPrompt);
+	const { prompt, references, sceneObjects } = buildGenPayload(rawPrompt);
 	const inputs = cell.model === "seedance"
 		? { prompt, resolution: "1080p", duration: 5 }
 		: { prompt };
 	inputs.references = references;
-	const legacy = document.getElementById(m.legacyBtnId);
-	if (legacy && legacy.disabled) {
-		alert("Sign in to Comfy Cloud (settings) before generating.");
-		return;
-	}
-	if (window.runGenerateModule) {
-		await window.runGenerateModule(cell.model, document.getElementById("vp-generate"), inputs, m.kind);
+	inputs.scene_objects = sceneObjects;
+	// Camera metadata so the prompt can anchor the model's lens/perspective.
+	inputs.camera = {
+		fov_deg: Math.round(camera.fov),
+		aspect: currentAspect()?.str || "free",
+	};
+
+	// Reveal the Blockout pill in the viewport toggle — the user can now check
+	// the exact PNG being sent to the model alongside the live viewport + render.
+	window.revealBlockoutToggle?.();
+
+	// Manage vp-generate's busy state ourselves — runModule (in the IIFE) does
+	// `btn.textContent = "running…"` which would wipe the icon + label spans.
+	// Feed it a throwaway button so it can't mangle our DOM.
+	const iconEl = document.getElementById("vp-generate-icon");
+	const labelEl = btn.querySelector("span:last-child");
+	const savedIcon = iconEl?.innerHTML ?? "";
+	const savedLabel = labelEl?.textContent ?? "Generate";
+	btn.classList.add("busy");
+	if (iconEl) iconEl.innerHTML = VP_SPINNER_SVG;
+	if (labelEl) labelEl.textContent = "Running…";
+
+	try {
+		const dummy = document.createElement("button");
+		await window.runGenerateModule(cell.model, dummy, inputs, m.kind);
+		console.log("[vp-generate] runGenerateModule resolved");
+	} catch (err) {
+		console.error("[vp-generate] threw:", err);
+		window.showAlert?.("Generate failed", String(err?.message || err));
+	} finally {
+		btn.classList.remove("busy");
+		if (iconEl) iconEl.innerHTML = savedIcon;
+		if (labelEl) labelEl.textContent = savedLabel;
 		refreshViewportGenerateBtn();
 	}
 });
@@ -4623,8 +5032,127 @@ function updateAspectFrame() {
 aspectSelect.addEventListener("change", () => {
 	handleResize();
 	updateAspectFrame();
+	updateResultOverlayPos();
 });
 updateAspectFrame();
+
+// ── Viewport / Blockout / Render toggle ────────────────────────────
+const resultOverlay = document.getElementById("result-overlay");
+const resultOverlayImg = document.getElementById("result-overlay-img");
+const resultOverlayVid = document.getElementById("result-overlay-vid");
+const resultToggle = document.getElementById("result-toggle");
+const renderToggleBtn = resultToggle?.querySelector('[data-result="render"]');
+const blockoutToggleBtn = resultToggle?.querySelector('[data-result="blockout"]');
+const viewportToggleBtn = resultToggle?.querySelector('[data-result="viewport"]');
+
+window.revealBlockoutToggle = function () {
+	if (blockoutToggleBtn) blockoutToggleBtn.hidden = false;
+};
+let resultMode = "viewport"; // "viewport" | "blockout" | "render"
+let lastResult = null;       // { kind: "image"|"video", url, filename }
+
+function updateResultOverlayPos() {
+	if (!resultOverlay || resultOverlay.hidden) return;
+	const asp = currentAspect();
+	const fit = asp ? fitDimensions() : { w: canvasWrap.clientWidth, h: canvasWrap.clientHeight };
+	const vs = viewportSize();
+	resultOverlay.style.width = fit.w + "px";
+	resultOverlay.style.height = fit.h + "px";
+	resultOverlay.style.left = (vs.w - fit.w) / 2 + "px";
+	resultOverlay.style.top = (vs.h - fit.h) / 2 + "px";
+}
+
+function refreshToggleActive() {
+	for (const b of resultToggle.querySelectorAll("button")) {
+		b.classList.toggle("active", b.dataset.result === resultMode);
+	}
+}
+
+function showBlockoutSnapshot() {
+	// Cache-bust each switch so a freshly-saved snapshot beats the browser cache.
+	const url = `/comfyblockout/image/${encodeURIComponent(NODE_ID)}?t=${Date.now()}`;
+	resultOverlay.hidden = false;
+	resultOverlayVid.removeAttribute("src");
+	resultOverlayVid.style.display = "none";
+	resultOverlayImg.style.display = "";
+	resultOverlayImg.src = url;
+	// object-fit: contain instead of cover so the user sees the actual AR
+	// (no cropping) and can verify the snapshot matches the live viewport.
+	resultOverlayImg.style.objectFit = "contain";
+	resultOverlayImg.style.background = "#000";
+	updateResultOverlayPos();
+}
+
+function showRenderResult() {
+	if (!lastResult) { resultMode = "viewport"; applyResultMode(); return; }
+	resultOverlay.hidden = false;
+	if (lastResult.kind === "video") {
+		resultOverlayImg.removeAttribute("src");
+		resultOverlayImg.style.display = "none";
+		resultOverlayVid.style.display = "";
+		resultOverlayVid.src = lastResult.url;
+		resultOverlayVid.controls = true;
+		resultOverlayVid.autoplay = true;
+		resultOverlayVid.play?.().catch(() => {});
+	} else {
+		resultOverlayVid.removeAttribute("src");
+		resultOverlayVid.style.display = "none";
+		resultOverlayImg.style.display = "";
+		resultOverlayImg.src = lastResult.url;
+		// Renders are produced at the AR crop already, so cover is correct here.
+		resultOverlayImg.style.objectFit = "cover";
+		resultOverlayImg.style.background = "";
+	}
+	updateResultOverlayPos();
+}
+
+function applyResultMode() {
+	refreshToggleActive();
+	if (resultMode === "blockout") {
+		showBlockoutSnapshot();
+	} else if (resultMode === "render") {
+		showRenderResult();
+	} else {
+		// viewport — overlay hidden, live 3D scene visible
+		resultOverlay.hidden = true;
+	}
+}
+
+window.showResultInViewport = function (kind, url, filename) {
+	lastResult = { kind, url, filename };
+	// Reveal Viewport + Render pills now that there's a render to compare against;
+	// Blockout was already revealed when Generate fired.
+	if (renderToggleBtn) renderToggleBtn.hidden = false;
+	if (viewportToggleBtn) viewportToggleBtn.hidden = false;
+	const saveBtn = document.getElementById("vp-save-render");
+	if (saveBtn) saveBtn.hidden = false;
+	resultMode = "render";
+	applyResultMode();
+	// Newly-generated output is now on disk — refresh the Assets list so it
+	// appears in the modal next time it opens (and updates if it's open).
+	window.refreshAssets?.();
+};
+
+// Save the current render to the user's local disk.
+document.getElementById("vp-save-render")?.addEventListener("click", () => {
+	if (!lastResult) return;
+	const a = document.createElement("a");
+	a.href = lastResult.url;
+	a.download = lastResult.filename || "render.png";
+	document.body.appendChild(a); a.click(); a.remove();
+});
+
+for (const b of resultToggle.querySelectorAll("button")) {
+	b.addEventListener("click", () => {
+		// Don't let the user click into "render" before a result exists
+		if (b.dataset.result === "render" && !lastResult) return;
+		resultMode = b.dataset.result;
+		applyResultMode();
+	});
+}
+
+new ResizeObserver(updateResultOverlayPos).observe(canvasWrap);
+applyResultMode();
 
 function cropCanvasToAspect(srcCanvas) {
 	const asp = currentAspect();
@@ -6192,12 +6720,25 @@ document.getElementById("project-new").addEventListener("click", async () => {
 		);
 		if (!ok) return;
 	}
-	await deserializeScene(EMPTY_SCENE);
-	// Drop a starter cube so "New" matches the fresh-node experience instead of leaving
-	// the user staring at an empty grid. addPrimitive picks the next palette color.
-	const cube = addPrimitive("cube");
-	if (cube) cube.position.set(0, 0.5, 0);
-	applyProjectName(null);
+	// Race-fix: previously this fired up to 3 overlapping saves —
+	//   1) deserialize(EMPTY).finally → saveScene (empty scene)
+	//   2) addPrimitive → internal saveScene (cube at origin)
+	//   3) await saveScene (cube at moved position)
+	// If the user dragged the cube before #2 landed, the late-arriving save
+	// would persist the pre-drag position and the cube snapped back on next
+	// reload. Suppress saves throughout the New flow, then issue ONE final
+	// save with the fully-set-up scene.
+	cancelPendingSave?.();
+	restoringScene = true;
+	try {
+		await deserializeScene(EMPTY_SCENE, { skipSave: true });
+		const cube = addPrimitive("cube");
+		if (cube) cube.position.set(0, 0.5, 0);
+		applyProjectName(null);
+	} finally {
+		restoringScene = false;
+	}
+	cancelPendingSave?.();
 	await saveScene();
 	updateStatus("new scene");
 });
@@ -6217,6 +6758,53 @@ document.getElementById("project-open").addEventListener("click", async () => {
 	// can miss when the preview was minted with a different NODE_ID than the editor.
 	try { window.parent?.postMessage({ source: "comfy3d-editor", type: "preview-refresh", node_id: NODE_ID }, "*"); } catch {}
 });
+
+// Exposed on window so callers in the classic-script IIFE (which loads before
+// this module) can reuse the custom modal helpers instead of native alert/confirm.
+window.showAlert = showAlert;
+window.showConfirm = showConfirm;
+
+function showAlert(title, message, opts = {}) {
+	const { confirmText = "OK", danger = false } = opts;
+	return new Promise((resolve) => {
+		const backdrop = document.createElement("div");
+		Object.assign(backdrop.style, {
+			position: "fixed", inset: "0", zIndex: "9998",
+			background: "rgba(0,0,0,0.65)", display: "flex",
+			alignItems: "center", justifyContent: "center",
+		});
+		const card = document.createElement("div");
+		Object.assign(card.style, {
+			background: "#15151c", border: "1px solid rgba(255,255,255,0.08)",
+			borderRadius: "10px", padding: "18px", minWidth: "320px", maxWidth: "420px",
+			color: "#ddd", fontFamily: "Inter, sans-serif", fontSize: "12px",
+		});
+		card.innerHTML = `
+			<div style="font-size:13px;font-weight:600;margin-bottom:8px">${title}</div>
+			<div style="color:rgba(255,255,255,0.65);line-height:1.5">${message}</div>
+		`;
+		const row = document.createElement("div");
+		Object.assign(row.style, { display: "flex", justifyContent: "flex-end", marginTop: "16px" });
+		const ok = document.createElement("button");
+		ok.textContent = confirmText;
+		Object.assign(ok.style, {
+			border: "none", padding: "6px 14px", borderRadius: "6px",
+			cursor: "pointer", fontFamily: "inherit", fontSize: "11px",
+			background: danger ? "rgba(255,80,80,0.22)" : "rgba(255,180,84,0.28)",
+			color: danger ? "#ff8a8a" : "#ffd28a",
+		});
+		row.appendChild(ok);
+		card.appendChild(row);
+		backdrop.appendChild(card);
+		document.body.appendChild(backdrop);
+		setTimeout(() => ok.focus(), 0);
+		const cleanup = () => { document.removeEventListener("keydown", onKey); backdrop.remove(); resolve(); };
+		const onKey = (e) => { if (e.key === "Escape" || e.key === "Enter") cleanup(); };
+		document.addEventListener("keydown", onKey);
+		ok.onclick = cleanup;
+		backdrop.addEventListener("click", e => { if (e.target === backdrop) cleanup(); });
+	});
+}
 
 function showConfirm(title, message, opts = {}) {
 	const { confirmText = "OK", cancelText = "Cancel", danger = false } = opts;
@@ -6572,6 +7160,8 @@ async function loadPrompt() {
 		const r = await fetch(`/comfyblockout/load_prompt?node_id=${encodeURIComponent(NODE_ID)}`);
 		const j = await r.json();
 		promptEl.value = j.prompt || "";
+		const baseEl = document.getElementById("prompt-base-text");
+		if (baseEl) baseEl.textContent = j.base || "";
 	} catch (e) { console.warn("[ComfyBlockout] prompt load failed:", e); }
 }
 
