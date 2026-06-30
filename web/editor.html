@@ -461,6 +461,20 @@
 
 	.section { margin-bottom: 32px; }
 	.section:last-child { margin-bottom: 0; }
+
+	/* Collapsible sections — click the head-row to fold the body */
+	.section.collapsible .section-head-row {
+		cursor: pointer; user-select: none;
+		margin-bottom: 14px;
+	}
+	.section.collapsible.collapsed .section-head-row { margin-bottom: 0; }
+	.section.collapsible .collapse-caret {
+		font-size: 10px; color: rgba(255,255,255,0.4);
+		transition: transform 0.15s ease;
+	}
+	.section.collapsible .section-head-row:hover .collapse-caret { color: #e6e6ea; }
+	.section.collapsible.collapsed .collapse-caret { transform: rotate(-90deg); }
+	.section.collapsible.collapsed > *:not(.section-head-row) { display: none; }
 	.section-label {
 		font-size: 10px; font-weight: 500; text-transform: uppercase;
 		letter-spacing: 0.06em; color: rgba(255,255,255,0.4);
@@ -483,6 +497,23 @@
 	}
 	.prim-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
 	.prim-btn svg { width: 18px; height: 18px; }
+
+	.gen-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+	.gen-btn {
+		aspect-ratio: 1; border: none; border-radius: 5px;
+		display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+		background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.65);
+		cursor: pointer; font-family: inherit; font-size: 10px; font-weight: 500;
+		letter-spacing: 0.04em; text-transform: uppercase; padding: 8px;
+		transition: background 0.12s, color 0.12s;
+	}
+	.gen-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+	.gen-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+	.gen-btn.primary {
+		background: rgba(255,180,84,0.14); color: #ffb454;
+	}
+	.gen-btn.primary:hover { background: rgba(255,180,84,0.22); }
+	.gen-btn svg { width: 22px; height: 22px; }
 
 	.outliner { display: flex; flex-direction: column; gap: 4px; min-height: 30px; }
 	.out-row {
@@ -735,18 +766,20 @@
 	.vt-btn:hover { background: #14141a; color: #e6e6ea; }
 	.vt-btn.active { background: #14141a; color: #ffb454; }
 	.vt-sep { flex: 1; }
-	.vt-bg-row {
-		display: inline-flex; align-items: center; gap: 6px;
-		height: 26px; padding: 0 10px; border-radius: 5px;
-		color: #8e8e95; font-size: 11px; cursor: pointer;
+	/* BG picker — now lives in the Scene properties pane */
+	.rp-bg-row {
+		display: inline-flex; align-items: center; gap: 10px;
+		padding: 8px 10px; border-radius: 5px;
+		background: rgba(255,255,255,0.04);
+		color: rgba(255,255,255,0.75); font-size: 11px; cursor: pointer;
 	}
-	.vt-bg-row:hover { background: #14141a; color: #e6e6ea; }
-	.vt-bg-row input[type="color"] {
-		width: 16px; height: 16px; padding: 0; border: none;
+	.rp-bg-row:hover { background: rgba(255,255,255,0.07); color: #fff; }
+	.rp-bg-row input[type="color"] {
+		width: 26px; height: 26px; padding: 0; border: none;
 		background: none; cursor: pointer; outline: none;
 	}
-	.vt-bg-row input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-	.vt-bg-row input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
+	.rp-bg-row input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+	.rp-bg-row input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
 
 	/* Right properties panel */
 	#right-panel {
@@ -890,10 +923,32 @@
 			<div class="outliner" id="outliner"></div>
 		</div>
 
-
-
 		<div class="section">
-			<div class="section-label">System Prompt (String Output)</div>
+			<div class="section-label">Generate</div>
+			<div class="gen-grid">
+				<button class="gen-btn primary" id="gen-nb" data-gen="nano-banana" disabled title="Generate edited image with Nano Banana">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+						<rect x="3" y="5" width="18" height="14" rx="2"/>
+						<circle cx="8.5" cy="10.5" r="1.5"/>
+						<path d="M21 17l-6-6-8 8"/>
+					</svg>
+					<span>Nano Banana</span>
+				</button>
+				<button class="gen-btn" id="gen-sd" data-gen="seedance" disabled title="Generate video with Seedance">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+						<rect x="3" y="6" width="13" height="12" rx="2"/>
+						<path d="M16 10l5-3v10l-5-3z"/>
+					</svg>
+					<span>Seedance</span>
+				</button>
+			</div>
+		</div>
+
+		<div class="section collapsible collapsed" id="sys-prompt-section">
+			<div class="section-head-row" onclick="this.parentElement.classList.toggle('collapsed')">
+				<span class="section-label">System Prompt</span>
+				<span class="collapse-caret">▾</span>
+			</div>
 			<textarea id="prompt-text" rows="10" placeholder="Render this blockout scene. Match the exact camera angle, composition, scale, aspect ration and object orientations — but do not use the blockout to define the style, colors, or creative direction. Only use the grid as reference for the scene perspective and not as an element to include in the generated image or video"></textarea>
 		</div>
 	</div>
@@ -914,10 +969,6 @@
 			<div class="vt-sep"></div>
 			<button class="vt-btn" data-rp-tab="camera" title="Camera properties">Camera</button>
 			<button class="vt-btn" data-rp-tab="scene" title="Scene properties">Scene</button>
-			<label class="vt-bg-row" title="Background color">
-				<input type="color" id="bg-color" value="#07080b">
-				<span>BG</span>
-			</label>
 		</div>
 		<div id="canvas-wrap">
 			<canvas id="renderCanvas"></canvas>
@@ -974,13 +1025,13 @@
 		<div id="rp-header">
 			<span class="rp-kicker">Properties</span>
 			<span class="rp-sep">:</span>
-			<span id="rp-title">No selection</span>
+			<span id="rp-title">Scene</span>
 		</div>
 
 		<div id="rp-body">
 
 			<!-- ===== OBJECT TAB ===== -->
-			<div class="rp-pane" id="rp-pane-object">
+			<div class="rp-pane" id="rp-pane-object" hidden>
 				<div class="section">
 					<div class="section-label">Transform</div>
 					<div class="sub-label">Position</div>
@@ -1037,8 +1088,16 @@
 				</div>
 			</div>
 
-			<!-- ===== SCENE TAB ===== -->
-			<div class="rp-pane" id="rp-pane-scene" hidden>
+			<!-- ===== SCENE TAB (default) ===== -->
+			<div class="rp-pane" id="rp-pane-scene">
+				<div class="section">
+					<div class="section-label">Background</div>
+					<label class="rp-bg-row" title="Background color">
+						<input type="color" id="bg-color" value="#07080b">
+						<span class="rp-bg-label">Color</span>
+					</label>
+				</div>
+
 				<div class="section">
 					<div class="section-label">Environment</div>
 					<div class="select-row">
@@ -1106,6 +1165,10 @@
 	(function () {
 		const btnNB = document.getElementById("th-run-nb");
 		const btnSD = document.getElementById("th-run-sd");
+		const btnNB2 = document.getElementById("gen-nb");
+		const btnSD2 = document.getElementById("gen-sd");
+		if (btnNB2) btnNB2.addEventListener("click", () => btnNB.click());
+		if (btnSD2) btnSD2.addEventListener("click", () => btnSD.click());
 		const refsStrip = document.getElementById("refs-strip");
 		const refsAdd = document.getElementById("refs-add");
 		const refsFile = document.getElementById("refs-file");
@@ -1126,10 +1189,14 @@
 			try {
 				const r = await fetch("/api/auth/status");
 				const s = await r.json();
-				btnNB.disabled = !s.ready;
-				btnSD.disabled = !s.ready;
+				const ready = !!s.ready;
+				btnNB.disabled = !ready; btnSD.disabled = !ready;
+				if (btnNB2) btnNB2.disabled = !ready;
+				if (btnSD2) btnSD2.disabled = !ready;
 			} catch (e) {
 				btnNB.disabled = true; btnSD.disabled = true;
+				if (btnNB2) btnNB2.disabled = true;
+				if (btnSD2) btnSD2.disabled = true;
 			}
 		}
 
@@ -2032,9 +2099,10 @@ function toggleVisibility(obj) {
 function refreshOutliner() {
 	outlinerEl.innerHTML = "";
 	// Keep the right-panel header in sync with the current selection.
+	// Default to the Scene pane when nothing is selected.
 	if (window.setRPContext) {
 		if (selected) window.setRPContext("object", selected.name);
-		else window.setRPContext("object", "No selection");
+		else window.setRPContext("scene", "Scene");
 	}
 	for (const obj of objects) {
 		const row = document.createElement("div");
