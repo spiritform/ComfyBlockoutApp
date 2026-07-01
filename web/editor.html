@@ -94,6 +94,14 @@
 	}
 	.modal-input:focus { background: rgba(255,255,255,0.07); }
 	.modal-hint { margin-top: 10px; font-size: 10px; color: rgba(255,255,255,0.35); line-height: 1.4; }
+	.modal-toggle-row {
+		display: flex; align-items: center; gap: 8px;
+		font-size: 11px; color: rgba(255,255,255,0.85); cursor: pointer;
+		user-select: none;
+	}
+	.modal-toggle-row input[type="checkbox"] { accent-color: #ffb454; cursor: pointer; margin: 0; }
+	body.assistant-off #th-assistant { display: none; }
+	body.assistant-off #llm-key-section { display: none; }
 	.modal-hint a { color: rgba(255,180,84,0.75); text-decoration: none; }
 	.modal-hint a:hover { color: #ffb454; }
 	.modal-actions { display: flex; gap: 6px; margin-top: 16px; }
@@ -217,12 +225,48 @@
 	}
 	#renderCanvas { display: block; }
 
+	/* Boot curtain — covers the canvas while the scene hydrates so a mid-load orbit
+	   or click doesn't get clobbered when deserializeScene restores camera+objects.
+	   Removed with a short fade by the boot IIFE. */
+	#init-overlay {
+		position: absolute; inset: 0;
+		z-index: 50;
+		display: flex; flex-direction: column;
+		align-items: center; justify-content: center;
+		gap: 14px;
+		background: rgba(10, 12, 18, 0.72);
+		backdrop-filter: blur(2px);
+		color: rgba(255, 255, 255, 0.72);
+		font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+		transition: opacity 0.28s ease-out;
+		pointer-events: auto;
+	}
+	#init-overlay.hidden { opacity: 0; pointer-events: none; }
+	#init-overlay .init-spinner {
+		width: 26px; height: 26px; border-radius: 50%;
+		border: 2px solid rgba(255, 255, 255, 0.14);
+		border-top-color: #ffb454;
+		animation: spin 0.9s linear infinite;
+	}
+
 	#timeline {
 		flex: 0 0 auto; height: 78px;
 		background: #0a0a10;
 		display: flex; align-items: flex-end; gap: 3px; padding: 14px 24px 14px 14px;
 		font-family: inherit; user-select: none;
 	}
+	/* Small recording status line — sits directly above the transport, shown only while
+	   the mediaRecorder is running so the user sees a "recording · 2.4s @ 24fps" hint
+	   without leaving the viewport for the top-corner status pill. */
+	#tl-rec-status {
+		flex: 0 0 auto;
+		background: #0a0a10;
+		color: #ff8a8a;
+		font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+		padding: 6px 24px 0 24px;
+		text-align: right;
+	}
+	#tl-rec-status[hidden] { display: none; }
 
 	/* Preview-mode (in-node iframe): hide chrome, expose tiny floating transport */
 	body.preview-mode #panel,
@@ -359,7 +403,9 @@
 		display: flex; align-items: center; justify-content: center;
 		font-family: inherit; line-height: 1;
 	}
-	#tl-rec { font-size: 22px; line-height: 1; padding-bottom: 4px; }
+	#tl-rec { font-size: 30px; line-height: 1; padding-bottom: 8px; color: #ff5c5c; }
+	#tl-rec:hover { color: #ff8080; }
+	#tl-rec.recording { color: #ff2020; }
 	#tl-play { font-size: 14px; }
 	#tl-addkey { font-size: 30px; line-height: 1; padding-bottom: 6px; }
 	.tl-btn.flash-green { animation: tlFlashGreen 0.5s ease-out; }
@@ -568,6 +614,32 @@
 	.mini-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 	.mini-btn:disabled:hover { background: transparent; color: rgba(255,255,255,0.4); }
 
+	/* + ADD dropdown menu — anchored under the gen-add button, lists every
+	   registered generator so the user can pick one instead of auto-inserting
+	   the next-missing default. */
+	.gen-add-wrap { position: relative; display: inline-flex; }
+	.gen-add-menu {
+		position: absolute; top: calc(100% + 4px); right: 0;
+		min-width: 180px; z-index: 60;
+		background: #1e1f22; border: 1px solid rgba(255,255,255,0.08);
+		border-radius: 6px; padding: 4px;
+		box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+		display: flex; flex-direction: column; gap: 2px;
+	}
+	.gen-add-menu[hidden] { display: none; }
+	.gen-add-item {
+		display: flex; align-items: center; gap: 8px;
+		padding: 6px 8px; border-radius: 4px;
+		background: transparent; border: none; cursor: pointer;
+		color: rgba(255,255,255,0.85); font: inherit; font-size: 11px;
+		text-align: left;
+	}
+	.gen-add-item:hover:not(:disabled) { background: rgba(255,180,84,0.12); color: #ffd39a; }
+	.gen-add-item:disabled { opacity: 0.4; cursor: not-allowed; }
+	.gen-add-item svg { width: 14px; height: 14px; flex: 0 0 auto; }
+	.gen-add-item .gen-add-check { margin-left: auto; font-size: 10px; opacity: 0.6; }
+	.gen-cell:focus { outline: none; }
+
 	/* Assistant (LLM + MCP) panel */
 	.assistant-status {
 		font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
@@ -594,6 +666,51 @@
 		padding: 8px;
 		display: flex; flex-direction: column; gap: 8px;
 	}
+	/* When the assistant is docked to the right pane it takes the full column —
+	   its own log grows/shrinks to fill instead of using the fixed 240px height. */
+	#rp-pane-assistant {
+		display: flex; flex-direction: column;
+		min-height: 100%;
+	}
+	#rp-pane-assistant[hidden] { display: none; }
+	#rp-pane-assistant #assistant-section {
+		display: flex; flex-direction: column;
+		flex: 1; min-height: 0;
+		margin: 0;
+	}
+	#rp-pane-assistant .section-head-row { margin-bottom: 8px; }
+	#rp-pane-assistant .section-label { display: none; }
+	#rp-pane-assistant .collapse-caret { display: none; }
+	#rp-pane-assistant .assistant-shell { flex: 1; min-height: 0; }
+	#rp-pane-assistant .assistant-log {
+		flex: 1; height: auto; min-height: 120px; resize: none;
+	}
+	/* Kill rp-body's own scroll while the assistant pane owns the height — the
+	   chat log has its own overflow-y, we don't want two scrollbars stacking.
+	   Also strip the pane padding so the chat fills edge-to-edge; rp-header keeps
+	   its own gutter above. */
+	#right-panel.mode-assistant #rp-body { overflow: hidden; padding: 0; }
+	/* Kill the "box in a box" — in the docked pane, the chat log + input row
+	   sit directly on the panel background instead of inside a bordered shell. */
+	#rp-pane-assistant .assistant-shell { border: none; border-radius: 0; }
+	#rp-pane-assistant .assistant-shell:focus-within { border-color: transparent; }
+	#rp-pane-assistant .assistant-log { background: transparent; padding: 12px 16px; }
+	#rp-pane-assistant .assistant-msg.system { background: transparent; padding: 0 0 4px; }
+	#rp-pane-assistant .assistant-input-row {
+		background: transparent;
+		border-top: 1px solid rgba(255,255,255,0.05);
+		/* Match the timeline row height so the bottom edge of the right pane and the
+		   bottom timeline read as one horizontal band. */
+		height: 78px; box-sizing: border-box;
+		display: flex; align-items: stretch;
+		padding: 0;
+	}
+	#rp-pane-assistant .assistant-input-row:focus-within { background: rgba(255,255,255,0.03); }
+	#rp-pane-assistant .assistant-input { height: 100%; padding: 12px 12px 12px 26px; }
+	#rp-pane-assistant .assistant-prompt-arrow { top: 12px; }
+	/* section-head-row is empty (label/reset/status/caret all hidden or hoisted) —
+	   suppress it entirely so it doesn't reserve a slice of vertical space. */
+	#rp-pane-assistant .section-head-row { display: none; }
 	/* Anything injected by the agent — markdown, images, code — must stay inside the
 	   chat width. No horizontal scroll on the outer panel. */
 	.assistant-msg, .assistant-md { max-width: 100%; min-width: 0; }
@@ -703,7 +820,18 @@
 		display: grid; grid-template-columns: 26px 1fr auto;
 		align-items: center; gap: 8px; cursor: pointer;
 	}
-	.gen-head-end { display: flex; align-items: center; gap: 0; }
+	.gen-head-end { display: flex; align-items: center; gap: 2px; }
+	/* Per-cell Generate button — small amber play glyph in the head-end. Routes
+	   through the shared vp-generate pipeline; setActiveGenCell first so the run
+	   targets THIS cell instead of whatever was previously active. */
+	.gen-run-btn {
+		background: transparent; border: none; color: rgba(255,180,84,0.8);
+		width: 22px; height: 22px; padding: 0;
+		border-radius: 4px; cursor: pointer;
+		font-size: 10px; line-height: 1;
+		display: inline-flex; align-items: center; justify-content: center;
+	}
+	.gen-run-btn:hover { background: rgba(255,180,84,0.15); color: #ffd28a; }
 	.gen-del {
 		width: 22px; height: 22px; border: none; background: transparent;
 		border-radius: 4px; cursor: pointer; color: rgba(255,255,255,0.35);
@@ -754,13 +882,54 @@
 	.gen-slot.drop-target {
 		border-color: #ffb454 !important; border-style: solid !important;
 		background: rgba(255,180,84,0.12) !important;
+		box-shadow: 0 0 0 2px rgba(255,180,84,0.35), inset 0 0 0 1px rgba(255,180,84,0.55);
+	}
+	.gen-slot.just-dropped {
+		animation: genSlotDropped 0.7s ease-out;
+	}
+	@keyframes genSlotDropped {
+		0%   { transform: scale(1.06); box-shadow: 0 0 12px rgba(56,217,119,0.6), inset 0 0 0 1px rgba(56,217,119,0.85); }
+		100% { transform: scale(1); box-shadow: none; }
 	}
 	.gen-slot-thumb {
 		width: 36px; height: 36px; flex: 0 0 36px; border-radius: 3px;
 		background: rgba(0,0,0,0.35) center/cover no-repeat;
 		border: 1px solid rgba(255,255,255,0.06);
+		display: flex; align-items: center; justify-content: center;
+		position: relative;
 	}
 	.gen-slot-thumb.has-image { border-color: transparent; }
+	/* Upload-hint icon lives INSIDE the empty thumb square. Hidden once the slot fills. */
+	.gen-slot-thumb .gen-slot-upload {
+		width: 16px; height: 16px; color: rgba(255,255,255,0.5);
+	}
+	.gen-slot:hover .gen-slot-thumb .gen-slot-upload { color: #ffd28a; }
+	.gen-slot-thumb.has-image .gen-slot-upload { display: none; }
+	/* Loading spinner shown during the /api/refs/upload round-trip. Sits on top of the
+	   preview thumbnail (image or first-frame of video) with a subtle dark overlay so
+	   the ring reads clearly against any content underneath. */
+	.gen-slot-spinner {
+		display: none;
+		position: absolute;
+		top: 50%; left: 50%;
+		width: 18px; height: 18px;
+		margin: -9px 0 0 -9px;
+		border-radius: 50%;
+		border: 2px solid rgba(0,0,0,0.35);
+		border-top-color: #ffb454;
+		animation: spin 0.9s linear infinite;
+		z-index: 2;
+	}
+	.gen-slot.uploading .gen-slot-thumb .gen-slot-upload { display: none; }
+	.gen-slot.uploading .gen-slot-thumb .gen-slot-spinner { display: block; }
+	.gen-slot.uploading .gen-slot-thumb::after {
+		content: "";
+		position: absolute; inset: 0;
+		background: rgba(0,0,0,0.35);
+		border-radius: inherit;
+		z-index: 1;
+		pointer-events: none;
+	}
 	.gen-slot-label {
 		flex: 1; min-width: 0;
 		font-size: 10px; color: rgba(255,255,255,0.55);
@@ -775,17 +944,13 @@
 		font-size: 14px; line-height: 1;
 	}
 	.gen-slot-clear:hover { background: rgba(255,80,80,0.22); color: #ff8a8a; }
-	/* Upload-hint icon — only shown when the slot is empty; the whole empty slot
-	   is the click target so the icon is purely a visual affordance. */
-	.gen-slot-upload {
-		width: 14px; height: 14px; flex: 0 0 14px;
-		color: rgba(255,255,255,0.45);
-		margin-left: 2px;
-	}
-	.gen-slot:hover .gen-slot-upload { color: #ffd28a; }
-	.gen-slot.filled .gen-slot-upload { display: none; }
-	/* Brief opacity-pulse while the file uploads through /api/refs/upload. */
-	.gen-slot.uploading { opacity: 0.55; pointer-events: none; }
+	/* [hidden] attribute defaults to display:none via UA styles, but the .gen-slot-clear
+	   rule below sets display:inline-flex which overrides it — so an empty slot still
+	   showed the ×. Re-assert display:none via the [hidden] attribute selector. */
+	.gen-slot-clear[hidden] { display: none; }
+	/* While uploading: block interaction but keep full opacity so the preview thumbnail
+	   under the spinner stays readable. Dark overlay + spinner (below) do the signalling. */
+	.gen-slot.uploading { pointer-events: none; }
 	.gen-ref-suggest {
 		position: absolute; left: 0; right: 0; top: 100%;
 		margin-top: 2px; z-index: 50;
@@ -1057,21 +1222,33 @@
 		width: 100%; height: 100%; object-fit: cover; display: block;
 	}
 	#result-overlay video { pointer-events: auto; }
+	/* Result toggle — the Viewport / Blockout / Render pill group. Lives in the
+	   left of the viewport toolbar (used to float top-center over the canvas). Each
+	   individual button is `hidden` until relevant, so the whole container reads as
+	   empty pre-generate. The × close button clears any active render. */
 	#result-toggle {
-		position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-		z-index: 12; display: flex; gap: 0;
+		display: flex; align-items: center; gap: 0;
 		background: rgba(14,14,18,0.92); border: 1px solid rgba(255,255,255,0.08);
 		border-radius: 5px; overflow: hidden;
-		backdrop-filter: blur(6px);
+		height: 26px;
 	}
 	#result-toggle[hidden] { display: none; }
 	#result-toggle button {
 		background: transparent; border: none; color: rgba(255,255,255,0.55);
-		padding: 5px 14px; font: inherit; font-size: 10px;
+		padding: 0 14px; height: 100%;
+		font: inherit; font-size: 10px;
 		letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
+		display: inline-flex; align-items: center; justify-content: center;
 	}
+	#result-toggle button[hidden] { display: none; }
 	#result-toggle button:hover { color: #fff; }
 	#result-toggle button.active { background: rgba(255,180,84,0.18); color: #ffb454; }
+	#result-toggle #result-close {
+		padding: 0 8px; font-size: 14px; letter-spacing: 0;
+		color: rgba(255,255,255,0.45);
+		border-left: 1px solid rgba(255,255,255,0.06);
+	}
+	#result-toggle #result-close:hover { background: rgba(255,80,80,0.18); color: #ff8a8a; }
 	#aspect-frame {
 		position: absolute; z-index: 5; pointer-events: none;
 		border: 1px solid rgba(255,255,255,0.12);
@@ -1334,7 +1511,21 @@
 		letter-spacing: 0.02em;
 	}
 	/* Drop zone highlight on out-img when an asset is being dragged */
-	.out-img.drop-target { border-color: #ffb454 !important; border-style: solid !important; background-color: rgba(255,180,84,0.15) !important; }
+	.out-img.drop-target {
+		border-color: #ffb454 !important; border-style: solid !important;
+		background-color: rgba(255,180,84,0.15) !important;
+		box-shadow: 0 0 0 2px rgba(255,180,84,0.35), inset 0 0 0 1px rgba(255,180,84,0.55);
+		transform: scale(1.12);
+	}
+	/* Success confirmation flash after upload completes — brief green pulse
+	   so the user knows the drop actually took. */
+	.out-img.just-dropped {
+		animation: outImgDropped 0.7s ease-out;
+	}
+	@keyframes outImgDropped {
+		0%   { transform: scale(1.15); box-shadow: 0 0 12px rgba(56,217,119,0.75), inset 0 0 0 1px rgba(56,217,119,0.9); }
+		100% { transform: scale(1); box-shadow: none; }
+	}
 	.gen-cell.active { box-shadow: inset 0 0 0 1px rgba(255,180,84,0.35); background: rgba(255,180,84,0.06); }
 	/* BG picker — now lives in the Scene properties pane */
 	.rp-bg-row {
@@ -1393,6 +1584,13 @@
 		display: flex; align-items: center; gap: 6px;
 		white-space: nowrap; overflow: hidden;
 	}
+	/* End-slot right-aligned; holds per-pane controls (currently the assistant's
+	   reset + MCP status). Hidden until a pane opts in via #rp-header-end[hidden]. */
+	.rp-header-end {
+		margin-left: auto;
+		display: inline-flex; align-items: center; gap: 8px;
+	}
+	.rp-header-end[hidden] { display: none; }
 	.rp-kicker, .rp-sep, #rp-title {
 		font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
 		font-weight: 500; line-height: 26px;
@@ -1454,6 +1652,7 @@
 			<button class="th-btn-mini" id="project-save" title="Save (Ctrl+S)">Save</button>
 			<button class="th-btn-mini" id="project-save-as" title="Save as a new project" hidden>Save As</button>
 			<button class="th-btn-mini th-btn-assets" id="th-assets" title="Assets — generated images + videos">Assets</button>
+			<button class="th-btn-mini" id="th-assistant" title="AI Agent — chat + Comfy MCP tools">AI Agent</button>
 			<button class="th-icon-btn" id="th-settings" title="Settings">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
 					<circle cx="12" cy="12" r="3"/>
@@ -1484,6 +1683,14 @@
 				</div>
 			</div>
 			<div class="modal-section">
+				<div class="section-label">AI Agent</div>
+				<label class="modal-toggle-row" for="assistant-toggle">
+					<input type="checkbox" id="assistant-toggle">
+					<span>Enable AI Agent (chat + Comfy MCP tools) in the right panel</span>
+				</label>
+				<div class="modal-hint">Off by default — flip it on to unlock the in-editor Claude Assistant.</div>
+			</div>
+			<div class="modal-section" id="llm-key-section">
 				<div class="section-label">Anthropic API Key (Assistant)</div>
 				<div class="modal-status" id="llm-key-status"></div>
 				<input class="modal-input" type="password" id="llm-key-input" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
@@ -1548,7 +1755,10 @@
 			<div class="section-head-row">
 				<span class="section-label">Generate</span>
 				<span class="head-end">
-					<button class="mini-btn" id="gen-add" title="Add a generator">+ Add</button>
+					<span class="gen-add-wrap">
+						<button class="mini-btn" id="gen-add" title="Add a generator" aria-haspopup="true" aria-expanded="false">+ Add</button>
+						<div class="gen-add-menu" id="gen-add-menu" role="menu" hidden></div>
+					</span>
 					<span class="collapse-caret">▾</span>
 				</span>
 			</div>
@@ -1584,7 +1794,22 @@
 
 	<div id="viewport-area">
 		<div id="viewport-toolbar">
+			<!-- Result toggle — Viewport / Blockout / Render pills. Individual buttons
+			     are hidden until relevant; the whole container is [hidden] pre-generate.
+			     × clears any active render and returns to the live scene. -->
+			<div id="result-toggle" hidden>
+				<button data-result="viewport" class="active" hidden>Viewport</button>
+				<button data-result="blockout" hidden>Blockout</button>
+				<button data-result="render" hidden>Render</button>
+				<button id="result-close" type="button" title="Close render — clear the overlay and go back to the live scene" hidden>×</button>
+			</div>
 			<div class="vt-group">
+				<button class="vt-btn vt-icon-btn" id="mode-scene" title="Scene view — orbit around the shot from an overview vantage. Also opens PROPERTIES : SCENE.">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="1"/><path d="M18.944 12.33a1 1 0 0 0 0-.66 7.5 7.5 0 0 0-13.888 0 1 1 0 0 0 0 .66 7.5 7.5 0 0 0 13.888 0"/></svg>
+				</button>
+				<button class="vt-btn vt-icon-btn" id="mode-camera" title="Camera view — look through the framed render camera. Also opens PROPERTIES : CAMERA and deselects so + / S keys the camera.">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+				</button>
 				<button class="vt-btn vt-icon-btn" id="mode-anchor" title="Pivot (Q) — move the origin without moving the object. Future rotate/scale happen around the new pivot.">
 					<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="3.6"/><line x1="1.5" y1="8" x2="14.5" y2="8"/><line x1="8" y1="1.5" x2="8" y2="14.5"/></svg>
 				</button>
@@ -1614,21 +1839,19 @@
 		</div>
 		<div id="canvas-wrap">
 			<canvas id="renderCanvas"></canvas>
+			<!-- Initializing curtain — blocks pointer events during scene hydration so a
+			     mid-boot orbit/click/drop doesn't get clobbered when deserializeScene
+			     re-applies camera + objects. Removed by the boot IIFE. -->
+			<div id="init-overlay">
+				<div class="init-spinner"></div>
+				<div class="init-label">Initializing…</div>
+			</div>
 			<div id="aspect-frame" class="no-guides"><span class="v1"></span><span class="v2"></span></div>
 			<!-- Generated result overlay — sits exactly on the AR rectangle, image
 			     (or first frame of video) shown when "After" is selected. -->
 			<div id="result-overlay" hidden>
 				<img id="result-overlay-img" alt="" draggable="false">
 				<video id="result-overlay-vid" loop muted playsinline></video>
-			</div>
-			<!-- Three-way viewport toggle. All three pills start hidden.
-			     - Blockout appears the moment Generate is clicked (preview the snapshot).
-			     - Viewport + Render appear once the render lands (full A/B/C toggle).
-			     Pre-Generate there are no pills at all — you're looking at the live scene. -->
-			<div id="result-toggle">
-				<button data-result="viewport" class="active" hidden>Viewport</button>
-				<button data-result="blockout" hidden>Blockout</button>
-				<button data-result="render" hidden>Render</button>
 			</div>
 			<div id="status">idle · 0 objects</div>
 			<div id="info-block" style="display:none;position:absolute;top:6px;left:6px;background:rgba(20,20,24,0.85);border-radius:6px;z-index:11;flex-direction:column;align-items:flex-start">
@@ -1658,6 +1881,7 @@
 				<span id="pv-time">0.00s / 5s</span>
 			</div>
 		</div>
+		<div id="tl-rec-status" hidden></div>
 		<div id="timeline">
 			<button class="tl-btn rec" id="tl-rec" title="Record (auto-tween if keyframes exist)">●</button>
 			<button class="tl-btn" id="tl-play" title="Play / pause (space)">▶</button>
@@ -1683,6 +1907,11 @@
 			<span class="rp-kicker" id="rp-kicker">Properties</span>
 			<span class="rp-sep" id="rp-sep">:</span>
 			<span id="rp-title">Scene</span>
+			<!-- End-slot for pane-specific header controls. Populated at init:
+			     the assistant's ↻ reset + "MCP · idle" status pill are hoisted here so
+			     they sit on the same baseline as the "AI AGENT" kicker instead of
+			     appearing in a second header row below. -->
+			<span class="rp-header-end" id="rp-header-end" hidden></span>
 			<div class="assets-filter" id="assets-filter" hidden>
 				<button class="assets-filter-btn active" data-filter="recent">Recent</button>
 				<span class="assets-filter-sep">|</span>
@@ -1781,8 +2010,8 @@
 				</div>
 			</div>
 
-			<!-- ===== SCENE TAB (default) ===== -->
-			<div class="rp-pane" id="rp-pane-scene">
+			<!-- ===== CAMERA TAB ===== -->
+			<div class="rp-pane" id="rp-pane-camera" hidden>
 				<div class="section">
 					<div class="section-head-row">
 						<div class="section-label">Camera</div>
@@ -1811,7 +2040,10 @@
 						<button class="vt-btn active" id="toggle-ar" title="Toggle aspect ratio overlay (frame + letterbox)">AR</button>
 					</div>
 				</div>
+			</div>
 
+			<!-- ===== SCENE TAB ===== -->
+			<div class="rp-pane" id="rp-pane-scene" hidden>
 				<div class="section">
 					<div class="section-label">Background</div>
 					<div class="rp-bg-pair">
@@ -1885,6 +2117,13 @@
 					<textarea id="prompt-text" rows="6" placeholder="Optional tweaks appended to the base — e.g. 'photoreal, dusk lighting' or scene-specific guidance."></textarea>
 				</div>
 			</div>
+
+			<!-- ===== AI AGENT TAB ===== -->
+			<!-- The assistant section (chat log + input + wiring) is moved here at
+			     init from the left sidebar so it can take the full right column.
+			     Keeping DOM IDs intact means all listeners wired against
+			     #assistant-* keep working after the reparent. -->
+			<div class="rp-pane" id="rp-pane-assistant" hidden></div>
 
 			<!-- ===== ASSETS TAB ===== -->
 			<div class="rp-pane" id="rp-pane-assets" hidden>
@@ -2129,6 +2368,10 @@
 			settingsKey.value = "";
 			settingsStatus.className = "modal-status";
 			settingsStatus.textContent = "";
+			// Sync the assistant toggle with the persisted flag every time the modal
+			// opens, so users see the current state even after a reload.
+			const asstToggle = document.getElementById("assistant-toggle");
+			if (asstToggle) asstToggle.checked = window.isAssistantEnabled?.() ?? false;
 			setTimeout(() => settingsKey.focus(), 50);
 		}
 		function closeSettings() { settingsModal.classList.remove("open"); }
@@ -2330,7 +2573,23 @@
 					return;
 				}
 				const out = await r.json();
-				if (out.url) showResult(resultKind, out.url, out.filename);
+				if (out.url) {
+					// 3D module results (meshes, splats) don't belong in the image/video
+					// viewport overlay — they get imported into the scene as a new object
+					// through the existing splat / mesh loader path.
+					if (resultKind === "3d" || resultKind === "3d-splat") {
+						try {
+							const buf = await (await fetch(out.url)).arrayBuffer();
+							await window.__cbLoadFromBytes?.(buf, out.filename);
+							window.refreshAssets?.();
+						} catch (impErr) {
+							console.error("[gen-cell] 3d import failed", impErr);
+							if (window.showAlert) window.showAlert("Import failed", impErr.message || String(impErr));
+						}
+					} else {
+						showResult(resultKind, out.url, out.filename);
+					}
+				}
 			} catch (e) {
 				if (window.showAlert) {
 					await window.showAlert(`${id} failed`, e.message || String(e));
@@ -2425,8 +2684,21 @@ renderer.setSize(vs0.w, vs0.h, true);
 renderer.setClearColor(0x07080b);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(55, vs0.w / vs0.h, 0.1, 1000);
+// Dual-camera setup: sceneCam is the editor viewport, renderCam is the framed shot
+// (keyframes, playback, and record always target renderCam). `camera` is a mutable
+// alias pointing at whichever one the viewport is currently rendering through, so
+// existing sites that read `camera.xxx` keep working. setActiveCam() swaps it.
+let camera = new THREE.PerspectiveCamera(55, vs0.w / vs0.h, 0.1, 1000);
 camera.position.set(2.2, 1.6, 2.8);
+camera.name = "SceneCam";
+const sceneCam = camera;
+const renderCam = new THREE.PerspectiveCamera(55, vs0.w / vs0.h, 0.1, 1000);
+renderCam.position.set(2.2, 1.6, 2.8);
+renderCam.name = "RenderCam";
+// Cameras don't have to be in the scene graph to render, but TransformControls
+// logs "attached 3D object must be a part of the scene graph" and silently fails
+// its parent-quaternion math when the target has no parent — so add it explicitly.
+scene.add(renderCam);
 
 const orbit = new OrbitControls(camera, canvas);
 orbit.enableDamping = true;
@@ -2443,16 +2715,144 @@ orbit.mouseButtons = {
 orbit.screenSpacePanning = true;
 
 const transform = new TransformControls(camera, renderer.domElement);
-// Local space — pivot axes follow the object's own orientation instead of the
-// world XYZ. Once you rotate a cube, dragging the gizmo's red arrow still
-// moves it along the cube's local +X (not world +X).
+// Local space — gizmo rides the object's frame for all three modes.
 transform.setSpace("local");
 transform.addEventListener("dragging-changed", (e) => {
-	orbit.enabled = !e.value;
+	// Re-enable orbit after a gizmo drag ENDS — but only when renderCam isn't the
+	// selection, since selecting renderCam pins the viewport for shot-adjustment.
+	orbit.enabled = !e.value && selected !== renderCam;
 	if (!e.value) saveSceneDebounced();
 });
 const transformHelper = transform.getHelper ? transform.getHelper() : transform;
 scene.add(transformHelper);
+
+// Render-camera wireframe — a minimal body-box + light-grey frustum cone. The
+// frustum's far rectangle is sized to the currently selected aspect ratio, so
+// 16:9 looks visibly wider than 1:1. Visible only in Scene view; ticked from
+// the animate loop via renderCamHelper.update().
+const renderCamHelper = (() => {
+	const group = new THREE.Group();
+	const bodyColor = 0xcccdd2;
+	const frustumColor = 0x7a7a82;
+	const FRUSTUM_DIST = 2.2;
+
+	// Camera body: a thin rectangular box, wider than tall, sitting behind the lens.
+	const bodyEdges = new THREE.EdgesGeometry(new THREE.BoxGeometry(0.32, 0.22, 0.24));
+	const body = new THREE.LineSegments(
+		bodyEdges,
+		new THREE.LineBasicMaterial({ color: bodyColor, transparent: true, opacity: 0.85, depthTest: false }),
+	);
+	body.position.set(0, 0, 0.12);
+	body.renderOrder = 999;
+	group.add(body);
+
+	// Invisible pick target — solid box matching the visual body so raycaster clicks
+	// register (LineSegments have no filled surface). Marked so the click handler can
+	// route the hit to renderCam.
+	const pickBox = new THREE.Mesh(
+		new THREE.BoxGeometry(0.36, 0.26, 0.28),
+		new THREE.MeshBasicMaterial({ visible: false }),
+	);
+	pickBox.position.set(0, 0, 0.12);
+	pickBox.userData.pickAsRenderCam = true;
+	group.add(pickBox);
+
+	// Frustum: 4 rays from the lens origin to the corners of a far-plane rectangle,
+	// plus the rectangle edges. All positions rewritten each update from FOV+aspect.
+	const frustumGeom = new THREE.BufferGeometry();
+	frustumGeom.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(16 * 3), 3));
+	const frustum = new THREE.LineSegments(
+		frustumGeom,
+		new THREE.LineBasicMaterial({ color: frustumColor, transparent: true, opacity: 0.55, depthTest: false }),
+	);
+	frustum.renderOrder = 998;
+	group.add(frustum);
+
+	function updateFrustum() {
+		const asp = currentAspect?.();
+		const ratio = asp?.ratio || 16 / 9;
+		const dist = FRUSTUM_DIST;
+		const fovRad = renderCam.fov * Math.PI / 180;
+		const h = 2 * dist * Math.tan(fovRad / 2);
+		const w = h * ratio;
+		const hx = w / 2, hy = h / 2, z = -dist;
+		const o0 = 0, o1 = 0, o2 = 0;
+		const tl = [-hx,  hy, z], tr = [ hx,  hy, z], bl = [-hx, -hy, z], br = [ hx, -hy, z];
+		const arr = frustumGeom.attributes.position.array;
+		arr.set([o0,o1,o2, ...tl,  o0,o1,o2, ...tr,  o0,o1,o2, ...bl,  o0,o1,o2, ...br], 0);
+		arr.set([...tl, ...tr,  ...tr, ...br,  ...br, ...bl,  ...bl, ...tl], 24);
+		frustumGeom.attributes.position.needsUpdate = true;
+	}
+	group.update = () => {
+		group.position.copy(renderCam.position);
+		group.quaternion.copy(renderCam.quaternion);
+		updateFrustum();
+	};
+	group.visible = false;
+	// Don't call updateFrustum() here — currentAspect() reads `aspectSelect` which is
+	// declared far below and would trip TDZ at boot. First animate tick handles it.
+	return group;
+})();
+scene.add(renderCamHelper);
+
+// Which camera the WebGL viewport renders through. sceneCam = editor overview,
+// renderCam = the framed shot. Swapping re-attaches orbit + transform to the new
+// active camera; every existing `camera.xxx` site keeps working via the live let-binding.
+//
+// Each camera keeps its OWN orbit target (where it's pointed at) — we stash them
+// here and restore on swap so the two views feel independent.
+const sceneCamTarget = new THREE.Vector3(0, 0, 0);
+const renderCamTarget = new THREE.Vector3(0, 0, 0);
+renderCam.lookAt(renderCamTarget);
+// Initial value matches the boot state (orbit is currently bound to sceneCam). We
+// swap to camera view immediately after setActiveView is defined — new scenes open
+// through the render camera.
+let activeView = "scene";
+// When swapping to Scene view, reposition sceneCam so the render camera and what it's
+// pointed at are both in frame — user gets an over-the-shoulder overview instead of
+// wherever sceneCam happened to be parked.
+function frameSceneCamOnShot() {
+	const midpoint = new THREE.Vector3().addVectors(renderCam.position, renderCamTarget).multiplyScalar(0.5);
+	const forward = new THREE.Vector3().subVectors(renderCamTarget, renderCam.position);
+	const shotDist = Math.max(0.5, forward.length());
+	const dist = shotDist * 1.6 + 1.5;
+	// Side-and-above vantage: perpendicular to the shot direction (falling back to +X
+	// when the shot is straight up/down) plus a lift so we can see the frustum from above.
+	const perp = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0));
+	if (perp.lengthSq() < 0.01) perp.set(1, 0, 0);
+	perp.normalize().multiplyScalar(dist);
+	perp.y += dist * 0.45;
+	sceneCam.position.copy(midpoint).add(perp);
+	sceneCam.up.set(0, 1, 0);
+	sceneCamTarget.copy(midpoint);
+}
+function setActiveView(which) {
+	// Always sync helper visibility so clicking Scene while already in Scene view
+	// still guarantees the wireframe is showing (helper starts hidden at boot).
+	renderCamHelper.visible = which === "scene";
+	if (which === activeView) return;
+	// Save the outgoing camera's orbit target before swapping.
+	(activeView === "camera" ? renderCamTarget : sceneCamTarget).copy(orbit.target);
+	// Reframe the overview camera every time we swap TO scene view so the framed
+	// shot is always visible + centered.
+	if (which === "scene") frameSceneCamOnShot();
+	activeView = which;
+	const cam = which === "camera" ? renderCam : sceneCam;
+	camera = cam;
+	orbit.object = cam;
+	orbit.target.copy(which === "camera" ? renderCamTarget : sceneCamTarget);
+	orbit.update();
+	transform.camera = cam;
+	// Wireframe visibility was already applied above (before the early-return guard).
+	// If we're switching INTO camera view with renderCam still selected, the gizmo
+	// would sit at the camera's own origin — invisible-huge and useless. Detach.
+	if (which === "camera" && typeof selected !== "undefined" && selected === renderCam && typeof select === "function") select(null);
+	// Update the numeric drag fields so they reflect the newly-active camera.
+	if (typeof updateCameraSliders === "function") updateCameraSliders();
+	// The mode-scene / mode-camera pill amber state is driven by pane visibility, not
+	// view state — coupling happens in their click handlers (open pane → also swap view).
+}
+window.setActiveView = setActiveView;
 
 let grid = new THREE.GridHelper(20, 20, 0x888888, 0x888888);
 grid.material.transparent = true;
@@ -2780,6 +3180,44 @@ async function uploadObjectRefImage(file) {
 		localUrl: j.local_url,
 		signedUrl: j.signed_url,
 	};
+}
+
+// Instant local thumbnail URL for a File the user just picked, used as an optimistic
+// preview while the /api/refs/upload round-trip runs. Images return a plain blob URL;
+// videos load into a hidden <video>, seek to a hair past 0, snap a canvas frame, and
+// return a data-URL (background-image can't display a raw video blob).
+async function localSlotThumbUrl(file, kind) {
+	if (kind === "image") {
+		return URL.createObjectURL(file);
+	}
+	if (kind === "video") {
+		return new Promise((resolve, reject) => {
+			const url = URL.createObjectURL(file);
+			const v = document.createElement("video");
+			v.muted = true; v.playsInline = true; v.preload = "auto";
+			v.src = url;
+			const done = (result, err) => {
+				URL.revokeObjectURL(url);
+				v.remove();
+				err ? reject(err) : resolve(result);
+			};
+			v.addEventListener("error", () => done(null, new Error("video decode failed")));
+			v.addEventListener("loadeddata", () => {
+				// Seek slightly past 0 — some codecs render a black first frame at t=0.
+				try { v.currentTime = Math.min(0.1, (v.duration || 0.1) * 0.05); } catch { /* older browsers */ }
+			});
+			v.addEventListener("seeked", () => {
+				try {
+					const c = document.createElement("canvas");
+					c.width = v.videoWidth || 128;
+					c.height = v.videoHeight || 72;
+					c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+					done(c.toDataURL("image/jpeg", 0.72));
+				} catch (e) { done(null, e); }
+			});
+		});
+	}
+	return null;
 }
 
 // URL for displaying a refImage thumbnail. Supports both the new shape
@@ -3138,6 +3576,10 @@ async function loadFromBytes(arrayBuffer, filename, opts = {}) {
 	updateStatus(`unsupported: .${ext}`);
 	return null;
 }
+// Exposed so the gen-cell IIFE can route a "3d-splat" module result straight into
+// the scene as a new imported object, instead of pushing it through the image/video
+// viewport overlay.
+window.__cbLoadFromBytes = loadFromBytes;
 
 async function loadFile(file) {
 	snapshotForUndo();
@@ -3212,7 +3654,7 @@ function deleteObject(obj) {
 	if (selected === obj) {
 		transform.detach();
 		selected = null;
-		forceRightPane("scene", "Scene");
+		forceRightPane(defaultRightPane());
 	}
 	if (obj.userData.primKind === "particles") {
 		const i = particleSystems.indexOf(obj);
@@ -3328,29 +3770,117 @@ function forceRightPane(which, label) {
 	// reflect current selection even if the IIFE-scoped helper somehow gets out of sync.
 	const objPane = document.getElementById("rp-pane-object");
 	const scnPane = document.getElementById("rp-pane-scene");
+	const camPane = document.getElementById("rp-pane-camera");
 	const astPane = document.getElementById("rp-pane-assets");
+	const asstPane = document.getElementById("rp-pane-assistant");
 	const titleEl = document.getElementById("rp-title");
 	const kickerEl = document.getElementById("rp-kicker");
 	const sepEl = document.getElementById("rp-sep");
 	if (objPane) objPane.hidden = which !== "object";
 	if (scnPane) scnPane.hidden = which !== "scene";
+	if (camPane) camPane.hidden = which !== "camera";
 	if (astPane) astPane.hidden = which !== "assets";
-	// Assets pane has its own kicker ("ASSETS") and no sub-title — collapse the ":" + title.
+	if (asstPane) asstPane.hidden = which !== "assistant";
+	// Assets + Assistant own the kicker label with no sub-title. Object / Scene /
+	// Camera use "Properties : <label>". "none" hides the whole header for a blank
+	// right panel.
 	const isAssets = which === "assets";
-	if (kickerEl) kickerEl.textContent = isAssets ? "Assets" : "Properties";
-	if (sepEl) sepEl.style.display = isAssets ? "none" : "";
-	if (titleEl) {
-		titleEl.style.display = isAssets ? "none" : "";
-		if (!isAssets) titleEl.textContent = label || (which === "scene" ? "Scene" : "Object");
+	const isAssistant = which === "assistant";
+	const isFullPane = isAssets || isAssistant;
+	const isBlank = which === "none";
+	if (kickerEl) {
+		kickerEl.textContent = isAssets ? "Assets" : isAssistant ? "AI Agent" : "Properties";
+		kickerEl.style.display = isBlank ? "none" : "";
 	}
-	// Keep the top-header Assets button in sync with whether the pane is the active one.
-	const assetsBtnEl = document.getElementById("th-assets");
-	assetsBtnEl?.classList.toggle("active", isAssets);
+	if (sepEl) sepEl.style.display = (isFullPane || isBlank) ? "none" : "";
+	if (titleEl) {
+		titleEl.style.display = (isFullPane || isBlank) ? "none" : "";
+		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : "Object");
+	}
+	// Keep top-header + viewport-toolbar buttons in sync with whichever full-pane
+	// view is active.
+	document.getElementById("th-assets")?.classList.toggle("active", isAssets);
+	document.getElementById("th-assistant")?.classList.toggle("active", isAssistant);
+	// Toolbar pills light amber ONLY while their pane is the visible one. That
+	// makes "lit" == "properties currently showing this".
+	document.getElementById("mode-camera")?.classList.toggle("active", which === "camera");
+	document.getElementById("mode-scene")?.classList.toggle("active", which === "scene");
 	// Filter chips live in the right-panel header (so they sit on the ASSETS baseline)
 	// — only meaningful while the assets pane is the active one.
 	const filterEl = document.getElementById("assets-filter");
 	if (filterEl) filterEl.hidden = !isAssets;
+	// Assistant's reset + MCP status pill live in the shared rp-header slot.
+	const headerEndEl = document.getElementById("rp-header-end");
+	if (headerEndEl) headerEndEl.hidden = !isAssistant;
+	// Assistant pane needs rp-body to stop scrolling (chat log has its own overflow).
+	document.getElementById("right-panel")?.classList.toggle("mode-assistant", isAssistant);
 }
+
+// Default pane resolution — AI Agent if enabled (opt-in via Settings), else blank.
+// Camera + Scene panes are strictly button-driven now.
+function defaultRightPane() { return isAssistantEnabled?.() ? "assistant" : "none"; }
+window.defaultRightPane = defaultRightPane;
+
+// AI Agent enablement — opt-in via Settings, persisted in localStorage. Off by
+// default so first-run users don't see the assistant surface until they flip it
+// on. `body.assistant-off` hides the top-header button + the Anthropic key form.
+const ASSISTANT_ENABLED_KEY = "cb.assistantEnabled";
+function isAssistantEnabled() {
+	return localStorage.getItem(ASSISTANT_ENABLED_KEY) === "1";
+}
+function applyAssistantEnablement() {
+	const on = isAssistantEnabled();
+	document.body.classList.toggle("assistant-off", !on);
+	// If the assistant pane is currently active and the user just turned it off,
+	// blank the panel so it's not showing hidden content.
+	if (!on) {
+		const pane = document.getElementById("rp-pane-assistant");
+		if (pane && !pane.hidden) forceRightPane("none");
+	}
+}
+window.isAssistantEnabled = isAssistantEnabled;
+// Toggle wiring: change instantly persists and re-applies. No reload needed.
+document.getElementById("assistant-toggle")?.addEventListener("change", (e) => {
+	localStorage.setItem(ASSISTANT_ENABLED_KEY, e.target.checked ? "1" : "0");
+	applyAssistantEnablement();
+});
+applyAssistantEnablement();
+
+// Move the assistant section from the left sidebar into the right-panel Assistant
+// pane at boot. Keeping the same DOM node means all `#assistant-*` listeners wired
+// elsewhere in the file (send/reset/log append/etc.) keep working — we just changed
+// where the element renders.
+(() => {
+	const src = document.getElementById("assistant-section");
+	const dst = document.getElementById("rp-pane-assistant");
+	if (src && dst && src.parentElement !== dst) dst.appendChild(src);
+
+	// Hoist the reset button + MCP status pill up to the right-panel header slot
+	// so they sit on the same baseline as the "AI AGENT" kicker. The section-head-row
+	// is left empty (hidden via CSS) since its label/caret are already suppressed.
+	const headerEnd = document.getElementById("rp-header-end");
+	const reset = document.getElementById("assistant-reset");
+	const status = document.getElementById("assistant-status");
+	if (headerEnd) {
+		if (reset) headerEnd.appendChild(reset);
+		if (status) headerEnd.appendChild(status);
+	}
+
+	const btn = document.getElementById("th-assistant");
+	if (!btn) return;
+	btn.addEventListener("click", () => {
+		const pane = document.getElementById("rp-pane-assistant");
+		const isOpen = pane && !pane.hidden;
+		if (isOpen) {
+			if (window.__selectedObj) forceRightPane("object", window.__selectedObj.name || "Object");
+			else forceRightPane("none");
+		} else {
+			forceRightPane("assistant");
+			// Autofocus the input so the user can start typing immediately.
+			document.getElementById("assistant-input")?.focus();
+		}
+	});
+})();
 
 function select(obj) {
 	selected = obj;
@@ -3361,12 +3891,23 @@ function select(obj) {
 		if (obj) tintGizmo(0xffb454);
 		else pivotMarker.visible = false;
 	}
-	if (obj) {
+	// Selecting the render camera locks the sceneCam orbit so the user's drag can't
+	// accidentally tumble the viewport while they're adjusting the shot. Re-enabled
+	// as soon as anything else (or nothing) is selected.
+	orbit.enabled = obj !== renderCam;
+	if (obj === renderCam) {
+		// Selecting the render camera opens the Camera pane instead of the Object
+		// inspector — the gizmo still attaches for direct manipulation, but the right
+		// panel shows FOV / position drag fields tied to the active camera.
+		forceRightPane("camera", "Camera");
+	} else if (obj) {
 		const label = obj.name || obj.userData.primKind || "Object";
 		forceRightPane("object", label);
 		refreshObjectInspector?.();
 	} else {
-		forceRightPane("scene", "Scene");
+		// Deselect returns to whatever the user's "home" pane is (AI Agent when
+		// enabled, otherwise blank). Camera + Scene stay strictly button-driven.
+		forceRightPane(defaultRightPane());
 	}
 	refreshOutliner();
 }
@@ -3397,13 +3938,16 @@ function refreshOutliner() {
 			? "#" + ps.config.color.toString(16).padStart(6, "0")
 			: (obj.material?.color ? "#" + obj.material.color.getHexString() : "#ffffff");
 		const ri = obj.userData.refImage;
-		const imgUrl = refImageThumbUrl(ri) || "";
+		// _pendingRefImage keeps the optimistic thumb visible if refreshOutliner fires mid-upload.
+		const pending = obj.userData._pendingRefImage;
+		const imgUrl = refImageThumbUrl(ri) || pending?.localUrl || "";
+		const hasImage = !!(ri || pending);
 		const expanded = obj.userData._outExpanded === true;
 		if (expanded) row.classList.add("expanded");
 		row.innerHTML = `
 			<div class="out-head">
 				<input type="color" class="out-color" value="${hex}" title="Change color">
-				<label class="out-img${ri ? " has-image" : ""}" title="${ri ? "Click to change · right-click to remove" : "Upload reference image"}" style="${imgUrl ? `background-image:url('${imgUrl}')` : ""}">
+				<label class="out-img${hasImage ? " has-image" : ""}" title="${hasImage ? "Click to change · right-click to remove" : "Upload reference image"}" style="${imgUrl ? `background-image:url('${imgUrl}')` : ""}">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
 					<input type="file" class="out-img-input" accept="image/*" hidden>
 				</label>
@@ -3482,16 +4026,34 @@ function refreshOutliner() {
 				window.showAlert?.("Can't use video as a ref", "Drop an image asset onto an object slot.");
 				return;
 			}
+			// Optimistic paint — the asset URL is already cached from the Assets pane, so
+			// the thumb lights up instantly. We stash a _pendingRefImage on userData so a
+			// refreshOutliner triggered by an unrelated event (selection, etc.) mid-round-trip
+			// keeps the preview visible. The real Comfy Cloud upload runs in the background.
+			const prevRefImage = obj.userData.refImage || null;
+			obj.userData._pendingRefImage = { localUrl: asset.url, filename: asset.filename };
+			imgCell.style.backgroundImage = `url("${asset.url}")`;
+			imgCell.classList.add("has-image");
+			imgCell.title = "Click to change · right-click to remove";
 			try {
 				const resp = await fetch(asset.url);
 				const blob = await resp.blob();
 				const file = new File([blob], asset.filename, { type: blob.type || "image/png" });
-				obj.userData.refImage = await uploadObjectRefImage(file);
+				const uploaded = await uploadObjectRefImage(file);
+				delete obj.userData._pendingRefImage;
+				obj.userData.refImage = uploaded;
+				// Skip refreshOutliner on success — the inline paint already shows the correct
+				// image (same bytes as the uploaded URL), so a rebuild would just cause a
+				// wasteful re-fetch of the swapped URL and blow away our .just-dropped flash.
+				imgCell.classList.add("just-dropped");
+				setTimeout(() => imgCell.classList.remove("just-dropped"), 700);
 				if (selected === obj) refreshObjectInspector?.();
-				refreshOutliner();
 				saveScene?.();
 			} catch (err) {
 				console.error("[out-img] asset drop failed", err);
+				delete obj.userData._pendingRefImage;
+				obj.userData.refImage = prevRefImage;
+				refreshOutliner();
 				window.showAlert?.("Drop failed", err.message || String(err));
 			}
 		});
@@ -3569,6 +4131,34 @@ const ndc = new THREE.Vector2();
 let pointerDownX = 0, pointerDownY = 0;
 canvas.addEventListener("pointerdown", e => { pointerDownX = e.clientX; pointerDownY = e.clientY; });
 
+// Capture-phase renderCam picker — the main select-on-click runs on pointerUP, so
+// without this, click-and-drag on the wireframe would start orbiting sceneCam before
+// the gizmo ever gets attached. Here we grab the pointerdown BEFORE OrbitControls
+// sees it, attach the gizmo mid-gesture, and swallow the event so orbit stays put.
+//
+// Only fires when renderCam ISN'T already selected — once the gizmo is up, we let
+// TransformControls own every subsequent click so its arrows and center handle work
+// without our pickBox intercepting them.
+canvas.addEventListener("pointerdown", e => {
+	if (!renderCamHelper.visible) return;
+	if (selected === renderCam) return;
+	if (e.button !== 0 || e.altKey) return; // Alt-drag / RMB stay routed to their handlers
+	if (transform.dragging || transform.axis) return; // already interacting with the gizmo
+	const rect = canvas.getBoundingClientRect();
+	const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+	const ny = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+	ndc.set(nx, ny);
+	raycaster.setFromCamera(ndc, camera);
+	const hits = raycaster.intersectObject(renderCamHelper, true);
+	if (!hits.some(h => h.object?.userData?.pickAsRenderCam)) return;
+	select(renderCam);
+	orbit.enabled = false;
+	e.preventDefault();
+	e.stopPropagation();
+	// Orbit stays disabled as long as renderCam is the selection (see select()).
+	// No pointerup re-enable needed — deselecting is what unlocks it.
+}, true);
+
 // Hover the small path dots: cursor turns into a pointer + a bright marker snaps onto the
 // dot, so you know it's clickable. Skipped during gizmo drags / Alt-camera so we don't
 // fight the active interaction.
@@ -3615,6 +4205,16 @@ canvas.addEventListener("pointerup", e => {
 	ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
 	ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 	raycaster.setFromCamera(ndc, camera);
+	// Click the render-camera wireframe in Scene view → select renderCam so its
+	// transform gizmo comes up. Checked first so the wireframe wins over any object
+	// that happens to be behind it.
+	if (renderCamHelper.visible) {
+		const camHits = raycaster.intersectObject(renderCamHelper, true);
+		if (camHits.some(h => h.object?.userData?.pickAsRenderCam)) {
+			select(renderCam);
+			return;
+		}
+	}
 	const meshHits = raycaster.intersectObjects(
 		objects.filter(o => o.userData.primKind !== "splat" && o.visible !== false),
 		true,
@@ -3674,6 +4274,18 @@ const GEN_MODELS = {
 		iconSvg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>`,
 		legacyBtnId: "gen-sd",
 	},
+	"tripo-i2m": {
+		name: "Tripo — Image to 3D",
+		kind: "3d",
+		placeholder: "Tripo H3.1 Image→Model runs on Comfy Cloud. Uses the current viewport snapshot (or a picked source image) to generate a .glb mesh that imports into the scene.",
+		iconSvg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 16l9 5 9-5"/></svg>`,
+	},
+	"tripo-t2m": {
+		name: "Tripo — Text to 3D",
+		kind: "3d",
+		placeholder: "Describe the 3D model — e.g. 'armored knight kneeling with sword, ornate silver-gold plate armor'",
+		iconSvg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h8"/><path d="M17 12l4 4-4 4"/></svg>`,
+	},
 };
 
 const genCells = [];
@@ -3684,6 +4296,10 @@ function getActiveGenCell() {
 }
 
 function setActiveGenCell(id) {
+	// No-op guard — mousedown/focusin listeners fire on every cell interaction,
+	// including typing into a prompt textarea. refreshGenCells rebuilds the DOM,
+	// which would blow away focus mid-keystroke. Only refresh on an actual change.
+	if (activeGenCellId === id) return;
 	activeGenCellId = id;
 	refreshGenCells();
 	refreshViewportGenerateBtn();
@@ -3692,6 +4308,7 @@ function setActiveGenCell(id) {
 const KIND_ICONS = {
 	image: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.5"/><path d="M21 17l-6-6-8 8"/></svg>`,
 	video: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>`,
+	"3d": `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 16l9 5 9-5"/></svg>`,
 };
 
 function refreshViewportGenerateBtn() {
@@ -3758,9 +4375,11 @@ function removeGenCell(id) {
 function refreshGenAddBtn() {
 	const btn = document.getElementById("gen-add");
 	if (!btn) return;
-	const missing = Object.keys(GEN_MODELS).find(id => !genCells.some(c => c.model === id));
-	btn.disabled = !missing;
-	btn.title = missing ? `Add ${GEN_MODELS[missing].name}` : "All models added";
+	// Always enabled — the dropdown shows the full list with existing models
+	// tagged as "added". Repaint the open menu (if any) so its state matches.
+	btn.disabled = false;
+	btn.title = "Add a generator";
+	window._refreshGenAddMenu?.();
 }
 
 // ── Color naming for prompt expansion ─────────────────────────────
@@ -3905,6 +4524,11 @@ function refreshGenCells() {
 		const m = GEN_MODELS[cell.model] || GEN_MODELS["nano-banana"];
 		const row = document.createElement("div");
 		row.className = "gen-cell" + (cell.expanded ? " expanded" : "") + (cell.id === activeGenCellId ? " active" : "");
+		// tabindex makes the row focusable so the top-level Delete-key handler
+		// can tell "the user is targeting a gen-cell" (via document.activeElement
+		// closest #gen-cells) instead of nuking the selected scene object.
+		row.tabIndex = -1;
+		row.dataset.cellId = cell.id;
 		// Per-model reference slots above the prompt. Each slot is a drop target for
 		// assets from the right-panel Assets pane (drag-and-drop).
 		//   nano-banana: 1 slot — style reference (aesthetic only, not subject/content)
@@ -3917,16 +4541,14 @@ function refreshGenCells() {
 			slotsHtml = `
 				<div class="gen-slots">
 					<div class="gen-slot" data-slot="startFrame" data-accepts="image" title="Start frame — drag an image from Assets, or click to upload">
-						<div class="gen-slot-thumb"></div>
+						<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
 						<div class="gen-slot-label">Start frame</div>
-						${uploadIcon}
 						<button type="button" class="gen-slot-clear" hidden>×</button>
 						<input type="file" class="gen-slot-file" accept="image/*" hidden>
 					</div>
 					<div class="gen-slot" data-slot="refVideo" data-accepts="video" title="Reference video — drag from Assets or click to upload; matches motion / timing">
-						<div class="gen-slot-thumb"></div>
+						<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
 						<div class="gen-slot-label">Ref video</div>
-						${uploadIcon}
 						<button type="button" class="gen-slot-clear" hidden>×</button>
 						<input type="file" class="gen-slot-file" accept="video/*" hidden>
 					</div>
@@ -3936,38 +4558,79 @@ function refreshGenCells() {
 			slotsHtml = `
 				<div class="gen-slots">
 					<div class="gen-slot" data-slot="styleRef" data-accepts="image" title="Style reference — aesthetic only (cartoon, anime, paint, etc.) not the subject. Drag from Assets or click to upload.">
-						<div class="gen-slot-thumb"></div>
+						<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
 						<div class="gen-slot-label">Style ref</div>
-						${uploadIcon}
+						<button type="button" class="gen-slot-clear" hidden>×</button>
+						<input type="file" class="gen-slot-file" accept="image/*" hidden>
+					</div>
+				</div>
+			`;
+		} else if (cell.model === "tripo-i2m") {
+			slotsHtml = `
+				<div class="gen-slots">
+					<div class="gen-slot" data-slot="sourceImage" data-accepts="image" title="Source image — the picture Tripo converts to a .glb mesh. Drag from Assets, click to upload, or leave empty to use the current viewport snapshot.">
+						<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
+						<div class="gen-slot-label">Source image</div>
 						<button type="button" class="gen-slot-clear" hidden>×</button>
 						<input type="file" class="gen-slot-file" accept="image/*" hidden>
 					</div>
 				</div>
 			`;
 		}
+		// Image-to-model is prompt-less — hide the prompt textarea so the cell
+		// doesn't suggest a text input that gets silently ignored. Text-to-model
+		// KEEPS the prompt; that's how the user tells Tripo what to build.
+		const promptWrap = cell.model === "tripo-i2m" ? "" : `
+			<div class="gen-prompt-wrap">
+				<div class="gen-prompt-hl" aria-hidden="true"></div>
+				<textarea class="gen-prompt" placeholder="Enter prompt here…" spellcheck="false">${cell.prompt.replace(/</g, "&lt;")}</textarea>
+				<div class="gen-ref-suggest" hidden></div>
+			</div>
+		`;
 		row.innerHTML = `
 			<div class="gen-head">
 				<div class="gen-icon">${m.iconSvg}</div>
 				<span class="gen-name">${m.name}</span>
 				<div class="gen-head-end">
-					<button class="out-expand-toggle" title="Expand">▾</button>
+					<button class="gen-run-btn" title="Generate with ${m.name}" type="button">▶</button>
 				</div>
 			</div>
 			<div class="out-expand">
 				${slotsHtml}
-				<div class="gen-prompt-wrap">
-					<div class="gen-prompt-hl" aria-hidden="true"></div>
-					<textarea class="gen-prompt" placeholder="Enter prompt here…" spellcheck="false">${cell.prompt.replace(/</g, "&lt;")}</textarea>
-					<div class="gen-ref-suggest" hidden></div>
-				</div>
+				${promptWrap}
 			</div>
 		`;
 
 		const head = row.querySelector(".gen-head");
 		head.addEventListener("click", (e) => {
+			// Per-cell Generate button lives in the head-end — don't toggle expand
+			// when the user clicks it.
+			if (e.target.closest(".gen-run-btn")) return;
 			cell.expanded = !cell.expanded;
 			row.classList.toggle("expanded", cell.expanded);
 			setActiveGenCell(cell.id);
+		});
+		// Any interaction anywhere in the cell body — clicking the prompt textarea,
+		// focusing a ref slot, using an upload input — should promote that cell to
+		// active. Otherwise you can be editing TripoSplat's source-image slot while
+		// vp-generate is still armed for Nano Banana.
+		row.addEventListener("focusin", () => setActiveGenCell(cell.id));
+		row.addEventListener("mousedown", (e) => {
+			setActiveGenCell(cell.id);
+			// Only steal focus for a bare-row click. If the user is clicking into
+			// a textarea / input / button inside the cell, let that element keep
+			// focus — Delete inside a prompt should type, not delete the cell.
+			if (!e.target.closest("input,textarea,button,select")) {
+				row.focus({ preventScroll: true });
+			}
+		});
+		// Per-cell Generate — routes through the shared vp-generate pipeline so the
+		// input-building / busy-state / result-import logic all stays in one place.
+		// setActiveGenCell first so vp-generate reads this cell.
+		row.querySelector(".gen-run-btn")?.addEventListener("click", (e) => {
+			e.stopPropagation();
+			setActiveGenCell(cell.id);
+			document.getElementById("vp-generate")?.click();
 		});
 
 		// Wire ref slots (no-op for cells that didn't get slot markup).
@@ -4007,6 +4670,18 @@ function refreshGenCells() {
 				const f = fileInput.files?.[0];
 				fileInput.value = "";
 				if (!f) return;
+				// Local preview + spinner immediately, before the upload starts. Videos
+				// especially need this — the round-trip can run 5–30s and the empty
+				// square with no feedback made it feel broken.
+				let localBlobUrl = null;
+				try {
+					const previewUrl = await localSlotThumbUrl(f, accepts);
+					if (previewUrl) {
+						localBlobUrl = previewUrl.startsWith("blob:") ? previewUrl : null;
+						thumb.style.backgroundImage = `url("${previewUrl}")`;
+						thumb.classList.add("has-image");
+					}
+				} catch { /* preview is best-effort — no local thumb is fine, spinner still shows */ }
 				try {
 					slot.classList.add("uploading");
 					const ref = await uploadObjectRefImage(f);
@@ -4016,12 +4691,20 @@ function refreshGenCells() {
 						kind: accepts,
 					};
 					paintSlot();
+					// Confirm the drop landed once the round-trip clears.
+					slot.classList.add("just-dropped");
+					setTimeout(() => slot.classList.remove("just-dropped"), 700);
 					maybeSaveDebounced();
 				} catch (err) {
 					console.error("[gen-slot] upload failed", err);
+					// Roll back the optimistic preview so a failed upload doesn't leave a
+					// misleading thumbnail in the slot.
+					thumb.style.backgroundImage = "";
+					thumb.classList.remove("has-image");
 					window.showAlert?.("Upload failed", err.message || String(err));
 				} finally {
 					slot.classList.remove("uploading");
+					if (localBlobUrl) URL.revokeObjectURL(localBlobUrl);
 				}
 			});
 			// Drag from the Assets pane → land here.
@@ -4045,6 +4728,9 @@ function refreshGenCells() {
 				}
 				cell[key] = { url: asset.url, filename: asset.filename, kind: asset.kind };
 				paintSlot();
+				// Success flash — confirms the drop landed on the right target.
+				slot.classList.add("just-dropped");
+				setTimeout(() => slot.classList.remove("just-dropped"), 700);
 				maybeSaveDebounced();
 			});
 			clearBtn?.addEventListener("click", e => {
@@ -4064,6 +4750,12 @@ function refreshGenCells() {
 		const promptEl = row.querySelector(".gen-prompt");
 		const suggestEl = row.querySelector(".gen-ref-suggest");
 		const hlEl = row.querySelector(".gen-prompt-hl");
+		// TripoSplat cells skip the prompt textarea, so the rest of the prompt-wiring
+		// setup (highlight sync, [ref] suggestions, save-on-input) has nothing to bind to.
+		if (!promptEl) {
+			container.appendChild(row);
+			continue;
+		}
 		let suggestActiveIdx = 0;
 		let suggestMatches = [];
 
@@ -4199,14 +4891,62 @@ function refreshGenCells() {
 	}
 }
 
-document.getElementById("gen-add")?.addEventListener("click", () => {
-	// One cell per model — fill in the next missing one (typically reinstates a
-	// previously-deleted default like Seedance or Nano Banana).
-	const nextModel = Object.keys(GEN_MODELS).find(id => !genCells.some(c => c.model === id));
-	if (!nextModel) return;
-	const cell = addGenCell({ model: nextModel, expanded: true });
-	setActiveGenCell(cell.id);
-});
+// + Add dropdown — shows every registered generator with existing ones tagged as
+// already-added. addGenCell() is idempotent per model, so re-picking one just
+// focuses the existing cell instead of creating a duplicate.
+(() => {
+	const btn = document.getElementById("gen-add");
+	const menu = document.getElementById("gen-add-menu");
+	if (!btn || !menu) return;
+
+	function paintMenu() {
+		menu.innerHTML = "";
+		for (const [id, m] of Object.entries(GEN_MODELS)) {
+			const exists = genCells.some(c => c.model === id);
+			const item = document.createElement("button");
+			item.type = "button";
+			item.className = "gen-add-item";
+			item.role = "menuitem";
+			item.disabled = exists;
+			item.innerHTML = `${m.iconSvg}<span>${m.name}</span>${exists ? '<span class="gen-add-check">added</span>' : ''}`;
+			item.addEventListener("click", () => {
+				closeMenu();
+				if (exists) {
+					const existing = genCells.find(c => c.model === id);
+					if (existing) setActiveGenCell(existing.id);
+					return;
+				}
+				const cell = addGenCell({ model: id, expanded: true });
+				setActiveGenCell(cell.id);
+			});
+			menu.appendChild(item);
+		}
+	}
+	function openMenu() {
+		paintMenu();
+		menu.hidden = false;
+		btn.setAttribute("aria-expanded", "true");
+		setTimeout(() => document.addEventListener("mousedown", onDocDown, true), 0);
+		document.addEventListener("keydown", onEsc, true);
+	}
+	function closeMenu() {
+		menu.hidden = true;
+		btn.setAttribute("aria-expanded", "false");
+		document.removeEventListener("mousedown", onDocDown, true);
+		document.removeEventListener("keydown", onEsc, true);
+	}
+	function onDocDown(e) {
+		if (e.target.closest("#gen-add-menu") || e.target.closest("#gen-add")) return;
+		closeMenu();
+	}
+	function onEsc(e) { if (e.key === "Escape") { e.stopPropagation(); closeMenu(); } }
+	btn.addEventListener("click", (e) => {
+		e.stopPropagation();
+		if (menu.hidden) openMenu(); else closeMenu();
+	});
+	// Keep button always enabled — dropdown handles per-model gating.
+	window._refreshGenAddMenu = () => { if (!menu.hidden) paintMenu(); };
+})();
 
 const VP_SPINNER_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:12px;height:12px;animation:vpSpin 0.9s linear infinite"><path d="M21 12a9 9 0 1 1-6.2-8.55"/></svg>`;
 
@@ -4234,30 +4974,42 @@ document.getElementById("vp-generate")?.addEventListener("click", async () => {
 	}
 	console.log("[vp-generate] firing model=", cell.model);
 
-	const rawPrompt = (cell.prompt || "").trim() || m.placeholder;
-	const { prompt, references, sceneObjects } = buildGenPayload(rawPrompt);
-	const inputs = cell.model === "seedance"
-		? { prompt, resolution: "1080p", duration: 5 }
-		: { prompt };
-	// Seedance ref slots — start frame = first frame of the generated video; video
-	// reference matches motion / timing.
-	if (cell.model === "seedance") {
-		if (cell.startFrame?.url) inputs.image = cell.startFrame.url;
-		if (cell.refVideo?.url) inputs.video = cell.refVideo.url;
+	// Tripo modules skip the ControlNet-style prompt scaffolding — they either
+	// take just a source image (i2m) or just a plain text prompt (t2m). Neither
+	// wants BASE_PROMPT + SCENE INVENTORY + object refs prepended.
+	let inputs;
+	if (cell.model === "tripo-i2m") {
+		inputs = {};
+		if (cell.sourceImage?.url) inputs.image_url = cell.sourceImage.url;
+	} else if (cell.model === "tripo-t2m") {
+		inputs = { prompt: (cell.prompt || "").trim() || m.placeholder };
+	} else {
+		const rawPrompt = (cell.prompt || "").trim() || m.placeholder;
+		const built = buildGenPayload(rawPrompt);
+		const { prompt, references, sceneObjects } = built;
+		inputs = cell.model === "seedance"
+			? { prompt, resolution: "1080p", duration: 5 }
+			: { prompt };
+		// Seedance ref slots — start frame = first frame of the generated video; video
+		// reference matches motion / timing.
+		if (cell.model === "seedance") {
+			if (cell.startFrame?.url) inputs.image = cell.startFrame.url;
+			if (cell.refVideo?.url) inputs.video = cell.refVideo.url;
+		}
+		// Nano style ref — surface-only aesthetic transfer. Sent alongside per-object
+		// material swatches so the server can prepend a "style only" instruction in the
+		// prompt. The server treats it differently from per-object refs (no spatial mapping).
+		if (cell.model === "nano-banana" && cell.styleRef?.url) {
+			inputs.style_reference = cell.styleRef.url;
+		}
+		inputs.references = references;
+		inputs.scene_objects = sceneObjects;
+		// Camera metadata so the prompt can anchor the model's lens/perspective.
+		inputs.camera = {
+			fov_deg: Math.round(camera.fov),
+			aspect: currentAspect()?.str || "free",
+		};
 	}
-	// Nano style ref — surface-only aesthetic transfer. Sent alongside per-object
-	// material swatches so the server can prepend a "style only" instruction in the
-	// prompt. The server treats it differently from per-object refs (no spatial mapping).
-	if (cell.model === "nano-banana" && cell.styleRef?.url) {
-		inputs.style_reference = cell.styleRef.url;
-	}
-	inputs.references = references;
-	inputs.scene_objects = sceneObjects;
-	// Camera metadata so the prompt can anchor the model's lens/perspective.
-	inputs.camera = {
-		fov_deg: Math.round(camera.fov),
-		aspect: currentAspect()?.str || "free",
-	};
 
 	// Reveal the Blockout pill in the viewport toggle — the user can now check
 	// the exact PNG being sent to the model alongside the live viewport + render.
@@ -4854,6 +5606,7 @@ const modeButtons = document.querySelectorAll("[data-mode]");
 function setActiveMode(mode) {
 	anchorMode = false;
 	transform.setMode(mode);
+	transform.setSpace("local");
 	transform.setSize(1.0);
 	modeButtons.forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
 	document.getElementById("mode-anchor").classList.remove("active");
@@ -4877,13 +5630,49 @@ function togglePivotMode() {
 	else enterPivotMode();
 }
 document.getElementById("mode-anchor").addEventListener("click", togglePivotMode);
+// Camera pill — swap the viewport to look through the framed render camera, deselect
+// any picked object so + / S key the camera, and toggle PROPERTIES : CAMERA on the
+// right. Clicking again closes the pane but leaves the view state alone.
+document.getElementById("mode-camera")?.addEventListener("click", () => {
+	setActiveView("camera");
+	select(null);
+	const pane = document.getElementById("rp-pane-camera");
+	if (pane && !pane.hidden) forceRightPane(defaultRightPane());
+	else forceRightPane("camera", "Camera");
+});
+// Scene pill — swap to the overview camera + PROPERTIES : SCENE (background / env /
+// render / prompt tweaks). Does not touch selection so it's safe to open while an
+// object is picked.
+document.getElementById("mode-scene")?.addEventListener("click", () => {
+	setActiveView("scene");
+	const pane = document.getElementById("rp-pane-scene");
+	if (pane && !pane.hidden) forceRightPane(defaultRightPane());
+	else forceRightPane("scene", "Scene");
+});
 
 let snapEnabled = false;
 const snapToggle = document.getElementById("toggle-snap");
+// Snap increments — chosen so each gizmo feels like it "clicks" onto a grid:
+//   translate: 0.25 world units (fine grid at unit-quarter marks)
+//   rotate:    15° (common turntable / architectural angle)
+//   scale:     0.25 (matches translate feel)
+// Translate keeps the object-to-object snap on top — the gizmo quantizes the
+// pixel-to-unit motion during drag, then findObjectToObjectSnapOffset can nudge
+// onto a neighbor's anchor if one is within OBJ_SNAP_DIST.
+const TRANSLATE_SNAP_STEP = 0.25;
+const ROTATE_SNAP_STEP_DEG = 15;
+const SCALE_SNAP_STEP = 0.25;
+function applyTransformSnap() {
+	transform.setTranslationSnap(snapEnabled ? TRANSLATE_SNAP_STEP : null);
+	transform.setRotationSnap(snapEnabled ? THREE.MathUtils.degToRad(ROTATE_SNAP_STEP_DEG) : null);
+	transform.setScaleSnap(snapEnabled ? SCALE_SNAP_STEP : null);
+}
 snapToggle.addEventListener("click", () => {
 	snapEnabled = !snapEnabled;
 	snapToggle.classList.toggle("active", snapEnabled);
+	applyTransformSnap();
 });
+applyTransformSnap();
 
 // Pivot snap: nearest vertex OR bbox face-center / corner / center, in obj-local space.
 // Pivot lives at the object's local origin, so the snap target's lengthSq is the metric.
@@ -5024,13 +5813,18 @@ transform.addEventListener("mouseDown", () => {
 transform.addEventListener("objectChange", () => {
 	if (anchorMode && selected && anchorStartPos) {
 		const delta = new THREE.Vector3().subVectors(selected.position, anchorStartPos);
+		// delta is in parent/world space; geometry.translate mutates vertices in the
+		// mesh's LOCAL frame. For a rotated object those differ, so convert first —
+		// otherwise the pivot compensation moves the vertices along the wrong axes
+		// and the object appears to jump instead of staying put.
+		const localDelta = delta.clone().applyQuaternion(selected.quaternion.clone().invert());
 		if (selected.geometry) {
-			selected.geometry.translate(-delta.x, -delta.y, -delta.z);
+			selected.geometry.translate(-localDelta.x, -localDelta.y, -localDelta.z);
 			selected.geometry.computeBoundingBox?.();
 		} else {
 			selected.traverse(c => {
 				if (c.isMesh && c.geometry) {
-					c.geometry.translate(-delta.x, -delta.y, -delta.z);
+					c.geometry.translate(-localDelta.x, -localDelta.y, -localDelta.z);
 					c.geometry.computeBoundingBox?.();
 				}
 			});
@@ -5688,9 +6482,24 @@ const resultToggle = document.getElementById("result-toggle");
 const renderToggleBtn = resultToggle?.querySelector('[data-result="render"]');
 const blockoutToggleBtn = resultToggle?.querySelector('[data-result="blockout"]');
 const viewportToggleBtn = resultToggle?.querySelector('[data-result="viewport"]');
+const resultCloseBtn = document.getElementById("result-close");
+
+// Result-toggle container is [hidden] until at least one pill has content. Call
+// this any time we flip individual pill visibility so the container matches.
+function syncResultToggleContainer() {
+	if (!resultToggle) return;
+	const anyPillVisible = !!(
+		(renderToggleBtn && !renderToggleBtn.hidden) ||
+		(blockoutToggleBtn && !blockoutToggleBtn.hidden) ||
+		(viewportToggleBtn && !viewportToggleBtn.hidden)
+	);
+	resultToggle.hidden = !anyPillVisible;
+	if (resultCloseBtn) resultCloseBtn.hidden = !anyPillVisible;
+}
 
 window.revealBlockoutToggle = function () {
 	if (blockoutToggleBtn) blockoutToggleBtn.hidden = false;
+	syncResultToggleContainer();
 };
 let resultMode = "viewport"; // "viewport" | "blockout" | "render"
 let lastResult = null;       // { kind: "image"|"video", url, filename }
@@ -5768,6 +6577,7 @@ window.showResultInViewport = function (kind, url, filename) {
 	// Blockout was already revealed when Generate fired.
 	if (renderToggleBtn) renderToggleBtn.hidden = false;
 	if (viewportToggleBtn) viewportToggleBtn.hidden = false;
+	syncResultToggleContainer();
 	const saveBtn = document.getElementById("vp-save-render");
 	if (saveBtn) saveBtn.hidden = false;
 	resultMode = "render";
@@ -5797,8 +6607,11 @@ function resetResultUI() {
 	if (renderToggleBtn) renderToggleBtn.hidden = true;
 	if (blockoutToggleBtn) blockoutToggleBtn.hidden = true;
 	if (viewportToggleBtn) viewportToggleBtn.hidden = true;
+	syncResultToggleContainer();
 	applyResultMode?.();
 }
+// Close button on the result toggle — clears the render + overlay + pills.
+resultCloseBtn?.addEventListener("click", () => resetResultUI());
 
 for (const b of resultToggle.querySelectorAll("button")) {
 	b.addEventListener("click", () => {
@@ -5898,13 +6711,22 @@ window.addEventListener("keydown", (e) => {
 	else if (e.key === "q") togglePivotMode();
 	else if (e.key === "s") {
 		// Mirrors the + button in the transport: key the selected object's pos/rot/scale,
-		// or the camera if nothing's selected.
-		if (selected) addObjectKeyframe(selected);
+		// or the render camera when nothing (or renderCam itself) is selected.
+		if (selected && selected !== renderCam) addObjectKeyframe(selected);
 		else addKeyframe();
 	}
 	else if (e.key === "f" || e.key === "F") frameScene();
 	else if (e.key === "Home") { camera.position.set(2.2, 1.6, 2.8); orbit.target.set(0, 0, 0); camera.up.set(0, 1, 0); camera.updateProjectionMatrix(); }
 	else if (e.key === "Delete" || e.key === "Backspace") {
+		// Gen-cell focused? Remove it and don't touch scene selection. Row is
+		// tab-focusable and grabs focus on mousedown (unless the click landed in
+		// an input/textarea, where the browser handles Delete for text editing).
+		const activeInGen = document.activeElement?.closest?.("#gen-cells .gen-cell");
+		if (activeInGen && activeGenCellId) {
+			e.preventDefault();
+			removeGenCell(activeGenCellId);
+			return;
+		}
 		if (selectedKeys.size) deleteKeyframes();
 		else deleteObject(selected);
 	}
@@ -6103,6 +6925,9 @@ function loop() {
 		tickFlyMovement(dt);
 		orbit.update();
 		if (anchorMode) updatePivotMarker();
+		// Keep the render-camera helper in sync with renderCam's current pose so the
+		// wireframe follows keyframe tweens / user edits in real time.
+		if (renderCamHelper.visible) renderCamHelper.update();
 		renderer.render(scene, camera);
 	} catch (e) {
 		renderErrorCount++;
@@ -6216,21 +7041,47 @@ const easings = {
 	easeInOut: t => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
 };
 
+// Camera keyframes ALWAYS target renderCam — the "framed shot" — regardless of which
+// view the user is currently looking through. When the user is in camera view the
+// mutations show up live in the viewport; in scene view they update the wireframe.
+//
+// We capture BOTH the derived orbit target AND the raw quaternion. `quat` is the
+// source of truth for orientation (works when the user rotates renderCam via the
+// gizmo, which doesn't touch renderCamTarget). `target` is kept so orbit-based
+// playback stays continuous and legacy saves still load.
 function captureCameraState() {
+	const isRender = activeView === "camera";
+	// Sync renderCamTarget to whatever direction renderCam is actually aimed at,
+	// so a saved key reflects the current rotation even after a gizmo tumble.
+	if (!isRender) {
+		const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(renderCam.quaternion);
+		const dist = renderCam.position.distanceTo(renderCamTarget) || 3;
+		renderCamTarget.copy(renderCam.position).add(fwd.multiplyScalar(dist));
+	}
 	return {
-		pos: camera.position.clone(),
-		target: orbit.target.clone(),
-		up: camera.up.clone(),
-		fov: camera.fov,
+		pos: renderCam.position.clone(),
+		quat: renderCam.quaternion.clone(),
+		target: (isRender ? orbit.target : renderCamTarget).clone(),
+		up: renderCam.up.clone(),
+		fov: renderCam.fov,
 	};
 }
 
 function applyCameraState(state) {
-	camera.position.copy(state.pos);
-	orbit.target.copy(state.target);
-	if (state.up) camera.up.copy(state.up).normalize();
-	camera.fov = state.fov;
-	camera.updateProjectionMatrix();
+	renderCam.position.copy(state.pos);
+	if (state.up) renderCam.up.copy(state.up).normalize();
+	renderCam.fov = state.fov;
+	if (state.quat) {
+		renderCam.quaternion.copy(state.quat);
+		// Keep renderCamTarget consistent with the applied rotation so orbit-view
+		// tumbling from this pose feels correct.
+		if (state.target) renderCamTarget.copy(state.target);
+	} else if (state.target) {
+		renderCamTarget.copy(state.target);
+		renderCam.lookAt(renderCamTarget);
+	}
+	renderCam.updateProjectionMatrix();
+	if (activeView === "camera") orbit.target.copy(renderCamTarget);
 }
 
 // Object animation — per-object track on userData.keyframes.
@@ -6507,12 +7358,20 @@ function sampleCameraAt(t) {
 			const eased = (easings[b.ease] || easings.easeInOut)(local);
 			const upA = a.up || new THREE.Vector3(0, 1, 0);
 			const upB = b.up || new THREE.Vector3(0, 1, 0);
-			return {
+			const out = {
 				pos: new THREE.Vector3().lerpVectors(a.pos, b.pos, eased),
 				target: new THREE.Vector3().lerpVectors(a.target, b.target, eased),
 				up: new THREE.Vector3().lerpVectors(upA, upB, eased).normalize(),
 				fov: a.fov + (b.fov - a.fov) * eased,
 			};
+			// Rotation: slerp the raw quaternions when both keys have them (matches
+			// how the camera was actually aimed at capture time, including any pure
+			// rotate-gizmo tumbles that didn't move renderCamTarget). Falls back to
+			// the lerped target for legacy saves without quat.
+			if (a.quat && b.quat) {
+				out.quat = new THREE.Quaternion().slerpQuaternions(a.quat, b.quat, eased);
+			}
+			return out;
 		}
 	}
 	return ks[ks.length - 1];
@@ -6840,8 +7699,9 @@ function addObjectKeyframe(obj) {
 
 tlAddKey.addEventListener("click", () => {
 	// + targets whatever's selected: an object key when an object is selected,
-	// otherwise a camera key. Same gesture, different track.
-	if (selected) addObjectKeyframe(selected);
+	// a camera key when the render camera is selected (or nothing is). Same gesture,
+	// different track.
+	if (selected && selected !== renderCam) addObjectKeyframe(selected);
 	else addKeyframe();
 	tlAddKey.classList.remove("flash-green");
 	void tlAddKey.offsetWidth; // force reflow so the animation restarts on repeat clicks
@@ -6919,6 +7779,11 @@ async function playPreview() {
 	if (isPlayingPreview) return;
 	const hasCameraTween = keyframes.length >= 2;
 	isPlayingPreview = true;
+	// Playback always shows the framed shot — swap the viewport to camera view so
+	// the user sees what renderCam sees. Restore whatever they were looking through
+	// when playback ends.
+	const _restoreViewAfterPlay = activeView;
+	setActiveView("camera");
 	tlPlay.classList.add("active");
 	const dur = currentDuration() * 1000;
 	// Inset the play range by the same visual gap used for the resting playhead so the
@@ -6957,6 +7822,7 @@ async function playPreview() {
 	isPlayingPreview = false;
 	tlPlay.classList.remove("active");
 	setMixersPlaying(false);
+	setActiveView(_restoreViewAfterPlay);
 }
 function stopPreview() {
 	isPlayingPreview = false;
@@ -7025,13 +7891,21 @@ function setRecordingMode(on) {
 	// canvas.captureStream() only sees WebGL pixels, NOT HTML overlays — so the
 	// panel, status pill, aspect frame, and timeline are invisible to the recording.
 	// We DO want the grid in the recorded video (it's part of the motion reference
-	// for downstream models). Just hide the transform gizmo so a selection bracket
-	// doesn't get baked into the clip.
+	// for downstream models). Hide the transform gizmo, animated-object motion paths,
+	// and the hover key-dot — all editor-only visualizers that would otherwise get
+	// baked into the clip.
 	transformHelper.visible = IS_PREVIEW ? false : !on;
+	animPathsGroup.visible = !on;
+	if (hoverDot) hoverDot.visible = hoverDot.visible && !on;
 }
 
 async function startRecording() {
 	if (recording) return;
+	// Recording always captures the framed shot. Swap the viewport to camera view so
+	// the aspect override, applyCameraState, and captureStream all target renderCam.
+	// Restored in the mediaRecorder.onstop handler below.
+	const _restoreViewAfterRec = activeView;
+	setActiveView("camera");
 	const duration = parseFloat(document.getElementById("duration").value);
 	const fps = parseInt(document.getElementById("fps").value, 10);
 
@@ -7076,30 +7950,35 @@ async function startRecording() {
 
 	await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-	const useKeyframes = keyframes.length >= 2;
+	// Always advance the playhead during recording — even scenes with only FBX rigs
+	// (no camera/object keys) want the timeline sweeping so the user sees progress.
+	// Camera + object states are sampled per-frame only when their respective tracks
+	// have ≥2 keys, so a static camera stays put but the playhead still moves.
+	const anyCameraKeys = keyframes.length >= 2;
+	const anyObjectKeys = objects.some(o => Array.isArray(o.userData?.keyframes) && o.userData.keyframes.length >= 2);
 	const recStartT = performance.now();
-	let tweenRunning = useKeyframes;
+	let tweenRunning = true;
 	// Pre-seed playhead + camera to trim-start so the very first captured frame
 	// matches the trimmed window (avoids a one-frame flash from t=last to t=start
 	// when the previous play/record left the camera at the end of the timeline).
 	setPlayhead(recStartNorm);
-	{
+	if (anyCameraKeys) {
 		const s0 = sampleCameraAt(recStartNorm);
 		if (s0) applyCameraState(s0);
 	}
-	if (useKeyframes) {
-		const animate = () => {
-			if (!tweenRunning) return;
-			const elapsed = performance.now() - recStartT;
-			const localT = Math.min(1, elapsed / recDurationMs);
-			const t = recStartNorm + localT * recSpanNorm;
-			setPlayhead(t);
+	const animate = () => {
+		if (!tweenRunning) return;
+		const elapsed = performance.now() - recStartT;
+		const localT = Math.min(1, elapsed / recDurationMs);
+		const t = recStartNorm + localT * recSpanNorm;
+		setPlayhead(t);
+		if (anyCameraKeys) {
 			const s = sampleCameraAt(t);
 			if (s) applyCameraState(s);
-			if (localT < 1) requestAnimationFrame(animate);
-		};
-		animate();
-	}
+		}
+		if (localT < 1) requestAnimationFrame(animate);
+	};
+	animate();
 
 	const stream = canvas.captureStream(fps);
 	recordChunks = [];
@@ -7111,6 +7990,8 @@ async function startRecording() {
 		recordedBlob = new Blob(recordChunks, { type: "video/webm" });
 		recording = false;
 		setRecordingMode(false);
+		const recStatusEl = document.getElementById("tl-rec-status");
+		if (recStatusEl) recStatusEl.hidden = true;
 		// Pause FBX mixers so the rig doesn't keep animating in the viewport after
 		// the recording ends — startRecording sets timeScale=1 to capture motion,
 		// but the mixer would otherwise stay running forever, breaking playhead
@@ -7122,6 +8003,7 @@ async function startRecording() {
 		renderer.setSize(prevW, prevH, false);
 		canvas.style.width = prevStyleW;
 		canvas.style.height = prevStyleH;
+		setActiveView(_restoreViewAfterRec);
 		tlRec.classList.remove("recording");
 		statusEl.classList.remove("recording");
 		updateStatus(`uploading ${(recordedBlob.size/1024/1024).toFixed(2)} MB…`);
@@ -7136,6 +8018,14 @@ async function startRecording() {
 				tlRec.classList.add("rec-done");
 				setTimeout(() => tlRec.classList.remove("rec-done"), 1100);
 				notifyParentSaved();
+				// Land the recording in the viewport overlay (same "Render/Blockout/Viewport"
+				// switcher generated images/videos use) and refresh Assets so it can be
+				// dragged into Seedance's Ref video slot.
+				if (j.out_url && window.showResultInViewport) {
+					window.showResultInViewport("video", j.out_url, j.out_filename || "recording.mp4");
+				} else {
+					window.refreshAssets?.();
+				}
 			} else {
 				updateStatus(`upload failed: ${j.error}`);
 			}
@@ -7147,7 +8037,13 @@ async function startRecording() {
 	recording = true;
 	tlRec.classList.add("recording");
 	statusEl.classList.add("recording");
-	statusEl.textContent = `recording · ${duration.toFixed(1)}s @ ${fps}fps${useKeyframes ? ` · ${keyframes.length} keys` : ""}`;
+	const recLabel = `recording · ${duration.toFixed(1)}s @ ${fps}fps${anyCameraKeys ? ` · ${keyframes.length} cam keys` : ""}${anyObjectKeys ? " · obj keys" : ""}`;
+	statusEl.textContent = recLabel;
+	const recStatusEl = document.getElementById("tl-rec-status");
+	if (recStatusEl) {
+		recStatusEl.textContent = recLabel;
+		recStatusEl.hidden = false;
+	}
 	mediaRecorder.start();
 	setTimeout(() => { if (mediaRecorder.state === "recording") mediaRecorder.stop(); }, recDurationMs);
 }
@@ -7247,11 +8143,18 @@ function serializeScene() {
 			keyframes: serializeObjectKeyframes(o),
 		})),
 		camera: {
-			position: camera.position.toArray(),
-			target: orbit.target.toArray(),
-			up: camera.up.toArray(),
-			fov: camera.fov,
+			position: sceneCam.position.toArray(),
+			target: (activeView === "scene" ? orbit.target : sceneCamTarget).toArray(),
+			up: sceneCam.up.toArray(),
+			fov: sceneCam.fov,
 		},
+		renderCamera: {
+			position: renderCam.position.toArray(),
+			target: (activeView === "camera" ? orbit.target : renderCamTarget).toArray(),
+			up: renderCam.up.toArray(),
+			fov: renderCam.fov,
+		},
+		activeView,
 		aspect: aspectSelect.value,
 		duration: parseFloat(document.getElementById("duration").value),
 		fps: parseInt(document.getElementById("fps").value, 10),
@@ -7271,6 +8174,7 @@ function serializeScene() {
 		keyframes: keyframes.map(k => ({
 			t: k.t,
 			pos: k.pos.toArray(),
+			quat: k.quat ? [k.quat.x, k.quat.y, k.quat.z, k.quat.w] : undefined,
 			target: k.target.toArray(),
 			up: (k.up || new THREE.Vector3(0, 1, 0)).toArray(),
 			fov: k.fov,
@@ -7368,16 +8272,28 @@ async function deserializeScene(state, opts = {}) {
 	}
 
 	if (state.camera) {
-		camera.position.fromArray(state.camera.position);
-		orbit.target.fromArray(state.camera.target);
-		if (Array.isArray(state.camera.up)) camera.up.fromArray(state.camera.up).normalize();
-		else camera.up.set(0, 1, 0);
-		camera.fov = state.camera.fov;
-		camera.updateProjectionMatrix();
+		sceneCam.position.fromArray(state.camera.position);
+		sceneCamTarget.fromArray(state.camera.target);
+		if (Array.isArray(state.camera.up)) sceneCam.up.fromArray(state.camera.up).normalize();
+		else sceneCam.up.set(0, 1, 0);
+		sceneCam.fov = state.camera.fov;
+		sceneCam.updateProjectionMatrix();
+		if (activeView === "scene") orbit.target.copy(sceneCamTarget);
 		const fovInput = document.getElementById("fov");
 		fovInput.value = state.camera.fov;
 		document.getElementById("fov-val").textContent = `${Math.round(state.camera.fov)}°`;
 	}
+	if (state.renderCamera) {
+		renderCam.position.fromArray(state.renderCamera.position);
+		renderCamTarget.fromArray(state.renderCamera.target);
+		if (Array.isArray(state.renderCamera.up)) renderCam.up.fromArray(state.renderCamera.up).normalize();
+		else renderCam.up.set(0, 1, 0);
+		renderCam.fov = state.renderCamera.fov;
+		renderCam.lookAt(renderCamTarget);
+		renderCam.updateProjectionMatrix();
+		if (activeView === "camera") orbit.target.copy(renderCamTarget);
+	}
+	if (state.activeView && state.activeView !== activeView) setActiveView(state.activeView);
 	if (state.aspect) {
 		aspectSelect.value = state.aspect;
 		handleResize();
@@ -7436,6 +8352,7 @@ async function deserializeScene(state, opts = {}) {
 		keyframes = state.keyframes.map(k => ({
 			t: k.t,
 			pos: new THREE.Vector3().fromArray(k.pos),
+			quat: Array.isArray(k.quat) ? new THREE.Quaternion(k.quat[0], k.quat[1], k.quat[2], k.quat[3]) : undefined,
 			target: new THREE.Vector3().fromArray(k.target),
 			up: Array.isArray(k.up) ? new THREE.Vector3().fromArray(k.up) : new THREE.Vector3(0, 1, 0),
 			fov: k.fov,
@@ -7448,7 +8365,7 @@ async function deserializeScene(state, opts = {}) {
 
 	transform.detach();
 	selected = null;
-	forceRightPane("scene", "Scene");
+	forceRightPane(defaultRightPane());
 	refreshOutliner();
 	// Always clamp the playhead into the trim region with the gap so the yellow line never
 	// sits directly on top of an orange trim handle at scene start
@@ -7505,13 +8422,25 @@ async function saveScene() {
 function applyLightSync(state) {
 	if (!state) return;
 	if (state.camera) {
-		camera.position.fromArray(state.camera.position);
-		orbit.target.fromArray(state.camera.target);
-		if (Array.isArray(state.camera.up)) camera.up.fromArray(state.camera.up).normalize();
+		sceneCam.position.fromArray(state.camera.position);
+		sceneCamTarget.fromArray(state.camera.target);
+		if (Array.isArray(state.camera.up)) sceneCam.up.fromArray(state.camera.up).normalize();
 		if (typeof state.camera.fov === "number") {
-			camera.fov = state.camera.fov;
-			camera.updateProjectionMatrix();
+			sceneCam.fov = state.camera.fov;
+			sceneCam.updateProjectionMatrix();
 		}
+		if (activeView === "scene") orbit.target.copy(sceneCamTarget);
+	}
+	if (state.renderCamera) {
+		renderCam.position.fromArray(state.renderCamera.position);
+		renderCamTarget.fromArray(state.renderCamera.target);
+		if (Array.isArray(state.renderCamera.up)) renderCam.up.fromArray(state.renderCamera.up).normalize();
+		if (typeof state.renderCamera.fov === "number") {
+			renderCam.fov = state.renderCamera.fov;
+			renderCam.updateProjectionMatrix();
+		}
+		renderCam.lookAt(renderCamTarget);
+		if (activeView === "camera") orbit.target.copy(renderCamTarget);
 	}
 	if (state.aspect && state.aspect !== aspectSelect.value) {
 		aspectSelect.value = state.aspect;
@@ -7534,6 +8463,7 @@ function applyLightSync(state) {
 		keyframes = state.keyframes.map(k => ({
 			t: k.t,
 			pos: new THREE.Vector3().fromArray(k.pos),
+			quat: Array.isArray(k.quat) ? new THREE.Quaternion(k.quat[0], k.quat[1], k.quat[2], k.quat[3]) : undefined,
 			target: new THREE.Vector3().fromArray(k.target),
 			up: Array.isArray(k.up) ? new THREE.Vector3().fromArray(k.up) : new THREE.Vector3(0, 1, 0),
 			fov: k.fov,
@@ -7830,12 +8760,14 @@ function showAlert(title, message, opts = {}) {
 		const card = document.createElement("div");
 		Object.assign(card.style, {
 			background: "#15151c", border: "1px solid rgba(255,255,255,0.08)",
-			borderRadius: "10px", padding: "18px", minWidth: "320px", maxWidth: "420px",
+			borderRadius: "10px", padding: "18px", minWidth: "320px",
+			maxWidth: "min(560px, 92vw)", maxHeight: "80vh",
+			display: "flex", flexDirection: "column",
 			color: "#ddd", fontFamily: "Inter, sans-serif", fontSize: "12px",
 		});
 		card.innerHTML = `
 			<div style="font-size:13px;font-weight:600;margin-bottom:8px">${title}</div>
-			<div style="color:rgba(255,255,255,0.65);line-height:1.5">${message}</div>
+			<div style="color:rgba(255,255,255,0.65);line-height:1.5;overflow-y:auto;overflow-x:hidden;word-break:break-word;overflow-wrap:anywhere">${message}</div>
 		`;
 		const row = document.createElement("div");
 		Object.assign(row.style, { display: "flex", justifyContent: "flex-end", marginTop: "16px" });
@@ -7872,12 +8804,14 @@ function showConfirm(title, message, opts = {}) {
 		const card = document.createElement("div");
 		Object.assign(card.style, {
 			background: "#15151c", border: "1px solid rgba(255,255,255,0.08)",
-			borderRadius: "10px", padding: "18px", minWidth: "320px", maxWidth: "420px",
+			borderRadius: "10px", padding: "18px", minWidth: "320px",
+			maxWidth: "min(560px, 92vw)", maxHeight: "80vh",
+			display: "flex", flexDirection: "column",
 			color: "#ddd", fontFamily: "Inter, sans-serif", fontSize: "12px",
 		});
 		card.innerHTML = `
 			<div style="font-size:13px;font-weight:600;margin-bottom:8px">${title}</div>
-			<div style="color:rgba(255,255,255,0.65);line-height:1.5">${message}</div>
+			<div style="color:rgba(255,255,255,0.65);line-height:1.5;overflow-y:auto;overflow-x:hidden;word-break:break-word;overflow-wrap:anywhere">${message}</div>
 		`;
 		const row = document.createElement("div");
 		Object.assign(row.style, { display: "flex", justifyContent: "flex-end", gap: "6px", marginTop: "16px" });
@@ -8220,6 +9154,7 @@ async function loadPrompt() {
 }
 
 (async () => {
+	const bootStart = performance.now();
 	// Paint the empty-state placeholder immediately so the outliner doesn't show as a
 	// blank section while loadScene() is still flying. refreshOutliner is called again
 	// at the end of deserializeScene with the real state.
@@ -8242,8 +9177,30 @@ async function loadPrompt() {
 	// object so the right panel shows its properties instead of the scene placeholder.
 	refreshOutliner();
 	if (!selected && objects.length > 0) select(objects[0]);
+	// Fresh scenes open in Scene view — user sees the seeded cube and the render
+	// camera's wireframe pointed at it, so the "shot" is spatially legible from the
+	// first frame. Aim renderCam at the cube (which was seeded at y=0.5), reframe
+	// sceneCam so both are in view, and show the wireframe (helper starts hidden).
+	if (!loaded) {
+		renderCamTarget.set(0, 0.5, 0);
+		renderCam.up.set(0, 1, 0);
+		renderCam.lookAt(renderCamTarget);
+		frameSceneCamOnShot();
+		renderCamHelper.visible = activeView === "scene";
+	}
 	await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 	autoSnapshot().catch(() => {});
+	// Curtain-down: hold the overlay for at least ~250ms so quick boots don't flash it,
+	// then fade out. The .hidden class handles both opacity and pointer-events.
+	const initOverlay = document.getElementById("init-overlay");
+	if (initOverlay) {
+		const minShown = 250;
+		const wait = Math.max(0, minShown - (performance.now() - bootStart));
+		setTimeout(() => {
+			initOverlay.classList.add("hidden");
+			setTimeout(() => initOverlay.remove(), 400);
+		}, wait);
+	}
 })();
 
 if (IS_PREVIEW) {
