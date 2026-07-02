@@ -58,6 +58,11 @@ def _load_env_file(*, override: bool = True) -> bool:
 
 
 _load_env_file()
+# Backfill COMFY_CLOUD_API_KEY from COMFY_API_KEY for users whose .env predates
+# the split. `comfy run --where cloud` reads the _CLOUD_ variant; `comfy generate`
+# reads the plain one. Keeping both aligned means one key covers both paths.
+if os.environ.get("COMFY_API_KEY") and not os.environ.get("COMFY_CLOUD_API_KEY"):
+    os.environ["COMFY_CLOUD_API_KEY"] = os.environ["COMFY_API_KEY"]
 
 
 def _read_env_kv() -> dict[str, str]:
@@ -339,7 +344,31 @@ async def save_video(
             print(f"[cb-app] ffmpeg rc={r.returncode}: {r.stderr.decode(errors='ignore')[:300]}")
 
     _video_store[node_id] = {"path": str(final_path)}
-    return JSONResponse({"success": True, "path": str(final_path), "bytes": len(file_bytes), "mp4": converted})
+
+    # Also drop a timestamped copy into the assets namespace so the recording shows
+    # up in the Assets modal (glob "out_*") and can be dragged into a Seedance Ref
+    # video slot. Distinct filename per recording preserves history — the primary
+    # node_<UID>.mp4 keeps getting overwritten as before for /comfyblockout/video/<id>.
+    out_url = None
+    out_filename = None
+    try:
+        import shutil, time
+        out_ext = final_path.suffix.lower() or ".mp4"
+        out_filename = f"out_rec_{node_id}_{int(time.time() * 1000)}{out_ext}"
+        out_path = DATA_DIR / out_filename
+        shutil.copyfile(final_path, out_path)
+        out_url = f"/data/{out_filename}"
+    except Exception as e:
+        print(f"[cb-app] recording asset copy failed: {e}")
+
+    return JSONResponse({
+        "success": True,
+        "path": str(final_path),
+        "bytes": len(file_bytes),
+        "mp4": converted,
+        "out_url": out_url,
+        "out_filename": out_filename,
+    })
 
 
 @app.post("/comfyblockout/save_image")
@@ -675,7 +704,11 @@ async def auth_logout():
 @app.post("/api/auth/key")
 async def auth_key(request: Request):
     """Persist a Comfy Cloud API key to .env and load it into the current process
-    so subsequent `comfy generate` calls authenticate as the user."""
+    so subsequent `comfy generate` and `comfy run --where cloud` calls authenticate
+    as the user. The CLI reads two different names depending on the mode:
+      COMFY_API_KEY       — partner-node auth (`comfy generate <provider>`)
+      COMFY_CLOUD_API_KEY — Cloud runner auth (`comfy run/upload/download --where cloud`)
+    We mirror the same key into both so the user only pastes it once."""
     body = await request.json()
     key = str(body.get("key", "")).strip()
     if not key:
@@ -683,8 +716,10 @@ async def auth_key(request: Request):
     if not key.startswith("comfyui-"):
         raise HTTPException(400, "key should start with 'comfyui-'")
     os.environ["COMFY_API_KEY"] = key
+    os.environ["COMFY_CLOUD_API_KEY"] = key
     kv = _read_env_kv()
     kv["COMFY_API_KEY"] = key
+    kv["COMFY_CLOUD_API_KEY"] = key
     _write_env_kv(kv)
     return {"saved": True}
 
@@ -692,8 +727,10 @@ async def auth_key(request: Request):
 @app.delete("/api/auth/key")
 async def auth_key_clear():
     os.environ.pop("COMFY_API_KEY", None)
+    os.environ.pop("COMFY_CLOUD_API_KEY", None)
     kv = _read_env_kv()
     kv.pop("COMFY_API_KEY", None)
+    kv.pop("COMFY_CLOUD_API_KEY", None)
     _write_env_kv(kv)
     return {"cleared": True}
 
@@ -889,6 +926,32 @@ async def run_module(module_id: str, request: Request):
             if not info or not Path(info["path"]).exists():
                 raise HTTPException(400, "no scene video recorded — record in the editor first")
             inputs["video_path"] = Path(info["path"])
+
+    # Optional image_url override — the frontend's gen-cell source-image slot passes
+    # this when the user picked/dragged a specific image instead of using the auto
+    # viewport snapshot. Resolve /data/... to a local file; anything else gets
+    # fetched to a temp file for `comfy upload` to consume.
+    image_url = inputs.pop("image_url", None)
+    if image_url:
+        import tempfile as _tempfile, urllib.request as _urlreq
+        try:
+            if image_url.startswith("/data/"):
+                candidate = DATA_DIR / image_url[len("/data/"):]
+                if not candidate.exists():
+                    raise HTTPException(400, f"source image not found: {image_url}")
+                inputs["image_path"] = candidate
+            elif image_url.startswith(("http://", "https://")):
+                suffix = Path(image_url.split("?", 1)[0]).suffix or ".png"
+                tmp = _tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+                tmp.close()
+                _urlreq.urlretrieve(image_url, tmp.name)
+                inputs["image_path"] = Path(tmp.name)
+            else:
+                raise HTTPException(400, f"unrecognized image_url scheme: {image_url}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"couldn't fetch image_url: {e}")
 
     # Auto-inject user-uploaded reference URLs (signed URLs from comfy generate upload)
     # so modules that opt-in (like nano-banana) get them without the client re-sending each id.

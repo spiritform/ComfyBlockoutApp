@@ -41,6 +41,11 @@ def _run_cli_sync(cmd: list[str], cwd: Path | None, timeout: int) -> tuple[int, 
     import os
     import subprocess
     env = os.environ.copy()
+    # Force UTF-8 on the child's stdio. Comfy CLI's Rich renderer emits glyphs
+    # (arrows, dashes, box-drawing) that crash Python's default cp1252 encoding
+    # on Windows when stdout is piped instead of a TTY.
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    env.setdefault("PYTHONUTF8", "1")
     try:
         r = subprocess.run(
             cmd,
