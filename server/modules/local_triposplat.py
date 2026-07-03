@@ -151,6 +151,21 @@ def _pick_splat_from_node_outs(node_outs: dict) -> dict | None:
     return None
 
 
+def _save_thumb(source_image: Path, output_ply: Path) -> None:
+    """Save a copy of the source image next to the .ply so the Assets pane can
+    render it as the tile thumbnail. Named `<stem>.thumb.<ext>` so the
+    /api/assets/list endpoint pairs them by prefix. Best-effort — a failed
+    copy shouldn't crash the module."""
+    try:
+        if not source_image or not source_image.exists():
+            return
+        src_ext = source_image.suffix.lstrip(".").lower() or "png"
+        thumb = output_ply.with_suffix(f".thumb.{src_ext}")
+        shutil.copy(str(source_image), str(thumb))
+    except Exception as e:
+        print(f"[cb-app] triposplat: thumb save skipped: {e}")
+
+
 def _scan_local_for_new_splat(start_ts: float) -> Path | None:
     """After a run, look at the local ComfyUI output dir for any splat file
     modified after the run started. Newest wins."""
@@ -225,6 +240,7 @@ async def run(*, image_path: Path, data_dir: Path, **_):
             ext = Path(src_filename).suffix.lstrip(".").lower() or "ply"
             dst = new_output_path(data_dir, "triposplat-local", ext)
             await _download(client, src_filename, subfolder, out_type, dst)
+            _save_thumb(image_path, dst)
             return {"path": str(dst), "filename": dst.name, "ext": ext}
 
         # --- Attempt 3: filesystem fallback. SplatToFile3D on the current
@@ -236,6 +252,7 @@ async def run(*, image_path: Path, data_dir: Path, **_):
             ext = local_hit.suffix.lstrip(".").lower() or "ply"
             dst = new_output_path(data_dir, "triposplat-local", ext)
             shutil.copy(str(local_hit), str(dst))
+            _save_thumb(image_path, dst)
             print(f"[cb-app] triposplat: splat via filesystem fallback: {local_hit} -> {dst}")
             return {"path": str(dst), "filename": dst.name, "ext": ext}
 

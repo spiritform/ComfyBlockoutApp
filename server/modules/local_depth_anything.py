@@ -1,12 +1,12 @@
-"""Local ComfyUI Depth Anything 3 — image → depth-map image.
+"""Local ComfyUI Depth (Lotus) — image → depth-map image.
 
-Runs the utility_depth_anything3_image_depth_estimation workflow on the user's
-local ComfyUI at 127.0.0.1:8188. Takes an input image (typically a viewport
-snapshot or a picked asset), returns a depth-map PNG that lands in the Assets
-pane and can be dragged into other cells' reference slots.
+Runs the image_lotus_depth workflow on the user's local ComfyUI at
+127.0.0.1:8188. Takes an input image (typically a viewport snapshot or a picked
+asset), returns a depth-map PNG that lands in the Assets pane and can be
+dragged into other cells' reference slots.
 
 Same shape as local_triposplat.py, just image-in / image-out. The workflow's
-PreviewImage node registers with ComfyUI's history dict, so we don't need the
+SaveImage node registers with ComfyUI's history dict, so we don't need the
 filesystem-scan fallback that SplatToFile3D required.
 """
 
@@ -23,8 +23,8 @@ from ._base import ModuleDef, new_output_path
 
 WORKFLOWS_DIR = Path(__file__).resolve().parent.parent / "workflows"
 COMFY_URL = "http://127.0.0.1:8188"
-WORKFLOW_NAME = "utility_depth_anything3_image_depth_estimation.json"
-LOAD_IMAGE_NODE = "85"
+WORKFLOW_NAME = "image_lotus_depth.json"
+LOAD_IMAGE_NODE = "12"
 OUTPUT_TITLE_MARKER = "BLOCKOUT_OUTPUT"
 POLL_INTERVAL = 2.0
 POLL_TIMEOUT = 1200
@@ -172,12 +172,12 @@ async def run(*, image_path: Path, data_dir: Path, **_):
 
 MODULE = ModuleDef(
     id="depth-anything-local",
-    label="Local Depth Anything 3 — Image → Depth Map",
+    label="Local Depth (Lotus) — Image → Depth Map",
     kind="image",
     inputs=[
         {"name": "image", "type": "scene-image", "required": True,
          "label": "Source image",
-         "help": "Runs Depth Anything 3 on your local ComfyUI; returns a depth-map PNG that lands in the Assets pane."},
+         "help": "Runs the Lotus depth model on your local ComfyUI; returns a depth-map PNG that lands in the Assets pane."},
     ],
     output_ext="png",
     run=run,

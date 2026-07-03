@@ -1449,9 +1449,23 @@ async def cancel_local_comfy():
 @app.get("/api/assets/list")
 async def assets_list():
     items = []
+    # Two-pass so we can pair 3D outputs with their `<stem>.thumb.<ext>`
+    # companion image before returning. Skip .thumb.* files from the listing
+    # itself — they're an implementation detail, not standalone assets.
+    thumbs: dict[str, Path] = {}
+    all_files: list[Path] = []
     for p in DATA_DIR.glob("out_*.*"):
         if not p.is_file():
             continue
+        # Match `out_<stem>.thumb.<ext>` — .stem strips the last extension
+        # only, so we still see `.thumb` in the remaining name.
+        if p.stem.endswith(".thumb"):
+            base = p.stem[: -len(".thumb")]  # drop `.thumb`
+            thumbs[base] = p
+            continue
+        all_files.append(p)
+
+    for p in all_files:
         ext = p.suffix.lower().lstrip(".")
         kind = None
         if ext in {"png", "jpg", "jpeg", "webp"}:
@@ -1459,8 +1473,6 @@ async def assets_list():
         elif ext in {"mp4", "webm", "mov"}:
             kind = "video"
         elif ext in {"glb", "gltf", "obj", "fbx", "ply", "spz", "splat", "ksplat"}:
-            # 3D outputs (Tripo mesh, TripoSplat splat). No thumb — the frontend
-            # renders a placeholder tile and re-imports on drag / double-click.
             kind = "3d"
         if not kind:
             continue
@@ -1469,14 +1481,23 @@ async def assets_list():
         except ValueError:
             continue
         st = p.stat()
-        items.append({
+        entry = {
             "url": f"/data/{rel}",
             "filename": p.name,
             "kind": kind,
             "ext": ext,
             "size": st.st_size,
             "mtime": st.st_mtime,
-        })
+        }
+        # Attach paired thumb if we saved one (currently only 3D outputs do).
+        thumb = thumbs.get(p.stem)
+        if thumb:
+            try:
+                trel = thumb.relative_to(DATA_DIR).as_posix()
+                entry["thumbUrl"] = f"/data/{trel}"
+            except ValueError:
+                pass
+        items.append(entry)
     items.sort(key=lambda x: x["mtime"], reverse=True)
     return {"assets": items[:200]}
 
