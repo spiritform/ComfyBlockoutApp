@@ -907,7 +907,7 @@
 		transform: translateX(14px); background: #1a1208;
 	}
 	.postfx-body { display: none; margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.05); }
-	.postfx-chip.enabled .postfx-body { display: block; }
+	.postfx-chip.expanded .postfx-body { display: block; }
 	.postfx-check {
 		display: flex; align-items: center; gap: 6px;
 		font-size: 11px; color: rgba(255,255,255,0.65);
@@ -1853,7 +1853,7 @@
 			<button class="th-btn-mini" id="project-new" title="Clear scene and start fresh">New</button>
 			<button class="th-btn-mini" id="project-open" title="Open a saved project">Open</button>
 			<button class="th-btn-mini" id="project-save" title="Save (Ctrl+S)">Save</button>
-			<button class="th-btn-mini" id="project-save-as" title="Save as a new project" hidden>Save As</button>
+			<button class="th-btn-mini" id="project-save-as" title="Save as a new project">Save As</button>
 			<button class="th-btn-mini th-btn-assets" id="th-assets" title="Assets — generated images + videos">Assets</button>
 			<button class="th-btn-mini" id="th-assistant" title="AI Agent — chat + Comfy MCP tools">AI Agent</button>
 			<button class="th-icon-btn" id="th-settings" title="Settings">
@@ -3113,10 +3113,11 @@ let aoEnabled = false;
 async function ensureAOComposer() {
 	if (aoComposer) return true;
 	try {
-		const [{ EffectComposer }, { RenderPass }, { OutputPass }, n8] = await Promise.all([
+		const [{ EffectComposer }, { RenderPass }, { OutputPass }, { SMAAPass }, n8] = await Promise.all([
 			import("three/addons/postprocessing/EffectComposer.js"),
 			import("three/addons/postprocessing/RenderPass.js"),
 			import("three/addons/postprocessing/OutputPass.js"),
+			import("three/addons/postprocessing/SMAAPass.js"),
 			import("n8ao"),
 		]);
 		const s = renderer.getSize(new THREE.Vector2());
@@ -3125,13 +3126,14 @@ async function ensureAOComposer() {
 		// depth *renderbuffer* (write-only) — the AO shader samples garbage and
 		// the output looks like a brightness shift instead of shading. Confirmed
 		// in the ao-mockup.
+		//
+		// RT otherwise matches three's default EffectComposer target so OutputPass
+		// handles the color-space conversion the way three expects — setting
+		// `colorSpace` explicitly here was double-triggering sRGB conversion.
 		const depthTex = new THREE.DepthTexture(s.x, s.y);
 		depthTex.type = THREE.UnsignedIntType;
 		const rt = new THREE.WebGLRenderTarget(s.x, s.y, {
 			type: THREE.HalfFloatType,
-			minFilter: THREE.LinearFilter,
-			magFilter: THREE.LinearFilter,
-			colorSpace: THREE.LinearSRGBColorSpace,
 			depthTexture: depthTex,
 		});
 		rt.texture.name = "cb-ao-composer.rt";
@@ -3149,8 +3151,11 @@ async function ensureAOComposer() {
 		if (aoPass.setGBuffer) aoPass.setGBuffer(depthTex, undefined);
 		if (typeof aoPass.setDisplayMode === "function") aoPass.setDisplayMode("Combined");
 		aoComposer.addPass(aoPass);
+		// SMAA gets the crisp edges back — EffectComposer bypasses the renderer's
+		// MSAA, so without an AA pass the whole composited output looks jaggy.
+		aoComposer.addPass(new SMAAPass(s.x * renderer.getPixelRatio(), s.y * renderer.getPixelRatio()));
 		aoComposer.addPass(new OutputPass());
-		console.log("[ComfyBlockout] AO composer ready (N8AOPass + explicit depth)");
+		console.log("[ComfyBlockout] AO composer ready (N8AOPass + SMAA + explicit depth)");
 		return true;
 	} catch (e) {
 		console.error("[ComfyBlockout] post pipeline init failed:", e);
@@ -7599,12 +7604,23 @@ aoToggle?.addEventListener("change", async e => {
 	}
 	saveSceneDebounced?.();
 });
-// Chip head + toggle button both flip the hidden checkbox, which fires the
-// change event above and does the actual work.
-document.getElementById("postfx-ao")?.querySelector(".postfx-head")?.addEventListener("click", () => {
-	aoToggle.checked = !aoToggle.checked;
-	aoToggle.dispatchEvent(new Event("change"));
-});
+// Head click = expand/collapse the chip (independent of on/off).
+// Toggle pill click = enable/disable (independent of expand state).
+(() => {
+	const chip = document.getElementById("postfx-ao");
+	const head = chip?.querySelector(".postfx-head");
+	const pill = chip?.querySelector(".postfx-toggle");
+	head?.addEventListener("click", (e) => {
+		// Let the toggle pill's own click fire without also triggering expand.
+		if (e.target.closest(".postfx-toggle")) return;
+		chip.classList.toggle("expanded");
+	});
+	pill?.addEventListener("click", (e) => {
+		e.stopPropagation();
+		aoToggle.checked = !aoToggle.checked;
+		aoToggle.dispatchEvent(new Event("change"));
+	});
+})();
 aoIntensity?.addEventListener("input", e => {
 	const v = parseFloat(e.target.value);
 	aoIntensityVal.textContent = v.toFixed(1);
@@ -8190,7 +8206,14 @@ function loop() {
 			for (const p of aoComposer.passes) {
 				if (p.camera) p.camera = camera;
 			}
+			// Color-space handoff: while the composer owns the render, the
+			// renderer must NOT apply sRGB conversion (OutputPass at the tail
+			// does it). Without this the composited output comes out visibly
+			// brighter than a raw render — sRGB gets applied twice.
+			const prevCS = renderer.outputColorSpace;
+			renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
 			aoComposer.render();
+			renderer.outputColorSpace = prevCS;
 		} else {
 			renderer.render(scene, camera);
 		}
