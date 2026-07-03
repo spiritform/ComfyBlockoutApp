@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>AO Mockup</title>
+<style>
+	body { margin: 0; background: #0e0f13; color: #e6e6ea; font: 12px system-ui, sans-serif; overflow: hidden; }
+	#panel {
+		position: fixed; top: 12px; left: 12px; z-index: 10;
+		background: rgba(20,20,24,0.85); backdrop-filter: blur(8px);
+		border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
+		padding: 12px 14px; min-width: 220px;
+	}
+	h1 { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+		color: rgba(255,255,255,0.5); margin: 0 0 10px; font-weight: 500; }
+	.row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+	label { flex: 0 0 70px; color: rgba(255,255,255,0.55); font-size: 11px; }
+	input[type="range"] { flex: 1; accent-color: #ffb454; }
+	.val { flex: 0 0 40px; text-align: right; font-variant-numeric: tabular-nums;
+		color: rgba(255,255,255,0.75); font-size: 10px; }
+	select { flex: 1; background: rgba(255,255,255,0.06); color: #e6e6ea;
+		border: none; border-radius: 4px; padding: 4px 6px; font: inherit; font-size: 11px; }
+	select option { color: #111; background: #f0f0f0; }
+	.check { display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+		color: rgba(255,255,255,0.7); cursor: pointer; }
+	.check input { accent-color: #ffb454; cursor: pointer; }
+	.sep { border-top: 1px solid rgba(255,255,255,0.06); margin: 10px 0; }
+	#info {
+		position: fixed; bottom: 12px; left: 12px; z-index: 10;
+		font-size: 10px; color: rgba(255,255,255,0.4);
+		background: rgba(20,20,24,0.7); padding: 6px 10px; border-radius: 6px;
+	}
+</style>
+
+<script type="importmap">
+{
+	"imports": {
+		"three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+		"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+		"three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+		"n8ao": "https://esm.sh/n8ao@1.10.2?external=three",
+		"postprocessing": "https://esm.sh/postprocessing@6.39.2?external=three",
+		"realism-effects": "https://esm.sh/realism-effects?external=three,postprocessing"
+	}
+}
+</script>
+</head>
+<body>
+
+<div id="panel">
+	<h1>AO Mockup</h1>
+
+	<div class="row">
+		<label>Algorithm</label>
+		<select id="algo">
+			<option value="none">Off (raw)</option>
+			<option value="ssao">SSAOPass (three)</option>
+			<option value="sao">SAOPass (three)</option>
+			<option value="n8ao">N8AOPass</option>
+			<option value="re-hbao">realism-effects HBAO</option>
+			<option value="re-ssao">realism-effects SSAO</option>
+			<option value="re-ssgi">realism-effects SSGI</option>
+		</select>
+	</div>
+
+	<div class="sep"></div>
+
+	<div class="row"><label>Intensity</label>
+		<input type="range" id="intensity" min="0" max="20" step="0.1" value="3.0">
+		<span class="val" id="intensity-v">3.0</span></div>
+	<div class="row"><label>Radius</label>
+		<input type="range" id="radius" min="0.1" max="10" step="0.1" value="1.0">
+		<span class="val" id="radius-v">1.0</span></div>
+	<div class="row"><label>Falloff/Min</label>
+		<input type="range" id="falloff" min="0" max="1" step="0.001" value="0.005">
+		<span class="val" id="falloff-v">0.005</span></div>
+	<div class="row"><label>Samples</label>
+		<input type="range" id="samples" min="4" max="64" step="1" value="16">
+		<span class="val" id="samples-v">16</span></div>
+
+	<label class="check">
+		<input type="checkbox" id="halfres"> Half resolution
+	</label>
+	<label class="check">
+		<input type="checkbox" id="screen-radius"> Screen-space radius (n8ao)
+	</label>
+
+	<div class="sep"></div>
+
+	<div class="row"><label>Object</label>
+		<select id="which-obj">
+			<option value="torus">Torus Knot</option>
+			<option value="cubes">Cube stack</option>
+			<option value="sphere">Sphere</option>
+			<option value="teapot">Import (drop .glb)</option>
+		</select>
+	</div>
+
+	<div class="row"><label>N8 output</label>
+		<select id="n8-output">
+			<option value="Combined">Combined</option>
+			<option value="AO">AO only</option>
+			<option value="Split">Split</option>
+			<option value="No AO">No AO</option>
+		</select>
+	</div>
+</div>
+
+<div id="info">Drag file to load a GLB. Orbit with mouse.</div>
+
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
+import { SAOPass } from "three/addons/postprocessing/SAOPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { N8AOPass } from "n8ao";
+
+// ---------- scene ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x0e0f13);
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(3, 2, 4);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.4;
+
+// Neutral ground so AO has something to sit on
+const ground = new THREE.Mesh(
+	new THREE.PlaneGeometry(20, 20),
+	new THREE.MeshStandardMaterial({ color: 0x8c8c92, roughness: 0.9 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -1.2;
+scene.add(ground);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+// ---------- object stack ----------
+const objectHost = new THREE.Group();
+scene.add(objectHost);
+
+function clearObjects() {
+	while (objectHost.children.length) {
+		const c = objectHost.children[0];
+		objectHost.remove(c);
+		c.geometry?.dispose?.();
+		c.material?.dispose?.();
+	}
+}
+
+function makeMesh(geom, color = 0xd8d8dc) {
+	const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.05 });
+	return new THREE.Mesh(geom, mat);
+}
+
+function loadObject(kind) {
+	clearObjects();
+	if (kind === "torus") {
+		objectHost.add(makeMesh(new THREE.TorusKnotGeometry(0.7, 0.25, 128, 32)));
+	} else if (kind === "cubes") {
+		const positions = [
+			[0, -0.7, 0, 0xff6b6b],
+			[-0.6, -0.7, -0.6, 0x6bceff],
+			[0.6, -0.7, -0.6, 0xffd166],
+			[0, -0.3, -1.2, 0xa78bfa],
+			[0, -0.9, 0.5, 0x66d9a3],
+		];
+		for (const [x, y, z, c] of positions) {
+			const m = makeMesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), c);
+			m.position.set(x, y, z);
+			objectHost.add(m);
+		}
+	} else if (kind === "sphere") {
+		objectHost.add(makeMesh(new THREE.SphereGeometry(0.9, 64, 64)));
+	}
+}
+loadObject("torus");
+
+document.getElementById("which-obj").addEventListener("change", e => {
+	if (e.target.value !== "teapot") loadObject(e.target.value);
+});
+
+// ---------- drag & drop GLB ----------
+window.addEventListener("dragover", e => { e.preventDefault(); });
+window.addEventListener("drop", async e => {
+	e.preventDefault();
+	const f = e.dataTransfer?.files?.[0];
+	if (!f) return;
+	const buf = await f.arrayBuffer();
+	const loader = new GLTFLoader();
+	loader.parse(buf, "", gltf => {
+		clearObjects();
+		const root = gltf.scene;
+		// Fit to ~2 units, drop on ground
+		const box = new THREE.Box3().setFromObject(root);
+		const size = box.getSize(new THREE.Vector3()).length();
+		if (size > 0) root.scale.setScalar(2 / size);
+		const box2 = new THREE.Box3().setFromObject(root);
+		root.position.y -= box2.min.y - (-1.2);
+		objectHost.add(root);
+		document.getElementById("info").textContent = `Loaded ${f.name}`;
+	}, err => console.error(err));
+});
+
+// ---------- composer + passes ----------
+const w = window.innerWidth, h = window.innerHeight;
+let composer = null;
+let currentAlgo = "none";
+let currentPass = null;
+
+function makeDepthRT(width, height) {
+	// Explicit depth texture on the composer's render target so any AO pass has
+	// depth to sample. Without this, three's default EffectComposer target has
+	// a depth *renderbuffer* (write-only) — AO shaders can't sample it.
+	const depthTex = new THREE.DepthTexture(width, height);
+	depthTex.type = THREE.UnsignedIntType;
+	const rt = new THREE.WebGLRenderTarget(width, height, {
+		type: THREE.HalfFloatType,
+		minFilter: THREE.LinearFilter,
+		magFilter: THREE.LinearFilter,
+		colorSpace: THREE.LinearSRGBColorSpace,
+		depthTexture: depthTex,
+	});
+	rt.texture.name = "composer.rt";
+	return rt;
+}
+
+function buildComposer(algo) {
+	// Full teardown to avoid stale render targets.
+	currentPass = null;
+	const rt = makeDepthRT(w, h);
+	composer = new EffectComposer(renderer, rt);
+	composer.addPass(new RenderPass(scene, camera));
+	if (algo === "ssao") {
+		currentPass = new SSAOPass(scene, camera, w, h);
+		currentPass.output = SSAOPass.OUTPUT.Default;
+		composer.addPass(currentPass);
+	} else if (algo === "sao") {
+		currentPass = new SAOPass(scene, camera);
+		composer.addPass(currentPass);
+	} else if (algo === "n8ao") {
+		currentPass = new N8AOPass(scene, camera, w, h);
+		// Hand n8ao the shared depth texture explicitly if the pass exposes it.
+		if (currentPass.setGBuffer) currentPass.setGBuffer(rt.depthTexture, undefined);
+		composer.addPass(currentPass);
+	}
+	composer.addPass(new OutputPass());
+	applyParamsToPass();
+	console.log("[ao-mockup] composer built for", algo, "depth attached:", !!rt.depthTexture);
+}
+
+function applyParamsToPass() {
+	if (!currentPass) return;
+	const intensity = parseFloat(document.getElementById("intensity").value);
+	const radius = parseFloat(document.getElementById("radius").value);
+	const falloff = parseFloat(document.getElementById("falloff").value);
+	const samples = parseInt(document.getElementById("samples").value, 10);
+	const halfres = document.getElementById("halfres").checked;
+	const scRadius = document.getElementById("screen-radius").checked;
+	const n8out = document.getElementById("n8-output").value;
+
+	if (currentAlgo === "ssao") {
+		currentPass.kernelRadius = radius;
+		currentPass.minDistance = falloff;
+		currentPass.maxDistance = intensity * 0.1;
+	} else if (currentAlgo === "sao") {
+		currentPass.params.saoIntensity = intensity * 0.001;
+		currentPass.params.saoScale = radius;
+		currentPass.params.saoKernelRadius = radius * 10;
+		currentPass.params.saoMinResolution = falloff;
+	} else if (currentAlgo === "n8ao") {
+		currentPass.configuration.intensity = intensity;
+		currentPass.configuration.aoRadius = radius;
+		currentPass.configuration.distanceFalloff = falloff * 10; // scale to n8ao's range
+		currentPass.configuration.aoSamples = samples;
+		currentPass.configuration.halfRes = halfres;
+		currentPass.configuration.screenSpaceRadius = scRadius;
+		if (typeof currentPass.setDisplayMode === "function") currentPass.setDisplayMode(n8out);
+	}
+}
+
+document.getElementById("algo").addEventListener("change", e => {
+	currentAlgo = e.target.value;
+	if (currentAlgo === "none") { composer = null; currentPass = null; return; }
+	if (currentAlgo.startsWith("re-")) {
+		console.warn("[ao-mockup] realism-effects not wired yet — start with the three-based algos first");
+		return;
+	}
+	buildComposer(currentAlgo);
+});
+
+for (const id of ["intensity", "radius", "falloff", "samples"]) {
+	document.getElementById(id).addEventListener("input", e => {
+		document.getElementById(id + "-v").textContent = e.target.value;
+		applyParamsToPass();
+	});
+}
+for (const id of ["halfres", "screen-radius"]) {
+	document.getElementById(id).addEventListener("change", applyParamsToPass);
+}
+document.getElementById("n8-output").addEventListener("change", applyParamsToPass);
+
+// ---------- resize ----------
+window.addEventListener("resize", () => {
+	const w = window.innerWidth, h = window.innerHeight;
+	camera.aspect = w / h;
+	camera.updateProjectionMatrix();
+	renderer.setSize(w, h);
+	if (composer) composer.setSize(w, h);
+	if (currentPass?.setSize) currentPass.setSize(w, h);
+});
+
+// ---------- loop ----------
+function loop() {
+	requestAnimationFrame(loop);
+	controls.update();
+	if (composer && currentAlgo !== "none") composer.render();
+	else renderer.render(scene, camera);
+}
+loop();
+</script>
+</body>
+</html>

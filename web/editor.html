@@ -866,6 +866,55 @@
 	.prim-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
 	.prim-btn svg { width: 16px; height: 16px; }
 
+	/* Post FX chip list — one row per effect. Head has icon + name + on/off
+	   toggle. Body (sliders) shows only when the effect is enabled. */
+	.postfx-list { display: flex; flex-direction: column; gap: 4px; }
+	.postfx-chip {
+		background: rgba(255,255,255,0.04);
+		border-radius: 5px; padding: 6px 8px;
+	}
+	.postfx-chip.enabled { background: rgba(255,180,84,0.06); }
+	.postfx-head {
+		display: grid; grid-template-columns: 26px 1fr auto;
+		align-items: center; gap: 8px; cursor: pointer;
+		min-height: 24px;
+	}
+	.postfx-icon {
+		display: inline-flex; align-items: center; justify-content: center;
+		width: 26px; height: 26px; color: rgba(255,255,255,0.55);
+	}
+	.postfx-icon svg { width: 14px; height: 14px; }
+	.postfx-chip.enabled .postfx-icon { color: #ffb454; }
+	.postfx-name {
+		font-size: 11px; color: rgba(255,255,255,0.85);
+		letter-spacing: 0.02em;
+	}
+	.postfx-chip.enabled .postfx-name { color: #ffd28a; }
+	.postfx-toggle {
+		background: rgba(255,255,255,0.06); border: none; border-radius: 999px;
+		width: 30px; height: 16px; padding: 0; cursor: pointer;
+		display: inline-flex; align-items: center; position: relative;
+		transition: background 0.15s;
+	}
+	.postfx-dot {
+		position: absolute; left: 2px; top: 2px;
+		width: 12px; height: 12px; border-radius: 50%;
+		background: rgba(255,255,255,0.7);
+		transition: transform 0.15s, background 0.15s;
+	}
+	.postfx-chip.enabled .postfx-toggle { background: #ffb454; }
+	.postfx-chip.enabled .postfx-dot {
+		transform: translateX(14px); background: #1a1208;
+	}
+	.postfx-body { display: none; margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.05); }
+	.postfx-chip.enabled .postfx-body { display: block; }
+	.postfx-check {
+		display: flex; align-items: center; gap: 6px;
+		font-size: 11px; color: rgba(255,255,255,0.65);
+		margin-top: 4px; cursor: pointer;
+	}
+	.postfx-check input[type="checkbox"] { accent-color: #ffb454; cursor: pointer; }
+
 	.gen-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
 	.gen-cells { display: flex; flex-direction: column; gap: 4px; }
 	.gen-cell {
@@ -1687,6 +1736,9 @@
 		text-align: left;
 	}
 	.rp-bg-img-btn.has-image { color: #ffb454; }
+	/* Off state for the eye toggle — dimmer + slightly translucent so it reads as
+	   "disabled" next to the bright amber "on" state. */
+	#obj-texture-btn:not(.has-image) { opacity: 0.55; color: rgba(255,255,255,0.55); }
 	#obj-image-btn { cursor: pointer; }
 	.rp-bg-clear {
 		margin-left: auto;
@@ -2312,6 +2364,61 @@
 					</div>
 				</div>
 
+				<div class="section" id="postfx-section">
+					<div class="section-label">Post FX</div>
+					<div class="postfx-list">
+						<!-- Ambient Occlusion chip -->
+						<div class="postfx-chip" id="postfx-ao">
+							<div class="postfx-head">
+								<span class="postfx-icon">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18"/><path d="M12 3a9 9 0 0 0 0 18" opacity="0.35"/></svg>
+								</span>
+								<span class="postfx-name">Ambient Occlusion</span>
+								<button type="button" class="postfx-toggle" id="ao-toggle-btn" title="Enable / disable">
+									<span class="postfx-dot"></span>
+								</button>
+							</div>
+							<div class="postfx-body">
+								<div class="slider-row">
+									<label>Intensity</label>
+									<input type="range" id="ao-intensity" min="0" max="20" step="0.1" value="3.0">
+									<span class="slider-val" id="ao-intensity-val">3.0</span>
+								</div>
+								<div class="slider-row">
+									<label>Radius</label>
+									<input type="range" id="ao-radius" min="0.1" max="10" step="0.1" value="1.0">
+									<span class="slider-val" id="ao-radius-val">1.0</span>
+								</div>
+								<div class="slider-row">
+									<label>Falloff</label>
+									<input type="range" id="ao-falloff" min="0" max="1" step="0.01" value="1.0">
+									<span class="slider-val" id="ao-falloff-val">1.00</span>
+								</div>
+								<div class="slider-row">
+									<label>Samples</label>
+									<input type="range" id="ao-samples" min="4" max="64" step="1" value="16">
+									<span class="slider-val" id="ao-samples-val">16</span>
+								</div>
+								<div class="slider-row">
+									<label>Denoise</label>
+									<input type="range" id="ao-denoise" min="0" max="16" step="1" value="4">
+									<span class="slider-val" id="ao-denoise-val">4</span>
+								</div>
+								<label class="postfx-check">
+									<input type="checkbox" id="ao-screen-radius">
+									<span>Screen-space radius</span>
+								</label>
+								<label class="postfx-check">
+									<input type="checkbox" id="ao-halfres">
+									<span>Half resolution (perf)</span>
+								</label>
+							</div>
+						</div>
+					</div>
+					<!-- Hidden checkbox for compat with existing setAOEnabled handler wiring. -->
+					<input type="checkbox" id="ao-toggle" hidden>
+				</div>
+
 				<div class="section">
 					<div class="section-label">Render</div>
 					<div class="select-row" style="margin-bottom:6px">
@@ -2378,7 +2485,10 @@
 		"imports": {
 			"three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
 			"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
-			"@sparkjsdev/spark": "https://esm.sh/@sparkjsdev/spark@2.1.0?external=three"
+			"three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+			"@sparkjsdev/spark": "https://esm.sh/@sparkjsdev/spark@2.1.0?external=three",
+			"postprocessing": "https://esm.sh/postprocessing@6.39.2?external=three",
+			"n8ao": "https://esm.sh/n8ao@1.10.2?external=three"
 		}
 	}
 	</script>
@@ -2881,7 +2991,20 @@
 					if (resultKind === "3d" || resultKind === "3d-splat") {
 						try {
 							const buf = await (await fetch(out.url)).arrayBuffer();
-							await window.__cbLoadFromBytes?.(buf, out.filename);
+							const obj = await window.__cbLoadFromBytes?.(buf, out.filename);
+							// Persist the asset so a saved project can reload it — same
+							// pattern the file-drop path uses. Without this, generated
+							// splats / meshes have no assetId and get filtered out of
+							// imports[] on serialize.
+							if (obj && window.__cbUploadAsset) {
+								try {
+									const { assetId } = await window.__cbUploadAsset(out.filename, buf);
+									obj.userData.assetId = assetId;
+									window.__cbSaveScene?.();
+								} catch (persistErr) {
+									console.warn("[gen-cell] 3d asset persist failed:", persistErr);
+								}
+							}
 							window.refreshAssets?.();
 						} catch (impErr) {
 							console.error("[gen-cell] 3d import failed", impErr);
@@ -2978,6 +3101,75 @@ function viewportSize() {
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
 renderer.setPixelRatio(window.devicePixelRatio);
+
+// Post-processing pipeline — three's EffectComposer + n8ao's N8AOPass. Built
+// lazily on first toggle so cold boot pays nothing. N8AOPass reads depth from
+// the shared render target rather than re-rendering the scene, so spark's
+// SplatMesh depth writes participate in the AO computation. Recording bypasses
+// the composer so mp4 exports stay clean.
+let aoComposer = null;
+let aoPass = null;
+let aoEnabled = false;
+async function ensureAOComposer() {
+	if (aoComposer) return true;
+	try {
+		const [{ EffectComposer }, { RenderPass }, { OutputPass }, n8] = await Promise.all([
+			import("three/addons/postprocessing/EffectComposer.js"),
+			import("three/addons/postprocessing/RenderPass.js"),
+			import("three/addons/postprocessing/OutputPass.js"),
+			import("n8ao"),
+		]);
+		const s = renderer.getSize(new THREE.Vector2());
+		// Explicit DepthTexture on the composer's render target so N8AOPass has a
+		// sampleable depth buffer. Without this the default composer target has a
+		// depth *renderbuffer* (write-only) — the AO shader samples garbage and
+		// the output looks like a brightness shift instead of shading. Confirmed
+		// in the ao-mockup.
+		const depthTex = new THREE.DepthTexture(s.x, s.y);
+		depthTex.type = THREE.UnsignedIntType;
+		const rt = new THREE.WebGLRenderTarget(s.x, s.y, {
+			type: THREE.HalfFloatType,
+			minFilter: THREE.LinearFilter,
+			magFilter: THREE.LinearFilter,
+			colorSpace: THREE.LinearSRGBColorSpace,
+			depthTexture: depthTex,
+		});
+		rt.texture.name = "cb-ao-composer.rt";
+		aoComposer = new EffectComposer(renderer, rt);
+		aoComposer.addPass(new RenderPass(scene, camera));
+		aoPass = new n8.N8AOPass(scene, camera, s.x, s.y);
+		aoPass.configuration.aoRadius = 1.0;
+		aoPass.configuration.intensity = 3.0;
+		aoPass.configuration.aoSamples = 16;
+		aoPass.configuration.denoiseSamples = 4;
+		aoPass.configuration.denoiseRadius = 12;
+		aoPass.configuration.distanceFalloff = 1.0;
+		aoPass.configuration.screenSpaceRadius = false;
+		aoPass.configuration.halfRes = false;
+		if (aoPass.setGBuffer) aoPass.setGBuffer(depthTex, undefined);
+		if (typeof aoPass.setDisplayMode === "function") aoPass.setDisplayMode("Combined");
+		aoComposer.addPass(aoPass);
+		aoComposer.addPass(new OutputPass());
+		console.log("[ComfyBlockout] AO composer ready (N8AOPass + explicit depth)");
+		return true;
+	} catch (e) {
+		console.error("[ComfyBlockout] post pipeline init failed:", e);
+		return false;
+	}
+}
+function updateAOSize(w, h) {
+	if (!aoComposer) return;
+	aoComposer.setSize(w, h);
+	if (aoPass?.setSize) aoPass.setSize(w, h);
+}
+async function setAOEnabled(on) {
+	if (on) {
+		const ok = await ensureAOComposer();
+		if (!ok) return false;
+	}
+	aoEnabled = !!on;
+	return true;
+}
 const vs0 = viewportSize();
 // Initial size will be re-tightened to the aspect rectangle by handleResize after the
 // scene loads (currentAspect defaults to 16:9 via the <select selected> attribute).
@@ -4036,6 +4228,10 @@ async function loadFromBytes(arrayBuffer, filename, opts = {}) {
 // the scene as a new imported object, instead of pushing it through the image/video
 // viewport overlay.
 window.__cbLoadFromBytes = loadFromBytes;
+// Exposed for the gen-cell IIFE (which lives in a separate classic <script>) so it
+// can persist a newly-generated 3D asset the same way the file-drop path does.
+window.__cbUploadAsset = uploadAsset;
+window.__cbSaveScene = () => { try { saveScene?.(); } catch {} };
 
 async function loadFile(file) {
 	snapshotForUndo();
@@ -4814,6 +5010,12 @@ const GEN_MODELS = {
 		placeholder: "Local ComfyUI runs the TripoSplat workflow on your GPU (requires ComfyUI at 127.0.0.1:8188). Uses the current viewport snapshot (or a picked source image) to generate a gaussian splat (.ply) that imports into the scene.",
 		iconSvg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="8" r="1.4"/><circle cx="12" cy="6" r="1.4"/><circle cx="18" cy="9" r="1.4"/><circle cx="8" cy="14" r="1.4"/><circle cx="15" cy="16" r="1.4"/><circle cx="11" cy="19" r="1.4"/></svg>`,
 	},
+	"depth-anything-local": {
+		name: "Depth Anything (Local)",
+		kind: "image",
+		placeholder: "Local ComfyUI runs Depth Anything 3 on the viewport snapshot (or a picked source image). Result is a depth-map PNG that lands in the Assets pane and can be dragged into any generator's reference slot.",
+		iconSvg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h18"/><path d="M12 3v18"/><path d="M7 7l10 10"/><path d="M17 7L7 17"/></svg>`,
+	},
 };
 
 const genCells = [];
@@ -5094,10 +5296,13 @@ function refreshGenCells() {
 				</div>
 			`;
 		} else if (cell.model === "tripo-i2m" || cell.model === "triposplat-local") {
-			// Both image-to-3d modules share the same source-image slot layout.
-			const help = cell.model === "triposplat-local"
-				? "Source image — TripoSplat runs locally on your GPU and converts this to a gaussian splat (.ply). Drag from Assets, click to upload, or leave empty to use the current viewport snapshot."
-				: "Source image — the picture Tripo converts to a .glb mesh. Drag from Assets, click to upload, or leave empty to use the current viewport snapshot.";
+			// Every image-in-only module (except depth-anything, which always uses
+			// the viewport snapshot) shares the same source-image slot layout.
+			const helpByModel = {
+				"triposplat-local": "Source image — TripoSplat runs locally on your GPU and converts this to a gaussian splat (.ply). Drag from Assets, click to upload, or leave empty to use the current viewport snapshot.",
+				"tripo-i2m": "Source image — the picture Tripo converts to a .glb mesh. Drag from Assets, click to upload, or leave empty to use the current viewport snapshot.",
+			};
+			const help = helpByModel[cell.model];
 			slotsHtml = `
 				<div class="gen-slots">
 					<div class="gen-slot" data-slot="sourceImage" data-accepts="image" title="${help}">
@@ -5109,10 +5314,13 @@ function refreshGenCells() {
 				</div>
 			`;
 		}
-		// Image-to-model / image-to-splat are prompt-less — hide the prompt textarea so the
-		// cell doesn't suggest a text input that gets silently ignored. Text-to-model KEEPS
-		// the prompt; that's how the user tells Tripo what to build.
-		const promptLessModels = ["tripo-i2m", "triposplat-local"];
+		// Depth-Anything is viewport-only: no inputs at all, and the cell doesn't
+		// need to expand (there's nothing to configure). Flag it so we skip the
+		// slot block AND the head-click expand toggle below.
+		const nonExpandable = cell.model === "depth-anything-local";
+		// Prompt-less models — hide the prompt textarea so the cell doesn't suggest a
+		// text input that gets silently ignored. Text-to-model KEEPS the prompt.
+		const promptLessModels = ["tripo-i2m", "triposplat-local", "depth-anything-local"];
 		const promptWrap = promptLessModels.includes(cell.model) ? "" : `
 			<div class="gen-prompt-wrap">
 				<div class="gen-prompt-hl" aria-hidden="true"></div>
@@ -5128,10 +5336,7 @@ function refreshGenCells() {
 					<button class="gen-run-btn" title="Generate with ${m.name}" type="button">▶</button>
 				</div>
 			</div>
-			<div class="out-expand">
-				${slotsHtml}
-				${promptWrap}
-			</div>
+			${nonExpandable ? "" : `<div class="out-expand">${slotsHtml}${promptWrap}</div>`}
 		`;
 
 		const head = row.querySelector(".gen-head");
@@ -5139,6 +5344,9 @@ function refreshGenCells() {
 			// Per-cell Generate button lives in the head-end — don't toggle expand
 			// when the user clicks it.
 			if (e.target.closest(".gen-run-btn")) return;
+			// Non-expandable cells (Depth Anything) still promote to active but
+			// don't toggle expansion since there's nothing configurable.
+			if (nonExpandable) { setActiveGenCell(cell.id); return; }
 			cell.expanded = !cell.expanded;
 			row.classList.toggle("expanded", cell.expanded);
 			setActiveGenCell(cell.id);
@@ -5517,12 +5725,16 @@ document.getElementById("vp-generate")?.addEventListener("click", async () => {
 	}
 	console.log("[vp-generate] firing model=", cell.model);
 
-	// Tripo modules (and the local TripoSplat) skip the ControlNet-style prompt
-	// scaffolding — they either take just a source image (i2m, triposplat-local)
-	// or just a plain text prompt (t2m). Neither wants BASE_PROMPT + SCENE
-	// INVENTORY + object refs prepended.
+	// Image-in-only modules (Tripo i2m, TripoSplat, Depth Anything) skip the
+	// ControlNet-style prompt scaffolding — they take just a source image. Tripo
+	// t2m takes just a plain text prompt. None want BASE_PROMPT + SCENE INVENTORY
+	// + object refs prepended.
 	let inputs;
-	if (cell.model === "tripo-i2m" || cell.model === "triposplat-local") {
+	if (cell.model === "depth-anything-local") {
+		// Always uses the viewport snapshot — backend auto-injects it from the
+		// scene-image type declared in the module's inputs.
+		inputs = {};
+	} else if (cell.model === "tripo-i2m" || cell.model === "triposplat-local") {
 		inputs = {};
 		if (cell.sourceImage?.url) inputs.image_url = cell.sourceImage.url;
 	} else if (cell.model === "tripo-t2m") {
@@ -6680,8 +6892,13 @@ function refreshObjectInspector() {
 	// Walk the tree — FBX/GLB imports are Groups whose child meshes carry the
 	// materials, not the root. First color material wins for the picker preview.
 	const colorMats = collectColorMaterials(selected);
-	const hasColor = colorMats.length > 0;
-	objColorInput.value = hasColor ? "#" + colorMats[0].color.getHexString() : "#ffffff";
+	const isSplatObj = selected.userData?.primKind === "splat";
+	const hasColor = colorMats.length > 0 || isSplatObj;
+	if (isSplatObj) {
+		objColorInput.value = selected.userData._splatTintHex || "#ffffff";
+	} else {
+		objColorInput.value = colorMats.length > 0 ? "#" + colorMats[0].color.getHexString() : "#ffffff";
+	}
 	objAppearance.style.display = "";
 	objColorBtn.style.display = hasColor ? "" : "none";
 
@@ -6706,22 +6923,27 @@ function refreshObjectInspector() {
 	objImageLabel.textContent = "Image ref";
 	objNotes.value = selected.userData.notes || "";
 
-	// Texture-hide toggle: only for imports that have (or previously had) a
-	// diffuse map. Stash-and-null pattern so the color underneath stays visible
-	// and the map can be restored.
+	// Texture-hide toggle. For imports (FBX/GLB/OBJ) we stash-and-null the diffuse
+	// maps so the color underneath shows through. For splats we push a SplatEdit
+	// on the SplatMesh that overrides every splat's RGB — same "Texture on/off"
+	// button, different underlying mechanism.
+	const isSplat = selected.userData?.primKind === "splat";
 	const texMats = collectTexturedMaterials(selected);
 	const hasStashed = Array.isArray(selected.userData._stashedMaps) && selected.userData._stashedMaps.length > 0;
+	const hasSplatEdit = !!selected.userData?._splatColorEdit;
 	if (selected.userData._textureVisible === undefined) {
-		selected.userData._textureVisible = !hasStashed;
+		selected.userData._textureVisible = !(hasStashed || hasSplatEdit);
 	}
 	const texVisible = selected.userData._textureVisible !== false;
 	const hasAnyTex = texMats.length > 0 || hasStashed;
-	objTextureBtn.hidden = !isImport || !hasAnyTex;
+	objTextureBtn.hidden = isSplat ? false : (!isImport || !hasAnyTex);
 	if (!objTextureBtn.hidden) {
 		objTextureBtn.classList.toggle("has-image", texVisible);
 		objTextureLabel.textContent = "Texture";
 		objTextureIcon.innerHTML = texVisible ? EYE_ON_SVG : EYE_OFF_SVG;
 	}
+	// Fake AO — only for splats. Reuses the same eye-on/off visual language so the
+	// button feels sibling to Texture. Real depth-pass AO will replace this.
 
 	refreshParticlesInspector?.();
 	// FBX animation controls — only shown when the object has a mixer with clips.
@@ -6736,6 +6958,14 @@ function refreshObjectInspector() {
 
 function setObjectTextureVisible(obj, visible) {
 	if (!obj) return;
+	// Splats live in their own render pipeline (sparkjs) — the mesh-material
+	// "null out .map" trick doesn't apply. Instead we push a SplatEdit onto the
+	// SplatMesh that overrides every splat's RGB with a uniform gray, and remove
+	// it to restore. See setSplatTextureVisible().
+	if (obj.userData?.primKind === "splat") {
+		setSplatTextureVisible(obj, visible);
+		return;
+	}
 	if (visible) {
 		const stashed = obj.userData._stashedMaps || [];
 		for (const { mat, map } of stashed) {
@@ -6756,6 +6986,50 @@ function setObjectTextureVisible(obj, visible) {
 	}
 }
 
+// Splat color/texture pipeline — spark.js has no separable "diffuse map"; the
+// color IS the gaussian data. Two knobs live on userData:
+//   _splatTintHex     — hex string, per-object tint (default #ffffff = identity)
+//   _textureVisible   — bool, false = strip per-splat variation (SET_RGB uniform)
+// Both fold into ONE SplatEdit that gets rebuilt whenever either changes. Tint
+// applies via MULTIPLY when texture is on and via SET_RGB when texture is off.
+async function applySplatColorState(obj) {
+	const mesh = obj?.userData?.splatMesh || obj;
+	if (!mesh) return;
+	try {
+		const spark = await ensureSpark();
+		const { SplatEdit, SplatEditSdf, SplatEditSdfType, SplatEditRgbaBlendMode } = spark;
+		const prev = obj.userData._splatColorEdit;
+		if (prev && Array.isArray(mesh.edits)) {
+			mesh.edits = mesh.edits.filter(e => e !== prev);
+		}
+		obj.userData._splatColorEdit = null;
+		const tintHex = obj.userData._splatTintHex || "#ffffff";
+		const texOn = obj.userData._textureVisible !== false;
+		// Identity fast-path — no edit needed for a plain white tint + texture on.
+		if (texOn && tintHex.toLowerCase() === "#ffffff") return;
+		const edit = new SplatEdit({
+			name: "cb-splat-color",
+			rgbaBlendMode: texOn
+				? SplatEditRgbaBlendMode.MULTIPLY
+				: SplatEditRgbaBlendMode.SET_RGB,
+			sdfs: [new SplatEditSdf({
+				type: SplatEditSdfType.ALL,
+				color: new THREE.Color(tintHex),
+			})],
+		});
+		mesh.edits = mesh.edits || [];
+		mesh.edits.push(edit);
+		obj.userData._splatColorEdit = edit;
+	} catch (e) {
+		console.error("[ComfyBlockout] splat color state apply failed:", e);
+	}
+}
+
+function setSplatTextureVisible(obj, visible) {
+	obj.userData._textureVisible = visible;
+	applySplatColorState(obj);
+}
+
 objTextureBtn.addEventListener("click", () => {
 	if (!selected) return;
 	const visible = selected.userData._textureVisible !== false;
@@ -6764,8 +7038,17 @@ objTextureBtn.addEventListener("click", () => {
 	saveScene?.();
 });
 
+
 objColorInput.addEventListener("input", e => {
 	if (!selected) return;
+	// Splats route through the SplatEdit color pipeline (tint via MULTIPLY, or
+	// SET_RGB when Texture is off). Meshes use the standard material.color path.
+	if (selected.userData?.primKind === "splat") {
+		selected.userData._splatTintHex = e.target.value;
+		applySplatColorState(selected);
+		refreshOutliner();
+		return;
+	}
 	// Broadcast across every color-bearing material so imports (whose colors
 	// live on child meshes) get tinted too, not just top-level primitives.
 	const mats = collectColorMaterials(selected);
@@ -7293,6 +7576,86 @@ envIntensity.addEventListener("input", e => {
 });
 envIntensity.addEventListener("change", () => { if (typeof saveSceneDebounced === "function") saveSceneDebounced(); });
 
+// SSAO shading section — toggle rebuilds the composer lazily; sliders live-tune
+// n8ao's configuration so the effect updates in real time.
+const aoToggle = document.getElementById("ao-toggle");
+const aoIntensity = document.getElementById("ao-intensity");
+const aoIntensityVal = document.getElementById("ao-intensity-val");
+const aoRadius = document.getElementById("ao-radius");
+const aoRadiusVal = document.getElementById("ao-radius-val");
+aoToggle?.addEventListener("change", async e => {
+	const on = e.target.checked;
+	const ok = await setAOEnabled(on);
+	if (!ok) {
+		e.target.checked = false;
+		document.getElementById("postfx-ao")?.classList.remove("enabled");
+		window.showAlert?.("Post FX init failed", "Couldn't load n8ao — check console.");
+		return;
+	}
+	document.getElementById("postfx-ao")?.classList.toggle("enabled", on);
+	if (aoPass) {
+		aoPass.configuration.intensity = parseFloat(aoIntensity.value);
+		aoPass.configuration.aoRadius = parseFloat(aoRadius.value);
+	}
+	saveSceneDebounced?.();
+});
+// Chip head + toggle button both flip the hidden checkbox, which fires the
+// change event above and does the actual work.
+document.getElementById("postfx-ao")?.querySelector(".postfx-head")?.addEventListener("click", () => {
+	aoToggle.checked = !aoToggle.checked;
+	aoToggle.dispatchEvent(new Event("change"));
+});
+aoIntensity?.addEventListener("input", e => {
+	const v = parseFloat(e.target.value);
+	aoIntensityVal.textContent = v.toFixed(1);
+	if (aoPass) aoPass.configuration.intensity = v;
+});
+aoIntensity?.addEventListener("change", () => saveSceneDebounced?.());
+aoRadius?.addEventListener("input", e => {
+	const v = parseFloat(e.target.value);
+	aoRadiusVal.textContent = v.toFixed(1);
+	if (aoPass) aoPass.configuration.aoRadius = v;
+});
+aoRadius?.addEventListener("change", () => saveSceneDebounced?.());
+
+const aoFalloff = document.getElementById("ao-falloff");
+const aoFalloffVal = document.getElementById("ao-falloff-val");
+aoFalloff?.addEventListener("input", e => {
+	const v = parseFloat(e.target.value);
+	aoFalloffVal.textContent = v.toFixed(2);
+	// ×10 scale matches the mockup — n8ao's distanceFalloff feels right in the
+	// 0–10 range, but the slider is 0–1 for a familiar UI.
+	if (aoPass) aoPass.configuration.distanceFalloff = v * 10;
+});
+aoFalloff?.addEventListener("change", () => saveSceneDebounced?.());
+
+const aoSamplesEl = document.getElementById("ao-samples");
+const aoSamplesVal = document.getElementById("ao-samples-val");
+aoSamplesEl?.addEventListener("input", e => {
+	const v = parseInt(e.target.value, 10);
+	aoSamplesVal.textContent = String(v);
+	if (aoPass) aoPass.configuration.aoSamples = v;
+});
+aoSamplesEl?.addEventListener("change", () => saveSceneDebounced?.());
+
+const aoDenoise = document.getElementById("ao-denoise");
+const aoDenoiseVal = document.getElementById("ao-denoise-val");
+aoDenoise?.addEventListener("input", e => {
+	const v = parseInt(e.target.value, 10);
+	aoDenoiseVal.textContent = String(v);
+	if (aoPass) aoPass.configuration.denoiseSamples = v;
+});
+aoDenoise?.addEventListener("change", () => saveSceneDebounced?.());
+
+document.getElementById("ao-screen-radius")?.addEventListener("change", e => {
+	if (aoPass) aoPass.configuration.screenSpaceRadius = e.target.checked;
+	saveSceneDebounced?.();
+});
+document.getElementById("ao-halfres")?.addEventListener("change", e => {
+	if (aoPass) aoPass.configuration.halfRes = e.target.checked;
+	saveSceneDebounced?.();
+});
+
 const aspectSelect = document.getElementById("aspect");
 const aspectFrame = document.getElementById("aspect-frame");
 
@@ -7670,6 +8033,7 @@ function handleResize() {
 		camera.aspect = fit.w / fit.h;
 		camera.updateProjectionMatrix();
 		renderer.setSize(fit.w, fit.h, true);
+		updateAOSize(fit.w, fit.h);
 		updateAspectFrame();
 		// If another handleResize call came in during the RAF (eg. deserializeScene
 		// setting aspectSelect.value after ResizeObserver already queued a RAF with the
@@ -7812,7 +8176,24 @@ function loop() {
 		// Keep the render-camera helper in sync with renderCam's current pose so the
 		// wireframe follows keyframe tweens / user edits in real time.
 		if (renderCamHelper.visible) renderCamHelper.update();
-		renderer.render(scene, camera);
+		// SSAO post pipeline runs when enabled AND we're not recording (recorded
+		// mp4s stay clean for use as motion references downstream). N8AOPass keeps
+		// its own scene/camera refs — but we need to point it at the current
+		// active `camera` alias each frame since setActiveView swaps sceneCam <-> renderCam.
+		if (aoEnabled && aoComposer && !recording) {
+			// The `camera` alias swaps between sceneCam and renderCam when the
+			// user toggles Scene ↔ Camera view. RenderPass + N8AOPass both cache
+			// the camera they were constructed with, so we retarget them each
+			// frame to whichever view is active. Without this, RenderPass draws
+			// through one POV and AO computes depth from another — result reads
+			// as "no visible AO" even though the pipeline is running.
+			for (const p of aoComposer.passes) {
+				if (p.camera) p.camera = camera;
+			}
+			aoComposer.render();
+		} else {
+			renderer.render(scene, camera);
+		}
 	} catch (e) {
 		renderErrorCount++;
 		lastRenderError = String(e?.message || e).slice(0, 200);
@@ -9078,6 +9459,7 @@ function serializeScene() {
 			notes: o.userData.notes || undefined,
 			refImage: o.userData.refImage || undefined,
 			textureHidden: o.userData._textureVisible === false || undefined,
+			splatTintHex: (o.userData.primKind === "splat" && o.userData._splatTintHex && o.userData._splatTintHex !== "#ffffff") ? o.userData._splatTintHex : undefined,
 			animFrozen: o.userData.mixer?._frozen === true || undefined,
 			keyframes: serializeObjectKeyframes(o),
 		})),
@@ -9189,7 +9571,11 @@ async function deserializeScene(state, opts = {}) {
 			if (obj && im.notes) obj.userData.notes = im.notes;
 			if (obj && im.refImage) obj.userData.refImage = im.refImage;
 			if (obj && Array.isArray(im.keyframes)) obj.userData.keyframes = deserializeObjectKeyframes(im.keyframes);
+			if (obj && obj.userData?.primKind === "splat") {
+				if (im.splatTintHex) obj.userData._splatTintHex = im.splatTintHex;
+			}
 			if (obj && im.textureHidden) setObjectTextureVisible(obj, false);
+			else if (obj && obj.userData?.primKind === "splat" && im.splatTintHex) applySplatColorState(obj);
 			if (obj && im.animFrozen && obj.userData?.mixer) {
 				obj.userData.mixer._frozen = true;
 				obj.userData.mixer.timeScale = 0;
