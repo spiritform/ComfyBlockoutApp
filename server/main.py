@@ -1422,6 +1422,23 @@ async def llm_reset(request: Request):
     return {"cleared": True}
 
 
+@app.post("/api/cancel-local")
+async def cancel_local_comfy():
+    """Interrupt whatever's currently running on the local ComfyUI at
+    127.0.0.1:8188. Used by the cancel button next to the viewport Generate
+    action so the user isn't stuck watching a stalled TripoSplat run. Best-effort
+    — returns 200 even if ComfyUI isn't reachable so the frontend can still
+    clear its own busy state."""
+    import httpx as _httpx
+    try:
+        async with _httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.post("http://127.0.0.1:8188/interrupt")
+            r.raise_for_status()
+        return {"cancelled": True, "target": "local-comfyui"}
+    except Exception as e:
+        return {"cancelled": False, "target": "local-comfyui", "error": str(e)}
+
+
 # ---------- assets browser (generated outputs) ----------
 #
 # Lists everything in DATA_DIR whose filename starts with `out_` (the prefix
@@ -1441,6 +1458,10 @@ async def assets_list():
             kind = "image"
         elif ext in {"mp4", "webm", "mov"}:
             kind = "video"
+        elif ext in {"glb", "gltf", "obj", "fbx", "ply", "spz", "splat", "ksplat"}:
+            # 3D outputs (Tripo mesh, TripoSplat splat). No thumb — the frontend
+            # renders a placeholder tile and re-imports on drag / double-click.
+            kind = "3d"
         if not kind:
             continue
         try:
@@ -1452,6 +1473,7 @@ async def assets_list():
             "url": f"/data/{rel}",
             "filename": p.name,
             "kind": kind,
+            "ext": ext,
             "size": st.st_size,
             "mtime": st.st_mtime,
         })
