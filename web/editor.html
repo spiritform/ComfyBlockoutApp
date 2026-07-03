@@ -230,7 +230,17 @@
 			radial-gradient(ellipse 80% 60% at 50% 35%, rgba(60,80,110,0.18), transparent 70%),
 			linear-gradient(180deg, #0c0d12 0%, #07080b 100%);
 	}
-	#renderCanvas { display: block; }
+	#renderCanvas { display: block; position: relative; z-index: 1; }
+	/* Background-image layer sits BEHIND the canvas so we can `filter: blur()` the
+	   image without also blurring the WebGL scene. Inset -60px so the blur's soft
+	   edge is clipped by canvas-wrap's overflow:hidden instead of showing seams. */
+	#canvas-bg-layer {
+		position: absolute; inset: -60px;
+		z-index: 0; pointer-events: none;
+		background-size: cover; background-position: center; background-repeat: no-repeat;
+		display: none;
+	}
+	#canvas-bg-layer.active { display: block; }
 
 	/* Boot curtain — covers the canvas while the scene hydrates so a mid-load orbit
 	   or click doesn't get clobbered when deserializeScene restores camera+objects.
@@ -1596,6 +1606,9 @@
 		background: rgba(255,255,255,0.04);
 		color: rgba(255,255,255,0.75); font-size: 11px; cursor: pointer;
 	}
+	/* inline-flex above overrides the HTML `hidden` attribute's default `display:none`,
+	   so obj-texture-btn kept showing on primitives. Restore proper hiding. */
+	.rp-bg-row[hidden] { display: none; }
 	.rp-bg-row:hover { background: rgba(255,255,255,0.07); color: #fff; }
 	.rp-bg-row input[type="color"] {
 		width: 26px; height: 26px; padding: 0; border: none;
@@ -1905,6 +1918,7 @@
 			</button>
 		</div>
 		<div id="canvas-wrap">
+			<div id="canvas-bg-layer"></div>
 			<canvas id="renderCanvas"></canvas>
 			<!-- Initializing curtain — blocks pointer events during scene hydration so a
 			     mid-boot orbit/click/drop doesn't get clobbered when deserializeScene
@@ -2214,6 +2228,11 @@
 							<button type="button" class="rp-bg-clear" id="bg-image-clear" title="Remove background" hidden>×</button>
 						</div>
 						<input type="file" id="bg-image-file" accept="image/*" hidden>
+					</div>
+					<div class="slider-row" id="bg-blur-row" style="margin-top:8px" hidden>
+						<label>Blur</label>
+						<input type="range" id="bg-blur" min="0" max="40" step="1" value="0">
+						<span class="slider-val" id="bg-blur-val">0</span>
 					</div>
 				</div>
 
@@ -6897,27 +6916,54 @@ const bgImageBtn = document.getElementById("bg-image-btn");
 const bgImageFile = document.getElementById("bg-image-file");
 const bgImageThumb = document.getElementById("bg-image-thumb");
 const bgImageLabel = document.getElementById("bg-image-label");
+const canvasBgLayer = document.getElementById("canvas-bg-layer");
+const bgBlurInput = document.getElementById("bg-blur");
+const bgBlurVal = document.getElementById("bg-blur-val");
+const bgBlurRow = document.getElementById("bg-blur-row");
 
 let bgMode = "color"; // "color" | "image"
 let bgImage = null;   // { assetId, ext } | null
+let bgBlur = 0;       // 0–40 px, applied via CSS filter to canvasBgLayer
 
 const DEFAULT_BG_GRADIENT =
 	"radial-gradient(ellipse 80% 60% at 50% 35%, rgba(60,80,110,0.18), transparent 70%)," +
-	"linear-gradient(180deg, #0c0d12 0%, #07080b 100%)";
+	"linear-gradient(180deg, #0c0d12 0%, #07080b 100%);";
 
 function applyBgColor(hex) {
 	renderer.setClearColor(hex, 1);
 	canvasWrap.style.backgroundImage = "none";
 	canvasWrap.style.backgroundColor = hex;
+	canvasBgLayer.classList.remove("active");
+	canvasBgLayer.style.backgroundImage = "";
+	canvasBgLayer.style.filter = "";
 }
 
 function applyBgImage(url) {
+	// Canvas becomes transparent so the layer shows through; the layer takes the
+	// image + blur so we can filter it without also blurring the WebGL scene.
 	renderer.setClearColor(0x000000, 0);
+	canvasWrap.style.backgroundImage = "none";
 	canvasWrap.style.backgroundColor = "#000";
-	canvasWrap.style.backgroundImage = url ? `url("${url}")` : DEFAULT_BG_GRADIENT;
-	canvasWrap.style.backgroundSize = "cover";
-	canvasWrap.style.backgroundPosition = "center";
-	canvasWrap.style.backgroundRepeat = "no-repeat";
+	if (url) {
+		canvasBgLayer.classList.add("active");
+		canvasBgLayer.style.backgroundImage = `url("${url}")`;
+		canvasBgLayer.style.filter = bgBlur > 0 ? `blur(${bgBlur}px)` : "";
+	} else {
+		canvasBgLayer.classList.remove("active");
+		canvasBgLayer.style.backgroundImage = "";
+		canvasBgLayer.style.filter = "";
+	}
+}
+
+function refreshBgBlurUI() {
+	// Blur only makes sense when an image is showing.
+	const show = bgMode === "image" && !!bgImage;
+	if (bgBlurRow) bgBlurRow.hidden = !show;
+	if (bgBlurInput) bgBlurInput.value = String(bgBlur);
+	if (bgBlurVal) bgBlurVal.textContent = String(bgBlur);
+	if (canvasBgLayer && show) {
+		canvasBgLayer.style.filter = bgBlur > 0 ? `blur(${bgBlur}px)` : "";
+	}
 }
 
 function bgImageUrl(img) {
@@ -6942,6 +6988,7 @@ function refreshBgImageUI() {
 	bgImageLabel.textContent = "Image";
 	bgColorBtn.classList.toggle("active-bg", bgMode === "color");
 	bgImageBtn.classList.toggle("active-bg", bgMode === "image");
+	refreshBgBlurUI();
 }
 
 function applyBgMode() {
@@ -6999,6 +7046,12 @@ bgImageFile.addEventListener("change", async () => {
 		alert(`Background image upload failed: ${err.message || err}`);
 	}
 });
+bgBlurInput?.addEventListener("input", e => {
+	bgBlur = parseInt(e.target.value, 10) || 0;
+	if (bgBlurVal) bgBlurVal.textContent = String(bgBlur);
+	if (canvasBgLayer) canvasBgLayer.style.filter = bgBlur > 0 ? `blur(${bgBlur}px)` : "";
+});
+bgBlurInput?.addEventListener("change", () => saveScene?.());
 
 
 function frameScene() {
@@ -8923,6 +8976,7 @@ function serializeScene() {
 			bg: bgColorInput.value,
 			bgMode,
 			bgImage,
+			bgBlur,
 			ar: arVisible,
 		},
 		trim: { start: trimStart, end: trimEnd },
@@ -9099,6 +9153,7 @@ async function deserializeScene(state, opts = {}) {
 		}
 		bgImage = (state.viewport.bgImage && state.viewport.bgImage.assetId) ? state.viewport.bgImage : null;
 		bgMode = state.viewport.bgMode === "image" ? "image" : "color";
+		bgBlur = Math.max(0, Math.min(40, parseInt(state.viewport.bgBlur, 10) || 0));
 		applyBgMode();
 		if (typeof state.viewport.ar === "boolean") {
 			arVisible = state.viewport.ar;
