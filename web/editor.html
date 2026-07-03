@@ -15,7 +15,7 @@
 	#top-header {
 		flex: 0 0 52px;
 		display: flex; align-items: center; justify-content: space-between;
-		padding: 0 24px;
+		padding: 0 24px 0 20px;
 		background: #020203;
 		z-index: 200;
 	}
@@ -38,7 +38,10 @@
 		text-transform: none; font-size: 11px; letter-spacing: 0.02em;
 	}
 	#top-header .th-right { display: flex; align-items: center; gap: 6px; }
-	#top-header .th-left { display: flex; align-items: center; gap: 28px; }
+	#top-header .th-left { display: flex; align-items: center; gap: 12px; }
+	.th-comfy-cloud-brand { display: inline-flex; align-items: center; padding: 0; border-radius: 4px; }
+	.th-comfy-cloud-brand img { display: block; opacity: 0.9; transition: opacity 120ms; width: 22px; height: 22px; }
+	.th-comfy-cloud-brand:hover img { opacity: 1; }
 	#top-header .th-gen { display: flex; align-items: center; gap: 8px; }
 	#top-header .th-group-label, #top-header .th-project {
 		font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
@@ -59,6 +62,10 @@
 	}
 	.th-icon-btn:hover { background: rgba(255,255,255,0.08); color: #e6e6ea; }
 	.th-icon-btn svg { width: 16px; height: 16px; }
+	/* Comfy Cloud shortcut — uses the site favicon, kept slightly dimmed until hover */
+	.th-comfy-cloud { text-decoration: none; }
+	.th-comfy-cloud img { display: block; opacity: 0.75; transition: opacity 120ms; }
+	.th-comfy-cloud:hover img { opacity: 1; }
 
 	/* ---- settings modal ---- */
 	.modal-backdrop {
@@ -1668,6 +1675,9 @@
 
 	<header id="top-header">
 		<div class="th-left">
+			<a class="th-comfy-cloud th-comfy-cloud-brand" id="th-comfy-cloud" href="https://cloud.comfy.org" target="_blank" rel="noopener" title="Comfy Cloud — manage account, credits, billing">
+				<img src="https://cloud.comfy.org/favicon.ico" alt="Comfy" width="22" height="22">
+			</a>
 			<div class="th-brand">
 				<span>ComfyBlockout</span>
 				<small class="th-sep">:</small>
