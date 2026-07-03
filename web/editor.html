@@ -531,8 +531,8 @@
 	#tl-trim-pre { left: 0; }
 	#tl-trim-post { right: 0; }
 	.tl-trim-handle {
-		position: absolute; top: 0; bottom: 0; width: 5px;
-		background: #ff8c1a;
+		position: absolute; top: 0; bottom: 0; width: 3px;
+		background: #c96a10;
 		cursor: ew-resize; z-index: 6;
 	}
 	/* Start handle sits just left of trimStart, end handle just right of trimEnd — never overlap */
@@ -1317,12 +1317,27 @@
 		letter-spacing: 0.08em; text-transform: uppercase;
 		text-shadow: 0 1px 2px rgba(0,0,0,0.7);
 	}
-	/* View-mode toggles pinned inside the aspect frame's top-left corner.
-	   Sub-frame so they only render when the AR overlay is visible. */
+	/* View-mode toggles pinned inside the aspect frame's top-RIGHT corner (paired
+	   with the RGB axes indicator at top-left). Sub-frame so they only render
+	   when the AR overlay is visible. */
 	#viewport-mode-corner {
-		position: absolute; top: 8px; left: 8px;
+		position: absolute; top: 8px; right: 8px;
 		display: flex; gap: 4px; z-index: 6;
 		pointer-events: auto;
+	}
+	/* RGB axes reference. SVG lines get their x2/y2 rewritten each frame from
+	   the world-axes-in-view-space projection. */
+	#viewport-axes-corner {
+		position: absolute; top: 6px; left: 6px;
+		width: 52px; height: 52px; z-index: 6;
+		pointer-events: none;
+	}
+	#viewport-axes-corner svg { width: 100%; height: 100%; display: block; overflow: visible; }
+	#viewport-axes-corner .axis-line { stroke-width: 1.5; stroke-linecap: round; }
+	#viewport-axes-corner .axis-label {
+		font: 700 9px ui-monospace, monospace;
+		text-anchor: middle; dominant-baseline: central;
+		paint-order: stroke; stroke: rgba(0,0,0,0.5); stroke-width: 2px;
 	}
 	.vpm-btn {
 		width: 24px; height: 24px; padding: 0; border: none; cursor: pointer;
@@ -1334,6 +1349,9 @@
 	.vpm-btn:hover { background: rgba(0,0,0,0.55); color: rgba(255,255,255,0.85); }
 	.vpm-btn.active { color: #ffb454; }
 	.vpm-btn svg { width: 14px; height: 14px; display: block; }
+	/* Suppress the click-focus ring but keep keyboard focus visible. */
+	.vpm-btn:focus { outline: none; }
+	.vpm-btn:focus-visible { outline: 2px solid rgba(255,180,84,0.6); outline-offset: 1px; }
 
 	#drop-overlay {
 		position: fixed; inset: 0; z-index: 200;
@@ -1898,12 +1916,22 @@
 			<div id="aspect-frame" class="no-guides">
 				<span class="v1"></span><span class="v2"></span>
 				<div id="viewport-time-corner"><span id="tl-time">0.00s / 4.00s</span></div>
+				<div id="viewport-axes-corner">
+					<svg viewBox="0 0 44 44">
+						<line class="axis-line" data-axis="x" x1="22" y1="22" x2="40" y2="22" stroke="#ff5252"/>
+						<line class="axis-line" data-axis="y" x1="22" y1="22" x2="22" y2="4"  stroke="#4ade80"/>
+						<line class="axis-line" data-axis="z" x1="22" y1="22" x2="22" y2="22" stroke="#4a8aff"/>
+						<text class="axis-label" data-axis="x" x="40" y="22" fill="#ff5252">X</text>
+						<text class="axis-label" data-axis="y" x="22" y="4"  fill="#4ade80">Y</text>
+						<text class="axis-label" data-axis="z" x="22" y="22" fill="#4a8aff">Z</text>
+					</svg>
+				</div>
 				<div id="viewport-mode-corner">
-					<button class="vpm-btn" id="mode-scene" title="Perspective view — orbit around the shot from an overview vantage. Also opens PROPERTIES : SCENE.">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="1"/><path d="M18.944 12.33a1 1 0 0 0 0-.66 7.5 7.5 0 0 0-13.888 0 1 1 0 0 0 0 .66 7.5 7.5 0 0 0 13.888 0"/></svg>
-					</button>
 					<button class="vpm-btn" id="mode-camera" title="Camera view — look through the framed render camera. Also opens PROPERTIES : CAMERA and deselects so + / S keys the camera.">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+					</button>
+					<button class="vpm-btn" id="mode-scene" title="Perspective view — orbit around the shot from an overview vantage. Also opens PROPERTIES : SCENE.">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="1"/><path d="M18.944 12.33a1 1 0 0 0 0-.66 7.5 7.5 0 0 0-13.888 0 1 1 0 0 0 0 .66 7.5 7.5 0 0 0 13.888 0"/></svg>
 					</button>
 				</div>
 			</div>
@@ -2979,6 +3007,8 @@ function setActiveView(which) {
 	if (which === "camera" && typeof selected !== "undefined" && selected === renderCam && typeof select === "function") select(null);
 	// Update the numeric drag fields so they reflect the newly-active camera.
 	if (typeof updateCameraSliders === "function") updateCameraSliders();
+	// Camera motion path is Scene-view only — rebuild so it appears/disappears with the swap.
+	if (typeof refreshAnimPaths === "function") refreshAnimPaths();
 	// The mode-scene / mode-camera pill amber state is driven by pane visibility, not
 	// view state — coupling happens in their click handlers (open pane → also swap view).
 }
@@ -7475,6 +7505,39 @@ infoBtn.addEventListener("click", () => {
 	infoBtn.style.color = infoOpen ? "#ffd28a" : "rgba(255,255,255,0.55)";
 	if (infoOpen) updateDebugHud();
 });
+// RGB axes reference — projects world X/Y/Z into the current camera's view space
+// and writes the resulting screen directions into the SVG lines/labels every frame.
+// Axes closer to camera (dir.z > 0) render at full opacity; ones pointing away fade.
+const _axesGizmoEls = (() => {
+	const wrap = document.getElementById("viewport-axes-corner");
+	if (!wrap) return null;
+	const lines = { x: wrap.querySelector('line[data-axis="x"]'), y: wrap.querySelector('line[data-axis="y"]'), z: wrap.querySelector('line[data-axis="z"]') };
+	const labels = { x: wrap.querySelector('text[data-axis="x"]'), y: wrap.querySelector('text[data-axis="y"]'), z: wrap.querySelector('text[data-axis="z"]') };
+	return { lines, labels };
+})();
+const _axesGizmoAxes = { x: new THREE.Vector3(1,0,0), y: new THREE.Vector3(0,1,0), z: new THREE.Vector3(0,0,1) };
+const _axesGizmoTmp = new THREE.Vector3();
+function updateAxesGizmo() {
+	if (!_axesGizmoEls) return;
+	const CENTER = 22, ARM = 15;
+	for (const k of ["x","y","z"]) {
+		_axesGizmoTmp.copy(_axesGizmoAxes[k]).transformDirection(camera.matrixWorldInverse);
+		// SVG y grows downward, so flip view-space y for the screen direction.
+		const sx = _axesGizmoTmp.x, sy = -_axesGizmoTmp.y;
+		const lx = CENTER + sx * ARM, ly = CENTER + sy * ARM;
+		const line = _axesGizmoEls.lines[k];
+		const label = _axesGizmoEls.labels[k];
+		line.setAttribute("x2", lx);
+		line.setAttribute("y2", ly);
+		label.setAttribute("x", CENTER + sx * (ARM + 5));
+		label.setAttribute("y", CENTER + sy * (ARM + 5));
+		// Axis pointing INTO the screen (dir.z < 0) fades toward 0.35 opacity.
+		const opacity = 0.4 + 0.6 * (0.5 + 0.5 * _axesGizmoTmp.z);
+		line.setAttribute("opacity", opacity);
+		label.setAttribute("opacity", opacity);
+	}
+}
+
 let frameCounter = 0;
 function updateDebugHud() {
 	if (!infoOpen) return;
@@ -7547,6 +7610,7 @@ function loop() {
 		// Keep the render-camera helper in sync with renderCam's current pose so the
 		// wireframe follows keyframe tweens / user edits in real time.
 		if (renderCamHelper.visible) renderCamHelper.update();
+		updateAxesGizmo();
 		renderer.render(scene, camera);
 	} catch (e) {
 		renderErrorCount++;
@@ -7884,6 +7948,22 @@ function refreshAnimPaths() {
 		const points = new THREE.Points(pg, pm);
 		points.renderOrder = 1000;
 		animPathsGroup.add(points);
+	}
+
+	// Camera path — only drawn in Scene view (would fill the frame in Camera view).
+	// Line only, no dots: the renderCam wireframe itself sits at each key when the
+	// playhead is parked there, so per-key dots would just add clutter.
+	// Straight segments match sampleCameraAt's linear lerp; a Catmull-Rom curve here
+	// would misrepresent where the shot actually travels.
+	if (activeView === "scene" && keyframes.length >= 2) {
+		const cpts = keyframes.map(k => k.pos);
+		const clg = new THREE.BufferGeometry().setFromPoints(cpts);
+		const clm = new THREE.LineBasicMaterial({
+			color: 0xcccdd2, transparent: true, opacity: 0.35, depthTest: false,
+		});
+		const cline = new THREE.Line(clg, clm);
+		cline.renderOrder = 999;
+		animPathsGroup.add(cline);
 	}
 }
 
@@ -9272,7 +9352,7 @@ const EMPTY_SCENE = {
 	primitives: [],
 	camera: { position: [2.2, 1.6, 2.8], target: [0, 0.5, 0], fov: 55 },
 	aspect: "16:9",
-	env: { preset: "studio", intensity: 1.0 },
+	env: { preset: "studio", intensity: 0.4 },
 	viewport: { grid: true, guides: false, bg: "#07080b" },
 	keyframes: [],
 	imports: [],
@@ -9416,6 +9496,10 @@ document.getElementById("project-new").addEventListener("click", async () => {
 		restoringScene = false;
 	}
 	cancelPendingSave?.();
+	// Fresh scene: deselect the seeded cube and open Scene properties so the user
+	// lands on Background / Env / Render controls instead of the cube's inspector.
+	select(null);
+	forceRightPane("scene", "Scene");
 	await saveScene();
 	updateStatus("new scene");
 });
