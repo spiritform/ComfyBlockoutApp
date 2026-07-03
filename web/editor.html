@@ -557,10 +557,10 @@
 		position: absolute; bottom: 8px; left: 8px;
 		z-index: 6; pointer-events: none;
 		display: inline-flex; align-items: center;
-		background: rgba(0,0,0,0.35); backdrop-filter: blur(4px);
+		background: rgba(0,0,0,0.25); backdrop-filter: blur(4px);
 		border-radius: 4px; padding: 4px 8px;
 		font-size: 10px; letter-spacing: 0.08em;
-		color: rgba(255,255,255,0.55);
+		color: rgba(255,255,255,0.32);
 		font-variant-numeric: tabular-nums;
 	}
 
@@ -644,13 +644,11 @@
 	.mini-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 	.mini-btn:disabled:hover { background: transparent; color: rgba(255,255,255,0.4); }
 
-	/* + ADD dropdown menu — anchored under the gen-add button, lists every
-	   registered generator so the user can pick one instead of auto-inserting
-	   the next-missing default. */
-	.gen-add-wrap { position: relative; display: inline-flex; }
+	/* Add-generator dropdown — flows in place under the trailing .gen-cell-add
+	   placeholder. Lists every registered generator so the user can pick one
+	   instead of auto-inserting the next-missing default. */
 	.gen-add-menu {
-		position: absolute; top: calc(100% + 4px); right: 0;
-		min-width: 180px; z-index: 60;
+		margin-top: 4px;
 		background: #1e1f22; border: 1px solid rgba(255,255,255,0.08);
 		border-radius: 6px; padding: 4px;
 		box-shadow: 0 8px 24px rgba(0,0,0,0.45);
@@ -846,6 +844,18 @@
 		background: rgba(255,255,255,0.04);
 	}
 	.gen-cell.expanded { background: rgba(255,255,255,0.05); }
+	/* Placeholder cell at the bottom of the Generate section — opens the model
+	   dropdown. Mimics gen-cell so it visually reads as "the next slot". */
+	.gen-cell-add {
+		display: flex; align-items: center; justify-content: center; gap: 8px;
+		padding: 10px 8px; border-radius: 5px; cursor: pointer;
+		background: transparent;
+		border: 1px dashed rgba(255,255,255,0.14);
+		color: rgba(255,255,255,0.55); font-size: 11px;
+		text-transform: uppercase; letter-spacing: 0.08em;
+	}
+	.gen-cell-add:hover { background: rgba(255,180,84,0.05); border-color: rgba(255,180,84,0.4); color: #ffd39a; }
+	.gen-cell-add svg { width: 14px; height: 14px; }
 	.gen-head {
 		display: grid; grid-template-columns: 26px 1fr auto;
 		align-items: center; gap: 8px; cursor: pointer;
@@ -1335,19 +1345,13 @@
 		display: flex; gap: 4px; z-index: 6;
 		pointer-events: auto;
 	}
-	/* RGB axes reference. SVG lines get their x2/y2 rewritten each frame from
-	   the world-axes-in-view-space projection. */
+	/* Static RGB "XYZ" reference — three colored letters, no camera-tracking. */
 	#viewport-axes-corner {
-		position: absolute; top: 6px; left: 6px;
-		width: 52px; height: 52px; z-index: 6;
+		position: absolute; top: 10px; left: 12px; z-index: 6;
 		pointer-events: none;
-	}
-	#viewport-axes-corner svg { width: 100%; height: 100%; display: block; overflow: visible; }
-	#viewport-axes-corner .axis-line { stroke-width: 1.5; stroke-linecap: round; }
-	#viewport-axes-corner .axis-label {
-		font: 700 9px ui-monospace, monospace;
-		text-anchor: middle; dominant-baseline: central;
-		paint-order: stroke; stroke: rgba(0,0,0,0.5); stroke-width: 2px;
+		font: 700 12px ui-monospace, monospace;
+		text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+		display: inline-flex; gap: 8px;
 	}
 	.vpm-btn {
 		width: 24px; height: 24px; padding: 0; border: none; cursor: pointer;
@@ -1555,8 +1559,11 @@
 		position: absolute; top: 6px; left: 6px;
 		background: rgba(0,0,0,0.7); color: #ffb454;
 		font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase;
-		padding: 2px 6px; border-radius: 3px;
+		padding: 0 8px; border-radius: 4px;
+		height: 22px; display: inline-flex; align-items: center;
+		opacity: 0; transition: opacity 0.12s; pointer-events: none;
 	}
+	.assets-tile:hover .badge { opacity: 1; }
 	.assets-tile .actions {
 		position: absolute; top: 6px; right: 6px;
 		display: flex; gap: 4px; opacity: 0;
@@ -1573,6 +1580,7 @@
 	.assets-tile .actions button:hover { background: rgba(255,180,84,0.3); color: #fff; }
 	.assets-tile .actions button.del:hover { background: rgba(255,80,80,0.3); color: #ff8a8a; }
 	.assets-tile .actions svg { width: 12px; height: 12px; }
+	.assets-tile .actions button.del { font: 700 18px/1 ui-sans-serif, system-ui, sans-serif; padding-bottom: 2px; }
 	.assets-empty {
 		padding: 32px; text-align: center; color: rgba(255,255,255,0.4);
 		font-size: 12px;
@@ -1842,14 +1850,11 @@
 			<div class="section-head-row">
 				<span class="section-label">Generate</span>
 				<span class="head-end">
-					<span class="gen-add-wrap">
-						<button class="mini-btn" id="gen-add" title="Add a generator" aria-haspopup="true" aria-expanded="false">+ Add</button>
-						<div class="gen-add-menu" id="gen-add-menu" role="menu" hidden></div>
-					</span>
 					<span class="collapse-caret">▾</span>
 				</span>
 			</div>
 			<div class="gen-cells" id="gen-cells"></div>
+			<div class="gen-add-menu" id="gen-add-menu" role="menu" hidden></div>
 			<!-- Hidden legacy buttons — runModule still routes through these so the top-header
 			     auth gating + status reuse work unchanged. Inline display:none because .gen-btn
 			     sets display:flex which would override the [hidden] attribute. -->
@@ -1930,16 +1935,7 @@
 			<div id="aspect-frame" class="no-guides">
 				<span class="v1"></span><span class="v2"></span>
 				<div id="viewport-time-corner"><span id="tl-time">0.00s / 4.00s</span></div>
-				<div id="viewport-axes-corner">
-					<svg viewBox="0 0 44 44">
-						<line class="axis-line" data-axis="x" x1="22" y1="22" x2="40" y2="22" stroke="#ff5252"/>
-						<line class="axis-line" data-axis="y" x1="22" y1="22" x2="22" y2="4"  stroke="#4ade80"/>
-						<line class="axis-line" data-axis="z" x1="22" y1="22" x2="22" y2="22" stroke="#4a8aff"/>
-						<text class="axis-label" data-axis="x" x="40" y="22" fill="#ff5252">X</text>
-						<text class="axis-label" data-axis="y" x="22" y="4"  fill="#4ade80">Y</text>
-						<text class="axis-label" data-axis="z" x="22" y="22" fill="#4a8aff">Z</text>
-					</svg>
-				</div>
+				<div id="viewport-axes-corner"><span style="color:#ff5252">X</span><span style="color:#4ade80">Y</span><span style="color:#4a8aff">Z</span></div>
 				<div id="viewport-mode-corner">
 					<button class="vpm-btn" id="mode-camera" title="Camera view — look through the framed render camera. Also opens PROPERTIES : CAMERA and deselects so + / S keys the camera.">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
@@ -2395,6 +2391,27 @@
 		// "image", or "video". Toggled by the pill row at the top of the pane.
 		let assetsFilter = "recent";
 		let assetsItems = [];
+		// One shared observer across renders — cheap to reuse. Videos ship with
+		// preload="none" so the initial paint doesn't fire N metadata fetches; the
+		// observer flips them to preload="metadata" as they scroll into view so the
+		// first-frame poster appears just before the user sees it.
+		let assetsMediaObserver = null;
+		function ensureAssetsMediaObserver() {
+			if (assetsMediaObserver || typeof IntersectionObserver !== "function") return assetsMediaObserver;
+			assetsMediaObserver = new IntersectionObserver((entries) => {
+				for (const e of entries) {
+					if (!e.isIntersecting) continue;
+					const vid = e.target;
+					if (vid.dataset.pending === "1") {
+						vid.preload = "metadata";
+						delete vid.dataset.pending;
+					}
+					assetsMediaObserver.unobserve(vid);
+				}
+			}, { root: assetsGrid, rootMargin: "300px 0px", threshold: 0.01 });
+			return assetsMediaObserver;
+		}
+		let renderAssetsToken = 0;
 		function renderAssetsFiltered() {
 			assetsGrid.innerHTML = "";
 			const filtered = (assetsFilter === "recent")
@@ -2407,9 +2424,25 @@
 					: `No ${assetsFilter === "image" ? "images" : "videos"} yet.`;
 			}
 			assetsGrid.style.display = filtered.length > 0 ? "" : "none";
-			for (const it of filtered) {
-				assetsGrid.appendChild(renderAssetTile(it));
+			// Render in chunks so the panel becomes interactive after the first frame
+			// instead of blocking on all N tiles (which each attach dragstart/dblclick
+			// listeners and a media element). First batch is a full above-fold view.
+			const FIRST = 12, CHUNK = 12;
+			const token = ++renderAssetsToken;
+			for (let i = 0; i < Math.min(FIRST, filtered.length); i++) {
+				assetsGrid.appendChild(renderAssetTile(filtered[i]));
 			}
+			let next = FIRST;
+			function paintNext() {
+				if (token !== renderAssetsToken) return; // superseded by another render
+				const end = Math.min(next + CHUNK, filtered.length);
+				const frag = document.createDocumentFragment();
+				for (let i = next; i < end; i++) frag.appendChild(renderAssetTile(filtered[i]));
+				assetsGrid.appendChild(frag);
+				next = end;
+				if (next < filtered.length) requestAnimationFrame(paintNext);
+			}
+			if (filtered.length > FIRST) requestAnimationFrame(paintNext);
 		}
 		async function refreshAssets() {
 			try {
@@ -2444,9 +2477,13 @@
 			tile.dataset.kind = asset.kind;
 			tile.dataset.filename = asset.filename;
 			tile.title = asset.filename;
+			// Videos start with preload="none" and a `data-pending` flag; the shared
+			// IntersectionObserver flips them to preload="metadata" as they enter
+			// the panel viewport, so N tiles = N pending fetches only for what
+			// the user can actually see. Images use the browser's native lazy loading.
 			const media = asset.kind === "video"
-				? `<video src="${asset.url}" muted preload="metadata"></video>`
-				: `<img src="${asset.url}" alt="">`;
+				? `<video src="${asset.url}" muted preload="none" data-pending="1"></video>`
+				: `<img src="${asset.url}" alt="" loading="lazy" decoding="async">`;
 			tile.innerHTML = `
 				${media}
 				<span class="badge">${asset.kind}</span>
@@ -2454,9 +2491,7 @@
 					<button class="dl" title="Download to disk">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
 					</button>
-					<button class="del" title="Delete">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg>
-					</button>
+					<button class="del" title="Delete">×</button>
 				</div>
 			`;
 			tile.addEventListener("dragstart", e => {
@@ -2508,6 +2543,14 @@
 					window.showAlert?.("Delete failed", err.message);
 				}
 			});
+			// Register pending video for on-demand metadata load. Falls back gracefully
+			// on browsers without IntersectionObserver — video just stays preload="none".
+			const vid = tile.querySelector("video[data-pending]");
+			if (vid) {
+				const obs = ensureAssetsMediaObserver();
+				if (obs) obs.observe(vid);
+				else { vid.preload = "metadata"; delete vid.dataset.pending; }
+			}
 			return tile;
 		}
 
@@ -4386,18 +4429,25 @@ function refreshOutliner() {
 			}
 		});
 
-		// Asset drag-drop — drop a tile from the Assets modal onto this cell to set
-		// it as the object's refImage. The asset already lives on our server; fetch
-		// it as a Blob, then re-upload through the normal refs flow to get a Comfy
-		// Cloud signed URL (Nano needs that, not our localhost path).
-		imgCell.addEventListener("dragover", e => {
+		// Asset drag-drop — drop a tile from the Assets modal ANYWHERE on this row
+		// to set it as the object's refImage. The imgCell still owns the visual
+		// "drop-target" highlight, but the entire row accepts the drop so the user
+		// doesn't have to aim at the tiny thumbnail square. The asset already lives
+		// on our server; fetch it as a Blob, then re-upload through the normal refs
+		// flow to get a Comfy Cloud signed URL (Nano needs that, not our localhost path).
+		row.addEventListener("dragover", e => {
 			if (!e.dataTransfer?.types?.includes("application/x-cb-asset")) return;
 			e.preventDefault();
 			e.dataTransfer.dropEffect = "copy";
 			imgCell.classList.add("drop-target");
 		});
-		imgCell.addEventListener("dragleave", () => imgCell.classList.remove("drop-target"));
-		imgCell.addEventListener("drop", async e => {
+		row.addEventListener("dragleave", e => {
+			// dragleave fires on every child boundary — only clear when the pointer
+			// actually leaves the row (relatedTarget is outside).
+			if (row.contains(e.relatedTarget)) return;
+			imgCell.classList.remove("drop-target");
+		});
+		row.addEventListener("drop", async e => {
 			imgCell.classList.remove("drop-target");
 			const raw = e.dataTransfer?.getData("application/x-cb-asset");
 			if (!raw) return;
@@ -5279,15 +5329,23 @@ function refreshGenCells() {
 
 		container.appendChild(row);
 	}
+	// Trailing placeholder — the "add another generator" chip. Clicking opens the
+	// same dropdown that lives outside the loop, positioned under this cell.
+	const addCell = document.createElement("div");
+	addCell.className = "gen-cell-add";
+	addCell.id = "gen-add-cell";
+	addCell.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span>Add generator</span>`;
+	container.appendChild(addCell);
 }
 
-// + Add dropdown — shows every registered generator with existing ones tagged as
+// Add dropdown — shows every registered generator with existing ones tagged as
 // already-added. addGenCell() is idempotent per model, so re-picking one just
-// focuses the existing cell instead of creating a duplicate.
+// focuses the existing cell instead of creating a duplicate. Anchor is the
+// placeholder cell at the bottom of #gen-cells.
 (() => {
-	const btn = document.getElementById("gen-add");
 	const menu = document.getElementById("gen-add-menu");
-	if (!btn || !menu) return;
+	if (!menu) return;
+	function getAnchor() { return document.getElementById("gen-add-cell"); }
 
 	function paintMenu() {
 		menu.innerHTML = "";
@@ -5315,26 +5373,28 @@ function refreshGenCells() {
 	function openMenu() {
 		paintMenu();
 		menu.hidden = false;
-		btn.setAttribute("aria-expanded", "true");
+		getAnchor()?.setAttribute("aria-expanded", "true");
 		setTimeout(() => document.addEventListener("mousedown", onDocDown, true), 0);
 		document.addEventListener("keydown", onEsc, true);
 	}
 	function closeMenu() {
 		menu.hidden = true;
-		btn.setAttribute("aria-expanded", "false");
+		getAnchor()?.setAttribute("aria-expanded", "false");
 		document.removeEventListener("mousedown", onDocDown, true);
 		document.removeEventListener("keydown", onEsc, true);
 	}
 	function onDocDown(e) {
-		if (e.target.closest("#gen-add-menu") || e.target.closest("#gen-add")) return;
+		if (e.target.closest("#gen-add-menu") || e.target.closest("#gen-add-cell")) return;
 		closeMenu();
 	}
 	function onEsc(e) { if (e.key === "Escape") { e.stopPropagation(); closeMenu(); } }
-	btn.addEventListener("click", (e) => {
+	// The placeholder cell is recreated on every refreshGenCells, so bind via
+	// delegation on the surrounding container instead of the button directly.
+	document.getElementById("gen-cells")?.addEventListener("click", (e) => {
+		if (!e.target.closest("#gen-add-cell")) return;
 		e.stopPropagation();
 		if (menu.hidden) openMenu(); else closeMenu();
 	});
-	// Keep button always enabled — dropdown handles per-model gating.
 	window._refreshGenAddMenu = () => { if (!menu.hidden) paintMenu(); };
 })();
 
@@ -7558,38 +7618,8 @@ infoBtn.addEventListener("click", () => {
 	infoBtn.style.color = infoOpen ? "#ffd28a" : "rgba(255,255,255,0.55)";
 	if (infoOpen) updateDebugHud();
 });
-// RGB axes reference — projects world X/Y/Z into the current camera's view space
-// and writes the resulting screen directions into the SVG lines/labels every frame.
-// Axes closer to camera (dir.z > 0) render at full opacity; ones pointing away fade.
-const _axesGizmoEls = (() => {
-	const wrap = document.getElementById("viewport-axes-corner");
-	if (!wrap) return null;
-	const lines = { x: wrap.querySelector('line[data-axis="x"]'), y: wrap.querySelector('line[data-axis="y"]'), z: wrap.querySelector('line[data-axis="z"]') };
-	const labels = { x: wrap.querySelector('text[data-axis="x"]'), y: wrap.querySelector('text[data-axis="y"]'), z: wrap.querySelector('text[data-axis="z"]') };
-	return { lines, labels };
-})();
-const _axesGizmoAxes = { x: new THREE.Vector3(1,0,0), y: new THREE.Vector3(0,1,0), z: new THREE.Vector3(0,0,1) };
-const _axesGizmoTmp = new THREE.Vector3();
-function updateAxesGizmo() {
-	if (!_axesGizmoEls) return;
-	const CENTER = 22, ARM = 15;
-	for (const k of ["x","y","z"]) {
-		_axesGizmoTmp.copy(_axesGizmoAxes[k]).transformDirection(camera.matrixWorldInverse);
-		// SVG y grows downward, so flip view-space y for the screen direction.
-		const sx = _axesGizmoTmp.x, sy = -_axesGizmoTmp.y;
-		const lx = CENTER + sx * ARM, ly = CENTER + sy * ARM;
-		const line = _axesGizmoEls.lines[k];
-		const label = _axesGizmoEls.labels[k];
-		line.setAttribute("x2", lx);
-		line.setAttribute("y2", ly);
-		label.setAttribute("x", CENTER + sx * (ARM + 5));
-		label.setAttribute("y", CENTER + sy * (ARM + 5));
-		// Axis pointing INTO the screen (dir.z < 0) fades toward 0.35 opacity.
-		const opacity = 0.4 + 0.6 * (0.5 + 0.5 * _axesGizmoTmp.z);
-		line.setAttribute("opacity", opacity);
-		label.setAttribute("opacity", opacity);
-	}
-}
+// RGB "XYZ" is now a static visual-legend label matching the gizmo axis colors
+// (X=red / Y=green / Z=blue). Painted once in the HTML; no per-frame update needed.
 
 let frameCounter = 0;
 function updateDebugHud() {
@@ -7663,7 +7693,6 @@ function loop() {
 		// Keep the render-camera helper in sync with renderCam's current pose so the
 		// wireframe follows keyframe tweens / user edits in real time.
 		if (renderCamHelper.visible) renderCamHelper.update();
-		updateAxesGizmo();
 		renderer.render(scene, camera);
 	} catch (e) {
 		renderErrorCount++;
