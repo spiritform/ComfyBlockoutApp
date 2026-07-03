@@ -71,7 +71,8 @@
 	.modal-backdrop {
 		position: fixed; inset: 0; z-index: 500;
 		background: rgba(0,0,0,0.55); backdrop-filter: blur(6px);
-		display: none; align-items: center; justify-content: center;
+		display: none; align-items: flex-start; justify-content: center;
+		padding-top: 22vh; overflow-y: auto;
 	}
 	.modal-backdrop.open { display: flex; }
 	.modal-card {
@@ -92,6 +93,7 @@
 	}
 	.modal-close:hover { background: rgba(255,255,255,0.06); color: #e6e6ea; }
 	.modal-section { padding-bottom: 0; }
+	.modal-section + .modal-section { margin-top: 24px; }
 	.modal-section .section-label { margin-bottom: 10px; }
 	.modal-input {
 		width: 100%; border: none; outline: none;
@@ -102,21 +104,49 @@
 	.modal-input:focus { background: rgba(255,255,255,0.07); }
 	.modal-hint { margin-top: 10px; font-size: 10px; color: rgba(255,255,255,0.35); line-height: 1.4; }
 	.modal-toggle-row {
-		display: flex; align-items: center; gap: 8px;
-		font-size: 11px; color: rgba(255,255,255,0.85); cursor: pointer;
+		display: flex; align-items: center; justify-content: space-between; gap: 12px;
+		font-size: 12px; color: rgba(255,255,255,0.9); cursor: pointer;
 		user-select: none;
+		margin-bottom: 18px;
 	}
-	.modal-toggle-row input[type="checkbox"] { accent-color: #ffb454; cursor: pointer; margin: 0; }
+	.modal-toggle-row .toggle-labels { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+	.modal-toggle-row .toggle-title { font-weight: 500; }
+	.modal-toggle-row .toggle-sub { font-size: 10px; color: rgba(255,255,255,0.4); }
+	.modal-toggle-row input[type="checkbox"] {
+		appearance: none; -webkit-appearance: none;
+		width: 34px; height: 20px; border-radius: 999px;
+		background: rgba(255,255,255,0.12); cursor: pointer;
+		position: relative; margin: 0; flex: 0 0 auto;
+		transition: background 0.15s;
+	}
+	.modal-toggle-row input[type="checkbox"]::after {
+		content: ""; position: absolute; top: 2px; left: 2px;
+		width: 16px; height: 16px; border-radius: 50%;
+		background: rgba(255,255,255,0.85);
+		transition: transform 0.15s, background 0.15s;
+	}
+	.modal-toggle-row input[type="checkbox"]:checked { background: #ffb454; }
+	.modal-toggle-row input[type="checkbox"]:checked::after {
+		transform: translateX(14px); background: #1a1208;
+	}
+	.modal-toggle-row input[type="checkbox"]:focus-visible { outline: 2px solid rgba(255,180,84,0.6); outline-offset: 2px; }
 	body.assistant-off #th-assistant { display: none; }
 	body.assistant-off #llm-key-section { display: none; }
 	.modal-hint a { color: rgba(255,180,84,0.75); text-decoration: none; }
 	.modal-hint a:hover { color: #ffb454; }
+	/* Input + Clear + Save on one line — Clear/Save no longer take a wide row of
+	   their own below the field. Both buttons stay the same visual height as the
+	   textbox so the row aligns cleanly. */
+	.modal-input-row { display: flex; gap: 6px; align-items: stretch; }
+	.modal-input-row .modal-input { flex: 1; min-width: 0; }
 	.modal-actions { display: flex; gap: 6px; margin-top: 16px; }
 	.modal-btn-primary {
 		flex: 1; padding: 8px 14px; border-radius: 5px; border: none;
 		background: #ffb454; color: #1a1208;
 		font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit;
 	}
+	.modal-input-row .modal-btn-primary { flex: 0 0 auto; padding: 0 14px; }
+	.modal-input-row .modal-btn-secondary { flex: 0 0 auto; padding: 0 12px; }
 	.modal-btn-primary:hover { background: #ffc066; }
 	.modal-btn-secondary {
 		padding: 8px 14px; border-radius: 5px; border: none;
@@ -1770,30 +1800,31 @@
 			<div class="modal-section">
 				<div class="section-label">Comfy Cloud API Key</div>
 				<div class="modal-status" id="settings-status"></div>
-				<input class="modal-input" type="password" id="settings-key" placeholder="comfyui-…" autocomplete="off" spellcheck="false">
-				<div class="modal-hint">Get yours at <a href="https://platform.comfy.org/profile/api-keys" target="_blank">platform.comfy.org/profile/api-keys</a></div>
-				<div class="modal-actions">
+				<div class="modal-input-row">
+					<input class="modal-input" type="password" id="settings-key" placeholder="comfyui-…" autocomplete="off" spellcheck="false">
 					<button class="modal-btn-secondary" id="settings-clear">Clear</button>
 					<button class="modal-btn-primary" id="settings-save">Save</button>
 				</div>
+				<div class="modal-hint">Get yours at <a href="https://platform.comfy.org/profile/api-keys" target="_blank">platform.comfy.org/profile/api-keys</a></div>
 			</div>
 			<div class="modal-section">
-				<div class="section-label">AI Agent</div>
 				<label class="modal-toggle-row" for="assistant-toggle">
+					<span class="toggle-labels">
+						<span class="toggle-title">Enable AI Agent</span>
+						<span class="toggle-sub">Chat + Comfy MCP tools</span>
+					</span>
 					<input type="checkbox" id="assistant-toggle">
-					<span>Enable AI Agent (chat + Comfy MCP tools) in the right panel</span>
 				</label>
-				<div class="modal-hint">Off by default — flip it on to unlock the in-editor Claude Assistant.</div>
 			</div>
 			<div class="modal-section" id="llm-key-section">
 				<div class="section-label">Anthropic API Key (Assistant)</div>
 				<div class="modal-status" id="llm-key-status"></div>
-				<input class="modal-input" type="password" id="llm-key-input" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
-				<div class="modal-hint">Powers the in-editor Assistant. Get yours at <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com/settings/keys</a></div>
-				<div class="modal-actions">
+				<div class="modal-input-row">
+					<input class="modal-input" type="password" id="llm-key-input" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
 					<button class="modal-btn-secondary" id="llm-key-clear">Clear</button>
 					<button class="modal-btn-primary" id="llm-key-save">Save</button>
 				</div>
+				<div class="modal-hint">Powers the in-editor Assistant. Get yours at <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com/settings/keys</a></div>
 			</div>
 		</div>
 	</div>
