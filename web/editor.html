@@ -8464,6 +8464,10 @@ function applyObjectState(obj, state) {
 	obj.position.copy(state.pos);
 	obj.quaternion.copy(state.quat);
 	obj.scale.copy(state.scale);
+	// Force matrix update. Standard THREE objects handle this in the renderer's
+	// pre-render traversal, but spark's SplatMesh occasionally lags a frame if
+	// matrixAutoUpdate has been touched anywhere in its chain.
+	obj.updateMatrixWorld(true);
 }
 // Catmull-Rom (tension=0.5) on a single component — produces a smooth curve through
 // p1 and p2 with tangents determined by the neighbors p0 and p3.
@@ -9040,9 +9044,10 @@ function renderKeyframeMarkers() {
 // key stores a full transform, not per-field tracks.
 const OBJ_KEYED_FIELDS = ["obj-px","obj-py","obj-pz","obj-rx","obj-ry","obj-rz","obj-sx","obj-sy","obj-sz"];
 const CAM_KEYED_FIELDS = ["cam-px","cam-py","cam-pz","cam-yaw","cam-pitch","cam-roll"];
-function flashKeyedFields(kind) {
-	const ids = kind === "camera" ? CAM_KEYED_FIELDS : OBJ_KEYED_FIELDS;
-	for (const id of ids) {
+function flashKeyedFields(kind, ids) {
+	const defaults = kind === "camera" ? CAM_KEYED_FIELDS : OBJ_KEYED_FIELDS;
+	const target = ids && ids.length ? ids : defaults;
+	for (const id of target) {
 		const el = document.getElementById(id);
 		if (!el) continue;
 		el.classList.remove("keyed-flash");
@@ -9050,6 +9055,32 @@ function flashKeyedFields(kind) {
 		void el.offsetWidth;
 		el.classList.add("keyed-flash");
 	}
+}
+
+// Compare current object transform vs the previous keyframe and return the
+// slider IDs that changed. Used to only flash the fields that actually differ
+// from the last capture. If there's no prior key, every field flashes since
+// this is the "baseline" snapshot.
+function _changedObjFieldsSincePrev(obj, prevKey) {
+	if (!prevKey) return OBJ_KEYED_FIELDS.slice();
+	const EPS_POS = 1e-4;
+	const EPS_QUAT = 1e-4;
+	const EPS_SCALE = 1e-4;
+	const ids = [];
+	if (Math.abs(obj.position.x - prevKey.pos.x) > EPS_POS) ids.push("obj-px");
+	if (Math.abs(obj.position.y - prevKey.pos.y) > EPS_POS) ids.push("obj-py");
+	if (Math.abs(obj.position.z - prevKey.pos.z) > EPS_POS) ids.push("obj-pz");
+	// Convert both quaternions to Euler to detect per-axis rotation changes.
+	// Quaternion component comparison is unreliable for detecting axis-of-rotation.
+	const eNow = new THREE.Euler().setFromQuaternion(obj.quaternion);
+	const eOld = new THREE.Euler().setFromQuaternion(prevKey.quat);
+	if (Math.abs(eNow.x - eOld.x) > EPS_QUAT) ids.push("obj-rx");
+	if (Math.abs(eNow.y - eOld.y) > EPS_QUAT) ids.push("obj-ry");
+	if (Math.abs(eNow.z - eOld.z) > EPS_QUAT) ids.push("obj-rz");
+	if (Math.abs(obj.scale.x - prevKey.scale.x) > EPS_SCALE) ids.push("obj-sx");
+	if (Math.abs(obj.scale.y - prevKey.scale.y) > EPS_SCALE) ids.push("obj-sy");
+	if (Math.abs(obj.scale.z - prevKey.scale.z) > EPS_SCALE) ids.push("obj-sz");
+	return ids;
 }
 
 function addKeyframe() {
@@ -9106,6 +9137,13 @@ function addObjectKeyframe(obj) {
 	if (!Array.isArray(obj.userData.keyframes)) obj.userData.keyframes = [];
 	snapshotForUndo();
 	const t = playhead;
+	// Grab the previous key (before we filter/sort) so we can diff what actually
+	// changed and only flash those fields — otherwise every S press pulses all 9
+	// fields even when the user only nudged one axis.
+	const prevKey = obj.userData.keyframes.length
+		? obj.userData.keyframes[obj.userData.keyframes.length - 1]
+		: null;
+	const changedFieldIds = _changedObjFieldsSincePrev(obj, prevKey);
 	// Replace any existing key at this time (within 0.5% — same dedup window as camera).
 	obj.userData.keyframes = obj.userData.keyframes.filter(k => Math.abs(k.t - t) > 0.005);
 	const cap = captureObjectState(obj);
@@ -9123,7 +9161,7 @@ function addObjectKeyframe(obj) {
 	obj.userData.keyframes.sort((a, b) => a.t - b.t);
 	selectedKeys.clear();
 	renderKeyframeMarkers();
-	flashKeyedFields("object");
+	flashKeyedFields("object", changedFieldIds);
 	saveSceneDebounced?.();
 }
 
