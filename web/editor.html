@@ -462,7 +462,7 @@
 	   Camera + per-object rows share a uniform 7×7 size so future object tracks can
 	   stack cleanly with room to breathe (~3px gap between rows). */
 	.tl-key {
-		position: absolute; top: -18px;
+		position: absolute; top: -22px;
 		width: 7px; height: 7px;
 		background: #38d977;
 		transform: translateX(-50%) rotate(45deg);
@@ -482,7 +482,7 @@
 	.tl-key.obj, .pv-key.obj {
 		background: #4dc4ff;
 		width: 7px; height: 7px;
-		top: -8px;
+		top: -12px;
 		z-index: 11;
 	}
 	.tl-key.obj:hover, .pv-key.obj:hover { background: #7ad3ff; }
@@ -541,7 +541,23 @@
 	.tl-trim-handle:hover { background: #ffb454; box-shadow: 0 0 6px rgba(255,180,80,0.7); }
 	.tl-trim-handle.dragging { background: #ffd28a; }
 
-	#tl-time { display: none; }
+	/* Timecode strip sits directly above the transport row, aligned with the
+	   record button (same 14px left as #timeline's padding). Negative bottom
+	   margin pulls it INTO the timeline row's top padding so it hugs the
+	   transport buttons instead of floating away. */
+	#tl-time-strip {
+		flex: 0 0 auto;
+		padding: 0 14px;
+		margin-bottom: -18px;
+		text-align: left;
+		position: relative; z-index: 5;
+		pointer-events: none;
+	}
+	#tl-time {
+		font-size: 10px; letter-spacing: 0.08em;
+		color: rgba(255,255,255,0.28);
+		font-variant-numeric: tabular-nums;
+	}
 
 	#status {
 		position: absolute; top: 14px; right: 14px; z-index: 10;
@@ -1923,6 +1939,7 @@
 			</div>
 		</div>
 		<div id="tl-rec-status" hidden></div>
+		<div id="tl-time-strip"><span id="tl-time">0.00s / 4.00s</span></div>
 		<div id="timeline">
 			<button class="tl-btn rec" id="tl-rec" title="Record (auto-tween if keyframes exist)">●</button>
 			<button class="tl-btn" id="tl-play" title="Play / pause (space)">▶</button>
@@ -1939,7 +1956,6 @@
 				<div class="tl-trim-handle" id="tl-trim-start" style="left:0%" title="Trim start"></div>
 				<div class="tl-trim-handle" id="tl-trim-end" style="left:100%" title="Trim end"></div>
 			</div>
-			<span id="tl-time">0.00s / 4.00s</span>
 		</div>
 	</div>
 
@@ -7850,7 +7866,10 @@ function setPlayhead(t) {
 	const displayNorm = playhead <= trimStart + gap * 1.5
 		? trimStart
 		: (playhead >= trimEnd - gap * 1.5 ? trimEnd : playhead);
-	tlTime.textContent = `${(displayNorm * dur).toFixed(2)}s / ${dur.toFixed(2)}s`;
+	// Format as compact seconds — drop trailing zeros so 0 → "0s", 4 → "4s",
+	// 2.5 → "2.5s". Reads cleaner than "0.00s / 4.00s" for a status label.
+	const fmtSec = (v) => (Math.abs(v - Math.round(v)) < 0.05 ? `${Math.round(v)}s` : `${v.toFixed(1)}s`);
+	tlTime.textContent = `${fmtSec(displayNorm * dur)} / ${fmtSec(dur)}`;
 	// Animated objects (with their own keyframes) follow the playhead automatically.
 	// No-op for objects without keys, so this is free for static scenes.
 	applyObjectsAt(playhead);
@@ -9858,9 +9877,16 @@ if (IS_PREVIEW) {
 	const pvPlayIcon = pvPlay.querySelector(".pv-icon");
 	setInterval(() => {
 		const dur = currentDuration();
-		const t = playhead * dur;
-		const durStr = Number.isInteger(dur) ? `${dur}s` : `${dur.toFixed(1)}s`;
-		pvTime.textContent = `${t.toFixed(2)}s / ${durStr}`;
+		// Snap the readout to 0 / dur when the playhead is inside the trim-gap
+		// padding so "at the start" reads 0.00s instead of 0.04s (matches how
+		// setPlayhead handles the main timecode).
+		const gap = trimGap();
+		const displayNorm = playhead <= trimStart + gap * 1.5
+			? trimStart
+			: (playhead >= trimEnd - gap * 1.5 ? trimEnd : playhead);
+		const t = displayNorm * dur;
+		const fmt = (v) => (Math.abs(v - Math.round(v)) < 0.05 ? `${Math.round(v)}s` : `${v.toFixed(1)}s`);
+		pvTime.textContent = `${fmt(t)} / ${fmt(dur)}`;
 		const want = `/extensions/ComfyBlockout/icons/${isPlayingPreview ? "pause" : "play"}.svg`;
 		if (!pvPlayIcon.src.endsWith(want)) pvPlayIcon.src = want;
 	}, 100);
