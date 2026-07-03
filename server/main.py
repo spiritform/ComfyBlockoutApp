@@ -601,6 +601,28 @@ async def delete_project(request: Request):
     return JSONResponse({"success": True})
 
 
+@app.post("/comfyblockout/projects/rename")
+async def rename_project(request: Request):
+    data = await request.json()
+    old = str(data.get("old", "")).strip()
+    new = str(data.get("new", "")).strip()
+    if not old or not _SAFE_PROJECT_NAME.match(old):
+        return JSONResponse({"success": False, "error": "Bad old name"}, status_code=400)
+    if not new or not _SAFE_PROJECT_NAME.match(new):
+        return JSONResponse({"success": False, "error": "Bad new name"}, status_code=400)
+    if old == new:
+        return JSONResponse({"success": True})
+    root = _projects_root()
+    src = root / old
+    dst = root / new
+    if not src.exists():
+        return JSONResponse({"success": False, "error": "Project not found"}, status_code=404)
+    if dst.exists():
+        return JSONResponse({"success": False, "error": "A project with that name already exists"}, status_code=409)
+    src.rename(dst)
+    return JSONResponse({"success": True})
+
+
 # ---------- auth (comfy-cli) ----------
 
 _CLI_VERSION_CACHE: tuple[bool, str | None] | None = None

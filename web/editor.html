@@ -36,6 +36,18 @@
 	#top-header .th-brand .th-sep { color: rgba(255,255,255,0.25); }
 	#top-header .th-brand .th-project-name {
 		text-transform: none; font-size: 11px; letter-spacing: 0.02em;
+		cursor: text; padding: 2px 4px; border-radius: 3px;
+		border: 1px solid transparent;
+	}
+	#top-header .th-brand .th-project-name:hover {
+		background: rgba(255,255,255,0.04);
+		border-color: rgba(255,255,255,0.08);
+	}
+	#top-header .th-brand .th-project-name-input {
+		background: rgba(255,255,255,0.06); border: 1px solid rgba(255,180,84,0.4);
+		border-radius: 3px; color: #ffd28a;
+		font: inherit; padding: 2px 4px; outline: none;
+		min-width: 120px; max-width: 240px;
 	}
 	#top-header .th-right { display: flex; align-items: center; gap: 6px; }
 	#top-header .th-left { display: flex; align-items: center; gap: 12px; }
@@ -1123,13 +1135,6 @@
 		box-sizing: border-box; z-index: 1;
 	}
 	.gen-prompt-hl .ref-tag { color: var(--ref-color, #ffb454); font-weight: 500; }
-	.gen-run-btn {
-		width: 100%; padding: 8px; border-radius: 4px; border: none;
-		background: rgba(255,180,84,0.15); color: #ffb454;
-		font: inherit; font-size: 11px; font-weight: 600;
-		text-transform: uppercase; letter-spacing: 0.06em; cursor: pointer;
-	}
-	.gen-run-btn:hover { background: rgba(255,180,84,0.25); color: #fff; }
 	.gen-run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 	.gen-cell .out-expand-toggle { font-size: 14px; }
 	.gen-cell.expanded .out-expand-toggle { transform: rotate(180deg); color: #ffb454; }
@@ -3125,7 +3130,11 @@ function viewportSize() {
 	return { w: canvasWrap.clientWidth, h: canvasWrap.clientHeight };
 }
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+// preserveDrawingBuffer so we can readPixels() from the canvas in the click
+// handler to verify that a splat's pickSphere hit corresponds to actual
+// rendered splat pixels — otherwise clicking empty space near the sphere
+// selects the splat, since splats have no triangle geometry to raycast against.
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 
 // Post-processing pipeline — three's EffectComposer + n8ao's N8AOPass. Built
@@ -4181,6 +4190,40 @@ async function loadSplat(arrayBuffer, filename, opts = {}) {
 	}
 }
 
+// Reads a 3×3 pixel window at the given client coords from the WebGL canvas
+// and checks whether ANY of the sampled pixels differ from the clear color
+// enough to suggest something was actually drawn there. Used to gate splat
+// selection so clicks in visually-empty space don't select the splat via its
+// loose bounding-sphere pick.
+const _clickPixelBuf = new Uint8Array(9 * 4);
+const _clickPixelClearColor = new THREE.Color();
+function _clickPixelIsRendered(clientX, clientY) {
+	const rect = canvas.getBoundingClientRect();
+	const w = renderer.domElement.width, h = renderer.domElement.height;
+	// Map from CSS coords (top-left) to renderer pixels (bottom-left).
+	const nx = ((clientX - rect.left) / rect.width) * w;
+	const ny = h - ((clientY - rect.top) / rect.height) * h;
+	const px = Math.max(0, Math.min(w - 3, Math.floor(nx - 1)));
+	const py = Math.max(0, Math.min(h - 3, Math.floor(ny - 1)));
+	const gl = renderer.getContext();
+	try {
+		gl.readPixels(px, py, 3, 3, gl.RGBA, gl.UNSIGNED_BYTE, _clickPixelBuf);
+	} catch (e) {
+		// If we can't read (context flag, cross-origin, etc.) fall back to allowing
+		// the hit so we don't regress selection behavior.
+		return true;
+	}
+	renderer.getClearColor(_clickPixelClearColor);
+	const cr = Math.round(_clickPixelClearColor.r * 255);
+	const cg = Math.round(_clickPixelClearColor.g * 255);
+	const cb = Math.round(_clickPixelClearColor.b * 255);
+	for (let i = 0; i < 9; i++) {
+		const r = _clickPixelBuf[i * 4], g = _clickPixelBuf[i * 4 + 1], b = _clickPixelBuf[i * 4 + 2];
+		if (Math.abs(r - cr) > 6 || Math.abs(g - cg) > 6 || Math.abs(b - cb) > 6) return true;
+	}
+	return false;
+}
+
 function computeSplatPickSphere(splatMesh) {
 	// SplatMesh has no triangle geometry; build a click-test sphere from whatever bounds API works.
 	try {
@@ -4966,11 +5009,16 @@ canvas.addEventListener("pointerup", e => {
 		true,
 	);
 	const meshHit = meshHits[0] || null;
-	// Sphere-pick for objects without reliable triangle raycast (splats, SkinnedMesh inside FBX)
+	// Sphere-pick for objects without reliable triangle raycast (splats, SkinnedMesh inside FBX).
+	// For splats we also verify that the click actually landed on rendered pixels —
+	// their pickSphere is a loose AABB fit, so empty space around irregular shapes
+	// would otherwise still select the splat. FBX skinned meshes skip the check.
+	const clickIsRendered = _clickPixelIsRendered(e.clientX, e.clientY);
 	let sphereHit = null, sphereHitDist = Infinity;
 	const tmpVec = new THREE.Vector3();
 	for (const o of objects) {
 		if (o.visible === false || !o.userData.pickSphere) continue;
+		if (o.userData.primKind === "splat" && !clickIsRendered) continue;
 		o.updateMatrixWorld();
 		const worldSphere = o.userData.pickSphere.clone().applyMatrix4(o.matrixWorld);
 		if (raycaster.ray.intersectSphere(worldSphere, tmpVec)) {
@@ -9990,6 +10038,65 @@ function applyProjectName(name) {
 		projectNameEl.style.color = currentProjectName ? "#ffd28a" : "rgba(255,255,255,0.55)";
 	}
 }
+
+// Click the project name to edit it inline. Untitled projects route to
+// the Save As flow (rename doesn't make sense without an existing folder);
+// named projects hit the /projects/rename endpoint on commit.
+async function renameProjectOnServer(oldName, newName) {
+	const r = await fetch("/comfyblockout/projects/rename", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ old: oldName, new: newName }),
+	});
+	return r.json();
+}
+projectNameEl?.addEventListener("click", () => {
+	if (projectNameEl.querySelector("input")) return; // already editing
+	if (!currentProjectName) {
+		// No saved project yet — hand off to Save As so the user is picking a
+		// name for the very first time, not renaming a nonexistent folder.
+		document.getElementById("project-save-as")?.click();
+		return;
+	}
+	const original = currentProjectName;
+	const input = document.createElement("input");
+	input.type = "text";
+	input.className = "th-project-name-input";
+	input.value = original;
+	input.spellcheck = false;
+	projectNameEl.textContent = "";
+	projectNameEl.appendChild(input);
+	input.focus();
+	input.select();
+	let done = false;
+	async function commit(save) {
+		if (done) return;
+		done = true;
+		const next = input.value.trim();
+		if (!save || !next || next === original) {
+			applyProjectName(original);
+			return;
+		}
+		try {
+			const j = await renameProjectOnServer(original, next);
+			if (j.success) {
+				applyProjectName(next);
+				updateStatus?.(`renamed · ${next}`);
+			} else {
+				window.showAlert?.("Rename failed", j.error || "Unknown error");
+				applyProjectName(original);
+			}
+		} catch (e) {
+			window.showAlert?.("Rename failed", String(e?.message || e));
+			applyProjectName(original);
+		}
+	}
+	input.addEventListener("blur", () => commit(true));
+	input.addEventListener("keydown", (e) => {
+		if (e.key === "Enter") { e.preventDefault(); commit(true); }
+		else if (e.key === "Escape") { e.preventDefault(); commit(false); }
+	});
+});
 
 const EMPTY_SCENE = {
 	primitives: [],
