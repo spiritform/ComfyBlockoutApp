@@ -541,21 +541,16 @@
 	.tl-trim-handle:hover { background: #ffb454; box-shadow: 0 0 6px rgba(255,180,80,0.7); }
 	.tl-trim-handle.dragging { background: #ffd28a; }
 
-	/* Timecode strip sits directly above the transport row, aligned with the
-	   record button (same 14px left as #timeline's padding). Negative bottom
-	   margin pulls it INTO the timeline row's top padding so it hugs the
-	   transport buttons instead of floating away. */
-	#tl-time-strip {
-		flex: 0 0 auto;
-		padding: 0 14px;
-		margin-bottom: -18px;
-		text-align: left;
-		position: relative; z-index: 5;
-		pointer-events: none;
-	}
-	#tl-time {
+	/* Timecode pinned inside the aspect frame's bottom-left corner — mirrors the
+	   scene/camera toggles at top-left. Hidden with the AR overlay. */
+	#viewport-time-corner {
+		position: absolute; bottom: 8px; left: 8px;
+		z-index: 6; pointer-events: none;
+		display: inline-flex; align-items: center;
+		background: rgba(0,0,0,0.35); backdrop-filter: blur(4px);
+		border-radius: 4px; padding: 4px 8px;
 		font-size: 10px; letter-spacing: 0.08em;
-		color: rgba(255,255,255,0.28);
+		color: rgba(255,255,255,0.55);
 		font-variant-numeric: tabular-nums;
 	}
 
@@ -1180,6 +1175,13 @@
 	.drag-num:hover { background: rgba(255,255,255,0.08); }
 	.drag-num.dragging { background: rgba(255,180,84,0.18); color: #ffd28a; }
 	.drag-num.editing { background: rgba(0,0,0,0.3); cursor: text; }
+	/* Confirmation flash when S / + captures the value into a keyframe. Blue matches
+	   the diamond markers on the object-anim track. */
+	@keyframes drag-key-flash {
+		0%   { box-shadow: inset 0 0 0 1px rgba(80,160,255,0.7); background: rgba(80,160,255,0.22); }
+		100% { box-shadow: inset 0 0 0 1px rgba(80,160,255,0);   background: rgba(80,160,255,0); }
+	}
+	.drag-num.keyed-flash { animation: drag-key-flash 0.7s ease-out; }
 	.drag-num .drag-label { color: rgba(255,255,255,0.4); font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; flex-shrink: 0; }
 	.drag-num .drag-val { text-align: right; flex: 1; overflow: hidden; text-overflow: ellipsis; }
 	.drag-num input {
@@ -1895,6 +1897,7 @@
 			</div>
 			<div id="aspect-frame" class="no-guides">
 				<span class="v1"></span><span class="v2"></span>
+				<div id="viewport-time-corner"><span id="tl-time">0.00s / 4.00s</span></div>
 				<div id="viewport-mode-corner">
 					<button class="vpm-btn" id="mode-scene" title="Perspective view — orbit around the shot from an overview vantage. Also opens PROPERTIES : SCENE.">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="1"/><path d="M18.944 12.33a1 1 0 0 0 0-.66 7.5 7.5 0 0 0-13.888 0 1 1 0 0 0 0 .66 7.5 7.5 0 0 0 13.888 0"/></svg>
@@ -1939,7 +1942,6 @@
 			</div>
 		</div>
 		<div id="tl-rec-status" hidden></div>
-		<div id="tl-time-strip"><span id="tl-time">0.00s / 4.00s</span></div>
 		<div id="timeline">
 			<button class="tl-btn rec" id="tl-rec" title="Record (auto-tween if keyframes exist)">●</button>
 			<button class="tl-btn" id="tl-play" title="Play / pause (space)">▶</button>
@@ -2848,7 +2850,10 @@ transform.addEventListener("dragging-changed", (e) => {
 	// Re-enable orbit after a gizmo drag ENDS — but only when renderCam isn't the
 	// selection, since selecting renderCam pins the viewport for shot-adjustment.
 	orbit.enabled = !e.value && selected !== renderCam;
-	if (!e.value) saveSceneDebounced();
+	if (!e.value) {
+		renderCamDragDist = null;
+		saveSceneDebounced();
+	}
 });
 const transformHelper = transform.getHelper ? transform.getHelper() : transform;
 scene.add(transformHelper);
@@ -2979,7 +2984,7 @@ function setActiveView(which) {
 }
 window.setActiveView = setActiveView;
 
-let grid = new THREE.GridHelper(20, 20, 0x888888, 0x888888);
+let grid = new THREE.GridHelper(20, 20, 0xdddddd, 0x888888);
 grid.material.transparent = true;
 grid.material.opacity = 0.18;
 scene.add(grid);
@@ -3259,7 +3264,9 @@ function buildParticleSystem(initialConfig) {
 	geom.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6); // skip culling
 
 	const rate = Math.max(1e-3, cfg.rate || (N / Math.max(0.001, cfg.lifetime)));
-	const cycle = N / rate;
+	// cycle must be at least lifetime — otherwise mod wraps before the death fade
+	// completes and particles pop out mid-flight.
+	const cycle = Math.max(N / rate, cfg.lifetime);
 	const mat = new THREE.ShaderMaterial({
 		uniforms: {
 			uTime:         { value: 0 },
@@ -3303,6 +3310,12 @@ function buildParticleSystem(initialConfig) {
 	helperGroup.add(sphereHelper);
 
 	points.userData.particleSystem = { config: cfg, geom, mat, points, boxHelper, sphereHelper, helperGroup };
+	// Click-target sphere so the emitter is selectable in the viewport (Points don't
+	// triangle-raycast, and their attribute positions are placeholders — the shader
+	// computes true positions). 0.6 covers the unit-sized box/sphere helpers and
+	// gives point-emitters a reasonable pick radius. Local-space; scale on the Points
+	// scales the sphere via matrixWorld.
+	points.userData.pickSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 0.6);
 	updateEmitterHelper(points);
 	return points;
 }
@@ -3334,7 +3347,7 @@ function syncParticleUniforms(points) {
 	u.uLifetime.value     = cfg.lifetime;
 	const N = Math.max(1, cfg.count | 0);
 	const rate = Math.max(1e-3, cfg.rate || (N / Math.max(0.001, cfg.lifetime)));
-	if (u.uCycle) u.uCycle.value = N / rate;
+	if (u.uCycle) u.uCycle.value = Math.max(N / rate, cfg.lifetime);
 	u.uSize.value         = cfg.size;
 	if (u.uRandom) u.uRandom.value = cfg.random;
 	u.uInitialSpeed.value = cfg.initialSpeed;
@@ -4157,7 +4170,48 @@ applyAssistantEnablement();
 	});
 })();
 
+// Soft selection highlight — tint the selected object's materials with a subtle
+// amber emissive so it reads as "lit up" without adding any extra geometry.
+// Applied per-material on select; original emissive + intensity cached in userData
+// and restored on deselect. Skinned meshes, standard materials, groups all work.
+const SELECTION_TINT = 0xffb454;
+const SELECTION_INTENSITY = 0.28;
+let _tintedMaterials = [];
+function clearSelectionTint() {
+	for (const entry of _tintedMaterials) {
+		const { mat, emissive, intensity } = entry;
+		if (mat.emissive && emissive) mat.emissive.copy(emissive);
+		if (typeof intensity === "number") mat.emissiveIntensity = intensity;
+		mat.needsUpdate = true;
+	}
+	_tintedMaterials = [];
+}
+function applySelectionTint(obj) {
+	if (!obj || obj === renderCam) return;
+	const seen = new Set();
+	obj.traverse(c => {
+		const mats = Array.isArray(c.material) ? c.material : c.material ? [c.material] : [];
+		for (const mat of mats) {
+			if (seen.has(mat) || !mat.emissive) continue;
+			seen.add(mat);
+			_tintedMaterials.push({
+				mat,
+				emissive: mat.emissive.clone(),
+				intensity: mat.emissiveIntensity,
+			});
+			mat.emissive.setHex(SELECTION_TINT);
+			mat.emissiveIntensity = SELECTION_INTENSITY;
+			mat.needsUpdate = true;
+		}
+	});
+}
+function updateSelectionOutline() {
+	// no-op: kept as a name-alias for the animate-loop hook. Emissive tint is
+	// applied/cleared at select time and doesn't need per-frame syncing.
+}
+
 function select(obj) {
+	clearSelectionTint();
 	selected = obj;
 	window.__selectedObj = obj;
 	if (obj) transform.attach(obj);
@@ -4166,6 +4220,7 @@ function select(obj) {
 		if (obj) tintGizmo(0xffb454);
 		else pivotMarker.visible = false;
 	}
+	if (obj && obj !== renderCam) applySelectionTint(obj);
 	// Selecting the render camera locks the sceneCam orbit so the user's drag can't
 	// accidentally tumble the viewport while they're adjusting the shot. Re-enabled
 	// as soon as anything else (or nothing) is selected.
@@ -4476,6 +4531,11 @@ canvas.addEventListener("pointerup", e => {
 		selectedKeys.add(dot.key);
 		renderKeyframeMarkers();
 		setPlayhead(dot.key.t);
+		// "Through" keys are Catmull-Rom control points — the curve at time k.t doesn't
+		// necessarily pass through k.pos. setPlayhead's sampler would land next to the
+		// dot, not on it. Force the object to the exact stored transform so the gizmo
+		// centers on the clicked dot.
+		applyObjectState(dot.obj, dot.key);
 		select(dot.obj); // surface the object too so the user can edit/key further
 		return;
 	}
@@ -5932,6 +5992,9 @@ document.getElementById("mode-scene")?.addEventListener("click", () => {
 });
 
 let snapEnabled = false;
+// Shift-held temporarily flips snap ON — matches Blender/Maya muscle memory. The
+// two states OR together, so a snap-off toggle + held Shift still snaps.
+let shiftSnapHeld = false;
 const snapToggle = document.getElementById("toggle-snap");
 // Snap increments — chosen so each gizmo feels like it "clicks" onto a grid:
 //   translate: 0.25 world units (fine grid at unit-quarter marks)
@@ -5943,10 +6006,12 @@ const snapToggle = document.getElementById("toggle-snap");
 const TRANSLATE_SNAP_STEP = 0.25;
 const ROTATE_SNAP_STEP_DEG = 15;
 const SCALE_SNAP_STEP = 0.25;
+function snapActive() { return snapEnabled || shiftSnapHeld; }
 function applyTransformSnap() {
-	transform.setTranslationSnap(snapEnabled ? TRANSLATE_SNAP_STEP : null);
-	transform.setRotationSnap(snapEnabled ? THREE.MathUtils.degToRad(ROTATE_SNAP_STEP_DEG) : null);
-	transform.setScaleSnap(snapEnabled ? SCALE_SNAP_STEP : null);
+	const on = snapActive();
+	transform.setTranslationSnap(on ? TRANSLATE_SNAP_STEP : null);
+	transform.setRotationSnap(on ? THREE.MathUtils.degToRad(ROTATE_SNAP_STEP_DEG) : null);
+	transform.setScaleSnap(on ? SCALE_SNAP_STEP : null);
 }
 snapToggle.addEventListener("click", () => {
 	snapEnabled = !snapEnabled;
@@ -5954,6 +6019,24 @@ snapToggle.addEventListener("click", () => {
 	applyTransformSnap();
 });
 applyTransformSnap();
+// Hold Shift → snap. Release → back to toggle state. Repeat keydown events fire
+// while held, so guard on the boolean to avoid thrashing setTranslationSnap.
+window.addEventListener("keydown", e => {
+	if (e.key === "Shift" && !shiftSnapHeld) {
+		shiftSnapHeld = true;
+		applyTransformSnap();
+	}
+});
+window.addEventListener("keyup", e => {
+	if (e.key === "Shift" && shiftSnapHeld) {
+		shiftSnapHeld = false;
+		applyTransformSnap();
+	}
+});
+// If the window loses focus mid-Shift (alt-tab), keyup never fires — reset on blur.
+window.addEventListener("blur", () => {
+	if (shiftSnapHeld) { shiftSnapHeld = false; applyTransformSnap(); }
+});
 
 // Pivot snap: nearest vertex OR bbox face-center / corner / center, in obj-local space.
 // Pivot lives at the object's local origin, so the snap target's lengthSq is the metric.
@@ -6084,12 +6167,16 @@ function applyPivotShift(obj, P) {
 	}
 }
 
+let renderCamDragDist = null;
 transform.addEventListener("mouseDown", () => {
 	// Snapshot pre-drag state so Ctrl+Z restores the object's transform from before the
 	// gizmo drag. One snapshot per gesture; objectChange fires per pixel and intentionally
 	// does NOT push, so the stack doesn't flood.
 	try { snapshotForUndo(); } catch {}
 	if (anchorMode && selected) anchorStartPos = selected.position.clone();
+	// Lock renderCam's target distance at gesture start. Recomputing it per-frame drifts
+	// (perpendicular translates grow |pos - target| each tick), so cache once.
+	renderCamDragDist = selected === renderCam ? (renderCam.position.distanceTo(renderCamTarget) || 3) : null;
 });
 transform.addEventListener("objectChange", () => {
 	if (anchorMode && selected && anchorStartPos) {
@@ -6127,13 +6214,13 @@ transform.addEventListener("objectChange", () => {
 		// position, so subsequent rotations/scales don't corrupt the reset math.
 		const acc = selected.userData._pivotDelta || new THREE.Vector3();
 		selected.userData._pivotDelta = acc.add(localDelta);
-		if (snapEnabled) {
+		if (snapActive()) {
 			const P = findNearestPivotSnap(selected);
 			if (P && P.lengthSq() > 1e-8) applyPivotShift(selected, P);
 		}
 		anchorStartPos = selected.position.clone();
 		updatePivotMarker();
-	} else if (snapEnabled && selected && transform.mode === "translate") {
+	} else if (snapActive() && selected && transform.mode === "translate") {
 		// Object-to-object snap: match an "anchor" on the dragged object (origin / bbox
 		// corner / bbox face-center) to the nearest such anchor on any other visible object.
 		const offset = findObjectToObjectSnapOffset(selected);
@@ -6688,6 +6775,13 @@ function refreshParticlesInspector() {
 }
 
 transform.addEventListener("objectChange", () => {
+	if (selected === renderCam && renderCamDragDist != null) {
+		// Keep renderCamTarget consistent with renderCam's live pose so a switch to
+		// Camera view orbits around what the wireframe is actually aimed at (not a
+		// stale pre-gizmo point). Cached distance prevents perpendicular-translate drift.
+		const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(renderCam.quaternion);
+		renderCamTarget.copy(renderCam.position).add(fwd.multiplyScalar(renderCamDragDist));
+	}
 	if (selected) for (const el of dragFields) el._refresh?.();
 });
 
@@ -8177,6 +8271,23 @@ function renderKeyframeMarkers() {
 	refreshPlayheadActiveOnKeys();
 }
 
+// Flash the drag-fields that were just captured by a keyframe — quick blue pulse
+// so the user can see which values are being animated. Purely cosmetic; the actual
+// key stores a full transform, not per-field tracks.
+const OBJ_KEYED_FIELDS = ["obj-px","obj-py","obj-pz","obj-rx","obj-ry","obj-rz","obj-sx","obj-sy","obj-sz"];
+const CAM_KEYED_FIELDS = ["cam-px","cam-py","cam-pz","cam-yaw","cam-pitch","cam-roll"];
+function flashKeyedFields(kind) {
+	const ids = kind === "camera" ? CAM_KEYED_FIELDS : OBJ_KEYED_FIELDS;
+	for (const id of ids) {
+		const el = document.getElementById(id);
+		if (!el) continue;
+		el.classList.remove("keyed-flash");
+		// Force reflow so the animation restarts if S is pressed repeatedly.
+		void el.offsetWidth;
+		el.classList.add("keyed-flash");
+	}
+}
+
 function addKeyframe() {
 	snapshotForUndo();
 	const t = playhead;
@@ -8189,6 +8300,7 @@ function addKeyframe() {
 	// Don't auto-select — newly created keys stay green; selection is an explicit user action.
 	selectedKeys.clear();
 	renderKeyframeMarkers();
+	flashKeyedFields("camera");
 	saveSceneDebounced?.();
 }
 
@@ -8199,6 +8311,13 @@ function deleteKeyframes() {
 		for (const obj of objects) {
 			if (Array.isArray(obj.userData?.keyframes)) {
 				obj.userData.keyframes = obj.userData.keyframes.filter(k => !selectedKeys.has(k));
+				// Deleting a boundary key can leave a `through` key exposed as the new
+				// boundary. Through-keys are positional-only waypoints — they need a
+				// timed neighbor on each side. Promote newly-boundary throughs to
+				// easeInOut so the object animates through them properly.
+				const ks = obj.userData.keyframes;
+				if (ks.length && ks[0].ease === "through") ks[0].ease = "easeInOut";
+				if (ks.length && ks[ks.length - 1].ease === "through") ks[ks.length - 1].ease = "easeInOut";
 			}
 		}
 		selectedKeys.clear();
@@ -8211,6 +8330,10 @@ function deleteKeyframes() {
 		}
 	}
 	renderKeyframeMarkers();
+	// Re-sample the transport so the scene reflects the new state immediately —
+	// otherwise the object stays floating at whatever pose it had before delete,
+	// off-path until the next scrub.
+	applyObjectsAt(playhead);
 	saveSceneDebounced?.();
 }
 
@@ -8236,6 +8359,7 @@ function addObjectKeyframe(obj) {
 	obj.userData.keyframes.sort((a, b) => a.t - b.t);
 	selectedKeys.clear();
 	renderKeyframeMarkers();
+	flashKeyedFields("object");
 	saveSceneDebounced?.();
 }
 
@@ -8323,11 +8447,10 @@ async function playPreview() {
 	if (isPlayingPreview) return;
 	const hasCameraTween = keyframes.length >= 2;
 	isPlayingPreview = true;
-	// Playback always shows the framed shot — swap the viewport to camera view so
-	// the user sees what renderCam sees. Stay in camera view AFTER playback ends
-	// too (matches the natural mental model — you played to check the shot, you
-	// still want to see the shot). Explicit mode-scene click returns to Scene.
-	setActiveView("camera");
+	// Playback respects the current view: Scene view keeps you watching the overview
+	// (with the renderCam wireframe animating alongside object animation), Camera view
+	// looks through the shot. applyCameraState always mutates renderCam so keyframes
+	// drive the wireframe pose in Scene view without disturbing sceneCam's orbit.
 	tlPlay.classList.add("active");
 	const dur = currentDuration() * 1000;
 	// Inset the play range by the same visual gap used for the resting playhead so the
