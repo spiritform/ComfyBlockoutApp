@@ -32,6 +32,12 @@ class ModuleDef:
     inputs: list[dict[str, Any]] = field(default_factory=list)
     output_ext: str = "png"
     run: Callable[..., Awaitable[dict]] | None = None
+    # "python" = hand-written module in server/modules/*.py.
+    # "workflow" = synthesized at load time from a workflow JSON + .meta.json
+    # manifest in server/workflows/. Frontend groups these into a separate
+    # WORKFLOW section (parallel to GENERATE) so the two paths stay isolated
+    # while the workflow-import flow is being tested.
+    source: str = "python"
 
 
 def _run_cli_sync(cmd: list[str], cwd: Path | None, timeout: int) -> tuple[int, str, str]:

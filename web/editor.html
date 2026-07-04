@@ -714,9 +714,33 @@
 	.assistant-status {
 		font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
 		color: rgba(255,255,255,0.3);
+		display: inline-flex; align-items: center; gap: 5px;
 	}
-	.assistant-status.busy { color: #ffb454; }
+	.assistant-status::before {
+		content: ""; display: inline-block;
+		width: 6px; height: 6px; border-radius: 50%;
+		background: currentColor; opacity: 0.35;
+	}
+	.assistant-status.busy { color: #ffb454; animation: assistantBreath 1.4s ease-in-out infinite; }
+	.assistant-status.busy::before {
+		/* Small glowing dot that pulses in counterpoint to the text — the text
+		   is on a slow ease breath, the dot beats a bit faster so the eye reads
+		   two independent motions and the whole thing feels alive rather than
+		   just a mechanical fade. */
+		opacity: 1;
+		box-shadow: 0 0 6px currentColor;
+		animation: assistantPulse 0.9s ease-in-out infinite;
+	}
 	.assistant-status.error { color: #ff6a6a; }
+	.assistant-status.error::before { opacity: 0.9; box-shadow: 0 0 6px currentColor; }
+	@keyframes assistantBreath {
+		0%, 100% { opacity: 0.7; }
+		50%      { opacity: 1; }
+	}
+	@keyframes assistantPulse {
+		0%, 100% { transform: scale(1);   opacity: 0.65; }
+		50%      { transform: scale(1.4); opacity: 1; }
+	}
 	.assistant-reset {
 		background: transparent; border: none; cursor: pointer;
 		color: rgba(255,255,255,0.35); font-size: 12px;
@@ -740,7 +764,7 @@
 	   its own log grows/shrinks to fill instead of using the fixed 240px height. */
 	#rp-pane-assistant {
 		display: flex; flex-direction: column;
-		min-height: 100%;
+		height: 100%;
 	}
 	#rp-pane-assistant[hidden] { display: none; }
 	#rp-pane-assistant #assistant-section {
@@ -753,7 +777,7 @@
 	#rp-pane-assistant .collapse-caret { display: none; }
 	#rp-pane-assistant .assistant-shell { flex: 1; min-height: 0; }
 	#rp-pane-assistant .assistant-log {
-		flex: 1; height: auto; min-height: 120px; resize: none;
+		flex: 1; height: auto; min-height: 0; resize: none;
 	}
 	/* Kill rp-body's own scroll while the assistant pane owns the height — the
 	   chat log has its own overflow-y, we don't want two scrollbars stacking.
@@ -803,17 +827,17 @@
 	.assistant-md { display: block; }
 	.assistant-md > :first-child { margin-top: 0; }
 	.assistant-md > :last-child { margin-bottom: 0; }
-	.assistant-md p { margin: 6px 0; }
+	.assistant-md p { margin: 3px 0; }
 	.assistant-md h1, .assistant-md h2, .assistant-md h3, .assistant-md h4 {
-		margin: 10px 0 4px; font-weight: 600; color: #fff;
+		margin: 6px 0 2px; font-weight: 600; color: #fff;
 		letter-spacing: 0; text-transform: none;
 	}
 	.assistant-md h1 { font-size: 13px; }
 	.assistant-md h2 { font-size: 12px; color: #ffb454; }
 	.assistant-md h3, .assistant-md h4 { font-size: 11px; color: #ffd28a; }
-	.assistant-md hr { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 8px 0; }
-	.assistant-md ul, .assistant-md ol { margin: 4px 0 6px; padding-left: 18px; }
-	.assistant-md li { margin: 2px 0; }
+	.assistant-md hr { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 4px 0; }
+	.assistant-md ul, .assistant-md ol { margin: 2px 0 3px; padding-left: 18px; }
+	.assistant-md li { margin: 1px 0; }
 	.assistant-md strong { color: #fff; font-weight: 600; }
 	.assistant-md em { color: rgba(255,255,255,0.9); }
 	.assistant-md a { color: #ffb454; text-decoration: underline; text-underline-offset: 2px; }
@@ -824,26 +848,72 @@
 	}
 	.assistant-md pre {
 		background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.05);
-		border-radius: 4px; padding: 8px 10px; margin: 6px 0;
+		border-radius: 4px; padding: 6px 8px; margin: 3px 0;
 		overflow-x: auto;
 	}
 	.assistant-md pre code { background: transparent; padding: 0; color: rgba(255,255,255,0.9); }
 	.assistant-md blockquote {
 		border-left: 2px solid rgba(255,180,84,0.5); padding-left: 8px;
-		color: rgba(255,255,255,0.7); margin: 6px 0;
+		color: rgba(255,255,255,0.7); margin: 3px 0;
 	}
+	/* Selection needs to be explicit at every level — some ancestor's cascade
+	   (probably the viewport pointer/drag machinery) leaves user-select
+	   unresolved to `none` on the docked pane, so we force `text` down the
+	   whole chat subtree. */
+	#assistant-log,
+	#rp-pane-assistant,
+	#rp-pane-assistant .assistant-shell,
+	.assistant-msg, .assistant-md, .assistant-md * {
+		user-select: text !important; -webkit-user-select: text !important;
+	}
+	.assistant-msg, .assistant-md, .assistant-md * { cursor: text; }
+	.assistant-md a, .assistant-md a * { cursor: pointer; }
 	.assistant-md table {
 		border-collapse: collapse; width: 100%; font-size: 10px;
-		margin: 6px 0; display: block; overflow-x: auto;
+		margin: 6px 0; table-layout: fixed;
 	}
 	.assistant-md th, .assistant-md td {
 		border: 1px solid rgba(255,255,255,0.08);
 		padding: 4px 6px; text-align: left; vertical-align: top;
+		/* `overflow-wrap: anywhere` (not `break-word`) lets long identifiers like
+		   file paths and .safetensors names wrap MID-token, so the table stays
+		   inside the chat column instead of triggering horizontal scroll. */
+		overflow-wrap: anywhere; word-break: normal;
+	}
+	.assistant-md td code, .assistant-md th code {
+		white-space: normal;
 	}
 	.assistant-md th {
 		background: rgba(255,255,255,0.04); color: #ffd28a; font-weight: 600;
 	}
 	.assistant-msg.error   { background: rgba(255,80,80,0.08); color: #ff8a8a; }
+
+	/* Context chip — thin row between the log and the input, only visible when
+	   a generator or workflow module is active. Compact so it doesn't fight the
+	   input row for vertical space. */
+	.assistant-context {
+		display: flex; align-items: center; gap: 6px;
+		padding: 5px 12px;
+		background: rgba(255,180,84,0.08);
+		border-top: 1px solid rgba(255,180,84,0.15);
+		font-size: 10px;
+	}
+	.assistant-context[hidden] { display: none; }
+	.assistant-context-label {
+		color: rgba(255,255,255,0.4);
+		text-transform: uppercase; letter-spacing: 0.08em; font-size: 9px;
+	}
+	.assistant-context-target {
+		color: #ffb454; font-weight: 500;
+		overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+		flex: 1; min-width: 0;
+	}
+	.assistant-context-clear {
+		background: transparent; border: none; cursor: pointer;
+		color: rgba(255,255,255,0.4); font-size: 14px;
+		padding: 0 4px; line-height: 1;
+	}
+	.assistant-context-clear:hover { color: #ff8a8a; }
 	.assistant-input-row {
 		position: relative;
 		background: rgba(255,255,255,0.03);
@@ -966,6 +1036,25 @@
 		font-size: 11px; line-height: 1;
 	}
 	.gen-run-btn:hover { background: rgba(255,180,84,0.28); color: #ffd28a; }
+	/* Busy state — hide the ▶ glyph and paint a spinning ring in its place.
+	   `color: transparent` swallows the button's textContent so the emoji /
+	   icon doesn't ghost through underneath the spinner. */
+	.gen-run-btn.busy {
+		color: transparent !important;
+		background: rgba(255,180,84,0.10);
+		cursor: progress;
+	}
+	.gen-run-btn.busy::after {
+		content: ""; position: absolute;
+		width: 14px; height: 14px;
+		border: 2px solid rgba(255,180,84,0.2);
+		border-top-color: #ffb454;
+		border-radius: 50%;
+		animation: spin 0.7s linear infinite;
+	}
+	/* Position: relative here so ::after's absolute lands centered inside the
+	   button box (via flex on the parent). */
+	.gen-run-btn { position: relative; }
 	.gen-del-btn {
 		background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.4);
 		font: 700 16px/1 ui-sans-serif, system-ui, sans-serif;
@@ -1995,6 +2084,21 @@
 			<button class="gen-btn" id="gen-sd" data-gen="seedance" disabled style="display:none"></button>
 		</div>
 
+		<!-- Sandboxed parallel section for manifest-driven workflow modules. Populated
+		     at load time from /api/modules where source === "workflow". Kept apart from
+		     Generate on purpose so the experimental import flow can't break the main
+		     path — deleting a workflow's .meta.json makes it vanish here without touching
+		     anything above. -->
+		<div class="section collapsible" data-section="workflow">
+			<div class="section-head-row">
+				<span class="section-label">Workflow</span>
+				<span class="head-end">
+					<span class="collapse-caret">▾</span>
+				</span>
+			</div>
+			<div class="gen-cells" id="workflow-cells"></div>
+		</div>
+
 		<div class="section collapsible" id="assistant-section" data-section="assistant">
 			<div class="section-head-row">
 				<span class="section-label">AI Agent</span>
@@ -2007,6 +2111,14 @@
 			<div class="assistant-shell">
 				<div class="assistant-log" id="assistant-log">
 					<div class="assistant-msg system" id="assistant-intro">Ask the agent to refine a prompt, structure a generation JSON, or call a Comfy MCP tool.</div>
+				</div>
+				<!-- Context chip — shows the currently active generator/workflow so the
+				     user doesn't need to name it in each message. Populated by
+				     refreshChatContextChip(); hidden when nothing is active. -->
+				<div class="assistant-context" id="assistant-context" hidden>
+					<span class="assistant-context-label">context</span>
+					<span class="assistant-context-target" id="assistant-context-target"></span>
+					<button type="button" class="assistant-context-clear" id="assistant-context-clear" title="Clear context">×</button>
 				</div>
 				<div class="assistant-input-row">
 					<span class="assistant-prompt-arrow" aria-hidden="true">&gt;</span>
@@ -3008,7 +3120,10 @@
 						);
 						if (open) document.getElementById("th-settings")?.click();
 					} else if (window.showAlert) {
-						await window.showAlert(`${id} failed`, msg);
+						// Pass the module id so the alert's "Send to Agent" button can
+						// activate the matching cell (surfacing it in the context chip)
+						// before opening the chat.
+						await window.showAlert(`${id} failed`, msg, { contextModuleId: id });
 					} else {
 						alert(`${id} failed: ${msg}`);
 					}
@@ -3047,7 +3162,7 @@
 				}
 			} catch (e) {
 				if (window.showAlert) {
-					await window.showAlert(`${id} failed`, e.message || String(e));
+					await window.showAlert(`${id} failed`, e.message || String(e), { contextModuleId: id });
 				} else {
 					alert(`${id} threw: ${e.message}`);
 				}
@@ -5036,10 +5151,12 @@ canvas.addEventListener("pointerup", e => {
 	} else if (sphereHit) {
 		select(sphereHit);
 	} else {
-		// Empty viewport background — deselect and open Scene properties so the
-		// user can tweak Background / Env / Render without opening the pane manually.
+		// Empty viewport background — deselect only. Scene properties get
+		// opened via the top-header Scene button; clicking the void used to
+		// pop the pane too, but that stole focus from whichever pane the user
+		// already had open (Assistant, Assets, etc.) every time they clicked
+		// off an object.
 		select(null);
-		forceRightPane("scene", "Scene");
 	}
 });
 
@@ -5110,8 +5227,16 @@ function setActiveGenCell(id) {
 	// which would blow away focus mid-keystroke. Only refresh on an actual change.
 	if (activeGenCellId === id) return;
 	activeGenCellId = id;
+	// Single "active target" model — activating a Generate cell clears any
+	// active WORKFLOW selection so the chat context chip agrees with the
+	// highlight the user sees.
+	if (id && typeof activeWorkflowCellId !== "undefined" && activeWorkflowCellId) {
+		activeWorkflowCellId = null;
+		if (typeof refreshWorkflowCells === "function") refreshWorkflowCells();
+	}
 	refreshGenCells();
 	refreshViewportGenerateBtn();
+	if (typeof refreshChatContextChip === "function") refreshChatContextChip();
 }
 
 const KIND_ICONS = {
@@ -5918,9 +6043,230 @@ new MutationObserver(refreshViewportGenerateBtn).observe(
 if (genCells.length === 0) {
 	addGenCell({ model: "nano-banana", expanded: false });
 	addGenCell({ model: "seedance",    expanded: false });
+	// addGenCell auto-activates the first cell so `activeGenCellId` isn't null
+	// when the user starts poking around, but at boot that means whichever cell
+	// happened to be seeded first (nano-banana) shows up as the active target
+	// in the chat context chip without the user ever clicking it. Start clean —
+	// the user picks a target explicitly by clicking a cell.
+	activeGenCellId = null;
 }
 refreshViewportGenerateBtn();
 refreshGenAddBtn();
+
+// ── WORKFLOW section ──────────────────────────────────────────────
+// Manifest-driven modules (source: "workflow") land here in a parallel section
+// so the experimental import path is sandboxed from GENERATE. Each cell is a
+// minimal renderer: label + one input per manifest input + × delete + ▶ run.
+// The run button routes through the same /api/run/{id} pipeline as GENERATE
+// via window.runGenerateModule, so results still land in the viewport overlay
+// AND the Assets pane.
+const workflowModules = {}; // id → {id, label, kind, inputs[], output_ext}
+const workflowCells = [];   // [{ id, moduleId, values: {name: string} }]
+// Only one target is active across GENERATE + WORKFLOW at a time — same mental
+// model as the built-in cells. Activating a workflow cell clears activeGenCellId,
+// and vice versa (handled in the click paths so the chat + agent get an
+// unambiguous "current target" via assistantSceneContext).
+let activeWorkflowCellId = null;
+
+function setActiveWorkflowCell(id) {
+	if (activeWorkflowCellId === id) return;
+	activeWorkflowCellId = id;
+	if (id) {
+		// Selecting a workflow releases the gen cell — chip is a single-target
+		// indicator; two "active" highlights would be misleading.
+		activeGenCellId = null;
+		refreshGenCells();
+	}
+	refreshWorkflowCells();
+	refreshChatContextChip();
+}
+
+async function fetchWorkflowModules() {
+	try {
+		const r = await fetch("/api/modules");
+		if (!r.ok) return;
+		const data = await r.json();
+		for (const m of (data.modules || [])) {
+			if (m.source === "workflow") workflowModules[m.id] = m;
+		}
+	} catch (e) {
+		console.warn("[workflow] module list fetch failed:", e);
+	}
+	// Seed one cell per registered workflow module. Users can × them off the
+	// list; adding one back is a re-import (for now) or clicking a future
+	// "restore" affordance.
+	for (const id of Object.keys(workflowModules)) {
+		if (!workflowCells.some(c => c.moduleId === id)) {
+			workflowCells.push({ id: newGenCellId(), moduleId: id, values: {} });
+		}
+	}
+	refreshWorkflowCells();
+}
+
+function refreshWorkflowCells() {
+	const container = document.getElementById("workflow-cells");
+	if (!container) return;
+	container.innerHTML = "";
+
+	for (const cell of workflowCells) {
+		const m = workflowModules[cell.moduleId];
+		if (!m) continue;
+		const row = document.createElement("div");
+		const isActive = cell.id === activeWorkflowCellId;
+		row.className = "gen-cell expanded" + (isActive ? " active" : "");
+		row.dataset.cellId = cell.id;
+		const kindIcon = KIND_ICONS[m.kind] || KIND_ICONS.image;
+		// Render one input per manifest spec. Only textarea/text supported so far;
+		// scene-image / number / etc. get a "coming soon" note so we notice missing
+		// wiring rather than silently skip.
+		let inputsHtml = "";
+		for (const spec of (m.inputs || [])) {
+			const label = spec.label || spec.name;
+			const placeholder = (spec.placeholder || "").replace(/"/g, "&quot;");
+			if (spec.type === "textarea" || spec.type === "text") {
+				const rows = spec.type === "textarea" ? 3 : 1;
+				const val = (cell.values[spec.name] || "").replace(/</g, "&lt;");
+				// Own class + inline styles — .gen-prompt is transparent-text on purpose
+				// so it can layer under the [name]-tag highlight div, which we don't wire
+				// for workflow cells yet. `overflow: hidden` on the textarea is required
+				// for the JS autosize below — without it, scrollHeight returns the
+				// content height + scrollbar allowance and we get a slow height drift.
+				inputsHtml += `
+					<div style="margin-top:6px">
+						<textarea class="wf-input" data-input="${spec.name}" rows="${rows}" placeholder="${placeholder}" spellcheck="false"
+							style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.06);border-radius:4px;padding:6px 8px;color:#e6e6ea;caret-color:#fff;font:inherit;font-size:11px;line-height:1.4;resize:none;outline:none;overflow:hidden">${val}</textarea>
+					</div>
+				`;
+			} else {
+				inputsHtml += `
+					<div style="font-size:10px;color:rgba(255,255,255,0.4);padding:6px 0">
+						Input "${label}" (${spec.type}) not yet wired in the workflow section.
+					</div>
+				`;
+			}
+		}
+		row.innerHTML = `
+			<div class="gen-head">
+				<div class="gen-icon">${kindIcon}</div>
+				<span class="gen-name">${m.label}</span>
+				<div class="gen-head-end">
+					<button class="gen-del-btn" title="Remove from list" type="button">×</button>
+					<button class="gen-run-btn" title="Run ${m.label}" type="button">▶</button>
+				</div>
+			</div>
+			<div class="out-expand">${inputsHtml}</div>
+		`;
+		// Click the head-row (anywhere except the ×/▶ buttons) to activate this
+		// cell. Same pattern as the built-in gen cells — activating hoists it
+		// into the chat context chip so agent commands like "generate" target
+		// the right module.
+		row.querySelector(".gen-head").addEventListener("click", (e) => {
+			if (e.target.closest(".gen-run-btn, .gen-del-btn")) return;
+			setActiveWorkflowCell(cell.id);
+		});
+		// Save typed values into the cell so re-renders don't lose state.
+		// Also grow the textarea to fit its content so an agent-injected long
+		// prompt reveals the whole thing at a glance instead of being trapped
+		// behind an inner scroll.
+		function autosize(ta) {
+			ta.style.height = "auto";
+			// +2 covers the border so the last line doesn't get its descender clipped.
+			ta.style.height = (ta.scrollHeight + 2) + "px";
+		}
+		for (const ta of row.querySelectorAll(".wf-input")) {
+			ta.addEventListener("input", () => {
+				cell.values[ta.dataset.input] = ta.value;
+				autosize(ta);
+			});
+			// Initial paint is deferred to the next frame because textareas
+			// report 0 for scrollHeight until they're attached to a laid-out
+			// DOM — running the sizing synchronously before appendChild fires
+			// gives us the placeholder height, not the content height.
+			requestAnimationFrame(() => autosize(ta));
+		}
+		row.querySelector(".gen-del-btn").addEventListener("click", async (e) => {
+			e.stopPropagation();
+			// Destructive on purpose — × permanently removes the manifest so
+			// a reboot doesn't resurrect the module. Confirm first because it's
+			// impossible to undo (the agent can re-create it, but not identically).
+			const ok = window.showConfirm
+				? await window.showConfirm(
+					"Delete workflow module?",
+					`This permanently removes "${m.label}" from server/workflows/. The agent can build it again if you ask.`,
+					{ confirmText: "Delete", cancelText: "Cancel" },
+				)
+				: confirm(`Delete "${m.label}" permanently? This removes it from server/workflows/.`);
+			if (!ok) return;
+			try {
+				const r = await fetch(`/api/workflows/${encodeURIComponent(cell.moduleId)}`, { method: "DELETE" });
+				if (!r.ok) {
+					const err = await r.json().catch(() => ({ detail: r.statusText }));
+					window.showAlert?.("Delete failed", err.detail || r.statusText);
+					return;
+				}
+			} catch (err) {
+				window.showAlert?.("Delete failed", err.message || String(err));
+				return;
+			}
+			// Drop the in-memory caches so the cell disappears immediately.
+			const i = workflowCells.findIndex(c => c.id === cell.id);
+			if (i >= 0) workflowCells.splice(i, 1);
+			delete workflowModules[cell.moduleId];
+			refreshWorkflowCells();
+		});
+		row.querySelector(".gen-run-btn").addEventListener("click", async (e) => {
+			e.stopPropagation();
+			const btn = e.currentTarget;
+			// Build inputs dict from the manifest spec so we only forward known keys.
+			const inputs = {};
+			for (const spec of (m.inputs || [])) {
+				const v = cell.values[spec.name];
+				if (v !== undefined && v !== "") inputs[spec.name] = v;
+			}
+			// Match the resultKind vocabulary runModule expects (image/video/3d).
+			const resultKind = m.kind === "3d" ? "3d" : m.kind;
+			if (!window.runGenerateModule) {
+				console.warn("[workflow] runGenerateModule missing");
+				return;
+			}
+			// runModule mutates btn.textContent to "running…", which crowds the
+			// compact ▶ icon button. Give it a hidden proxy button to trash while
+			// we express busy state on the visible one via `.busy` class → the
+			// CSS pseudo-element paints a spinning ring inside the button. The
+			// ▶ glyph stays as textContent for a11y / hover-title fallback; CSS
+			// hides it with `color: transparent` while spinning.
+			const proxy = document.createElement("button");
+			proxy.style.display = "none";
+			proxy.textContent = "▶";
+			document.body.appendChild(proxy);
+			btn.disabled = true;
+			btn.classList.add("busy");
+			try {
+				await window.runGenerateModule(cell.moduleId, proxy, inputs, resultKind);
+			} finally {
+				btn.disabled = false;
+				btn.classList.remove("busy");
+				proxy.remove();
+			}
+		});
+		container.appendChild(row);
+	}
+
+	// Empty-state hint — generators are built by asking the AI Agent to make one.
+	// The upload path has been retired; the section is populated exclusively via
+	// the agent's create_workflow_module tool.
+	if (workflowCells.length === 0) {
+		const empty = document.createElement("div");
+		empty.style.cssText = "font-size:10.5px;color:rgba(255,255,255,0.35);padding:8px 4px;font-style:italic;line-height:1.5";
+		empty.textContent = "No workflow modules yet. Ask the AI Agent to build one — e.g. \"make me a local Flux 2 Klein T2I generator\".";
+		container.appendChild(empty);
+	}
+}
+
+// Generators land in the WORKFLOW section via the AI Agent's create_workflow_module
+// tool — the upload-and-analyze path is retired. Fetch existing modules on boot
+// so previously-registered ones re-hydrate.
+fetchWorkflowModules();
 
 // ── Section collapse toggles ──────────────────────────────────────
 // Click the head-row (label or chevron) to collapse the module. Inline action
@@ -5968,6 +6314,13 @@ function pushAssistantMsg(kind, text) {
 
 // Snapshot the current scene state for the assistant's context block.
 function assistantSceneContext() {
+	// Snapshot of what's selected across Generate + Workflow, plus the module
+	// definitions so the agent can inspect input names / manifest without
+	// re-fetching. Kept flat so _format_scene_context on the backend can render
+	// it in one pass.
+	const activeGen = genCells.find(c => c.id === activeGenCellId);
+	const activeWorkflow = workflowCells.find(c => c.id === activeWorkflowCellId);
+	const activeWorkflowMod = activeWorkflow ? workflowModules[activeWorkflow.moduleId] : null;
 	return {
 		objects: objects.map(o => ({
 			name: o.name,
@@ -5977,8 +6330,54 @@ function assistantSceneContext() {
 		})),
 		activeGenCellId,
 		genCells: genCells.map(c => ({ model: c.model, prompt: c.prompt })),
+		activeWorkflowModuleId: activeWorkflowMod ? activeWorkflowMod.id : null,
+		activeWorkflowLabel: activeWorkflowMod ? activeWorkflowMod.label : null,
+		activeWorkflowKind: activeWorkflowMod ? activeWorkflowMod.kind : null,
+		activeWorkflowInputs: activeWorkflowMod ? activeWorkflowMod.inputs : null,
+		workflowModules: Object.values(workflowModules).map(m => ({
+			id: m.id, label: m.label, kind: m.kind,
+		})),
+		// One unambiguous target the agent should read to disambiguate commands
+		// like "generate" or "set prompt" without asking.
+		activeTarget: activeWorkflowMod
+			? { kind: "workflow", id: activeWorkflowMod.id, label: activeWorkflowMod.label }
+			: (activeGen
+				? { kind: "generator", id: activeGen.model, label: activeGen.model }
+				: null),
 	};
 }
+
+// Populate/hide the chat's context chip based on which cell is active. Called
+// whenever selection changes so the chip stays in sync without polling.
+function refreshChatContextChip() {
+	const chip = document.getElementById("assistant-context");
+	const target = document.getElementById("assistant-context-target");
+	if (!chip || !target) return;
+	const activeGen = genCells.find(c => c.id === activeGenCellId);
+	const activeWorkflow = workflowCells.find(c => c.id === activeWorkflowCellId);
+	const activeWorkflowMod = activeWorkflow ? workflowModules[activeWorkflow.moduleId] : null;
+	if (activeWorkflowMod) {
+		target.textContent = `${activeWorkflowMod.label} · workflow`;
+		chip.hidden = false;
+	} else if (activeGen) {
+		const model = activeGen.model;
+		target.textContent = `${model} · generator`;
+		chip.hidden = false;
+	} else {
+		chip.hidden = true;
+	}
+}
+
+document.getElementById("assistant-context-clear")?.addEventListener("click", () => {
+	activeWorkflowCellId = null;
+	activeGenCellId = null;
+	refreshWorkflowCells?.();
+	refreshGenCells?.();
+	refreshChatContextChip();
+});
+
+// Initial paint — reflects whichever cell was seeded active at boot.
+refreshChatContextChip();
 
 // ── Editor tools — Claude calls these via tool_use ────────────────
 // Each handler returns a string (or object stringified) — that becomes the
@@ -6124,29 +6523,307 @@ const ASSISTANT_TOOLS = {
 	},
 
 	set_generator_prompt({ model, prompt }) {
-		const cell = genCells.find(c => c.model === model);
-		if (!cell) return `error: no generator cell for ${model}`;
-		cell.prompt = String(prompt || "");
-		refreshGenCells();
-		maybeSaveDebounced();
-		return `updated ${model} prompt`;
+		// Built-in Generate cells (nano-banana / seedance / etc.) key on cell.model.
+		const g = genCells.find(c => c.model === model);
+		if (g) {
+			g.prompt = String(prompt || "");
+			refreshGenCells();
+			maybeSaveDebounced();
+			return `updated ${model} prompt`;
+		}
+		// WORKFLOW cells key on moduleId. Find whichever input is named "prompt"
+		// (falls back to the first textarea/text input if none is literally named
+		// "prompt" — some manifests use "text" or "positive").
+		const w = workflowCells.find(c => c.moduleId === model);
+		if (w) {
+			const m = workflowModules[w.moduleId];
+			if (!m) return `error: workflow module ${model} not loaded`;
+			const inputs = m.inputs || [];
+			const target =
+				inputs.find(i => i.name === "prompt") ||
+				inputs.find(i => i.type === "textarea") ||
+				inputs.find(i => i.type === "text");
+			if (!target) return `error: workflow module ${model} has no text/prompt input`;
+			w.values[target.name] = String(prompt || "");
+			refreshWorkflowCells();
+			return `updated ${model} '${target.name}' input`;
+		}
+		return `error: no generator cell for ${model}`;
 	},
 
 	async trigger_generate({ model, prompt }) {
-		const cell = genCells.find(c => c.model === model);
-		if (!cell) return `error: no generator cell for ${model}`;
-		if (typeof prompt === "string" && prompt.length) {
-			cell.prompt = prompt;
-			refreshGenCells();
+		// Built-in cells route through the viewport Generate button so busy state,
+		// overlay, and Assets refresh all reuse the same handlers.
+		const g = genCells.find(c => c.model === model);
+		if (g) {
+			if (typeof prompt === "string" && prompt.length) {
+				g.prompt = prompt;
+				refreshGenCells();
+			}
+			setActiveGenCell(g.id);
+			const btn = document.getElementById("vp-generate");
+			if (!btn) return "error: viewport generate button missing";
+			btn.click();
+			return `generation submitted (${model}) — landing in viewport + assets when ready`;
 		}
-		// Activate the cell so the viewport Generate button targets the right model,
-		// then fire it exactly like a manual click — busy state + viewport overlay +
-		// Assets refresh all run through their normal handlers.
-		setActiveGenCell(cell.id);
-		const btn = document.getElementById("vp-generate");
-		if (!btn) return "error: viewport generate button missing";
-		btn.click();
-		return `generation submitted (${model}) — landing in viewport + assets when ready`;
+		// WORKFLOW cells don't hook into vp-generate; find the cell's ▶ button
+		// in the DOM and click it directly. The button's handler already routes
+		// through /api/run/{module_id} + Assets refresh.
+		const w = workflowCells.find(c => c.moduleId === model);
+		if (w) {
+			const m = workflowModules[w.moduleId];
+			if (typeof prompt === "string" && prompt.length && m) {
+				const target =
+					(m.inputs || []).find(i => i.name === "prompt") ||
+					(m.inputs || []).find(i => i.type === "textarea") ||
+					(m.inputs || []).find(i => i.type === "text");
+				if (target) {
+					w.values[target.name] = prompt;
+					refreshWorkflowCells();
+				}
+			}
+			const row = document.querySelector(`#workflow-cells .gen-cell[data-cell-id="${w.id}"]`);
+			const btn = row?.querySelector(".gen-run-btn");
+			if (!btn) return "error: workflow cell button not found in DOM";
+			btn.click();
+			return `generation submitted (${model}) — landing in assets when ready`;
+		}
+		return `error: no generator cell for ${model}`;
+	},
+
+	async create_workflow_module(spec) {
+		// Post the full bundle to the register endpoint — backend writes the two
+		// files atomically, hot-registers the module, returns the finished ModuleDef.
+		if (!spec || typeof spec !== "object") return "error: spec is required";
+		try {
+			const r = await fetch("/api/workflows/register", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(spec),
+			});
+			if (!r.ok) {
+				const err = await r.json().catch(() => ({ detail: r.statusText }));
+				return `error: ${err.detail || r.statusText}`;
+			}
+			const out = await r.json();
+			const mod = out.module;
+			workflowModules[mod.id] = mod;
+			if (!workflowCells.some(c => c.moduleId === mod.id)) {
+				workflowCells.push({ id: newGenCellId(), moduleId: mod.id, values: {} });
+			}
+			refreshWorkflowCells();
+			return `registered workflow module '${mod.id}' (${mod.label}); cell added to WORKFLOW section — runner=${mod.source === "workflow" ? (spec.runner || "cloud") : "?"}`;
+		} catch (e) {
+			return `error: ${e.message || e}`;
+		}
+	},
+
+	async download_model_to_comfy({ url, folder, filename }) {
+		// Streams SSE progress into the chat log as a single live-updating line
+		// so the user watches the byte counter tick instead of staring at a
+		// spinner. tool_result to Claude summarizes final path or the error so
+		// it can react (retry, tell the user, offer alternate mirror, etc.).
+		if (!url || !folder || !filename) return "error: url, folder, filename required";
+		// Progress line the SSE loop rewrites in place — avoids stacking one
+		// message per percent tick.
+		const progressLine = document.createElement("div");
+		progressLine.className = "assistant-msg system";
+		progressLine.textContent = `→ Downloading ${filename} to models/${folder}/ …`;
+		assistantLog.appendChild(progressLine);
+		assistantLog.scrollTop = assistantLog.scrollHeight;
+
+		let resp;
+		try {
+			resp = await fetch("/api/local/download-model", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ url, folder, filename }),
+			});
+		} catch (e) {
+			progressLine.textContent = `✕ Download request failed: ${e.message || e}`;
+			return `error: request failed — ${e.message || e}`;
+		}
+		if (!resp.ok || !resp.body) {
+			const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+			progressLine.textContent = `✕ Download failed: ${err.detail || resp.statusText}`;
+			return `error: ${err.detail || resp.statusText}`;
+		}
+
+		const reader = resp.body.getReader();
+		const decoder = new TextDecoder();
+		let buffer = "";
+		let doneEvent = null;
+		let errorEvent = null;
+		while (true) {
+			const { value, done } = await reader.read();
+			if (done) break;
+			buffer += decoder.decode(value, { stream: true });
+			let idx;
+			while ((idx = buffer.indexOf("\n\n")) >= 0) {
+				const chunk = buffer.slice(0, idx);
+				buffer = buffer.slice(idx + 2);
+				const dataLine = chunk.split("\n").find(l => l.startsWith("data:"));
+				if (!dataLine) continue;
+				let event;
+				try { event = JSON.parse(dataLine.slice(5).trim()); } catch { continue; }
+				if (event.type === "progress") {
+					if (event.total > 0 && event.percent >= 0) {
+						const mb = (event.bytes / (1024 * 1024)).toFixed(1);
+						const totalMb = (event.total / (1024 * 1024)).toFixed(1);
+						progressLine.textContent = `→ Downloading ${filename}: ${event.percent}% (${mb}/${totalMb} MB)`;
+					} else if (event.bytes > 0) {
+						const mb = (event.bytes / (1024 * 1024)).toFixed(1);
+						progressLine.textContent = `→ Downloading ${filename}: ${mb} MB`;
+					} else {
+						progressLine.textContent = `→ ${event.message || "Downloading…"}`;
+					}
+					assistantLog.scrollTop = assistantLog.scrollHeight;
+				} else if (event.type === "done") {
+					doneEvent = event;
+				} else if (event.type === "error") {
+					errorEvent = event;
+				}
+			}
+		}
+
+		if (errorEvent) {
+			progressLine.textContent = `✕ ${errorEvent.message}`;
+			return `error: ${errorEvent.message}`;
+		}
+		if (!doneEvent) {
+			progressLine.textContent = `✕ Download ended without a done event`;
+			return "error: stream ended before done";
+		}
+		progressLine.textContent = `✓ Saved ${filename} to ${doneEvent.path}`;
+		return `saved to ${doneEvent.path}`;
+	},
+
+	async get_workflow_module({ id }) {
+		// Fetch the on-disk manifest + workflow JSON so Claude can inspect what
+		// was saved (avoiding hallucinated recall of the graph shape). Returns
+		// the payload as a stringified JSON so it slots into tool_result cleanly.
+		if (!id) return "error: id is required";
+		try {
+			const r = await fetch(`/api/workflows/${encodeURIComponent(id)}/source`);
+			if (!r.ok) {
+				const err = await r.json().catch(() => ({ detail: r.statusText }));
+				return `error: ${err.detail || r.statusText}`;
+			}
+			return JSON.stringify(await r.json());
+		} catch (e) {
+			return `error: ${e.message || e}`;
+		}
+	},
+
+	async check_custom_nodes({ class_types }) {
+		// Thin proxy — server does the /object_info scan.
+		if (!Array.isArray(class_types) || !class_types.length) return "error: class_types[] is required";
+		try {
+			const r = await fetch("/api/local/check-custom-nodes", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ class_types }),
+			});
+			if (!r.ok) {
+				const err = await r.json().catch(() => ({ detail: r.statusText }));
+				return `error: ${err.detail || r.statusText}`;
+			}
+			return JSON.stringify(await r.json());
+		} catch (e) {
+			return `error: ${e.message || e}`;
+		}
+	},
+
+	async install_custom_node({ git_url, name }) {
+		// SSE stream — mirror download_model_to_comfy: one live-updating line
+		// in chat so the user watches git's own progress output tick.
+		if (!git_url) return "error: git_url is required";
+		const label = name || (git_url.replace(/\.git$/, "").split("/").pop() || "custom node");
+		const progressLine = document.createElement("div");
+		progressLine.className = "assistant-msg system";
+		progressLine.textContent = `→ Installing custom node ${label}…`;
+		assistantLog.appendChild(progressLine);
+		assistantLog.scrollTop = assistantLog.scrollHeight;
+
+		let resp;
+		try {
+			resp = await fetch("/api/local/install-custom-node", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ git_url, name }),
+			});
+		} catch (e) {
+			progressLine.textContent = `✕ Install request failed: ${e.message || e}`;
+			return `error: request failed — ${e.message || e}`;
+		}
+		if (!resp.ok || !resp.body) {
+			const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+			progressLine.textContent = `✕ Install failed: ${err.detail || resp.statusText}`;
+			return `error: ${err.detail || resp.statusText}`;
+		}
+
+		const reader = resp.body.getReader();
+		const decoder = new TextDecoder();
+		let buffer = "";
+		let doneEvent = null;
+		let errorEvent = null;
+		while (true) {
+			const { value, done } = await reader.read();
+			if (done) break;
+			buffer += decoder.decode(value, { stream: true });
+			let idx;
+			while ((idx = buffer.indexOf("\n\n")) >= 0) {
+				const chunk = buffer.slice(0, idx);
+				buffer = buffer.slice(idx + 2);
+				const dataLine = chunk.split("\n").find(l => l.startsWith("data:"));
+				if (!dataLine) continue;
+				let event;
+				try { event = JSON.parse(dataLine.slice(5).trim()); } catch { continue; }
+				if (event.type === "progress") {
+					// Overwrite the same line so git's "Receiving objects: 42%…"
+					// output feels like a single ticker instead of a spam log.
+					progressLine.textContent = `→ ${event.message}`;
+					assistantLog.scrollTop = assistantLog.scrollHeight;
+				} else if (event.type === "done") {
+					doneEvent = event;
+				} else if (event.type === "error") {
+					errorEvent = event;
+				}
+			}
+		}
+		if (errorEvent) {
+			progressLine.textContent = `✕ ${errorEvent.message}`;
+			return `error: ${errorEvent.message}`;
+		}
+		if (!doneEvent) {
+			progressLine.textContent = `✕ Install ended without a done event`;
+			return "error: stream ended before done";
+		}
+		progressLine.textContent = `✓ Installed ${label} at ${doneEvent.path}`;
+		// Serialize the whole done envelope so Claude can react — it'll see any
+		// requirements.txt and the restart flag.
+		return JSON.stringify(doneEvent);
+	},
+
+	async check_local_models({ models }) {
+		// Thin proxy to the backend endpoint — the server does the /object_info
+		// scan; we just serialize the result back to Claude as tool_result content.
+		if (!Array.isArray(models) || !models.length) return "error: models[] is required";
+		try {
+			const r = await fetch("/api/local/check-models", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ models }),
+			});
+			if (!r.ok) {
+				const err = await r.json().catch(() => ({ detail: r.statusText }));
+				return `error: ${err.detail || r.statusText}`;
+			}
+			const out = await r.json();
+			return JSON.stringify(out);
+		} catch (e) {
+			return `error: ${e.message || e}`;
+		}
 	},
 };
 
@@ -6162,11 +6839,19 @@ async function runAssistantTool(tu) {
 }
 
 let assistantBusy = false;
-async function sendAssistant(message) {
+async function sendAssistant(message, opts = {}) {
+	// `opts.silent` skips the "you · …" bubble and replaces it with a compact
+	// system-styled line — used for command-style actions like the Inspect
+	// button, where the user didn't type anything and doesn't want their
+	// (auto-generated) prompt to look like a chat message.
 	if (assistantBusy) return;
 	const text = (message ?? assistantInput.value).trim();
 	if (!text) return;
-	pushAssistantMsg("user", text);
+	if (opts.silent) {
+		pushAssistantMsg("system", opts.systemLine || "→ command sent to agent");
+	} else {
+		pushAssistantMsg("user", text);
+	}
 	assistantInput.value = "";
 	assistantBusy = true;
 	assistantInput.disabled = true;
@@ -6187,6 +6872,20 @@ async function sendAssistant(message) {
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify(payload),
 			});
+			if (r.status === 409) {
+				// Backend lost the conversation state (typical during dev with
+				// uvicorn --reload). Nuke both sides so the next turn starts
+				// clean instead of leaving the frontend loop stuck on tool_results
+				// the server can't validate.
+				try {
+					await fetch("/api/llm/reset", {
+						method: "POST", headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ node_id: NODE_ID }),
+					});
+				} catch {}
+				pushAssistantMsg("system", "→ chat state was lost (server restarted). Cleared and ready — try again.");
+				break;
+			}
 			if (!r.ok) {
 				const e = await r.json().catch(() => ({}));
 				throw new Error(e.detail || `chat failed (${r.status})`);
@@ -10314,7 +11013,11 @@ window.showAlert = showAlert;
 window.showConfirm = showConfirm;
 
 function showAlert(title, message, opts = {}) {
-	const { confirmText = "OK", danger = false } = opts;
+	// `contextModuleId` (optional) — if provided, "Send to Agent" also
+	// activates the matching cell (workflow module preferred, then gen cell)
+	// so the chat's context chip surfaces the target and the agent sees an
+	// unambiguous `activeTarget` in its scene block.
+	const { confirmText = "OK", danger = false, contextModuleId = null } = opts;
 	return new Promise((resolve) => {
 		const backdrop = document.createElement("div");
 		Object.assign(backdrop.style, {
@@ -10332,10 +11035,91 @@ function showAlert(title, message, opts = {}) {
 		});
 		card.innerHTML = `
 			<div style="font-size:13px;font-weight:600;margin-bottom:8px">${title}</div>
-			<div style="color:rgba(255,255,255,0.65);line-height:1.5;overflow-y:auto;overflow-x:hidden;word-break:break-word;overflow-wrap:anywhere">${message}</div>
+			<div class="alert-message" style="color:rgba(255,255,255,0.65);line-height:1.5;overflow-y:auto;overflow-x:hidden;word-break:break-word;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text;cursor:text">${message}</div>
 		`;
 		const row = document.createElement("div");
-		Object.assign(row.style, { display: "flex", justifyContent: "flex-end", marginTop: "16px" });
+		Object.assign(row.style, { display: "flex", justifyContent: "flex-end", marginTop: "16px", gap: "8px" });
+		// "Copy" — the reason this exists is that error modals often carry an
+		// error blob the user wants to paste into the AI Agent chat. Selecting
+		// the text in the modal works with the user-select fix above, but a
+		// one-click copy is friendlier than "select all → Ctrl+C → close modal".
+		const copy = document.createElement("button");
+		copy.textContent = "Copy";
+		Object.assign(copy.style, {
+			border: "1px solid rgba(255,255,255,0.1)", padding: "6px 12px",
+			borderRadius: "6px", cursor: "pointer", fontFamily: "inherit",
+			fontSize: "11px", background: "transparent", color: "rgba(255,255,255,0.7)",
+		});
+		copy.onclick = async () => {
+			// Prefer the modern clipboard API; fall back to a synthetic range
+			// selection for older webviews that don't grant clipboard-write.
+			const text = card.querySelector(".alert-message")?.textContent || "";
+			try {
+				await navigator.clipboard.writeText(text);
+				copy.textContent = "Copied";
+				setTimeout(() => { copy.textContent = "Copy"; }, 1200);
+			} catch {
+				const r = document.createRange();
+				r.selectNodeContents(card.querySelector(".alert-message"));
+				const sel = window.getSelection();
+				sel?.removeAllRanges();
+				sel?.addRange(r);
+				try { document.execCommand("copy"); } catch {}
+				copy.textContent = "Copied";
+				setTimeout(() => { copy.textContent = "Copy"; }, 1200);
+			}
+		};
+		row.appendChild(copy);
+		// "Send to Agent" — closes the modal, opens the AI Agent pane (if not
+		// already open), and pre-fills the chat input with a prompt that quotes
+		// the error, asking the agent to inspect. User can edit / send with
+		// Enter. Non-destructive: does NOT auto-send, giving the user the last
+		// word before the agent goes to work.
+		const send = document.createElement("button");
+		send.textContent = "Inspect";
+		send.title = "Ask the AI Agent to inspect + fix this failure";
+		Object.assign(send.style, {
+			border: "1px solid rgba(255,180,84,0.4)", padding: "6px 12px",
+			borderRadius: "6px", cursor: "pointer", fontFamily: "inherit",
+			fontSize: "11px", background: "transparent", color: "#ffb454",
+		});
+		send.onclick = () => {
+			const text = card.querySelector(".alert-message")?.textContent || "";
+			const prompt = `Please inspect and fix "${title}":\n\n${text}`;
+			// Activate the target the error belongs to so the context chip
+			// shows it before we send. Prefer workflow modules (editable via
+			// get_workflow_module), fall back to the built-in gen cells.
+			if (contextModuleId) {
+				const w = workflowCells.find(c => c.moduleId === contextModuleId);
+				if (w) {
+					try { setActiveWorkflowCell(w.id); } catch {}
+				} else {
+					const g = genCells.find(c => c.model === contextModuleId);
+					if (g) {
+						try { setActiveGenCell(g.id); } catch {}
+					}
+				}
+			}
+			try { window.forceRightPane?.("assistant"); } catch {}
+			cleanup();
+			// Auto-send instead of pre-filling the input. Two reasons:
+			//  1) A pasted error blob makes the input textarea look nasty
+			//     until the user finishes reading & hits Enter.
+			//  2) The intent of clicking this button is unambiguous — the user
+			//     already read the error in the modal and decided to hand it to
+			//     the agent. No middle step needed.
+			// Defer a frame so the pane mount finishes and sendAssistant can
+			// find the log DOM to render the outgoing user bubble.
+			requestAnimationFrame(() => {
+				if (typeof sendAssistant === "function") {
+					sendAssistant(prompt, {
+						silent: true,
+						systemLine: `→ Inspecting failure of ${contextModuleId || title}…`,
+					});
+				}
+			});
+		};
+		row.appendChild(send);
 		const ok = document.createElement("button");
 		ok.textContent = confirmText;
 		Object.assign(ok.style, {

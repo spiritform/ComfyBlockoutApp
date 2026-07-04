@@ -6,6 +6,7 @@ or COMFY_API_KEY env var as a fallback)."""
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import json
 import os
@@ -248,6 +249,19 @@ def _load_modules() -> None:
                 print(f"[cb-app] loaded module: {m.id}")
         except Exception as e:
             print(f"[cb-app] FAILED to load module {f.name}: {e}")
+
+    # Workflow-manifest modules (source="workflow") come after so hand-written
+    # Python modules win on id collisions — a manifest that shadows an existing
+    # module gets skipped with a warning instead of silently replacing it.
+    try:
+        from server.modules._workflow_shared import discover_manifest_modules
+        for m in discover_manifest_modules():
+            if m.id in MODULES:
+                print(f"[cb-app] workflow {m.id} conflicts with existing module, skipped")
+                continue
+            MODULES[m.id] = m
+    except Exception as e:
+        print(f"[cb-app] workflow discovery failed: {e}")
 
 
 _load_modules()
@@ -919,12 +933,709 @@ def _module_dict(m) -> dict:
         "kind": m.kind,
         "inputs": m.inputs,
         "output_ext": m.output_ext,
+        "source": getattr(m, "source", "python"),
     }
 
 
 @app.get("/api/modules")
 async def list_modules():
     return {"modules": [_module_dict(m) for m in MODULES.values()]}
+
+
+# ---------- workflow import (upload + AI-analyze) ----------
+#
+# The WORKFLOW section's "+ Import workflow" chip uploads a ComfyUI workflow
+# JSON here, then streams the AI-analyze step over SSE so the user can watch
+# the agent inspect the graph, propose input mappings, and register the module
+# — no server restart needed.
+
+_WORKFLOWS_DIR = APP_DIR / "server" / "workflows"
+_SAFE_WF_STEM = re.compile(r"^[a-zA-Z0-9_\-]+$")
+
+
+def _sanitize_workflow_stem(filename: str) -> str:
+    """Turn an arbitrary upload filename into a filesystem-safe stem. Collisions
+    get a numeric suffix so re-uploading the same workflow doesn't clobber a
+    manifest the user already tuned."""
+    stem = Path(filename).stem or "workflow"
+    stem = re.sub(r"[^a-zA-Z0-9_\-]", "_", stem).strip("_") or "workflow"
+    _WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
+    candidate = stem
+    i = 1
+    while (_WORKFLOWS_DIR / f"{candidate}.json").exists():
+        i += 1
+        candidate = f"{stem}_{i}"
+    return candidate
+
+
+@app.post("/api/workflows/upload")
+async def workflows_upload(file: UploadFile = File(...)):
+    """Save a picked workflow JSON into server/workflows/. Returns the stem the
+    client should pass to /api/workflows/analyze. The manifest is written by
+    the analyze step, not here — this endpoint just parks the file."""
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "empty upload")
+    try:
+        wf = json.loads(raw.decode("utf-8"))
+    except Exception as e:
+        raise HTTPException(400, f"not a valid JSON workflow: {e}")
+    if not isinstance(wf, dict) or "nodes" not in wf:
+        raise HTTPException(400, "JSON has no `nodes` array — not a ComfyUI workflow?")
+    stem = _sanitize_workflow_stem(file.filename or "workflow")
+    dst = _WORKFLOWS_DIR / f"{stem}.json"
+    dst.write_text(json.dumps(wf, indent=2), encoding="utf-8")
+    return {
+        "stem": stem,
+        "filename": dst.name,
+        "node_count": len(wf.get("nodes", [])),
+    }
+
+
+_SAFE_MODULE_ID = re.compile(r"^[a-zA-Z0-9_\-]{1,64}$")
+
+
+@app.get("/api/workflows/{module_id}/source")
+async def workflows_get_source(module_id: str):
+    """Return the manifest + raw workflow JSON for an already-registered
+    workflow module. Used by the AI Agent's `get_workflow_module` tool so it
+    can inspect what's actually saved before proposing a fix — the alternative
+    is Claude hallucinating what the workflow "probably" looks like."""
+    if not _SAFE_MODULE_ID.match(module_id):
+        raise HTTPException(400, "invalid module id")
+    mod = MODULES.get(module_id)
+    if mod is None:
+        raise HTTPException(404, f"unknown module: {module_id}")
+    if getattr(mod, "source", "python") != "workflow":
+        raise HTTPException(403, "not a workflow module")
+    wf_path = _WORKFLOWS_DIR / f"{module_id}.json"
+    meta_path = _WORKFLOWS_DIR / f"{module_id}.meta.json"
+    if not wf_path.exists() or not meta_path.exists():
+        raise HTTPException(500, "workflow or manifest missing on disk")
+    return {
+        "id": module_id,
+        "manifest": json.loads(meta_path.read_text(encoding="utf-8")),
+        "workflow": json.loads(wf_path.read_text(encoding="utf-8")),
+    }
+
+
+@app.delete("/api/workflows/{module_id}")
+async def workflows_delete(module_id: str):
+    """Permanently delete a workflow module — removes the `<id>.json` and
+    `<id>.meta.json` from server/workflows/ and unregisters the entry from
+    MODULES. Refuses to touch hand-written Python modules (source="python")
+    since those live in code, not on the workflows/ side.
+
+    Called by the frontend when the user clicks × on a WORKFLOW cell — that
+    action is destructive by design so re-boots don't resurrect the module
+    unless the user asks the agent to build it again."""
+    if not _SAFE_MODULE_ID.match(module_id):
+        raise HTTPException(400, "invalid module id")
+    mod = MODULES.get(module_id)
+    if mod is None:
+        raise HTTPException(404, f"unknown module: {module_id}")
+    if getattr(mod, "source", "python") != "workflow":
+        raise HTTPException(403, "refuse to delete built-in module")
+
+    # Best-effort file removal — a manifest missing on disk when we get here
+    # (already deleted, or renamed by hand) shouldn't stop us unregistering
+    # the runtime entry.
+    for name in (f"{module_id}.json", f"{module_id}.meta.json"):
+        p = _WORKFLOWS_DIR / name
+        if p.exists():
+            try:
+                p.unlink()
+            except OSError as e:
+                print(f"[cb-app] failed to remove {p}: {e}")
+    # Also try the `<id>.local.json` companion the "prepare for local" flow
+    # would write; safe no-op if it doesn't exist.
+    local_p = _WORKFLOWS_DIR / f"{module_id}.local.json"
+    if local_p.exists():
+        try:
+            local_p.unlink()
+        except OSError:
+            pass
+
+    MODULES.pop(module_id, None)
+    return {"deleted": module_id}
+
+
+_LOCAL_COMFY_URL = "http://127.0.0.1:8188"
+
+
+# ComfyUI models directory — first existing candidate wins. Override with
+# COMFY_MODELS_DIR for non-standard installs. Kept parallel to
+# `local_triposplat.COMFY_OUTPUT_CANDIDATES` so the two "where is ComfyUI"
+# questions get answered consistently.
+def _find_local_models_dir() -> Path | None:
+    env_v = os.environ.get("COMFY_MODELS_DIR", "").strip()
+    candidates: list[Path] = [Path(env_v)] if env_v else []
+    candidates += [
+        Path(r"H:\ComfyUI-Easy-Install\ComfyUI\models"),
+        Path(r"H:\Comfy-Desktop\ComfyUI-Installs\ComfyDesktop\ComfyUI\models"),
+        Path(r"H:\ComfyUI_windows_portable\ComfyUI\models"),
+        Path(r"H:\Krita\ComfyUI\ComfyUI\models"),
+    ]
+    for p in candidates:
+        try:
+            if p.exists() and p.is_dir():
+                return p
+        except OSError:
+            continue
+    return None
+
+
+_SAFE_MODEL_FILENAME = re.compile(r"^[A-Za-z0-9._\-]+$")
+_SAFE_MODEL_FOLDER = re.compile(r"^[A-Za-z0-9._\-/]+$")
+
+
+def _find_local_custom_nodes_dir() -> Path | None:
+    """Locate `<ComfyUI>/custom_nodes/`. Same candidate list as models —
+    custom_nodes and models are siblings under the ComfyUI root — plus a
+    COMFY_CUSTOM_NODES_DIR override for exotic layouts."""
+    env_v = os.environ.get("COMFY_CUSTOM_NODES_DIR", "").strip()
+    candidates: list[Path] = [Path(env_v)] if env_v else []
+    models_dir = _find_local_models_dir()
+    if models_dir:
+        candidates.append(models_dir.parent / "custom_nodes")
+    # Fall back to the same hardcoded roots, appending /custom_nodes.
+    for hard in (
+        Path(r"H:\ComfyUI-Easy-Install\ComfyUI\custom_nodes"),
+        Path(r"H:\Comfy-Desktop\ComfyUI-Installs\ComfyDesktop\ComfyUI\custom_nodes"),
+        Path(r"H:\ComfyUI_windows_portable\ComfyUI\custom_nodes"),
+        Path(r"H:\Krita\ComfyUI\ComfyUI\custom_nodes"),
+    ):
+        candidates.append(hard)
+    for p in candidates:
+        try:
+            if p.exists() and p.is_dir():
+                return p
+        except OSError:
+            continue
+    return None
+
+
+@app.post("/api/local/check-custom-nodes")
+async def local_check_custom_nodes(request: Request):
+    """Query local /object_info and report which of the requested class_types
+    the local ComfyUI doesn't know about. Used before firing a workflow so the
+    agent can install missing custom nodes before ComfyUI errors out at run
+    time with a cryptic KeyError.
+
+    Body: {"class_types": ["TripoSplatToFile3D", "TripoAPI", ...]}"""
+    body = await request.json()
+    class_types = body.get("class_types") or []
+    if not isinstance(class_types, list):
+        raise HTTPException(400, "class_types must be a list")
+
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.get(f"{_LOCAL_COMFY_URL}/object_info")
+            r.raise_for_status()
+            oi = r.json()
+    except Exception as e:
+        return {
+            "reachable": False,
+            "error": f"Local ComfyUI unreachable at {_LOCAL_COMFY_URL}: {e}",
+            "missing": [str(ct) for ct in class_types if ct],
+            "present": [],
+        }
+
+    known = set((oi or {}).keys())
+    present, missing = [], []
+    for ct in class_types:
+        s = str(ct).strip()
+        if not s:
+            continue
+        (present if s in known else missing).append(s)
+    return {"reachable": True, "missing": missing, "present": present}
+
+
+_SAFE_REPO_NAME = re.compile(r"^[A-Za-z0-9._\-]{1,120}$")
+_GIT_URL_RE = re.compile(r"^https?://[A-Za-z0-9._\-]+(?:/[A-Za-z0-9._\-/]+)+?(?:\.git)?$")
+
+
+@app.post("/api/local/install-custom-node")
+async def local_install_custom_node(request: Request):
+    """SSE stream that runs `git clone <url> <custom_nodes>/<name>` in the
+    user's ComfyUI install. If the repo ships a requirements.txt, we surface
+    it in the final event so the agent can tell the user what to `pip install`
+    (we do NOT auto-pip because the ComfyUI Python env is usually not the same
+    as ours, and installing into the wrong venv is worse than doing nothing).
+
+    Body: {"git_url": "https://github.com/foo/bar", "name": "bar" (optional)}"""
+    body = await request.json()
+    git_url = str(body.get("git_url", "")).strip()
+    name = str(body.get("name", "")).strip()
+    if not git_url or not _GIT_URL_RE.match(git_url):
+        raise HTTPException(400, "git_url must be a public https/http git URL")
+    # Derive name from URL when not supplied. Strip trailing .git and pull the
+    # last path segment — standard `git clone` naming.
+    if not name:
+        stem = git_url.rstrip("/")
+        if stem.endswith(".git"):
+            stem = stem[:-4]
+        name = stem.rsplit("/", 1)[-1] or "custom_node"
+    if not _SAFE_REPO_NAME.match(name):
+        raise HTTPException(400, "invalid derived repo name")
+
+    cn_dir = _find_local_custom_nodes_dir()
+    if not cn_dir:
+        raise HTTPException(
+            500,
+            "ComfyUI custom_nodes directory not found. Set COMFY_CUSTOM_NODES_DIR "
+            "in .env to the path (typically <ComfyUI>/custom_nodes).",
+        )
+    dst = cn_dir / name
+
+    async def gen():
+        try:
+            if dst.exists():
+                yield _sse("progress", message=f"{name} already present at {dst} — skipping clone")
+                req = dst / "requirements.txt"
+                yield _sse(
+                    "done",
+                    message=f"already installed at {dst}",
+                    path=str(dst),
+                    requirements=str(req) if req.exists() else None,
+                    restart_required=False,
+                )
+                return
+
+            yield _sse("progress", message=f"Cloning {git_url} into {dst}")
+            git = shutil.which("git")
+            if not git:
+                yield _sse("error", message="`git` not on PATH — install Git for Windows or add it to PATH.")
+                return
+
+            proc = await asyncio.create_subprocess_exec(
+                git, "clone", "--depth=1", git_url, str(dst),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            # Stream git output as-is so the user watches "Receiving objects: 42%..."
+            # etc. instead of just staring at a spinner. `errors="replace"` keeps
+            # anything non-UTF-8 (some git installs print CP-1252) from crashing us.
+            assert proc.stdout is not None
+            async for raw in proc.stdout:
+                line = raw.decode("utf-8", errors="replace").rstrip()
+                if line:
+                    yield _sse("progress", message=line)
+            rc = await proc.wait()
+            if rc != 0:
+                # Clean up partial clone so a retry doesn't hit "already present".
+                if dst.exists():
+                    try:
+                        shutil.rmtree(dst)
+                    except OSError:
+                        pass
+                yield _sse("error", message=f"git clone failed (rc={rc})")
+                return
+
+            req = dst / "requirements.txt"
+            requirements_preview = None
+            if req.exists():
+                try:
+                    lines = [l.strip() for l in req.read_text(encoding="utf-8").splitlines() if l.strip() and not l.strip().startswith("#")]
+                    requirements_preview = lines[:20]
+                except Exception:
+                    pass
+
+            yield _sse(
+                "done",
+                message=f"Cloned to {dst}",
+                path=str(dst),
+                requirements=str(req) if req.exists() else None,
+                requirements_preview=requirements_preview,
+                restart_required=True,
+            )
+        except Exception as e:
+            if dst.exists() and not any(dst.iterdir()):
+                try:
+                    dst.rmdir()
+                except OSError:
+                    pass
+            yield _sse("error", message=f"{type(e).__name__}: {e}")
+
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/local/download-model")
+async def local_download_model(request: Request):
+    """Stream a model download from a URL into ComfyUI's models/{folder}/ dir.
+    SSE progress: {type: "progress", bytes, total, percent}, {type: "done", path},
+    {type: "error", message}. Uses httpx.stream to avoid buffering the whole
+    file in memory — matters for 4-8 GB safetensors.
+
+    Body: {"url": "...", "folder": "diffusion_models", "filename": "flux-2-klein-4b.safetensors"}
+    """
+    body = await request.json()
+    url = str(body.get("url", "")).strip()
+    folder = str(body.get("folder", "")).strip()
+    filename = str(body.get("filename", "")).strip()
+    if not url or not url.startswith(("http://", "https://")):
+        raise HTTPException(400, "url must be http(s)")
+    if not filename or not _SAFE_MODEL_FILENAME.match(filename):
+        raise HTTPException(400, "invalid filename")
+    if not folder or not _SAFE_MODEL_FOLDER.match(folder):
+        raise HTTPException(400, "invalid folder")
+    if ".." in folder or folder.startswith("/"):
+        raise HTTPException(400, "folder must be a relative subdir")
+
+    models_dir = _find_local_models_dir()
+    if not models_dir:
+        raise HTTPException(
+            500,
+            "ComfyUI models directory not found. Set COMFY_MODELS_DIR in .env "
+            "to your ComfyUI install's models/ path.",
+        )
+
+    dst_dir = models_dir / folder
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    dst = dst_dir / filename
+    # Write to a .part file and rename on success so a killed download doesn't
+    # leave a truncated file that ComfyUI would happily try to load.
+    tmp = dst.with_name(dst.name + ".part")
+
+    async def gen():
+        import httpx
+        try:
+            yield _sse("progress", message=f"Fetching {url}", bytes=0, total=0, percent=0)
+            async with httpx.AsyncClient(follow_redirects=True, timeout=None) as client:
+                async with client.stream("GET", url) as r:
+                    if r.status_code != 200:
+                        yield _sse("error", message=f"HTTP {r.status_code} from {url}")
+                        return
+                    total = int(r.headers.get("content-length") or 0)
+                    got = 0
+                    last_pct = -1
+                    with tmp.open("wb") as f:
+                        async for chunk in r.aiter_bytes(chunk_size=1024 * 1024):
+                            f.write(chunk)
+                            got += len(chunk)
+                            if total > 0:
+                                pct = int(got * 100 / total)
+                                if pct != last_pct:
+                                    last_pct = pct
+                                    yield _sse("progress", message=f"{pct}%",
+                                               bytes=got, total=total, percent=pct)
+                            else:
+                                mb = got / (1024 * 1024)
+                                yield _sse("progress", message=f"{mb:.1f} MB",
+                                           bytes=got, total=0, percent=0)
+            tmp.replace(dst)
+            yield _sse("done", message=f"Saved to {dst}", path=str(dst))
+        except Exception as e:
+            try:
+                if tmp.exists():
+                    tmp.unlink()
+            except OSError:
+                pass
+            yield _sse("error", message=f"{type(e).__name__}: {e}")
+
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/local/check-models")
+async def local_check_models(request: Request):
+    """Query the local ComfyUI's /object_info catalog and check which of the
+    requested model filenames are already present. Reads every combo widget's
+    choices list and treats any exact-match filename as "present" — path-
+    agnostic, so shared model dirs configured via extra_model_paths.yaml just
+    work.
+
+    Body: {"models": [{"filename": "...", "folder": "diffusion_models"}, ...]}
+    """
+    body = await request.json()
+    models = body.get("models") or []
+    if not isinstance(models, list):
+        raise HTTPException(400, "models must be a list")
+
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.get(f"{_LOCAL_COMFY_URL}/object_info")
+            r.raise_for_status()
+            oi = r.json()
+    except Exception as e:
+        return {
+            "reachable": False,
+            "error": f"Local ComfyUI unreachable at {_LOCAL_COMFY_URL}: {e}",
+            "missing": [dict(m) for m in models if isinstance(m, dict)],
+            "present": [],
+        }
+
+    # Flatten every combo choice across the catalog. ComfyUI reports model
+    # widget lists as `[[choice1, choice2, ...], {tooltip: ...}]` under
+    # object_info[class_type].input.required[widget_name]. Some choices are
+    # nested paths ("subdir/file.safetensors") — add the basename too so a
+    # user's manifest that says just "file.safetensors" still matches.
+    known: set[str] = set()
+    for _class_type, info in (oi or {}).items():
+        if not isinstance(info, dict):
+            continue
+        input_spec = info.get("input") or {}
+        for section in ("required", "optional"):
+            for _name, spec in ((input_spec.get(section) or {}) or {}).items():
+                if not isinstance(spec, list) or not spec:
+                    continue
+                choices = spec[0]
+                if not isinstance(choices, list):
+                    continue
+                for choice in choices:
+                    if not isinstance(choice, str):
+                        continue
+                    known.add(choice)
+                    base = choice.replace("\\", "/").rsplit("/", 1)[-1]
+                    if base and base != choice:
+                        known.add(base)
+
+    missing: list[dict] = []
+    present: list[str] = []
+    for m in models:
+        if not isinstance(m, dict):
+            continue
+        fn = str(m.get("filename", "")).strip()
+        if not fn:
+            continue
+        if fn in known or fn.replace("\\", "/").rsplit("/", 1)[-1] in known:
+            present.append(fn)
+        else:
+            missing.append({"filename": fn, "folder": m.get("folder", "")})
+
+    return {"reachable": True, "missing": missing, "present": present}
+
+
+@app.post("/api/workflows/register")
+async def workflows_register(request: Request):
+    """Save a workflow + its manifest atomically, then hot-register the module
+    so it appears in the WORKFLOW section without a restart. Called by the AI
+    Agent's `create_workflow_module` tool — the agent constructs a workflow
+    (from its own knowledge or via the Comfy Cloud MCP), decides which node
+    widgets should be user inputs, and posts the whole bundle here."""
+    body = await request.json()
+    mod_id = str(body.get("id", "")).strip()
+    label = str(body.get("label", "")).strip() or mod_id
+    kind = str(body.get("kind", "image")).strip().lower()
+    output_ext = str(body.get("output_ext", "png")).strip().lower().lstrip(".")
+    runner = str(body.get("runner", "cloud")).strip().lower() or "cloud"
+    workflow = body.get("workflow")
+    inputs = body.get("inputs") or []
+
+    if not mod_id or not _SAFE_MODULE_ID.match(mod_id):
+        raise HTTPException(400, "id must be snake_case, [a-zA-Z0-9_-] up to 64 chars")
+    if kind not in ("image", "video", "3d", "audio"):
+        raise HTTPException(400, "kind must be one of image/video/3d/audio")
+    if runner not in ("cloud", "local"):
+        raise HTTPException(400, "runner must be cloud or local")
+    if not isinstance(workflow, dict) or not workflow:
+        raise HTTPException(400, "workflow must be a non-empty JSON object")
+    if not isinstance(inputs, list):
+        raise HTTPException(400, "inputs must be a list")
+    # Refuse to overwrite a hand-written Python module — those are the primary
+    # generators and should never get shadowed by an agent-created one.
+    if mod_id in MODULES and getattr(MODULES[mod_id], "source", "python") == "python":
+        raise HTTPException(409, f"module id `{mod_id}` conflicts with a built-in generator")
+
+    _WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
+    wf_path = _WORKFLOWS_DIR / f"{mod_id}.json"
+    meta_path = _WORKFLOWS_DIR / f"{mod_id}.meta.json"
+
+    manifest = {
+        "id": mod_id,
+        "label": label,
+        "kind": kind,
+        "output_ext": output_ext,
+        "runner": runner,
+        "inputs": inputs,
+    }
+
+    wf_path.write_text(json.dumps(workflow, indent=2), encoding="utf-8")
+    meta_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+    from server.modules._workflow_shared import register_manifest_by_name
+    mod = register_manifest_by_name(mod_id)
+    if not mod:
+        raise HTTPException(500, "manifest saved but hot-register failed — restart to pick it up")
+    MODULES[mod.id] = mod
+    return {"module": _module_dict(mod), "manifest": manifest}
+
+
+# System prompt for the manifest-writer agent. The tool schema constrains the
+# shape; this text explains WHICH node holds a user prompt vs a machine seed vs
+# a load-image slot, so the model doesn't misroute.
+_MANIFEST_ANALYZER_SYSTEM = """You analyze a ComfyUI workflow graph and emit a manifest that lets ComfyBlockout expose it as a generator.
+
+The user drops a workflow JSON. You look at its nodes and decide:
+1. Which nodes hold USER-FACING inputs — the ones the user should type/upload each time. Typically:
+   - `CLIPTextEncode` (widget 0 = prompt text)
+   - `PrimitiveStringMultiline` titled "Prompt" or similar (widget 0 = prompt)
+   - `LoadImage` where the file would come from the user (widget 0 = image filename → use type "scene-image" so ComfyBlockout uploads the editor snapshot at run time)
+   - `KSampler` seed (widget 0) IF it's obviously meant to be user-facing — usually leave seeds alone (workflow randomizer handles them).
+2. What the OUTPUT kind is — look at the terminal save nodes (SaveImage → image; VHS_VideoCombine / SaveWEBM → video; SaveGLB → 3d; SaveAudio → audio). Pick the primary output kind.
+3. A short `label` (title-cased human name) and `id` (snake_case). The client already picked an id from the filename; you can override if the filename was ugly.
+
+Rules:
+- SKIP nodes with `mode: 4` (bypassed) or `mode: 2` (muted) — they don't fire.
+- If a node has a `title` (custom name the workflow author gave it), that's usually a strong hint about intent.
+- If two nodes look like prompt inputs (e.g. a positive + negative CLIPTextEncode), map the POSITIVE one to `prompt` and leave the negative alone — the workflow's default negative is usually fine.
+- Match `widget_index` to the widget position in `widgets_values` (0-based).
+- For `patch.node_id`, use the numeric `id` field of the node.
+- Prefer FEWER inputs over more. Only expose things the user must set for a useful generation.
+
+When you're done, call the `write_manifest` tool with the final manifest. Do not narrate — the tool call is your entire response."""
+
+
+_MANIFEST_TOOL = {
+    "name": "write_manifest",
+    "description": "Emit the finished manifest for the workflow.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "id": {"type": "string", "description": "snake_case identifier (unique per workflow)"},
+            "label": {"type": "string", "description": "Human-readable title for the UI"},
+            "kind": {"type": "string", "enum": ["image", "video", "3d", "audio"]},
+            "output_ext": {"type": "string", "description": "e.g. png, mp4, glb, wav"},
+            "inputs": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "kwarg name, snake_case"},
+                        "type": {"type": "string", "enum": ["textarea", "text", "scene-image", "number"]},
+                        "required": {"type": "boolean"},
+                        "placeholder": {"type": "string"},
+                        "label": {"type": "string"},
+                        "patch": {
+                            "type": "object",
+                            "properties": {
+                                "node_id": {"type": "integer"},
+                                "widget_index": {"type": "integer"},
+                            },
+                            "required": ["node_id", "widget_index"],
+                        },
+                    },
+                    "required": ["name", "type", "patch"],
+                },
+            },
+        },
+        "required": ["id", "label", "kind", "output_ext", "inputs"],
+    },
+}
+
+
+def _sse(event: str, **fields) -> bytes:
+    """Serialize one Server-Sent Event line. `event` becomes the SSE event type,
+    fields become the JSON `data` payload. Trailing blank line delimits."""
+    payload = json.dumps({"type": event, **fields})
+    return f"event: {event}\ndata: {payload}\n\n".encode("utf-8")
+
+
+@app.post("/api/workflows/analyze")
+async def workflows_analyze(request: Request):
+    """SSE stream. Body: {"stem": "..."}. Loads the workflow, sends the slim
+    view to Claude with the `write_manifest` tool, saves the returned manifest,
+    hot-registers the module. Emits progress events so the UI can show the
+    agent's steps in real time."""
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise HTTPException(400, "Anthropic API key not set — add it in Settings.")
+    body = await request.json()
+    stem = str(body.get("stem", "")).strip()
+    if not stem or not _SAFE_WF_STEM.match(stem):
+        raise HTTPException(400, "bad stem")
+    wf_path = _WORKFLOWS_DIR / f"{stem}.json"
+    if not wf_path.exists():
+        raise HTTPException(404, f"workflow not found: {stem}")
+
+    async def gen():
+        from server.modules._workflow_shared import slim_workflow_for_analysis, register_manifest_by_name
+        import anthropic
+
+        try:
+            yield _sse("progress", message=f"Reading {stem}.json…")
+            workflow = json.loads(wf_path.read_text(encoding="utf-8"))
+            node_count = len(workflow.get("nodes", []))
+            active = sum(1 for n in workflow.get("nodes", []) if n.get("mode", 0) not in (2, 4))
+            yield _sse("progress", message=f"Workflow has {node_count} nodes ({active} active)")
+
+            slim = slim_workflow_for_analysis(workflow)
+            slim_json = json.dumps(slim, indent=2)
+            yield _sse("progress", message="Handing graph to the agent…")
+
+            client = anthropic.Anthropic()
+            user_msg = (
+                f"Client-suggested id: `{stem}` (change it if the filename was garbage).\n\n"
+                f"Workflow graph:\n```json\n{slim_json}\n```\n\n"
+                "Emit the manifest via the `write_manifest` tool."
+            )
+            # Sync SDK call in a thread so we don't block the event loop; the
+            # streaming vibe here is us emitting steps around the call, not
+            # token streaming from Claude (which would need beta streaming).
+            resp = await asyncio.to_thread(
+                client.messages.create,
+                model="claude-sonnet-4-6",
+                max_tokens=2048,
+                system=_MANIFEST_ANALYZER_SYSTEM,
+                tools=[_MANIFEST_TOOL],
+                tool_choice={"type": "tool", "name": "write_manifest"},
+                messages=[{"role": "user", "content": user_msg}],
+            )
+
+            manifest = None
+            for block in resp.content:
+                b = block.model_dump() if hasattr(block, "model_dump") else block
+                if b.get("type") == "tool_use" and b.get("name") == "write_manifest":
+                    manifest = b.get("input") or {}
+                    break
+            if not manifest:
+                yield _sse("error", message="Agent didn't call write_manifest — analysis failed")
+                return
+
+            # Enforce id = filename stem so runtime lookup stays predictable.
+            # The agent's proposed id/label are advisory; we keep the label, force the id.
+            manifest["id"] = stem
+            for spec in manifest.get("inputs", []):
+                nid = (spec.get("patch") or {}).get("node_id")
+                if nid is not None:
+                    yield _sse("found", message=f"Input `{spec['name']}` ({spec['type']}) → node {nid}")
+
+            meta_path = _WORKFLOWS_DIR / f"{stem}.meta.json"
+            meta_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+            yield _sse("progress", message=f"Saved {meta_path.name}")
+
+            mod = register_manifest_by_name(stem)
+            if not mod:
+                yield _sse("error", message="Manifest registered on disk but hot-load failed — restart to pick it up")
+                return
+            MODULES[mod.id] = mod
+            yield _sse("progress", message=f"Registered module `{mod.id}`")
+            yield _sse(
+                "done",
+                module=_module_dict(mod),
+                manifest=manifest,
+            )
+        except Exception as e:
+            import traceback
+            print(f"[cb-app] workflow analyze error: {e}\n{traceback.format_exc()}")
+            yield _sse("error", message=f"{type(e).__name__}: {e}")
+
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/api/run/{module_id}")
@@ -1085,6 +1796,48 @@ ASSISTANT_SYSTEM = (
     "result lands in the viewport overlay AND in the user's Assets pane "
     "(double-clickable, draggable, persistent). The raw MCP tools should only be "
     "used for inspection or for advanced flows the editor doesn't expose.\n\n"
+    "CREATING NEW GENERATORS: if the user asks for a generator that doesn't exist "
+    "yet (e.g. \"make me a local Flux 2 Klein T2I generator\", \"add an SDXL "
+    "text-to-image workflow\", \"build a Wan video generator\"), use the "
+    "`create_workflow_module` editor tool:\n"
+    "1. Get the workflow — either fetch a matching template via the Comfy Cloud "
+    "MCP `get_template` tool, or construct it yourself from ComfyUI nodes if you "
+    "know the shape. Ask `search_templates` first to find a match.\n"
+    "2. Decide user-facing inputs. Expose ONLY what changes per run (prompt, seed "
+    "if the user cares, source image for image-edit workflows). Everything else "
+    "stays baked into the workflow.\n"
+    "3. For each input, work out the node id + widget slot to patch. Include both "
+    "widget_index (0-based) AND widget_name (e.g. \"text\" for CLIPTextEncode) — "
+    "the cloud runner uses index, the local runner uses name.\n"
+    "4. If the user asked for a LOCAL generator, set runner=\"local\" and pass the "
+    "workflow in ComfyUI's API/prompt format (dict keyed by node id, each entry "
+    "has class_type + inputs). If the workflow you have is in graph/save format "
+    "(top-level nodes[] array), convert it first — you know the node schemas.\n"
+    "5. Call `create_workflow_module`. The generator cell appears in the WORKFLOW "
+    "section immediately — no reload needed. To FIX or REPLACE an existing workflow "
+    "module (e.g. wrong text encoder, missing node, agent mistake in the first pass), "
+    "call `get_workflow_module` with its id to see the current JSON, work out what "
+    "needs to change, then re-call `create_workflow_module` with the same id and the "
+    "corrected workflow — the register endpoint overwrites atomically and hot-"
+    "registers the updated module in place.\n"
+    "6. If runner=\"local\", IMMEDIATELY call `check_custom_nodes` with every "
+    "third-party node class_type the workflow references (skip built-ins like "
+    "KSampler / CLIPTextEncode / VAEDecode / etc.). If any are missing, tell the "
+    "user which ones and offer to install them via `install_custom_node` — pass "
+    "the github/gitlab URL for the repo. On success the tool reports "
+    "`restart_required: true` and any requirements.txt lines; remind the user to "
+    "`pip install -r requirements.txt` in ComfyUI's Python env AND restart "
+    "ComfyUI before running the workflow. Do NOT try to pip install yourself.\n"
+    "7. Also call `check_local_models` with every model file (checkpoints, VAEs, "
+    "text encoders, LoRAs, etc.). Format the result as a compact bulleted list "
+    "(the chat panel is narrow — NO wide tables). For any missing model, group by "
+    "folder and give a short HuggingFace slug, then ask \"want me to download "
+    "it for you?\" before doing anything.\n"
+    "8. If the user confirms downloads, call `download_model_to_comfy` with the "
+    "direct HF URL (https://huggingface.co/<repo>/resolve/main/<path>), the "
+    "ComfyUI folder, and the exact filename. Multiple missing models = call the "
+    "tool sequentially, one per file — don't parallelize; the server writes "
+    ".part files that could collide.\n\n"
     "Keep responses tight. Quote object names with brackets like [Cube.001] when "
     "referring to scene objects — the editor renders those tokens in the object's "
     "color and uses them to attach the per-object reference image at generate time."
@@ -1235,11 +1988,18 @@ EDITOR_TOOLS = [
     },
     {
         "name": "set_generator_prompt",
-        "description": "Set the prompt text on a generator cell (nano-banana or seedance).",
+        "description": (
+            "Set the prompt on a generator cell. Works on the built-in cells "
+            "(model: 'nano-banana' or 'seedance') AND on any agent-created WORKFLOW "
+            "module (pass its module id, e.g. 'flux2_klein_t2i_local'). For workflow "
+            "modules the tool writes to whichever input is named 'prompt' in the "
+            "manifest — if the module named its prompt input something else, tell "
+            "the user which input to fill manually."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "model": {"type": "string", "enum": ["nano-banana", "seedance"]},
+                "model": {"type": "string", "description": "'nano-banana', 'seedance', or a WORKFLOW module id"},
                 "prompt": {"type": "string"},
             },
             "required": ["model", "prompt"],
@@ -1264,6 +2024,242 @@ EDITOR_TOOLS = [
                 },
             },
             "required": ["model"],
+        },
+    },
+    {
+        "name": "create_workflow_module",
+        "description": (
+            "Register a new generator based on a ComfyUI workflow you constructed or "
+            "fetched. The new module appears as a cell in the editor's WORKFLOW section "
+            "and runs through the same pipeline as the built-in generators (output "
+            "lands in Assets, cell is clickable/removable, etc.). Use when the user "
+            "asks for a generator that doesn't already exist. Also use to FIX or "
+            "REPLACE an existing workflow module — passing the same `id` overwrites "
+            "the workflow JSON and manifest atomically, then re-registers. Call "
+            "`get_workflow_module` first if you need to see what's currently saved "
+            "before rewriting. See the system prompt for the full construction "
+            "protocol."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "snake_case identifier, unique per workflow (e.g. 'flux2_klein_t2i_local')",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Human-readable title for the cell (e.g. 'Flux.2 Klein — Text to Image (Local)')",
+                },
+                "kind": {
+                    "type": "string",
+                    "enum": ["image", "video", "3d", "audio"],
+                    "description": "What the workflow produces. Determines the icon and how the result is imported.",
+                },
+                "output_ext": {
+                    "type": "string",
+                    "description": "Expected output extension without the dot (e.g. 'png', 'mp4', 'glb', 'wav')",
+                },
+                "runner": {
+                    "type": "string",
+                    "enum": ["cloud", "local"],
+                    "description": "Where the workflow will run. Defaults to 'cloud' if omitted.",
+                },
+                "workflow": {
+                    "type": "object",
+                    "description": (
+                        "The full workflow JSON. For runner='cloud' use ComfyUI graph/save "
+                        "format (top-level nodes[] + links[]). For runner='local' use API/"
+                        "prompt format (flat dict keyed by node id string; each value has "
+                        "class_type + inputs + optional _meta.title). Convert format yourself "
+                        "if needed."
+                    ),
+                },
+                "inputs": {
+                    "type": "array",
+                    "description": (
+                        "User-facing inputs the editor should render on the cell. Each entry "
+                        "specifies which node's widget the input patches at run time. "
+                        "Expose only inputs that change per run — everything else stays "
+                        "baked into the workflow."
+                    ),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "snake_case kwarg name (e.g. 'prompt', 'seed', 'image')",
+                            },
+                            "type": {
+                                "type": "string",
+                                "enum": ["textarea", "text", "scene-image", "number"],
+                                "description": (
+                                    "UI control type. 'textarea' = multi-line prompt, 'text' = "
+                                    "single-line, 'scene-image' = uses the editor's viewport "
+                                    "snapshot (or a picked source image) — the runner uploads it "
+                                    "and patches the LoadImage node with the returned filename, "
+                                    "'number' = numeric field."
+                                ),
+                            },
+                            "required": {"type": "boolean"},
+                            "placeholder": {
+                                "type": "string",
+                                "description": "Helper text shown in an empty input.",
+                            },
+                            "label": {
+                                "type": "string",
+                                "description": "Optional custom UI label (falls back to `name`).",
+                            },
+                            "patch": {
+                                "type": "object",
+                                "description": (
+                                    "How to write this input into the workflow at run time. "
+                                    "Provide widget_index for the cloud runner (0-based position "
+                                    "in the node's widgets_values array) AND widget_name for the "
+                                    "local runner (the input key name in ComfyUI API format, e.g. "
+                                    "'text' for CLIPTextEncode, 'image' for LoadImage, 'seed' for "
+                                    "KSampler)."
+                                ),
+                                "properties": {
+                                    "node_id": {"type": "integer"},
+                                    "widget_index": {"type": "integer"},
+                                    "widget_name": {"type": "string"},
+                                },
+                                "required": ["node_id"],
+                            },
+                        },
+                        "required": ["name", "type", "patch"],
+                    },
+                },
+            },
+            "required": ["id", "label", "kind", "output_ext", "workflow", "inputs"],
+        },
+    },
+    {
+        "name": "download_model_to_comfy",
+        "description": (
+            "Download a model file straight into the user's local ComfyUI models "
+            "directory. Use ONLY after check_local_models flags something as "
+            "missing AND the user confirmed they want you to fetch it. The "
+            "backend detects the ComfyUI install path and drops the file into "
+            "models/<folder>/. Progress streams into the chat automatically; "
+            "the tool_result reports the final on-disk path or an error. Prefer "
+            "direct HuggingFace URLs (https://huggingface.co/<repo>/resolve/main/<path>) "
+            "since those don't need auth for public models."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "Direct download URL to the raw file (e.g. huggingface.co/…/resolve/main/…)",
+                },
+                "folder": {
+                    "type": "string",
+                    "description": "ComfyUI models sub-folder (diffusion_models, vae, text_encoders, checkpoints, loras, controlnet, etc.)",
+                },
+                "filename": {
+                    "type": "string",
+                    "description": "Filename to save as — must match what the workflow references",
+                },
+            },
+            "required": ["url", "folder", "filename"],
+        },
+    },
+    {
+        "name": "get_workflow_module",
+        "description": (
+            "Read back the manifest AND workflow JSON currently saved for a "
+            "workflow module (source='workflow'). Use before proposing a fix so "
+            "you can see what's actually there instead of guessing. Returns "
+            "{id, manifest, workflow}. Refuses to return built-in Python modules."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "The workflow module id (e.g. 'flux2_klein_t2i_local')"},
+            },
+            "required": ["id"],
+        },
+    },
+    {
+        "name": "check_custom_nodes",
+        "description": (
+            "Verify which ComfyUI custom-node class_types are installed locally. "
+            "Call this AFTER create_workflow_module with runner='local', BEFORE "
+            "downloading models — a workflow that references TripoSplat, Nunchaku, "
+            "or another third-party node type will crash at run time with a "
+            "cryptic KeyError if the nodes aren't installed. Returns "
+            "{reachable, missing: [class_type, ...], present: [class_type, ...]}. "
+            "Missing ones can be resolved via install_custom_node."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "class_types": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Distinct node class_types the workflow uses (not the built-in ones like KSampler / CLIPTextEncode — only third-party ones).",
+                    "minItems": 1,
+                },
+            },
+            "required": ["class_types"],
+        },
+    },
+    {
+        "name": "install_custom_node",
+        "description": (
+            "Clone a ComfyUI custom-node repo into the user's local install. "
+            "Backend runs `git clone --depth=1 <git_url> <ComfyUI>/custom_nodes/<name>` "
+            "and streams the git output into the chat. Requires ComfyUI restart "
+            "afterward — the tool_result reports `restart_required: true` and any "
+            "requirements.txt lines the repo ships (do NOT try to pip install "
+            "yourself; the ComfyUI Python env is not ours, and the user should run "
+            "pip themselves against the right interpreter). If the target dir "
+            "already exists we skip cloning and report already-installed."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "git_url": {
+                    "type": "string",
+                    "description": "Public https git URL (github, gitlab, etc.). Trailing .git is optional.",
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Directory name under custom_nodes/ (defaults to the repo's basename)",
+                },
+            },
+            "required": ["git_url"],
+        },
+    },
+    {
+        "name": "check_local_models",
+        "description": (
+            "Verify which model files are already installed in the user's local "
+            "ComfyUI. Call this right after registering a `runner: local` workflow "
+            "module so you can tell the user up-front what they're missing (and "
+            "for shared model dirs configured via extra_model_paths.yaml, whatever "
+            "ComfyUI can see counts as installed — no path config needed here). "
+            "Returns {reachable, missing: [{filename, folder}], present: [filename, ...]}."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "models": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "filename": {"type": "string", "description": "The .safetensors / .ckpt / etc. filename ComfyUI would see in its dropdown"},
+                            "folder": {"type": "string", "description": "ComfyUI folder category — checkpoints, vae, loras, controlnet, text_encoders, diffusion_models, etc. Optional but helps the user route the download."},
+                        },
+                        "required": ["filename"],
+                    },
+                    "minItems": 1,
+                },
+            },
+            "required": ["models"],
         },
     },
 ]
@@ -1295,6 +2291,24 @@ def _format_scene_context(ctx: dict) -> str:
             prompt = (c.get("prompt") or "").strip()
             prompt_preview = (prompt[:120] + "…") if len(prompt) > 120 else prompt
             parts.append(f"  - {model}: {prompt_preview or '(empty)'}")
+    wfs = ctx.get("workflowModules") or []
+    if wfs:
+        parts.append(f"Workflow modules ({len(wfs)}):")
+        for w in wfs:
+            parts.append(f"  - {w.get('id')}: {w.get('label')} ({w.get('kind')})")
+    # active_target is the disambiguator for underspecified commands like
+    # "generate one" — always prefer this over guessing from history.
+    at = ctx.get("activeTarget")
+    if at:
+        parts.append(
+            f"Active target: {at.get('kind')}='{at.get('id')}' (label: {at.get('label')})."
+        )
+        awi = ctx.get("activeWorkflowInputs")
+        if at.get("kind") == "workflow" and awi:
+            names = ", ".join(str(i.get("name")) for i in awi if isinstance(i, dict))
+            parts.append(f"  Its inputs: {names}")
+    else:
+        parts.append("Active target: (none) — ask the user which generator to use if a command is ambiguous.")
     parts.append(
         "NOTE: Objects above is authoritative. [Name] tokens inside generator "
         "prompts are saved text and may reference objects that were deleted — "
@@ -1373,15 +2387,34 @@ async def llm_chat(request: Request):
 
     if tool_results:
         # Continuation turn — frontend ran the editor tools we asked for and is
-        # now sending back the results. Append as a user message containing
-        # tool_result content blocks (one per pending tool_use), then re-invoke
-        # Claude so it can react to the results.
+        # now sending back the results. Guard against the "server restarted
+        # mid-loop" case: `_chat_history` lives in memory, so `uvicorn --reload`
+        # or a crash wipes it. If tool_results land after that, we'd end up
+        # posting a tool_result as message 0 and Anthropic rejects it hard
+        # ("tool_use_id has no matching tool_use in previous message").
+        # Return a clean 409 so the frontend can reset instead of crashing.
+        last = history[-1] if history else None
+        expected_ids: set[str] = set()
+        if isinstance(last, dict) and last.get("role") == "assistant":
+            for block in last.get("content") or []:
+                if isinstance(block, dict) and block.get("type") == "tool_use":
+                    tuid = block.get("id")
+                    if isinstance(tuid, str):
+                        expected_ids.add(tuid)
+        provided_ids = {r.get("tool_use_id") for r in tool_results if isinstance(r, dict)}
+        if not expected_ids or not (provided_ids & expected_ids):
+            raise HTTPException(
+                409,
+                "conversation state was lost (server restarted mid-turn). "
+                "Clearing the chat and asking again will fix this.",
+            )
+
         content_blocks = [{
             "type": "tool_result",
             "tool_use_id": r["tool_use_id"],
             "content": r.get("content", ""),
             **({"is_error": True} if r.get("is_error") else {}),
-        } for r in tool_results]
+        } for r in tool_results if r.get("tool_use_id") in expected_ids]
         history.append({"role": "user", "content": content_blocks})
     else:
         # New user turn — prepend scene context (cached separately).
