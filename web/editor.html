@@ -1279,6 +1279,65 @@
 	.gen-btn svg { width: 22px; height: 22px; }
 
 	.outliner { display: flex; flex-direction: column; gap: 4px; min-height: 30px; }
+	/* Group card — same shell as .out-row but the head is [folder icon | name
+	   | count | eye | chevron]. No color swatch, no image slot. Expanding
+	   reveals the group's member .out-row.nested children below. */
+	.out-group {
+		display: flex; flex-direction: column;
+		padding: 6px 8px; border-radius: 5px;
+		background: rgba(255,255,255,0.04);
+	}
+	.out-group-head {
+		display: grid;
+		grid-template-columns: 26px 1fr auto auto;
+		align-items: center; gap: 8px;
+		cursor: pointer; user-select: none;
+	}
+	.out-group:hover { background: rgba(255,255,255,0.06); }
+	.out-group.selected { background: rgba(255,180,84,0.10); box-shadow: inset 0 0 0 1px rgba(255,180,84,0.28); }
+	.out-group.selected .out-name { color: #ffb454; }
+	.out-group.hidden .out-name { opacity: 0.35; text-decoration: line-through; }
+	.out-group-icon {
+		width: 26px; height: 26px; border-radius: 4px;
+		background: rgba(255,255,255,0.04);
+		display: flex; align-items: center; justify-content: center;
+		color: rgba(255,180,84,0.75);
+	}
+	.out-group-icon svg { width: 15px; height: 15px; }
+	.out-group-count {
+		font-size: 9px; letter-spacing: 0.06em;
+		color: rgba(255,255,255,0.35);
+		padding: 2px 6px; border-radius: 3px;
+		background: rgba(255,255,255,0.04);
+	}
+	.out-group-members {
+		display: none;
+		margin-top: 6px; padding-left: 10px;
+		border-left: 1px solid rgba(255,255,255,0.06);
+		flex-direction: column; gap: 3px;
+	}
+	.out-group.expanded .out-group-members { display: flex; }
+	.out-group.expanded .out-expand-toggle { transform: rotate(180deg); color: #ffb454; }
+	/* Nested member rows — compact list style: shorter, no color/image slots,
+	   no expandable prompt textarea. Keeps the group card readable when it
+	   contains 4+ items. Click still selects the object like a root row. */
+	.out-row.nested {
+		padding: 2px 6px;
+		background: rgba(0,0,0,0.15);
+	}
+	.out-row.nested .out-head {
+		grid-template-columns: 14px 1fr auto;
+		gap: 6px;
+	}
+	/* Compact nested row — smaller swatch, smaller text, tighter padding so
+	   4+ members fit in the same vertical space as a single root card. Image
+	   slot + expand toggle are stripped (nested row = swatch | name | eye). */
+	.out-row.nested .out-color { width: 12px; height: 12px; border-radius: 3px; }
+	.out-row.nested .out-img,
+	.out-row.nested .out-expand-toggle { display: none; }
+	.out-row.nested .out-expand { display: none !important; }
+	.out-row.nested .out-name { font-size: 10px; }
+	.out-row.nested .out-vis { width: 18px; height: 18px; font-size: 10px; }
 	.out-empty {
 		padding: 14px 12px; border-radius: 5px;
 		border: 1px dashed rgba(255,255,255,0.1);
@@ -1290,7 +1349,12 @@
 		padding: 6px 8px; border-radius: 5px;
 		cursor: pointer;
 		background: rgba(255,255,255,0.04);
+		/* Kill browser text-selection on shift-click — otherwise Sphere.001
+		   gets highlighted blue every time you extend the selection. The
+		   rename input re-enables select via .out-name-edit below. */
+		user-select: none; -webkit-user-select: none;
 	}
+	.out-name-edit { user-select: text; -webkit-user-select: text; }
 	.out-head {
 		display: grid;
 		grid-template-columns: 26px 26px 1fr auto;
@@ -1371,7 +1435,7 @@
 	   is invisible — no rectangle highlight, no padding shift, just the text. */
 	.out-name-edit:focus { color: #fff; text-overflow: clip; }
 
-	.out-vis, .out-del {
+	.out-vis, .out-del, .out-group-ungroup {
 		width: 22px; height: 22px; border: none; background: transparent;
 		border-radius: 4px; cursor: pointer; color: rgba(255,255,255,0.4);
 		display: flex; align-items: center; justify-content: center;
@@ -1379,6 +1443,12 @@
 	}
 	.out-vis:hover { background: rgba(255,255,255,0.06); color: #e6e6ea; }
 	.out-del:hover { background: rgba(255,255,255,0.06); color: #ff5a5a; }
+	/* × on a group card = ungroup. Same shape as .out-del but red-tinted on
+	   hover to make the destructive intent legible. */
+	.out-group-ungroup {
+		font: 700 14px/1 ui-sans-serif, system-ui, sans-serif;
+	}
+	.out-group-ungroup:hover { background: rgba(255,80,80,0.15); color: #ff8a8a; }
 
 	.slider-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
 	.slider-row label { flex: 0 0 auto; font-size: 11px; color: rgba(255,255,255,0.5); }
@@ -1594,7 +1664,10 @@
 		color: rgba(255,255,255,0.45);
 	}
 	.vpm-btn:hover { background: rgba(0,0,0,0.55); color: rgba(255,255,255,0.85); }
-	.vpm-btn.active { color: #ffb454; }
+	/* Active state uses neutral white — matches the dim-by-default / bright-
+	   when-active language on the viewport toolbar buttons, avoids reading
+	   as a permanent amber alert. */
+	.vpm-btn.active { color: #fff; }
 	.vpm-btn svg { width: 14px; height: 14px; display: block; }
 	/* Suppress the click-focus ring but keep keyboard focus visible. */
 	.vpm-btn:focus { outline: none; }
@@ -1673,21 +1746,25 @@
 	}
 	.vt-group { display: flex; align-items: center; gap: 2px; }
 	.vt-group + .vt-group { margin-left: 18px; }
+	/* Viewport toolbar — dim-by-default, neutral-white when active. No amber
+	   tint on active state (that was reading as a permanent alert); active
+	   is a subtle dark chip with brighter text, matching the file-manager /
+	   Figma toolbar language the mockup showed. */
 	.vt-btn {
 		height: 26px; padding: 0 12px; border-radius: 5px; border: none;
-		background: transparent; color: #b0b0b8;
+		background: transparent; color: rgba(255,255,255,0.4);
 		font-size: 11px; cursor: pointer; letter-spacing: 0;
 		display: inline-flex; align-items: center; gap: 6px;
 		font-family: inherit;
 	}
-	.vt-btn:hover { background: #14141a; color: #e6e6ea; }
-	.vt-btn.active { background: #14141a; color: #ffb454; }
+	.vt-btn:hover { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.85); }
+	.vt-btn.active { background: rgba(255,255,255,0.08); color: #fff; }
 	.vt-key {
-		font-size: 9px; opacity: 0.4; margin-left: 5px;
+		font-size: 9px; opacity: 0.35; margin-left: 5px;
 		font-weight: 600; letter-spacing: 0.5px;
 	}
-	.vt-btn.active .vt-key { opacity: 0.7; }
-	.vt-btn:hover .vt-key { opacity: 0.6; }
+	.vt-btn.active .vt-key { opacity: 0.55; }
+	.vt-btn:hover .vt-key { opacity: 0.55; }
 	.vt-icon-btn { padding: 0 8px; }
 	.vt-icon-btn svg { width: 14px; height: 14px; display: block; }
 	.vt-sep { flex: 1; }
@@ -3971,6 +4048,64 @@ const selectionSet = new Set();
 // Null outside a drag or during single-select drags.
 let groupDragSnapshot = null;
 
+// Outliner collections — Blender-style groupings for organization only. Each
+// entry is { id, name, memberNames, expanded, visible }. Members are referenced
+// by object.name (stable across save/load) instead of THREE.uuid (regenerated
+// on load). Collections DO NOT reparent 3D objects — they're purely an outliner
+// grouping layer, so FBX/GLB internal transforms stay intact and gizmo/select
+// math is untouched. Persisted through serializeScene → deserializeScene.
+let sceneCollections = [];
+function nextCollectionName() {
+	let n = 1;
+	const used = new Set(sceneCollections.map(g => g.name));
+	while (used.has(`Group.${String(n).padStart(3, "0")}`)) n++;
+	return `Group.${String(n).padStart(3, "0")}`;
+}
+function findCollectionOf(obj) {
+	if (!obj?.name) return null;
+	return sceneCollections.find(g => g.memberNames.includes(obj.name)) || null;
+}
+// Ctrl+G: pull the current selectionSet into a new collection. Objects that
+// were in another group get moved (a member can only live in one group). No-op
+// on empty selection or when only renderCam is picked.
+function createCollectionFromSelection() {
+	const members = Array.from(selectionSet).filter(o => o && o !== renderCam && o.name);
+	if (members.length === 0) return null;
+	const memberNames = members.map(o => o.name);
+	for (const g of sceneCollections) {
+		g.memberNames = g.memberNames.filter(n => !memberNames.includes(n));
+	}
+	// Prune any collection we just emptied — don't leave zombie groups behind.
+	sceneCollections = sceneCollections.filter(g => g.memberNames.length > 0);
+	const group = {
+		id: (crypto.randomUUID?.() || `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
+		name: nextCollectionName(),
+		memberNames,
+		expanded: true,
+		visible: true,
+	};
+	sceneCollections.push(group);
+	return group;
+}
+// Ctrl+Shift+G: dissolve every collection that any currently-selected object
+// belongs to. Members drop back to the unassigned root level.
+function dissolveCollectionsForSelection() {
+	const names = new Set(Array.from(selectionSet).map(o => o?.name).filter(Boolean));
+	if (names.size === 0) return false;
+	const before = sceneCollections.length;
+	sceneCollections = sceneCollections.filter(g => !g.memberNames.some(n => names.has(n)));
+	return sceneCollections.length < before;
+}
+// Called from deleteObject so a removed object doesn't leave a stale entry in
+// its collection. Prunes empty collections after removal.
+function removeObjectFromCollections(obj) {
+	if (!obj?.name) return;
+	for (const g of sceneCollections) {
+		g.memberNames = g.memberNames.filter(n => n !== obj.name);
+	}
+	sceneCollections = sceneCollections.filter(g => g.memberNames.length > 0);
+}
+
 const PRIM_DEFS = {
 	cube:     () => new THREE.BoxGeometry(1, 1, 1),
 	sphere:   () => new THREE.SphereGeometry(0.6, 32, 24),
@@ -4892,6 +5027,9 @@ async function performRedo() {
 function deleteObject(obj) {
 	if (!obj) return;
 	snapshotForUndo();
+	// Strip from any outliner collection so the group doesn't hold a stale
+	// name reference after delete. Empties get pruned automatically.
+	removeObjectFromCollections(obj);
 	if (selected === obj) {
 		// The selection rim shells live in the scene root (see applySelectionTint),
 		// so removing `obj` alone leaves them orphaned and still rendering the amber
@@ -5843,21 +5981,12 @@ function toggleVisibility(obj) {
 	if (typeof saveScene === "function") saveScene();
 }
 
-function refreshOutliner() {
-	outlinerEl.innerHTML = "";
-	// Clear button is only meaningful when the list isn't empty.
-	const clearBtn = document.getElementById("clear-btn");
-	if (clearBtn) clearBtn.hidden = objects.length === 0;
-	if (objects.length === 0) {
-		const empty = document.createElement("div");
-		empty.className = "out-empty";
-		empty.textContent = "Add an object from above";
-		outlinerEl.appendChild(empty);
-		return;
-	}
-	for (const obj of objects) {
-		const row = document.createElement("div");
-		row.className = "out-row" + (selectionSet.has(obj) ? " selected" : "") + (obj.visible === false ? " hidden" : "");
+// Extracted so refreshOutliner can call it twice — once for root-level
+// unassigned objects, once for each group's expanded members (with `nested`
+// so CSS shrinks the row and hides the color/image slots + prompt textarea).
+function buildOutlinerRow(obj, { nested = false } = {}) {
+	const row = document.createElement("div");
+	row.className = "out-row" + (nested ? " nested" : "") + (selectionSet.has(obj) ? " selected" : "") + (obj.visible === false ? " hidden" : "");
 		const ps = obj.userData.particleSystem;
 		const hex = ps
 			? "#" + ps.config.color.toString(16).padStart(6, "0")
@@ -6042,14 +6171,194 @@ function refreshOutliner() {
 			maybeSaveDebounced();
 		});
 
-		row.addEventListener("click", (e) => {
-			if (e.target.closest(".out-vis")) { toggleVisibility(obj); return; }
-			if (e.target.closest(".out-expand-toggle, .out-context")) return;
-			if (e.target.closest(".out-color, .out-img, .out-name-edit")) return;
-			select(obj, { additive: e.shiftKey || e.ctrlKey || e.metaKey });
+	row.addEventListener("click", (e) => {
+		if (e.target.closest(".out-vis")) { toggleVisibility(obj); return; }
+		if (e.target.closest(".out-expand-toggle, .out-context")) return;
+		if (e.target.closest(".out-color, .out-img, .out-name-edit")) return;
+		select(obj, { additive: e.shiftKey || e.ctrlKey || e.metaKey });
+	});
+
+	return row;
+}
+
+function refreshOutliner() {
+	outlinerEl.innerHTML = "";
+	// Clear button is only meaningful when the list isn't empty.
+	const clearBtn = document.getElementById("clear-btn");
+	if (clearBtn) clearBtn.hidden = objects.length === 0;
+	if (objects.length === 0) {
+		const empty = document.createElement("div");
+		empty.className = "out-empty";
+		empty.textContent = "Add an object from above";
+		outlinerEl.appendChild(empty);
+		return;
+	}
+	// Every object that's a member of some collection — those render inside
+	// their group card, not at root level. Everything else renders as a
+	// normal root .out-row above the group cards.
+	const groupedNames = new Set();
+	for (const g of sceneCollections) for (const n of g.memberNames) groupedNames.add(n);
+	for (const obj of objects) {
+		if (groupedNames.has(obj.name)) continue;
+		outlinerEl.appendChild(buildOutlinerRow(obj));
+	}
+	// Group cards. Each collection renders as [folder icon | name | count
+	// | eye | chevron]; expanded shows the member .out-row.nested rows in an
+	// indented container. Members resolve from the live `objects` array by
+	// name — any stale name (deleted between saves) is silently skipped.
+	for (const group of sceneCollections) {
+		const members = group.memberNames
+			.map(n => objects.find(o => o.name === n))
+			.filter(Boolean);
+		if (members.length === 0) continue;
+		// A group is "selected" (highlighted amber) when every one of its
+		// members is currently in the selectionSet — reflects the "click header
+		// to select all" gesture, dims when the user has diverged.
+		const allSelected = members.every(m => selectionSet.has(m));
+		const allHidden = members.every(m => m.visible === false);
+		const card = document.createElement("div");
+		card.className = "out-group"
+			+ (group.expanded ? " expanded" : "")
+			+ (allSelected ? " selected" : "")
+			+ (allHidden ? " hidden" : "");
+		card.innerHTML = `
+			<div class="out-group-head" title="Click to ${group.expanded ? "collapse" : "expand"} · double-click name to rename">
+				<span class="out-group-icon" title="Group">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+				</span>
+				<span class="out-name" title="Double-click to rename"></span>
+				<span class="out-group-count">${members.length}</span>
+				<div class="out-head-end">
+					<button class="out-vis" title="Show/hide group">${allHidden ? "○" : "◉"}</button>
+					<button class="out-group-ungroup" title="Ungroup (Ctrl+Shift+G)">×</button>
+				</div>
+			</div>
+			<div class="out-group-members"></div>
+		`;
+
+		const nameSpan = card.querySelector(".out-name");
+		nameSpan.textContent = group.name;
+		// pendingExpandToggle is set on single-click and consumed 220ms later.
+		// A dblclick within that window cancels it and enters rename instead,
+		// so clicking the name label twice fast opens rename cleanly without
+		// the expand-toggle flickering on and off first.
+		let pendingExpandToggle = null;
+		nameSpan.addEventListener("dblclick", e => {
+			e.stopPropagation();
+			if (pendingExpandToggle) { clearTimeout(pendingExpandToggle); pendingExpandToggle = null; }
+			const input = document.createElement("input");
+			input.type = "text";
+			input.className = "out-name out-name-edit";
+			input.maxLength = 40;
+			input.value = group.name;
+			nameSpan.replaceWith(input);
+			input.focus();
+			input.select();
+			input.addEventListener("click", ev => ev.stopPropagation());
+			let done = false;
+			const commit = (save) => {
+				if (done) return;
+				done = true;
+				if (save) {
+					const v = input.value.trim();
+					if (v) { group.name = v; saveScene?.(); }
+				}
+				refreshOutliner();
+			};
+			input.addEventListener("blur", () => commit(true));
+			input.addEventListener("keydown", ev => {
+				if (ev.key === "Enter") { ev.preventDefault(); commit(true); }
+				else if (ev.key === "Escape") { ev.preventDefault(); commit(false); }
+			});
 		});
 
-		outlinerEl.appendChild(row);
+		// × button dissolves this group specifically. Keyboard: Ctrl+Shift+G
+		// (or Ctrl+G on a group whose members are all currently selected).
+		card.querySelector(".out-group-ungroup").addEventListener("click", e => {
+			e.stopPropagation();
+			sceneCollections = sceneCollections.filter(g => g !== group);
+			refreshOutliner();
+			saveScene?.();
+		});
+
+		card.querySelector(".out-vis").addEventListener("click", e => {
+			e.stopPropagation();
+			// Toggle mirrors the "all hidden" heuristic: if every member is
+			// already hidden, show them all; otherwise hide them all.
+			const targetVisible = allHidden;
+			for (const m of members) {
+				m.visible = targetVisible;
+				if (m.userData?.primKind === "particles") m.userData._userVisible = targetVisible;
+			}
+			refreshOutliner();
+			saveScene?.();
+		});
+
+		// Single click anywhere on the group head (except the ×, eye, or an
+		// active name-rename input) toggles expand/collapse. Clicks on the
+		// name label ARE allowed to toggle — but the toggle is deferred 220ms
+		// so a double-click can cancel it and go into rename cleanly instead.
+		// Shift/Ctrl-click selects every member additively (grab-the-group
+		// escape hatch).
+		card.querySelector(".out-group-head").addEventListener("click", e => {
+			if (e.target.closest(".out-vis, .out-group-ungroup, .out-name-edit")) return;
+			const additive = e.shiftKey || e.ctrlKey || e.metaKey;
+			if (additive) {
+				let last = null;
+				for (const m of members) {
+					if (selectionSet.has(m)) {
+						selectionSet.delete(m);
+						continue;
+					}
+					selectionSet.add(m);
+					last = m;
+				}
+				clearSelectionTint();
+				for (const o of selectionSet) applySelectionTint(o);
+				if (last) {
+					selected = last;
+					window.__selectedObj = last;
+					transform.attach(last);
+					const label = last.name || last.userData.primKind || "Object";
+					forceRightPane("object", label);
+					refreshObjectInspector?.();
+				} else if (selectionSet.size === 0) {
+					selected = null;
+					window.__selectedObj = null;
+					transform.detach();
+					forceRightPane(defaultRightPane());
+				}
+				orbit.enabled = true;
+				refreshOutliner();
+				return;
+			}
+			// Plain click: toggle expand/collapse. Deferred 220ms so a double-
+			// click on the name label can cancel this (see nameSpan dblclick
+			// above) and land in rename mode instead. Non-name clicks feel
+			// like the delay isn't there since there's no dblclick to wait
+			// for on those areas.
+			const onName = !!e.target.closest(".out-name");
+			const doToggle = () => {
+				pendingExpandToggle = null;
+				group.expanded = !group.expanded;
+				refreshOutliner();
+				saveScene?.();
+			};
+			if (onName) {
+				if (pendingExpandToggle) return;
+				pendingExpandToggle = setTimeout(doToggle, 220);
+			} else {
+				doToggle();
+			}
+		});
+
+		if (group.expanded) {
+			const memberList = card.querySelector(".out-group-members");
+			for (const m of members) {
+				memberList.appendChild(buildOutlinerRow(m, { nested: true }));
+			}
+		}
+		outlinerEl.appendChild(card);
 	}
 }
 
@@ -6346,7 +6655,7 @@ const KIND_ICONS = {
 // Play-arrow used on the right side of the toolbar Generate button. Matches the
 // ▶ chip on individual workflow cells so the two paths (per-cell run vs. the
 // active-cell viewport run) visually rhyme.
-const GENERATE_ARROW_SVG = `<svg viewBox="0 0 24 24" fill="currentColor" style="width:9px;height:9px" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>`;
+const GENERATE_ARROW_SVG = `<svg viewBox="0 0 24 24" fill="currentColor" style="width:12px;height:12px" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>`;
 
 function refreshViewportGenerateBtn() {
 	const btn = document.getElementById("vp-generate");
@@ -10475,6 +10784,39 @@ window.addEventListener("keydown", (e) => {
 		isPlayingPreview ? stopPreview() : playPreview();
 		return;
 	}
+	// Ctrl+G group / Ctrl+Shift+G ungroup — Blender-style outliner
+	// collections. Preempts the browser's native "find next" so the shortcut
+	// stays predictable.
+	//
+	// Ctrl+G is a TOGGLE: if any collection is fully contained in the current
+	// selection, dissolve those collections (that's the "Ctrl+G on a group to
+	// ungroup" gesture). Otherwise create a new group from the selection.
+	// Ctrl+Shift+G always dissolves regardless of exact match.
+	if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "g") {
+		e.preventDefault();
+		if (e.shiftKey) {
+			if (dissolveCollectionsForSelection()) {
+				refreshOutliner();
+				saveScene?.();
+			}
+			return;
+		}
+		const selNames = new Set(Array.from(selectionSet).map(o => o?.name).filter(Boolean));
+		const fullyContained = sceneCollections.filter(g =>
+			g.memberNames.length > 0 && g.memberNames.every(n => selNames.has(n))
+		);
+		if (fullyContained.length > 0) {
+			sceneCollections = sceneCollections.filter(g => !fullyContained.includes(g));
+			refreshOutliner();
+			saveScene?.();
+			return;
+		}
+		if (createCollectionFromSelection()) {
+			refreshOutliner();
+			saveScene?.();
+		}
+		return;
+	}
 	if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
 		e.preventDefault();
 		stopPreview();
@@ -12175,6 +12517,18 @@ function serializeScene() {
 		workflowCells: workflowCells.map(c => ({
 			id: c.id, moduleId: c.moduleId, values: { ...c.values }, expanded: c.expanded,
 		})),
+		// Outliner-only groupings. Members referenced by name (stable across
+		// save/load). Filtered to only include names that still resolve to an
+		// existing object — deletes may have happened between saves.
+		collections: sceneCollections
+			.map(g => ({
+				id: g.id,
+				name: g.name,
+				memberNames: g.memberNames.filter(n => objects.some(o => o.name === n)),
+				expanded: g.expanded !== false,
+				visible: g.visible !== false,
+			}))
+			.filter(g => g.memberNames.length > 0),
 		particles: objects.filter(o => o.userData.primKind === "particles").map(o => ({
 			name: o.name,
 			position: o.position.toArray(),
@@ -12520,6 +12874,20 @@ async function deserializeScene(state, opts = {}) {
 	// (without this they'd stay hidden on load until the user added a camera key).
 	renderKeyframeMarkers();
 
+	// Outliner collections — restore any groups from the saved scene. Prune
+	// members that no longer exist as an object (import/asset failures during
+	// load can leave stragglers), and empty groups get dropped entirely.
+	sceneCollections = Array.isArray(state.collections)
+		? state.collections
+			.map(g => ({
+				id: g.id || (crypto.randomUUID?.() || `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`),
+				name: g.name || nextCollectionName(),
+				memberNames: (Array.isArray(g.memberNames) ? g.memberNames : []).filter(n => objects.some(o => o.name === n)),
+				expanded: g.expanded !== false,
+				visible: g.visible !== false,
+			}))
+			.filter(g => g.memberNames.length > 0)
+		: [];
 	transform.detach();
 	selected = null;
 	forceRightPane(defaultRightPane());
