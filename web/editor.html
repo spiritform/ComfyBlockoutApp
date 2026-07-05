@@ -100,6 +100,20 @@
 	   Mirroring the feed (horizontal flip) matches how every user is used
 	   to a webcam view; the take-still path un-mirrors before uploading so
 	   the saved asset reads naturally. */
+	/* Load Media overlay — same aspect-frame positioning as the render +
+	   MediaPipe overlays. Static image OR looping video takes the whole
+	   AR rectangle. Lower z than the result overlay so a generated render
+	   still shows on top when both are present. */
+	#media-overlay {
+		position: absolute;
+		background: #000;
+		overflow: hidden;
+		z-index: 5;
+	}
+	#media-overlay img, #media-overlay video {
+		width: 100%; height: 100%; object-fit: contain; display: block;
+	}
+	#media-overlay[hidden] { display: none; }
 	/* Sized/positioned dynamically by updateResultOverlayPos() so it snaps
 	   to the aspect-frame rectangle (matches #result-overlay). Same z as
 	   the AR frame, below the result overlay. */
@@ -2499,15 +2513,19 @@
 			<div class="prim-grid">
 				<button class="prim-btn" data-fx="clouds" data-label="Clouds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M7 17h11a3.5 3.5 0 0 0 .5-6.9A5.5 5.5 0 0 0 8 8.5 4 4 0 0 0 7 17z"/></svg></button>
 				<!-- MediaPipe tool — opens a browser webcam surface with
-				     MediaPipe.js pose/hand/face detection running client-side.
-				     Lets the user record a sequence, snapshot stills, and
-				     eventually feed the frame in as the viewport source. The
-				     JS wiring is stubbed for now — this button reserves the
-				     slot and fires the future entry point. -->
+				     MediaPipe.js pose/hand/face detection running client-side. -->
 				<button class="prim-btn" data-tool="mediapipe" data-label="MediaPipe" title="Webcam + MediaPipe pose/hand/face — record a sequence, take stills, or use as viewport source"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="6.5" r="2"/><path d="M12 8.5v5"/><path d="M9 10.5l3 1 3-1"/><path d="M12 13.5l-3 4"/><path d="M12 13.5l3 4"/></svg></button>
-				<button class="prim-btn" data-fx="smoke" data-label="Smoke"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 20c0-2 3-2 3-4s-3-2-3-4 3-2 3-4"/><path d="M15 19c0-2 2-2 2-4s-2-2-2-4"/></svg></button>
+				<!-- Load Media — pick an image or video from disk, display
+				     it in the viewport at the AR rectangle. Same overlay
+				     positioning as the render + MediaPipe surfaces. -->
+				<button class="prim-btn" data-tool="loadmedia" data-label="Load Media" title="Load an image or video into the viewport as a reference source"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16"/><path d="M3 12h5"/><path d="M14 10l4 3-4 3z" fill="currentColor" stroke="none"/></svg></button>
 				<button class="prim-btn" data-fx="scatter" data-label="Scatter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M3 18l9-4 9 4-9 4-9-4z"/><path d="M7 13l1.5-4 1.5 4"/><path d="M12.5 11l1.5-5 1.5 5"/><path d="M16.5 15l1.5-4 1.5 4"/></svg></button>
+				<button class="prim-btn" data-fx="smoke" data-label="Smoke" title="Smoke FX — coming soon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 20c0-2 3-2 3-4s-3-2-3-4 3-2 3-4"/><path d="M15 19c0-2 2-2 2-4s-2-2-2-4"/></svg></button>
+				<button class="prim-btn" data-tool="soon-1" data-label="Coming soon" title="Reserved slot — future tool" style="opacity:0.35"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg></button>
+				<button class="prim-btn" data-tool="soon-2" data-label="Coming soon" title="Reserved slot — future tool" style="opacity:0.35"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg></button>
+				<button class="prim-btn" data-tool="soon-3" data-label="Coming soon" title="Reserved slot — future tool" style="opacity:0.35"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg></button>
 			</div>
+			<input type="file" id="loadmedia-file" accept="image/*,video/*" hidden>
 		</div>
 
 		<div class="section collapsible" data-section="outliner">
@@ -2638,6 +2656,14 @@
 					     button always shows the ACTIVE view. -->
 					<button class="vpm-btn active" id="mode-view-toggle" title="Switch between camera view and perspective view"></button>
 				</div>
+			</div>
+			<!-- Load Media overlay — a static image or looping video shown in
+			     the AR rectangle as a reference source. Sized/positioned by
+			     updateResultOverlayPos alongside the render + MediaPipe
+			     surfaces. Toggled by the Tools > Load Media button. -->
+			<div id="media-overlay" hidden>
+				<img id="media-overlay-img" alt="" draggable="false">
+				<video id="media-overlay-vid" loop muted playsinline draggable="false"></video>
 			</div>
 			<!-- MediaPipe overlay — webcam feed + landmark canvas sized to the
 			     AR rectangle exactly like #result-overlay. Config lives in
@@ -6262,6 +6288,36 @@ function clearSelectionTint() {
 function applySelectionTint(obj) {
 	if (!obj || obj === renderCam) return;
 	if (obj.userData?.primKind === "splat") return;
+	// Clouds are a volumetric shader on a big cube. The normal-expanded hull
+	// approach paints the whole cube silhouette solid amber, which reads as
+	// "orange box" not "selected cloud". Switch to a wireframe (12-edge box)
+	// outline for clouds so you get an unmistakable bounding-box selection
+	// without hiding the fog effect underneath.
+	if (obj.userData?.primKind === "clouds") {
+		obj.traverse(c => {
+			if (!c.isMesh || !c.geometry) return;
+			const edges = new THREE.EdgesGeometry(c.geometry);
+			const mat = new THREE.LineBasicMaterial({
+				color: SELECTION_TINT,
+				transparent: true,
+				opacity: 0.9,
+				depthTest: true,
+				depthWrite: false,
+			});
+			const wire = new THREE.LineSegments(edges, mat);
+			wire.name = "__cb_selection_rim";
+			wire.renderOrder = 2001;
+			wire.matrixAutoUpdate = false;
+			wire.matrixWorldAutoUpdate = false;
+			wire.onBeforeRender = () => {
+				wire.matrix.copy(c.matrixWorld);
+				wire.matrixWorld.copy(c.matrixWorld);
+			};
+			scene.add(wire);
+			_rimOverlays.push({ host: c, mesh: wire });
+		});
+		return;
+	}
 	obj.traverse(c => {
 		if (!c.isMesh || !c.geometry) return;
 		// SkinnedMesh outlines would need per-frame bone-driven vertex expansion
@@ -7043,8 +7099,68 @@ function runTool(kind) {
 		else openMediaPipeTool();
 		return;
 	}
+	if (kind === "loadmedia") {
+		// Toggle — clicking again clears whatever's loaded and hides the
+		// overlay. Otherwise open the file picker; the picker's change
+		// handler wires the selected file into the overlay.
+		const overlay = document.getElementById("media-overlay");
+		if (overlay && !overlay.hidden) {
+			closeLoadMediaTool();
+		} else {
+			document.getElementById("loadmedia-file")?.click();
+		}
+		return;
+	}
+	if (kind && kind.startsWith("soon-")) return;
 	updateStatus(`${kind[0].toUpperCase() + kind.slice(1)} tool — coming soon`);
 }
+
+// Load Media tool — displays an image or looping video in the AR
+// rectangle as a viewport reference source. Toggle off by clicking the
+// button again; state auto-cleans up.
+function openLoadMediaTool(file) {
+	const overlay = document.getElementById("media-overlay");
+	const img = document.getElementById("media-overlay-img");
+	const vid = document.getElementById("media-overlay-vid");
+	if (!overlay || !img || !vid || !file) return;
+	// Revoke any previous blob URL so we don't pile them up.
+	if (overlay.dataset.blobUrl) {
+		try { URL.revokeObjectURL(overlay.dataset.blobUrl); } catch {}
+	}
+	const url = URL.createObjectURL(file);
+	overlay.dataset.blobUrl = url;
+	const isVideo = file.type.startsWith("video/");
+	img.hidden = isVideo;
+	vid.hidden = !isVideo;
+	if (isVideo) {
+		vid.src = url;
+		vid.play().catch(() => {});
+	} else {
+		img.src = url;
+	}
+	overlay.hidden = false;
+	updateResultOverlayPos?.();
+	document.querySelector('.prim-btn[data-tool="loadmedia"]')?.classList.add("active");
+}
+function closeLoadMediaTool() {
+	const overlay = document.getElementById("media-overlay");
+	const img = document.getElementById("media-overlay-img");
+	const vid = document.getElementById("media-overlay-vid");
+	if (!overlay) return;
+	if (overlay.dataset.blobUrl) {
+		try { URL.revokeObjectURL(overlay.dataset.blobUrl); } catch {}
+		delete overlay.dataset.blobUrl;
+	}
+	if (vid) { try { vid.pause(); } catch {}; vid.removeAttribute("src"); vid.load?.(); }
+	if (img) img.removeAttribute("src");
+	overlay.hidden = true;
+	document.querySelector('.prim-btn[data-tool="loadmedia"]')?.classList.remove("active");
+}
+document.getElementById("loadmedia-file")?.addEventListener("change", (e) => {
+	const f = e.target.files?.[0];
+	e.target.value = "";
+	if (f) openLoadMediaTool(f);
+});
 
 // ── MediaPipe tool ────────────────────────────────────────────────
 // Modal-hosted webcam + on-device landmark detection. Uses @mediapipe/
@@ -11766,6 +11882,14 @@ function updateResultOverlayPos() {
 		mpOverlay.style.height = height;
 		mpOverlay.style.left = left;
 		mpOverlay.style.top = top;
+	}
+	// Load Media overlay — same treatment.
+	const medOverlay = document.getElementById("media-overlay");
+	if (medOverlay && !medOverlay.hidden) {
+		medOverlay.style.width = width;
+		medOverlay.style.height = height;
+		medOverlay.style.left = left;
+		medOverlay.style.top = top;
 	}
 }
 
