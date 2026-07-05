@@ -1321,23 +1321,13 @@
 	/* Nested member rows — compact list style: shorter, no color/image slots,
 	   no expandable prompt textarea. Keeps the group card readable when it
 	   contains 4+ items. Click still selects the object like a root row. */
+	/* Nested rows inherit the compact swatch/text/eye size from .out-row.
+	   Only difference from root is the darker background + tighter padding
+	   so members visually sit inside their group card. */
 	.out-row.nested {
 		padding: 2px 6px;
 		background: rgba(0,0,0,0.15);
 	}
-	.out-row.nested .out-head {
-		grid-template-columns: 14px 1fr auto;
-		gap: 6px;
-	}
-	/* Compact nested row — smaller swatch, smaller text, tighter padding so
-	   4+ members fit in the same vertical space as a single root card. Image
-	   slot + expand toggle are stripped (nested row = swatch | name | eye). */
-	.out-row.nested .out-color { width: 12px; height: 12px; border-radius: 3px; }
-	.out-row.nested .out-img,
-	.out-row.nested .out-expand-toggle { display: none; }
-	.out-row.nested .out-expand { display: none !important; }
-	.out-row.nested .out-name { font-size: 10px; }
-	.out-row.nested .out-vis { width: 18px; height: 18px; font-size: 10px; }
 	.out-empty {
 		padding: 14px 12px; border-radius: 5px;
 		border: 1px dashed rgba(255,255,255,0.1);
@@ -1346,7 +1336,7 @@
 	}
 	.out-row {
 		display: flex; flex-direction: column;
-		padding: 6px 8px; border-radius: 5px;
+		padding: 4px 8px; border-radius: 5px;
 		cursor: pointer;
 		background: rgba(255,255,255,0.04);
 		/* Kill browser text-selection on shift-click — otherwise Sphere.001
@@ -1355,11 +1345,32 @@
 		user-select: none; -webkit-user-select: none;
 	}
 	.out-name-edit { user-select: text; -webkit-user-select: text; }
+	/* Text-highlight in the rename input — override the browser's default
+	   blue with a soft amber tint that matches the app's accent language,
+	   so double-click-to-rename reads as an intentional in-app affordance. */
+	.out-name-edit::selection { background: rgba(255,180,84,0.35); color: #fff; }
+	.out-name-edit::-moz-selection { background: rgba(255,180,84,0.35); color: #fff; }
 	.out-head {
 		display: grid;
-		grid-template-columns: 26px 26px 1fr auto;
+		grid-template-columns: 14px 1fr auto;
 		align-items: center; gap: 8px;
 	}
+	/* Root-level rows are now compact: [color | name | eye | expand-toggle].
+	   The image-ref tile lives inside the expand panel (revealed by the ▾)
+	   next to the prompt textarea, so the collapsed row stays a clean glance
+	   surface but per-object image refs are still one click away. */
+	.out-row .out-color { width: 12px; height: 12px; border-radius: 3px; }
+	.out-row .out-name { font-size: 10px; }
+	.out-row .out-vis { width: 18px; height: 18px; font-size: 10px; }
+	.out-row .out-expand-toggle { width: 18px; height: 18px; font-size: 12px; }
+	/* Expand panel — horizontal layout so the image slot sits left of the
+	   prompt textarea, sharing the row's vertical space. */
+	.out-row .out-expand { flex-direction: row; align-items: stretch; gap: 8px; }
+	.out-row .out-expand .out-img {
+		width: 44px; height: auto; min-height: 44px; flex: 0 0 44px;
+		align-self: stretch;
+	}
+	.out-row .out-expand .out-context { flex: 1; min-width: 0; }
 	.out-head-end { display: flex; align-items: center; gap: 0; }
 	.out-expand {
 		display: none;
@@ -1753,7 +1764,7 @@
 	.vt-btn {
 		height: 26px; padding: 0 12px; border-radius: 5px; border: none;
 		background: transparent; color: rgba(255,255,255,0.4);
-		font-size: 11px; cursor: pointer; letter-spacing: 0;
+		font-size: 10px; font-weight: 600; cursor: pointer; letter-spacing: 0;
 		display: inline-flex; align-items: center; gap: 6px;
 		font-family: inherit;
 	}
@@ -3836,6 +3847,25 @@ transform.addEventListener("dragging-changed", (e) => {
 const transformHelper = transform.getHelper ? transform.getHelper() : transform;
 scene.add(transformHelper);
 
+// TransformControls draws a full-length axis-extension line when the user
+// hovers/drags an axis handle (the AXIS / START / END / DELTA children of the
+// helper). Its internal update pass re-sets opacity=1.0 and color=yellow on
+// the hovered handle every frame, so a one-shot material.opacity change gets
+// stomped. Instead, install onBeforeRender on each Line/LineSegments to clamp
+// opacity BEFORE each draw — 0.22 keeps the line as a subtle spatial cue
+// without cutting the viewport with a stark bar.
+transformHelper.traverse(c => {
+	if (!c?.material) return;
+	if (c.isLine || c.isLineSegments) {
+		c.material.transparent = true;
+		const prev = c.onBeforeRender;
+		c.onBeforeRender = function(...args) {
+			this.material.opacity = 0.22;
+			if (prev) prev.apply(this, args);
+		};
+	}
+});
+
 // Render-camera wireframe — a minimal body-box + light-grey frustum cone. The
 // frustum's far rectangle is sized to the currently selected aspect ratio, so
 // 16:9 looks visibly wider than 1:1. Visible only in Scene view; ticked from
@@ -3965,14 +3995,13 @@ function setActiveView(which) {
 }
 window.setActiveView = setActiveView;
 
-// The two color args are (centerAxisColor, gridLineColor). Center axis matches
-// the field color now — at 0.18 opacity even a slightly-brighter center line
-// reads as a hard white bar cutting the viewport. If you want origin cues,
-// switch to an AxesHelper (dedicated color-coded arrows) rather than boosting
-// the grid axis line.
-let grid = new THREE.GridHelper(20, 20, 0x888888, 0x888888);
+// The two color args are (centerAxisColor, gridLineColor). Center axis sits
+// just a hair brighter than the field so the X/Z origin lines are legible as
+// spatial cues without reading as a stark white bar (the previous 0xdddddd
+// was too much at grazing angles; 0x888888 same-as-field wiped them out).
+let grid = new THREE.GridHelper(20, 20, 0xd0d0d8, 0x888888);
 grid.material.transparent = true;
-grid.material.opacity = 0.18;
+grid.material.opacity = 0.11;
 scene.add(grid);
 
 const hemi = new THREE.HemisphereLight(0xb0c4ff, 0x202020, 0.35);
@@ -6001,10 +6030,6 @@ function buildOutlinerRow(obj, { nested = false } = {}) {
 		row.innerHTML = `
 			<div class="out-head">
 				<input type="color" class="out-color" value="${hex}" title="Change color">
-				<label class="out-img${hasImage ? " has-image" : ""}" title="${hasImage ? "Click to change · right-click to remove" : "Upload reference image"}" style="${imgUrl ? `background-image:url('${imgUrl}')` : ""}">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
-					<input type="file" class="out-img-input" accept="image/*" hidden>
-				</label>
 				<span class="out-name" title="Double-click to rename"></span>
 				<div class="out-head-end">
 					<button class="out-vis" title="Show/hide">${obj.visible === false ? "○" : "◉"}</button>
@@ -6012,6 +6037,10 @@ function buildOutlinerRow(obj, { nested = false } = {}) {
 				</div>
 			</div>
 			<div class="out-expand">
+				<label class="out-img${hasImage ? " has-image" : ""}" title="${hasImage ? "Click to change · right-click to remove" : "Upload reference image"}" style="${imgUrl ? `background-image:url('${imgUrl}')` : ""}">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+					<input type="file" class="out-img-input" accept="image/*" hidden>
+				</label>
 				<textarea class="out-context" placeholder="Prompting context for this object (style, material, role in scene…)" rows="3"></textarea>
 			</div>
 		`;
@@ -6121,8 +6150,15 @@ function buildOutlinerRow(obj, { nested = false } = {}) {
 
 		const nameSpan = row.querySelector(".out-name");
 		nameSpan.textContent = obj.name;
+		// pendingNameSelect defers select() when the click landed on the name
+		// span, giving the browser time to fire dblclick if a second click is
+		// coming. Without it, the first click's refreshOutliner() would rebuild
+		// the DOM and the dblclick would never fire (the second click lands
+		// on a different element than the first).
+		let pendingNameSelect = null;
 		nameSpan.addEventListener("dblclick", e => {
 			e.stopPropagation();
+			if (pendingNameSelect) { clearTimeout(pendingNameSelect); pendingNameSelect = null; }
 			const input = document.createElement("input");
 			input.type = "text";
 			input.className = "out-name out-name-edit";
@@ -6175,7 +6211,18 @@ function buildOutlinerRow(obj, { nested = false } = {}) {
 		if (e.target.closest(".out-vis")) { toggleVisibility(obj); return; }
 		if (e.target.closest(".out-expand-toggle, .out-context")) return;
 		if (e.target.closest(".out-color, .out-img, .out-name-edit")) return;
-		select(obj, { additive: e.shiftKey || e.ctrlKey || e.metaKey });
+		// Name-label clicks defer select() 220ms so a dblclick can land in
+		// rename mode instead. Other click targets fire select immediately.
+		const additive = e.shiftKey || e.ctrlKey || e.metaKey;
+		if (e.target.closest(".out-name")) {
+			if (pendingNameSelect) return;
+			pendingNameSelect = setTimeout(() => {
+				pendingNameSelect = null;
+				select(obj, { additive });
+			}, 220);
+			return;
+		}
+		select(obj, { additive });
 	});
 
 	return row;
@@ -11503,18 +11550,21 @@ function refreshAnimPaths() {
 			}
 			const lg = new THREE.BufferGeometry().setFromPoints(pts);
 			const lm = new THREE.LineBasicMaterial({
-				color: colorHex, transparent: true, opacity: 0.35, depthTest: false,
+				color: colorHex, transparent: true, opacity: 0.6, depthTest: false,
 			});
 			const line = new THREE.Line(lg, lm);
 			line.renderOrder = 999;
 			animPathsGroup.add(line);
 		}
 
-		// Square dots at each keyframe position — 2D screen-space size (no perspective shrink).
+		// Square dots at each keyframe position — 2D screen-space size (no
+		// perspective shrink). Neutral light-grey so the dots read brighter
+		// than the tinted path line (visual hierarchy: dots = focal points,
+		// line = connecting geometry).
 		const pg = new THREE.BufferGeometry().setFromPoints(ks.map(k => k.pos));
 		const pm = new THREE.PointsMaterial({
-			color: colorHex, size: 5, sizeAttenuation: false,
-			transparent: true, opacity: 0.8, depthTest: false,
+			color: 0xd0d0d8, size: 7, sizeAttenuation: false,
+			transparent: true, opacity: 0.95, depthTest: false,
 		});
 		const points = new THREE.Points(pg, pm);
 		points.renderOrder = 1000;
@@ -11530,7 +11580,7 @@ function refreshAnimPaths() {
 		const cpts = keyframes.map(k => k.pos);
 		const clg = new THREE.BufferGeometry().setFromPoints(cpts);
 		const clm = new THREE.LineBasicMaterial({
-			color: 0xcccdd2, transparent: true, opacity: 0.35, depthTest: false,
+			color: 0xcccdd2, transparent: true, opacity: 0.6, depthTest: false,
 		});
 		const cline = new THREE.Line(clg, clm);
 		cline.renderOrder = 999;
@@ -11541,10 +11591,13 @@ function refreshAnimPaths() {
 // Hover highlight overlay — single bright dot that snaps onto the path keyframe the
 // mouse is currently over. Sits one renderOrder higher than the path's own dots so it
 // always wins the depth test (which is already disabled for both).
+// Hover highlight — blue chip so it reads as a "clickable" affordance
+// against the path's own dim white/tint dots (Blender/Maya use similar
+// blue hover cues on timeline scrubbers + spline keys).
 const hoverDot = new THREE.Points(
 	new THREE.BufferGeometry().setFromPoints([new THREE.Vector3()]),
 	new THREE.PointsMaterial({
-		color: 0xffffff, size: 10, sizeAttenuation: false,
+		color: 0x5aa4ff, size: 10, sizeAttenuation: false,
 		transparent: true, opacity: 1.0, depthTest: false,
 	}),
 );
