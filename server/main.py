@@ -1761,6 +1761,39 @@ async def workflows_register(request: Request):
     return {"module": _module_dict(mod), "manifest": manifest}
 
 
+@app.post("/api/workflows/rename")
+async def workflows_rename(request: Request):
+    """Rename a workflow module's user-facing label — updates the `label`
+    field in the module's meta.json in place and re-registers the module so
+    the change picks up without a server restart. The `id` stays untouched
+    (renaming that would require moving the JSON files + updating every
+    saved cell that references it, out of scope for a quick rename)."""
+    body = await request.json()
+    mod_id = str(body.get("id", "")).strip()
+    label = str(body.get("label", "")).strip()
+    if not mod_id or not _SAFE_MODULE_ID.match(mod_id):
+        raise HTTPException(400, "id must be snake_case, [a-zA-Z0-9_-] up to 64 chars")
+    if not label:
+        raise HTTPException(400, "label cannot be empty")
+    if len(label) > 120:
+        raise HTTPException(400, "label too long (max 120 chars)")
+    meta_path = _WORKFLOWS_DIR / f"{mod_id}.meta.json"
+    if not meta_path.exists():
+        raise HTTPException(404, f"no manifest at {meta_path}")
+    try:
+        manifest = json.loads(meta_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise HTTPException(500, f"manifest is not valid JSON: {e}") from e
+    manifest["label"] = label
+    meta_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    from server.modules._workflow_shared import register_manifest_by_name
+    mod = register_manifest_by_name(mod_id)
+    if not mod:
+        raise HTTPException(500, "manifest saved but hot-register failed — restart to pick it up")
+    MODULES[mod.id] = mod
+    return {"module": _module_dict(mod), "label": label}
+
+
 # System prompt for the manifest-writer agent. The tool schema constrains the
 # shape; this text explains WHICH node holds a user prompt vs a machine seed vs
 # a load-image slot, so the model doesn't misroute.
@@ -1784,6 +1817,7 @@ Rules:
 - Prefer FEWER inputs over more. Only expose things the user must set for a useful generation.
 - ALWAYS expose the KSampler `seed` widget via `type: "seed"` — the UI renders a 🎲/🔒 toggle so the user gets random-per-run by default, with the ability to lock a value they liked. This is not a "hide it" input; users want reproducibility.
 - If the workflow has a ControlNet / IPAdapter / Loras strength that materially changes the output (typical range 0-1), expose it via `type: "number"` with `default`, `min: 0`, `max: 1`, `step: 0.05`. Same for guidance/CFG when the workflow author left it as a widget rather than baking it in.
+- Comfy COMBO widgets (dropdowns of enumerated strings — AIO Aux Preprocessor's `preprocessor`, KSampler's `sampler_name`/`scheduler`, checkpoint pickers, etc.) MUST be exposed via `type: "dropdown"` with the full `options` array copied verbatim from the node's schema. Never fall back to a plain text field for these — users can't remember every valid string, and typos silently fail at runtime. Always set `default` to the workflow's current value so the picker opens on the same option the author picked.
 
 4. Preprocessor previews (INTERMEDIATES). If the workflow has a preprocessor step that produces a visualisable image the user would want to see (Depth-Anything / Zoe / Marigold / MiDaS depth, Canny / HED / Lineart / Scribble edges, OpenPose, Normal, Seg, etc.), add an entry to `intermediates`:
    `{ name, label, source_node_id, source_slot }`
@@ -1810,14 +1844,19 @@ _MANIFEST_TOOL = {
                     "type": "object",
                     "properties": {
                         "name": {"type": "string", "description": "kwarg name, snake_case"},
-                        "type": {"type": "string", "enum": ["textarea", "text", "scene-image", "number", "seed"]},
+                        "type": {"type": "string", "enum": ["textarea", "text", "scene-image", "number", "seed", "dropdown"]},
                         "required": {"type": "boolean"},
                         "placeholder": {"type": "string"},
                         "label": {"type": "string"},
-                        "default": {"description": "Optional default value for number/seed fields."},
+                        "default": {"description": "Optional default value for number/seed/dropdown fields."},
                         "min": {"type": "number"},
                         "max": {"type": "number"},
                         "step": {"type": "number"},
+                        "options": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "For type='dropdown' — list of allowed values shown as a <select> in the editor. Forwarded as a plain string to the widget.",
+                        },
                         "patch": {
                             "type": "object",
                             "properties": {
@@ -2584,7 +2623,7 @@ EDITOR_TOOLS = [
                             },
                             "type": {
                                 "type": "string",
-                                "enum": ["textarea", "text", "scene-image", "number", "seed"],
+                                "enum": ["textarea", "text", "scene-image", "number", "seed", "dropdown"],
                                 "description": (
                                     "UI control type. 'textarea' = multi-line prompt, 'text' = "
                                     "single-line, 'scene-image' = uses the editor's viewport "
@@ -2593,7 +2632,11 @@ EDITOR_TOOLS = [
                                     "'number' = numeric field (supports optional `default`, `min`, "
                                     "`max`, `step`), 'seed' = numeric field with a 🎲/🔒 random-vs-"
                                     "fixed toggle. Patch 'seed' onto KSampler.seed (or an int "
-                                    "primitive feeding it) so a fresh int is minted per run."
+                                    "primitive feeding it) so a fresh int is minted per run. "
+                                    "'dropdown' = <select> populated from `options` — use this for "
+                                    "any Comfy COMBO widget (preprocessor pickers, sampler names, "
+                                    "checkpoint names, etc.). The selected string is forwarded "
+                                    "verbatim to the widget."
                                 ),
                             },
                             "required": {"type": "boolean"},
@@ -2605,10 +2648,15 @@ EDITOR_TOOLS = [
                                 "type": "string",
                                 "description": "Optional custom UI label (falls back to `name`).",
                             },
-                            "default": {"description": "Optional default value for number/seed fields (e.g. 0.8 for a ControlNet strength)."},
+                            "default": {"description": "Optional default value for number/seed/dropdown fields (e.g. 0.8 for a ControlNet strength, 'DepthAnythingV2Preprocessor' for an AIO Aux preprocessor picker)."},
                             "min": {"type": "number", "description": "Optional numeric lower bound (number type)."},
                             "max": {"type": "number", "description": "Optional numeric upper bound (number type)."},
                             "step": {"type": "number", "description": "Optional numeric step (e.g. 0.05 for strengths, 1 for counts)."},
+                            "options": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "For type='dropdown' — full list of allowed values shown as a <select>. Ordered exactly as they should appear in the menu. Include every valid option from the Comfy COMBO widget so the user isn't guessing.",
+                            },
                             "patch": {
                                 "type": "object",
                                 "description": (

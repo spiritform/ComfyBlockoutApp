@@ -101,16 +101,16 @@
     }
   },
   "9": {
-    "class_type": "DepthAnythingPreprocessor",
+    "class_type": "AIO_Preprocessor",
     "_meta": {
-      "title": "Depth Anything Preprocessor"
+      "title": "AIO Aux Preprocessor"
     },
     "inputs": {
       "image": [
         "10",
         0
       ],
-      "ckpt_name": "depth_anything_vitl14.pth",
+      "preprocessor": "DepthAnythingV2Preprocessor",
       "resolution": 1024
     }
   },

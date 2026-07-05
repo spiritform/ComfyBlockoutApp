@@ -94,6 +94,64 @@
 		box-shadow: 0 30px 80px rgba(0,0,0,0.55);
 	}
 	.modal-card.wide { width: min(720px, 94vw); }
+	/* MediaPipe viewport overlay — positioned/sized to the AR rectangle by
+	   the aspect-frame layout, same as #result-overlay. Video + canvas
+	   share a grid cell so landmarks paint on top of the mirrored feed.
+	   Mirroring the feed (horizontal flip) matches how every user is used
+	   to a webcam view; the take-still path un-mirrors before uploading so
+	   the saved asset reads naturally. */
+	/* Sized/positioned dynamically by updateResultOverlayPos() so it snaps
+	   to the aspect-frame rectangle (matches #result-overlay). Same z as
+	   the AR frame, below the result overlay. */
+	#mediapipe-overlay {
+		position: absolute;
+		background: #000;
+		overflow: hidden;
+		z-index: 6;
+	}
+	#mediapipe-overlay video,
+	#mediapipe-overlay canvas {
+		position: absolute; inset: 0;
+		width: 100%; height: 100%;
+		object-fit: cover;
+		transform: scaleX(-1);
+	}
+	#mediapipe-overlay[hidden] { display: none; }
+	.mp-status {
+		position: absolute; top: 8px; left: 10px;
+		font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+		color: rgba(255,255,255,0.55);
+		background: rgba(0,0,0,0.35);
+		padding: 3px 8px; border-radius: 3px;
+		pointer-events: none;
+		z-index: 2;
+	}
+	/* Mode picker inside the right-pane MediaPipe properties. Four segments
+	   share a pill container; active tab tinted amber. */
+	.mp-mode-tabs {
+		display: flex; gap: 2px;
+		background: rgba(255,255,255,0.04);
+		border-radius: 5px; padding: 2px;
+	}
+	.mp-mode-tabs button {
+		flex: 1;
+		background: transparent; border: none; cursor: pointer;
+		color: rgba(255,255,255,0.55);
+		font: inherit; font-size: 10px; font-weight: 600;
+		padding: 6px 10px; border-radius: 4px;
+		letter-spacing: 0.04em;
+	}
+	.mp-mode-tabs button:hover { color: #e6e6ea; }
+	.mp-mode-tabs button.active { background: rgba(255,180,84,0.18); color: #ffd28a; }
+	.mp-still-btn {
+		width: 100%;
+		background: rgba(255,255,255,0.06); border: none; cursor: pointer;
+		color: rgba(255,255,255,0.85);
+		font: inherit; font-size: 11px; font-weight: 600;
+		padding: 8px 14px; border-radius: 5px;
+	}
+	.mp-still-btn:hover { background: rgba(255,180,84,0.18); color: #ffd28a; }
+	.mp-still-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 	.modal-cols {
 		display: grid; grid-template-columns: 1fr 1fr;
 		gap: 26px 32px;
@@ -202,6 +260,25 @@
 	.th-btn.secondary:hover { background: rgba(255,255,255,0.08); color: #fff; }
 
 	#main-row { flex: 1; min-height: 0; display: flex; }
+	/* Bottom bumper — a slim row below everything so the timeline / panels
+	   don't sit flush against the taskbar edge. Three flex slots (left,
+	   center, right) available for future global chips. */
+	#bottom-bumper {
+		flex: 0 0 24px;
+		display: flex; align-items: center;
+		padding: 0 14px; gap: 8px;
+		background: #16181d;
+		border-top: 1px solid rgba(255,255,255,0.05);
+		font-size: 10px; color: rgba(255,255,255,0.4);
+		letter-spacing: 0.04em;
+	}
+	.bumper-brand { font-size: 10px; color: rgba(255,255,255,0.4); letter-spacing: 0.04em; }
+	.bumper-brand strong { color: rgba(255,255,255,0.7); font-weight: 600; letter-spacing: 0.02em; }
+	.bumper-brand-by { opacity: 0.55; margin: 0 4px; }
+	.bumper-slot { display: flex; align-items: center; gap: 8px; }
+	.bumper-slot-left { flex: 0 0 auto; }
+	.bumper-slot-center { flex: 1 1 auto; justify-content: center; }
+	.bumper-slot-right { flex: 0 0 auto; }
 
 	/* Floating result viewer — shows the latest generation. */
 	#result-toast {
@@ -777,7 +854,15 @@
 		background: rgba(0,0,0,0.28);
 		padding: 8px;
 		display: flex; flex-direction: column; gap: 8px;
+		/* Thin dark scrollbar — Firefox gets `scrollbar-width` + colors,
+		   Chromium honors the ::-webkit-scrollbar rules below. */
+		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.08) transparent;
 	}
+	.assistant-log::-webkit-scrollbar { width: 4px; }
+	.assistant-log::-webkit-scrollbar-track { background: transparent; }
+	.assistant-log::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+	.assistant-log::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.16); }
+	.assistant-log::-webkit-scrollbar-button { display: none; }
 	/* When the assistant is docked to the right pane it takes the full column —
 	   its own log grows/shrinks to fill instead of using the fixed 240px height. */
 	#rp-pane-assistant {
@@ -968,6 +1053,12 @@
 		color: rgba(255,255,255,0.55); cursor: pointer; transition: background 0.12s, color 0.12s;
 	}
 	.prim-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+	/* Active tool — amber icon (currentColor drives the SVG stroke) to read
+	   as "this is on". Background stays neutral so the chip doesn't shout.
+	   Used for stateful tools (e.g. MediaPipe camera is running); not for
+	   one-shot primitive adders. */
+	.prim-btn.active { background: rgba(255,180,84,0.08); color: #ffb454; }
+	.prim-btn.active:hover { background: rgba(255,180,84,0.14); color: #ffd28a; }
 	.prim-btn svg { width: 16px; height: 16px; }
 
 	/* Post FX chip list — one row per effect. Head has icon + name + on/off
@@ -1363,14 +1454,17 @@
 	.out-row .out-name { font-size: 10px; }
 	.out-row .out-vis { width: 18px; height: 18px; font-size: 10px; }
 	.out-row .out-expand-toggle { width: 18px; height: 18px; font-size: 12px; }
-	/* Expand panel — horizontal layout so the image slot sits left of the
-	   prompt textarea, sharing the row's vertical space. */
-	.out-row .out-expand { flex-direction: row; align-items: stretch; gap: 8px; }
+	/* Expand panel — image slot (square) sits left of the prompt textarea,
+	   aligned to the top so a taller prompt doesn't stretch the slot. */
+	.out-row .out-expand { flex-direction: row; align-items: flex-start; gap: 8px; }
 	.out-row .out-expand .out-img {
-		width: 44px; height: auto; min-height: 44px; flex: 0 0 44px;
-		align-self: stretch;
+		width: 48px; height: 48px; flex: 0 0 48px;
 	}
 	.out-row .out-expand .out-context { flex: 1; min-width: 0; }
+	/* Match the row's horizontal padding (8px) on the bottom when expanded
+	   so the prompt textarea + image slot don't look cramped against the
+	   card's bottom edge. Collapsed rows keep the 4px vertical for density. */
+	.out-row.expanded { padding-bottom: 8px; }
 	.out-head-end { display: flex; align-items: center; gap: 0; }
 	.out-expand {
 		display: none;
@@ -1752,7 +1846,7 @@
 	#viewport-toolbar {
 		flex: 0 0 40px;
 		display: flex; align-items: center; gap: 4px;
-		padding: 0 14px;
+		padding: 0 6px;
 		background: #0a0a10;
 	}
 	.vt-group { display: flex; align-items: center; gap: 2px; }
@@ -1779,6 +1873,20 @@
 	.vt-icon-btn { padding: 0 8px; }
 	.vt-icon-btn svg { width: 14px; height: 14px; display: block; }
 	.vt-sep { flex: 1; }
+	/* Right-panel Generate button — mirrors the toolbar chip (grey + play
+	   arrow on right) but stretches to fill the pane so it's a large hit
+	   target under the inputs. Runs the same per-cell ▶ pipeline so busy
+	   state on the toolbar chip stays in sync. */
+	.rp-generate-btn {
+		display: flex; align-items: center; justify-content: center;
+		gap: 8px; flex-direction: row-reverse;
+		width: 100%; height: 34px; margin-top: 12px;
+		background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.75);
+		border: none; border-radius: 5px; cursor: pointer;
+		font: inherit; font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+	}
+	.rp-generate-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+	.rp-generate-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 	/* Toolbar Generate button — subtle grey chip with a play-arrow on the RIGHT,
 	   echoing the ▶ chip on individual workflow cells. row-reverse flips the
 	   DOM order [icon, label] into visual [label, icon] without touching the
@@ -2045,8 +2153,144 @@
 		flex: 0 0 320px; height: 100%;
 		background: #131318;
 		overflow: hidden; display: flex; flex-direction: column;
+		/* --rp-top-basis is set by the split-handle drag logic and persisted
+		   to localStorage. Default 48% keeps the agent and property switcher
+		   roughly balanced on first run. */
+		--rp-top-basis: 48%;
 	}
 	#right-panel[hidden] { display: none; }
+	/* Two-zone layout — visually: property/asset switcher on TOP, AI Agent
+	   on BOTTOM. DOM order is preserved (agent element first), the visual
+	   swap comes from flex `order`; `--rp-top-basis` still controls the
+	   Agent zone size (below the handle). When the agent is disabled in
+	   Settings, the whole agent zone + handle are hidden and the switcher
+	   fills the column (via #right-panel.no-agent). */
+	#rp-zone-top {
+		flex: 0 0 var(--rp-top-basis);
+		min-height: 80px;
+		display: flex; flex-direction: column;
+		overflow: hidden;
+		border-top: 1px solid rgba(255,255,255,0.04);
+		order: 3;
+	}
+	#rp-split-handle { order: 2; }
+	#rp-zone-bottom { order: 1; }
+	#right-panel.no-agent #rp-zone-top,
+	#right-panel.no-agent #rp-split-handle { display: none; }
+	#right-panel.no-agent #rp-zone-bottom { flex: 1 1 auto; }
+	#rp-zone-top-header {
+		flex: 0 0 40px;
+		padding: 0 20px;
+		display: flex; align-items: center; gap: 6px;
+		white-space: nowrap;
+		cursor: pointer; user-select: none;
+	}
+	.rp-zone-caret {
+		font-size: 10px; color: rgba(255,255,255,0.35);
+		display: inline-block; transition: transform 0.15s ease, color 0.12s;
+	}
+	#rp-zone-top-header:hover .rp-zone-caret { color: rgba(255,255,255,0.7); }
+	/* Collapsed state — chat log hidden, zone shrinks to header + context
+	   chip + input row (~content height). Split handle stays visible so
+	   the user can also drag up to uncollapse. Caret flips from ▾ → ▸. */
+	#right-panel.rp-agent-collapsed #rp-zone-top { flex: 0 0 auto; }
+	#right-panel.rp-agent-collapsed #rp-zone-top-body { flex: 0 0 auto; }
+	#right-panel.rp-agent-collapsed .assistant-log { display: none; }
+	#right-panel.rp-agent-collapsed #rp-pane-assistant .assistant-shell { flex: 0 0 auto; }
+	#right-panel.rp-agent-collapsed .rp-zone-caret { transform: rotate(-90deg); }
+	/* Workflow-cell custom dropdown (COMBO picker) — replaces the native
+	   <select> so the open option list can be fully styled. Layout is
+	   [label above / trigger below], trigger opens an absolutely-positioned
+	   scrollable menu, options tint amber on hover / selected. */
+	.wf-dropdown { position: relative; display: block; }
+	.wf-dropdown-label {
+		font-size: 10px; color: rgba(255,255,255,0.55);
+		margin-bottom: 4px;
+	}
+	.wf-dropdown-btn {
+		display: flex; align-items: center; justify-content: space-between;
+		width: 100%; box-sizing: border-box;
+		background: rgba(0,0,0,0.28);
+		border: 1px solid rgba(255,255,255,0.06);
+		border-radius: 4px;
+		padding: 5px 8px;
+		color: #e6e6ea; font: inherit; font-size: 11px; line-height: 1.2;
+		cursor: pointer; outline: none;
+		transition: border-color 0.12s, background 0.12s;
+	}
+	.wf-dropdown-btn:hover { border-color: rgba(255,180,84,0.4); background: rgba(0,0,0,0.4); }
+	.wf-dropdown.open .wf-dropdown-btn { border-color: rgba(255,180,84,0.55); background: rgba(0,0,0,0.4); }
+	.wf-dropdown-value {
+		overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+	}
+	.wf-dropdown-chevron {
+		width: 10px; height: 10px; flex: 0 0 10px; margin-left: 8px;
+		color: #ffb454;
+		transition: transform 0.15s ease;
+	}
+	.wf-dropdown.open .wf-dropdown-chevron { transform: rotate(180deg); }
+	.wf-dropdown-menu {
+		position: absolute; left: 0; right: 0; top: calc(100% + 3px);
+		z-index: 60;
+		background: #14141a;
+		border: 1px solid rgba(255,255,255,0.08);
+		border-radius: 4px;
+		padding: 3px;
+		max-height: 280px; overflow-y: auto;
+		box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+		display: flex; flex-direction: column; gap: 1px;
+		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+	}
+	.wf-dropdown-menu::-webkit-scrollbar { width: 4px; }
+	.wf-dropdown-menu::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+	.wf-dropdown-menu[hidden] { display: none; }
+	.wf-dropdown-opt {
+		display: block; width: 100%; text-align: left;
+		background: transparent; border: none;
+		color: rgba(255,255,255,0.8);
+		padding: 6px 8px; border-radius: 3px;
+		font: inherit; font-size: 11px; line-height: 1.3; cursor: pointer;
+		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+		transition: background 0.08s, color 0.08s;
+		/* flex-shrink: 0 — without this the flex parent tries to squish
+		   every option into max-height:280px before overflow-y kicks in,
+		   producing thin "glitch line" rows. */
+		flex-shrink: 0;
+	}
+	.wf-dropdown-opt:hover { background: rgba(255,180,84,0.14); color: #ffd28a; }
+	.wf-dropdown-opt.selected {
+		background: rgba(255,180,84,0.2);
+		color: #ffd28a;
+	}
+	.wf-dropdown-opt.selected:hover { background: rgba(255,180,84,0.28); }
+
+	/* Drag highlight on chat drop targets — the input row and the log
+	   scroll surface both accept asset drops; amber outline signals
+	   "release here". Applied by the assistant IIFE that wires drop. */
+	.assistant-input-row.cb-drop-target,
+	#assistant-log.cb-drop-target {
+		outline: 1px dashed rgba(255,180,84,0.65);
+		outline-offset: -2px;
+		background: rgba(255,180,84,0.05);
+	}
+	#rp-zone-top-body {
+		flex: 1 1 auto; min-height: 0;
+		display: flex; flex-direction: column;
+		overflow: hidden;
+	}
+	#rp-zone-top-body > .rp-pane { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+	#rp-zone-bottom {
+		flex: 1 1 auto; min-height: 80px;
+		display: flex; flex-direction: column;
+		overflow: hidden;
+	}
+	#rp-split-handle {
+		flex: 0 0 5px;
+		cursor: row-resize;
+		background: rgba(255,255,255,0.12);
+		transition: background 0.12s;
+	}
+	#rp-split-handle:hover, #rp-split-handle.dragging { background: rgba(255,180,84,0.5); }
 	#rp-header {
 		flex: 0 0 40px;
 		padding: 0 20px;
@@ -2064,7 +2308,11 @@
 		font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
 		font-weight: 500; line-height: 26px;
 	}
-	.rp-kicker { color: rgba(255,255,255,0.4); }
+	/* Right-panel kickers ("PROPERTIES", "ASSETS", "AI Agent") match the
+	   left-panel .section-label brightness — 60% white when the zone is
+	   active/expanded, dimmed to 32% when the AI Agent zone is collapsed. */
+	.rp-kicker { color: rgba(255,255,255,0.6); }
+	#right-panel.rp-agent-collapsed #rp-zone-top-header .rp-kicker { color: rgba(255,255,255,0.32); }
 	.rp-sep    { color: rgba(255,255,255,0.25); }
 	#rp-title  { color: #e6e6ea; overflow: hidden; text-overflow: ellipsis; }
 	#rp-body {
@@ -2244,13 +2492,19 @@
 			</div>
 		</div>
 
-		<div class="section collapsible" data-section="fx">
+		<div class="section collapsible" data-section="tools">
 			<div class="section-head-row">
-				<span class="section-label">FX</span>
+				<span class="section-label">Tools</span>
 			</div>
 			<div class="prim-grid">
 				<button class="prim-btn" data-fx="clouds" data-label="Clouds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M7 17h11a3.5 3.5 0 0 0 .5-6.9A5.5 5.5 0 0 0 8 8.5 4 4 0 0 0 7 17z"/></svg></button>
-				<button class="prim-btn" data-fx="water" data-label="Water"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 8c3-2 6 2 9 0s6-2 9 0"/><path d="M3 13c3-2 6 2 9 0s6-2 9 0"/><path d="M3 18c3-2 6 2 9 0s6-2 9 0"/></svg></button>
+				<!-- MediaPipe tool — opens a browser webcam surface with
+				     MediaPipe.js pose/hand/face detection running client-side.
+				     Lets the user record a sequence, snapshot stills, and
+				     eventually feed the frame in as the viewport source. The
+				     JS wiring is stubbed for now — this button reserves the
+				     slot and fires the future entry point. -->
+				<button class="prim-btn" data-tool="mediapipe" data-label="MediaPipe" title="Webcam + MediaPipe pose/hand/face — record a sequence, take stills, or use as viewport source"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="6.5" r="2"/><path d="M12 8.5v5"/><path d="M9 10.5l3 1 3-1"/><path d="M12 13.5l-3 4"/><path d="M12 13.5l3 4"/></svg></button>
 				<button class="prim-btn" data-fx="smoke" data-label="Smoke"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 20c0-2 3-2 3-4s-3-2-3-4 3-2 3-4"/><path d="M15 19c0-2 2-2 2-4s-2-2-2-4"/></svg></button>
 				<button class="prim-btn" data-fx="scatter" data-label="Scatter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M3 18l9-4 9 4-9 4-9-4z"/><path d="M7 13l1.5-4 1.5 4"/><path d="M12.5 11l1.5-5 1.5 5"/><path d="M16.5 15l1.5-4 1.5 4"/></svg></button>
 			</div>
@@ -2346,21 +2600,22 @@
 					<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" style="width:12px;height:12px;vertical-align:-2px;margin-right:5px"><circle cx="8" cy="8" r="3.6"/><line x1="1.5" y1="8" x2="14.5" y2="8"/><line x1="8" y1="1.5" x2="8" y2="14.5"/></svg>Origin<span class="vt-key">Q</span></button>
 			</div>
 			<div class="vt-sep"></div>
-			<button class="vt-btn vt-generate" id="vp-generate" title="Generate with active model">
-				<span id="vp-generate-icon" style="display:flex;align-items:center"></span>
-				<span>Generate</span>
-			</button>
-			<button class="vt-btn vt-cancel" id="vp-cancel" title="Cancel the current generation" hidden>×</button>
-			<!-- Result toggle — Viewport / Blockout / Render pills. Sits right of
-			     Generate now (was on the left) and each button is [hidden] until
-			     relevant, so the whole container reads as empty pre-generate. The
-			     × close button clears any active render. -->
+			<!-- Result toggle — Viewport / Blockout / Render pills. Sits to
+			     the LEFT of Generate so the "what am I looking at" context
+			     reads before the "generate again" action. Each pill is
+			     [hidden] until relevant, so the whole container reads as
+			     empty pre-generate. × clears the active render. -->
 			<div id="result-toggle" hidden>
 				<button data-result="viewport" class="active" hidden>Viewport</button>
 				<button data-result="blockout" hidden>Blockout</button>
 				<button data-result="render" hidden>Render</button>
 				<button id="result-close" type="button" title="Close render — clear the overlay and go back to the live scene" hidden>×</button>
 			</div>
+			<button class="vt-btn vt-generate" id="vp-generate" title="Generate with active model">
+				<span id="vp-generate-icon" style="display:flex;align-items:center"></span>
+				<span>Generate</span>
+			</button>
+			<button class="vt-btn vt-cancel" id="vp-cancel" title="Cancel the current generation" hidden>×</button>
 		</div>
 		<div id="canvas-wrap">
 			<div id="canvas-bg-layer"></div>
@@ -2384,12 +2639,21 @@
 					<button class="vpm-btn active" id="mode-view-toggle" title="Switch between camera view and perspective view"></button>
 				</div>
 			</div>
+			<!-- MediaPipe overlay — webcam feed + landmark canvas sized to the
+			     AR rectangle exactly like #result-overlay. Config lives in
+			     #rp-pane-mediapipe (right panel). Visibility toggled by the
+			     Tools > MediaPipe button; camera track stops when hidden. -->
+			<div id="mediapipe-overlay" hidden>
+				<video id="mp-video" autoplay playsinline muted></video>
+				<canvas id="mp-overlay"></canvas>
+				<div class="mp-status" id="mp-status">idle</div>
+			</div>
 			<!-- Generated result overlay — sits exactly on the AR rectangle, image
 			     (or first frame of video) shown when "After" is selected. Save
 			     button floats top-right so the toolbar can stay lean. -->
 			<div id="result-overlay" hidden>
-				<img id="result-overlay-img" alt="" draggable="false">
-				<video id="result-overlay-vid" loop muted playsinline></video>
+				<img id="result-overlay-img" alt="" draggable="true">
+				<video id="result-overlay-vid" loop muted playsinline draggable="true"></video>
 				<button id="result-save-overlay" type="button" title="Download this render">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
 				</button>
@@ -2444,6 +2708,26 @@
 	</div>
 
 	<aside id="right-panel">
+		<!-- TOP ZONE — dedicated AI Agent surface. Always visible when the
+		     agent is enabled (Settings). Split from the bottom switcher zone
+		     by #rp-split-handle so users can drag to resize. Below the top
+		     zone lives #rp-zone-bottom which owns the property/asset/scene
+		     switcher (the original single-panel layout, now scoped to a zone). -->
+		<div id="rp-zone-top">
+			<div id="rp-zone-top-header" title="Click to collapse / expand">
+				<span class="rp-zone-caret" aria-hidden="true">▾</span>
+				<span class="rp-kicker">AI Agent</span>
+				<span class="rp-header-end" id="rp-zone-top-controls"></span>
+			</div>
+			<div id="rp-zone-top-body">
+				<!-- Assistant pane lives here permanently now. The boot IIFE
+				     hoists #assistant-section into it, same as before — only
+				     the parent has changed. -->
+				<div class="rp-pane" id="rp-pane-assistant"></div>
+			</div>
+		</div>
+		<div id="rp-split-handle" title="Drag to resize" role="separator" aria-orientation="horizontal"></div>
+		<div id="rp-zone-bottom">
 		<div id="rp-header">
 			<span class="rp-kicker" id="rp-kicker">Properties</span>
 			<span class="rp-sep" id="rp-sep">:</span>
@@ -2737,7 +3021,7 @@
 					<div class="section-label">Background</div>
 					<div class="rp-bg-pair">
 						<label class="rp-bg-row" id="bg-color-btn" title="Solid color background">
-							<input type="color" id="bg-color" value="#07080b">
+							<input type="color" id="bg-color" value="#000000">
 							<span class="rp-bg-label">Color</span>
 						</label>
 						<div class="rp-bg-row rp-bg-img-btn" id="bg-image-btn" title="Image background — fills the entire viewport">
@@ -2895,12 +3179,7 @@
 				</div>
 			</div>
 
-			<!-- ===== AI AGENT TAB ===== -->
-			<!-- The assistant section (chat log + input + wiring) is moved here at
-			     init from the left sidebar so it can take the full right column.
-			     Keeping DOM IDs intact means all listeners wired against
-			     #assistant-* keep working after the reparent. -->
-			<div class="rp-pane" id="rp-pane-assistant" hidden></div>
+			<!-- Assistant pane moved to #rp-zone-top — permanent home now. -->
 
 			<!-- ===== GEN CELL TAB ===== -->
 			<!-- Parameters for the currently active generator cell (slots + prompt).
@@ -2911,6 +3190,40 @@
 			<!-- Parameters for the currently active workflow module cell.
 			     Content is rebuilt on activation by renderWorkflowCellProperties. -->
 			<div class="rp-pane" id="rp-pane-workflowcell" hidden></div>
+
+			<!-- ===== MEDIAPIPE TAB — mode picker + take-still for the
+			     webcam tool. Camera runs in the viewport overlay above; this
+			     pane is just its config surface. ===== -->
+			<div class="rp-pane" id="rp-pane-mediapipe" hidden>
+				<div class="section">
+					<div class="section-label">Detection</div>
+					<div class="mp-mode-tabs" id="mp-modes">
+						<button data-mp-mode="pose" class="active">Pose</button>
+						<button data-mp-mode="hand">Hand</button>
+						<button data-mp-mode="face">Face</button>
+						<button data-mp-mode="none">None</button>
+					</div>
+				</div>
+				<div class="section">
+					<div class="section-label">Display</div>
+					<div class="slider-row">
+						<label>Opacity</label>
+						<input type="range" id="mp-video-opacity" min="0" max="100" value="100">
+						<span class="slider-val" id="mp-video-opacity-val">100%</span>
+					</div>
+					<div class="slider-row">
+						<label>Blur</label>
+						<input type="range" id="mp-video-blur" min="0" max="40" step="1" value="0">
+						<span class="slider-val" id="mp-video-blur-val">0px</span>
+					</div>
+					<div class="hint" style="margin-top:4px">Drop opacity to 0 to see only the landmarks; blur softens the feed so faces stay unrecognizable.</div>
+				</div>
+				<div class="section">
+					<div class="section-label">Capture</div>
+					<button class="mp-still-btn" id="mp-still" type="button">Take still</button>
+					<div class="hint" style="margin-top:6px">Composites the video + landmarks and drops it into Assets.</div>
+				</div>
+			</div>
 
 			<!-- ===== ASSETS TAB ===== -->
 			<div class="rp-pane" id="rp-pane-assets" hidden>
@@ -2924,9 +3237,23 @@
 			</div>
 
 		</div><!-- /#rp-body -->
+		</div><!-- /#rp-zone-bottom -->
 	</aside>
 
 	</div><!-- /#main-row -->
+
+	<!-- Bottom bumper — short full-width row below the main viewport/panels.
+	     Acts as a visual bumper so the timeline/panels don't butt up against
+	     the OS taskbar edge, and holds room for future global-scope buttons
+	     (status, snap-mode, backup indicator, etc.). Fixed 24px height so it
+	     doesn't eat into the working area. -->
+	<div id="bottom-bumper">
+		<div class="bumper-slot bumper-slot-left">
+			<span class="bumper-brand"><strong>ComfyBlockout</strong><span class="bumper-brand-by">by</span>Spiritform</span>
+		</div>
+		<div class="bumper-slot bumper-slot-center"></div>
+		<div class="bumper-slot bumper-slot-right"></div>
+	</div>
 
 	<script type="importmap">
 	{
@@ -3798,7 +4125,7 @@ const vs0 = viewportSize();
 // Initial size will be re-tightened to the aspect rectangle by handleResize after the
 // scene loads (currentAspect defaults to 16:9 via the <select selected> attribute).
 renderer.setSize(vs0.w, vs0.h, true);
-renderer.setClearColor(0x07080b);
+renderer.setClearColor(0x000000);
 
 const scene = new THREE.Scene();
 // Dual-camera setup: sceneCam is the editor viewport, renderCam is the framed shot
@@ -5679,15 +6006,20 @@ function duplicateObject(obj) {
 
 window.forceRightPane = forceRightPane;
 function forceRightPane(which, label) {
+	// Assistant lives in its OWN zone (#rp-zone-top) now — the switcher below
+	// no longer owns it, so requests to show "assistant" here become a no-op.
+	// The agent is always visible in the top zone (unless disabled in
+	// Settings, in which case #right-panel.no-agent hides that whole zone).
+	if (which === "assistant") return;
 	// Direct DOM swap, bypassing the captured rpPanes NodeList — guarantees the panes
 	// reflect current selection even if the IIFE-scoped helper somehow gets out of sync.
 	const objPane = document.getElementById("rp-pane-object");
 	const scnPane = document.getElementById("rp-pane-scene");
 	const camPane = document.getElementById("rp-pane-camera");
 	const astPane = document.getElementById("rp-pane-assets");
-	const asstPane = document.getElementById("rp-pane-assistant");
 	const genPane = document.getElementById("rp-pane-gencell");
 	const wfPane  = document.getElementById("rp-pane-workflowcell");
+	const mpPane  = document.getElementById("rp-pane-mediapipe");
 	const titleEl = document.getElementById("rp-title");
 	const kickerEl = document.getElementById("rp-kicker");
 	const sepEl = document.getElementById("rp-sep");
@@ -5695,29 +6027,28 @@ function forceRightPane(which, label) {
 	if (scnPane) scnPane.hidden = which !== "scene";
 	if (camPane) camPane.hidden = which !== "camera";
 	if (astPane) astPane.hidden = which !== "assets";
-	if (asstPane) asstPane.hidden = which !== "assistant";
 	if (genPane) genPane.hidden = which !== "gencell";
 	if (wfPane)  wfPane.hidden  = which !== "workflowcell";
-	// Assets + Assistant own the kicker label with no sub-title. Object / Scene /
-	// Camera / GenCell / WorkflowCell use "Properties : <label>". "none" hides the
-	// whole header for a blank right panel.
+	if (mpPane)  mpPane.hidden  = which !== "mediapipe";
+	// Assets owns the kicker label with no sub-title. Object / Scene / Camera /
+	// GenCell / WorkflowCell use "Properties : <label>". "none" hides the whole
+	// header for a blank switcher zone.
 	const isAssets = which === "assets";
-	const isAssistant = which === "assistant";
-	const isFullPane = isAssets || isAssistant;
+	const isFullPane = isAssets;
 	const isBlank = which === "none";
 	if (kickerEl) {
-		kickerEl.textContent = isAssets ? "Assets" : isAssistant ? "AI Agent" : "Properties";
+		kickerEl.textContent = isAssets ? "Assets" : "Properties";
 		kickerEl.style.display = isBlank ? "none" : "";
 	}
 	if (sepEl) sepEl.style.display = (isFullPane || isBlank) ? "none" : "";
 	if (titleEl) {
 		titleEl.style.display = (isFullPane || isBlank) ? "none" : "";
-		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : which === "gencell" ? "Generator" : which === "workflowcell" ? "Workflow" : "Object");
+		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : which === "gencell" ? "Generator" : which === "workflowcell" ? "Workflow" : which === "mediapipe" ? "MediaPipe" : "Object");
 	}
 	// Keep top-header + viewport-toolbar buttons in sync with whichever full-pane
-	// view is active.
+	// view is active. Assistant button now toggles agent-zone collapse (wired
+	// below in the split-handle IIFE) rather than swapping the switcher pane.
 	document.getElementById("th-assets")?.classList.toggle("active", isAssets);
-	document.getElementById("th-assistant")?.classList.toggle("active", isAssistant);
 	// Toolbar pills light amber ONLY while their pane is the visible one. That
 	// makes "lit" == "properties currently showing this".
 	// #scene-props-btn (top toolbar) is amber whenever the Scene properties
@@ -5729,16 +6060,17 @@ function forceRightPane(which, label) {
 	// — only meaningful while the assets pane is the active one.
 	const filterEl = document.getElementById("assets-filter");
 	if (filterEl) filterEl.hidden = !isAssets;
-	// Assistant's reset + MCP status pill live in the shared rp-header slot.
+	// Assistant's reset + MCP status pill live in the TOP zone's own header
+	// now (#rp-zone-top-controls) — hoisted there permanently by the boot
+	// IIFE. Nothing to toggle here per switcher-pane change.
 	const headerEndEl = document.getElementById("rp-header-end");
-	if (headerEndEl) headerEndEl.hidden = !isAssistant;
-	// Assistant pane needs rp-body to stop scrolling (chat log has its own overflow).
-	document.getElementById("right-panel")?.classList.toggle("mode-assistant", isAssistant);
+	if (headerEndEl) headerEndEl.hidden = true;
 }
 
-// Default pane resolution — AI Agent if enabled (opt-in via Settings), else blank.
-// Camera + Scene panes are strictly button-driven now.
-function defaultRightPane() { return isAssistantEnabled?.() ? "assistant" : "none"; }
+// Default switcher pane resolution — always "none" now that the Assistant has
+// its own permanent top zone. The switcher below shows nothing until the user
+// selects something (an object, an asset, a scene/camera button).
+function defaultRightPane() { return "none"; }
 window.defaultRightPane = defaultRightPane;
 
 // AI Agent enablement — opt-in via Settings, persisted in localStorage. Off by
@@ -5763,6 +6095,9 @@ window.isAssistantEnabled = isAssistantEnabled;
 document.getElementById("assistant-toggle")?.addEventListener("change", (e) => {
 	localStorage.setItem(ASSISTANT_ENABLED_KEY, e.target.checked ? "1" : "0");
 	applyAssistantEnablement();
+	// Reflect the toggle on the split-panel layout — show/hide the top zone
+	// + split handle so the switcher takes the full column when off.
+	window.__syncAgentZoneVisibility?.();
 });
 applyAssistantEnablement();
 
@@ -5775,26 +6110,105 @@ applyAssistantEnablement();
 	const dst = document.getElementById("rp-pane-assistant");
 	if (src && dst && src.parentElement !== dst) dst.appendChild(src);
 
-	// Hoist the MCP status pill up to the right-panel header slot so it sits on
-	// the same baseline as the "AI AGENT" kicker. The reset button lived here
-	// too but was retired in favor of a `/clear` slash-command in the input.
-	const headerEnd = document.getElementById("rp-header-end");
+	// Hoist the MCP status pill up to the TOP zone's own header slot so it
+	// sits on the same baseline as the AI AGENT kicker.
+	const headerEnd = document.getElementById("rp-zone-top-controls");
 	const status = document.getElementById("assistant-status");
 	if (headerEnd && status) headerEnd.appendChild(status);
 
+	// Split-handle drag — resizes the top zone height by pushing the value
+	// into --rp-top-basis on #right-panel. Persisted to localStorage so the
+	// user's workspace layout carries across sessions and projects.
+	const RP_TOP_KEY = "cb.rightPanel.topBasis";
+	const panel = document.getElementById("right-panel");
+	const handle = document.getElementById("rp-split-handle");
+	const savedBasis = (() => { try { return localStorage.getItem(RP_TOP_KEY); } catch { return null; } })();
+	if (panel && savedBasis) panel.style.setProperty("--rp-top-basis", savedBasis);
+	if (handle && panel) {
+		let dragging = false;
+		// Minimum agent zone height while drag-sizing — 90px is the exact
+		// stack of [header 40 + context chip 24 + input row 26], so dragging
+		// all the way down lands on the same visual state as click-to-
+		// collapse without needing the shortcut. Anything smaller would
+		// clip the input, which we always want reachable.
+		const AGENT_MIN_PX = 90;
+		const SWITCHER_MIN_PX = 80;
+		handle.addEventListener("mousedown", (e) => {
+			dragging = true;
+			handle.classList.add("dragging");
+			document.body.style.cursor = "row-resize";
+			// Suppress iframe / canvas pointer events during drag so the
+			// handle keeps mousemove even when the pointer crosses over them.
+			document.body.style.userSelect = "none";
+			// If collapsed, popping out of collapse the moment they start
+			// dragging is more intuitive than "drag does nothing until you
+			// un-collapse first".
+			if (panel.classList.contains("rp-agent-collapsed")) {
+				panel.classList.remove("rp-agent-collapsed");
+				try { localStorage.setItem(RP_AGENT_COLLAPSED_KEY, "0"); } catch {}
+			}
+			e.preventDefault();
+		});
+		window.addEventListener("mousemove", (e) => {
+			if (!dragging) return;
+			const rect = panel.getBoundingClientRect();
+			const y = e.clientY - rect.top;
+			// Clamp: switcher >=80px at top, agent >=180px at bottom. Agent
+			// size = panelHeight - handleY, so handleY <= panelHeight - 180.
+			const clamped = Math.max(SWITCHER_MIN_PX, Math.min(rect.height - AGENT_MIN_PX, y));
+			const agentPx = rect.height - clamped;
+			const pct = ((agentPx / rect.height) * 100).toFixed(2) + "%";
+			panel.style.setProperty("--rp-top-basis", pct);
+		});
+		window.addEventListener("mouseup", () => {
+			if (!dragging) return;
+			dragging = false;
+			handle.classList.remove("dragging");
+			document.body.style.cursor = "";
+			document.body.style.userSelect = "";
+			try {
+				const current = panel.style.getPropertyValue("--rp-top-basis").trim();
+				if (current) localStorage.setItem(RP_TOP_KEY, current);
+			} catch {}
+		});
+	}
+
+	// Reflect assistant-enabled setting: when off, hide the whole top zone
+	// (and its handle) so the switcher takes the full column. Rerun whenever
+	// the user flips the toggle in Settings.
+	function syncAgentZoneVisibility() {
+		if (!panel) return;
+		const on = !!isAssistantEnabled?.();
+		panel.classList.toggle("no-agent", !on);
+	}
+	syncAgentZoneVisibility();
+	window.__syncAgentZoneVisibility = syncAgentZoneVisibility;
+
+	// Collapse toggle — click the AI Agent zone header to fold the chat log
+	// away, leaving just the header + context chip + input row (~80-90px).
+	// Click again to expand back to the last drag-sized height. State
+	// persisted so the user's preference sticks across sessions.
+	const RP_AGENT_COLLAPSED_KEY = "cb.rightPanel.agentCollapsed";
+	const savedCollapsed = (() => { try { return localStorage.getItem(RP_AGENT_COLLAPSED_KEY) === "1"; } catch { return false; } })();
+	if (panel && savedCollapsed) panel.classList.add("rp-agent-collapsed");
+	document.getElementById("rp-zone-top-header")?.addEventListener("click", (e) => {
+		// Ignore clicks on the status pill so it doesn't trigger collapse
+		// when the user is just glancing at the MCP status.
+		if (e.target.closest("#assistant-status, #rp-zone-top-controls")) return;
+		if (!panel) return;
+		panel.classList.toggle("rp-agent-collapsed");
+		try {
+			localStorage.setItem(RP_AGENT_COLLAPSED_KEY, panel.classList.contains("rp-agent-collapsed") ? "1" : "0");
+		} catch {}
+	});
+
 	const btn = document.getElementById("th-assistant");
 	if (!btn) return;
+	// Assistant lives in the permanent top zone now — the top-header button
+	// just focuses the chat input as a quick "jump to agent" gesture instead
+	// of swapping the switcher pane.
 	btn.addEventListener("click", () => {
-		const pane = document.getElementById("rp-pane-assistant");
-		const isOpen = pane && !pane.hidden;
-		if (isOpen) {
-			if (window.__selectedObj) forceRightPane("object", window.__selectedObj.name || "Object");
-			else forceRightPane("none");
-		} else {
-			forceRightPane("assistant");
-			// Autofocus the input so the user can start typing immediately.
-			document.getElementById("assistant-input")?.focus();
-		}
+		document.getElementById("assistant-input")?.focus();
 	});
 })();
 
@@ -5999,6 +6413,9 @@ function select(obj, opts = {}) {
 		forceRightPane(defaultRightPane());
 	}
 	refreshOutliner();
+	// Selected object joins the AI agent's context chip so the agent can
+	// address it by name without the user having to type it.
+	if (typeof refreshChatContextChip === "function") refreshChatContextChip();
 }
 
 function toggleVisibility(obj) {
@@ -6589,6 +7006,407 @@ document.querySelectorAll(".prim-btn[data-prim]").forEach(b => {
 document.querySelectorAll(".prim-btn[data-fx]").forEach(b => {
 	b.addEventListener("click", () => addFx(b.dataset.fx));
 });
+// Tools section — non-FX utilities that live alongside the addable FX. Each
+// button opts in via `data-tool="…"`. Dispatched through a single handler
+// so adding a new util is just a button + a case here.
+document.querySelectorAll(".prim-btn[data-tool]").forEach(b => {
+	b.addEventListener("click", () => runTool(b.dataset.tool));
+});
+// Hover on any Tools / Objects / FX button pops the specific label into
+// the section header — e.g. hovering the MediaPipe button in Tools shows
+// "TOOLS : MEDIAPIPE" in the section head. Mouseleave restores the base
+// section label. Applied broadly to every prim-btn that has a data-label.
+(() => {
+	for (const btn of document.querySelectorAll(".prim-btn[data-label]")) {
+		const section = btn.closest(".section");
+		const labelEl = section?.querySelector(".section-label");
+		if (!labelEl) continue;
+		btn.addEventListener("mouseenter", () => {
+			if (labelEl.dataset._origLabel === undefined) {
+				labelEl.dataset._origLabel = labelEl.textContent;
+			}
+			labelEl.textContent = `${labelEl.dataset._origLabel} : ${btn.dataset.label}`;
+		});
+		btn.addEventListener("mouseleave", () => {
+			if (labelEl.dataset._origLabel !== undefined) {
+				labelEl.textContent = labelEl.dataset._origLabel;
+			}
+		});
+	}
+})();
+function runTool(kind) {
+	if (kind === "mediapipe") {
+		// Toggle — clicking the Tools button again turns the camera off and
+		// closes the right pane, so the user doesn't have to hunt for a
+		// hidden close button.
+		if (_mp.running || _mp.stream) closeMediaPipeTool();
+		else openMediaPipeTool();
+		return;
+	}
+	updateStatus(`${kind[0].toUpperCase() + kind.slice(1)} tool — coming soon`);
+}
+
+// ── MediaPipe tool ────────────────────────────────────────────────
+// Modal-hosted webcam + on-device landmark detection. Uses @mediapipe/
+// tasks-vision from a CDN, lazy-loaded on first open so the ~1MB WASM
+// bundle doesn't hit the initial page weight. Pose / Hand / Face
+// landmarkers are all supported; None mode shows a raw feed with no
+// overlay. "Take still" captures the composited frame (video + overlay)
+// un-mirrored and uploads it into the Assets library.
+const _mp = {
+	loaded: false, loading: null,
+	tasks: null, vision: null,
+	landmarkers: { pose: null, hand: null, face: null },
+	mode: "pose",
+	stream: null, running: false,
+	lastLandmarks: null,
+	lastFrameTs: 0,
+};
+const MP_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.17";
+async function _loadMediaPipe() {
+	if (_mp.loaded) return true;
+	if (_mp.loading) return _mp.loading;
+	_mp.loading = (async () => {
+		try {
+			const tasks = await import(`${MP_CDN}/vision_bundle.mjs`);
+			const vision = await tasks.FilesetResolver.forVisionTasks(`${MP_CDN}/wasm`);
+			_mp.tasks = tasks;
+			_mp.vision = vision;
+			_mp.loaded = true;
+			return true;
+		} catch (e) {
+			console.error("[mediapipe] load failed:", e);
+			return false;
+		}
+	})();
+	return _mp.loading;
+}
+const MP_MODEL_URLS = {
+	pose: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
+	hand: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
+	face: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
+};
+async function _ensureLandmarker(mode) {
+	if (mode === "none") return null;
+	if (_mp.landmarkers[mode]) return _mp.landmarkers[mode];
+	const { tasks, vision } = _mp;
+	if (mode === "pose") {
+		_mp.landmarkers.pose = await tasks.PoseLandmarker.createFromOptions(vision, {
+			baseOptions: { modelAssetPath: MP_MODEL_URLS.pose, delegate: "GPU" },
+			runningMode: "VIDEO",
+			numPoses: 1,
+		});
+	} else if (mode === "hand") {
+		_mp.landmarkers.hand = await tasks.HandLandmarker.createFromOptions(vision, {
+			baseOptions: { modelAssetPath: MP_MODEL_URLS.hand, delegate: "GPU" },
+			runningMode: "VIDEO",
+			numHands: 2,
+		});
+	} else if (mode === "face") {
+		_mp.landmarkers.face = await tasks.FaceLandmarker.createFromOptions(vision, {
+			baseOptions: { modelAssetPath: MP_MODEL_URLS.face, delegate: "GPU" },
+			runningMode: "VIDEO",
+			numFaces: 1,
+			outputFacialTransformationMatrixes: false,
+			outputFaceBlendshapes: false,
+		});
+	}
+	return _mp.landmarkers[mode];
+}
+
+async function openMediaPipeTool() {
+	// Show the viewport overlay + open the right-pane properties. Camera
+	// start / MediaPipe load runs after both mount so the user sees the
+	// "starting camera…" status pill immediately.
+	const overlayEl = document.getElementById("mediapipe-overlay");
+	const status = document.getElementById("mp-status");
+	const video = document.getElementById("mp-video");
+	const overlay = document.getElementById("mp-overlay");
+	if (!overlayEl || !video || !overlay || !status) return;
+	overlayEl.hidden = false;
+	// Snap to the aspect-frame rectangle before the camera lights up so the
+	// user doesn't briefly see the letterbox bleed.
+	updateResultOverlayPos?.();
+	document.querySelector('.prim-btn[data-tool="mediapipe"]')?.classList.add("active");
+	forceRightPane?.("mediapipe", "MediaPipe");
+	status.textContent = "starting camera…";
+	try {
+		_mp.stream = await navigator.mediaDevices.getUserMedia({
+			video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+			audio: false,
+		});
+		video.srcObject = _mp.stream;
+		await new Promise(res => video.addEventListener("loadedmetadata", res, { once: true }));
+		await video.play();
+	} catch (e) {
+		console.error("[mediapipe] camera start failed:", e);
+		status.textContent = `camera denied — ${e.message || "check permissions"}`;
+		return;
+	}
+	status.textContent = "loading MediaPipe…";
+	const ok = await _loadMediaPipe();
+	if (!ok) { status.textContent = "MediaPipe load failed"; return; }
+	await _ensureLandmarker(_mp.mode);
+	// Overlay canvas matches the video's intrinsic resolution so landmark
+	// coords (0..1) can multiply through cleanly.
+	overlay.width = video.videoWidth;
+	overlay.height = video.videoHeight;
+	_mp.drawingUtils = new _mp.tasks.DrawingUtils(overlay.getContext("2d"));
+	_mp.running = true;
+	status.textContent = _mp.mode === "none" ? "raw feed" : `${_mp.mode} detection`;
+	_mpLoop();
+}
+function _mpLoop() {
+	if (!_mp.running) return;
+	const video = document.getElementById("mp-video");
+	const overlay = document.getElementById("mp-overlay");
+	if (!video || !overlay || video.readyState < 2) {
+		requestAnimationFrame(_mpLoop);
+		return;
+	}
+	const ts = performance.now();
+	if (ts - _mp.lastFrameTs < 30) { requestAnimationFrame(_mpLoop); return; }
+	_mp.lastFrameTs = ts;
+	const ctx = overlay.getContext("2d");
+	ctx.clearRect(0, 0, overlay.width, overlay.height);
+	if (_mp.mode !== "none") {
+		const lm = _mp.landmarkers[_mp.mode];
+		if (lm) {
+			try {
+				const result = lm.detectForVideo(video, ts);
+				_mp.lastLandmarks = result;
+				_drawLandmarks(ctx, overlay.width, overlay.height, result, _mp.mode);
+			} catch (e) {
+				// Frame errors are common when video hasn't fully warmed up;
+				// swallow rather than spam console.
+			}
+		}
+	}
+	requestAnimationFrame(_mpLoop);
+}
+function _drawLandmarks(ctx, w, h, result, mode) {
+	// Uses MediaPipe's own DrawingUtils — same class every official demo
+	// uses — so the visualization matches the MediaPipe Solutions gallery
+	// (connector lines + landmark dots per official task-specific palette).
+	const du = _mp.drawingUtils;
+	if (!du) return;
+	const tasks = _mp.tasks;
+	if (mode === "pose") {
+		for (const pose of (result.landmarks || [])) {
+			du.drawConnectors(pose, tasks.PoseLandmarker.POSE_CONNECTIONS, { color: "#ffb454", lineWidth: 3 });
+			du.drawLandmarks(pose, { color: "#ffd28a", lineWidth: 1, radius: 3 });
+		}
+	} else if (mode === "hand") {
+		for (const hand of (result.landmarks || [])) {
+			du.drawConnectors(hand, tasks.HandLandmarker.HAND_CONNECTIONS, { color: "#ffb454", lineWidth: 3 });
+			du.drawLandmarks(hand, { color: "#ffd28a", lineWidth: 1, radius: 3 });
+		}
+	} else if (mode === "face") {
+		for (const face of (result.faceLandmarks || [])) {
+			// Standard MediaPipe face-mesh visualization — tesselation +
+			// contours + irises. Matches the demo gallery's Face Landmark
+			// Detection card exactly.
+			du.drawConnectors(face, tasks.FaceLandmarker.FACE_LANDMARKS_TESSELATION, { color: "rgba(255,180,84,0.35)", lineWidth: 1 });
+			du.drawConnectors(face, tasks.FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE, { color: "#ffb454", lineWidth: 1 });
+			du.drawConnectors(face, tasks.FaceLandmarker.FACE_LANDMARKS_LEFT_EYE, { color: "#ffb454", lineWidth: 1 });
+			du.drawConnectors(face, tasks.FaceLandmarker.FACE_LANDMARKS_FACE_OVAL, { color: "#ffd28a", lineWidth: 1 });
+			du.drawConnectors(face, tasks.FaceLandmarker.FACE_LANDMARKS_LIPS, { color: "#ffd28a", lineWidth: 1 });
+			du.drawConnectors(face, tasks.FaceLandmarker.FACE_LANDMARKS_RIGHT_IRIS, { color: "#ffb454", lineWidth: 1 });
+			du.drawConnectors(face, tasks.FaceLandmarker.FACE_LANDMARKS_LEFT_IRIS, { color: "#ffb454", lineWidth: 1 });
+		}
+	}
+}
+function closeMediaPipeTool() {
+	_mp.running = false;
+	if (_mp.stream) {
+		for (const t of _mp.stream.getTracks()) t.stop();
+		_mp.stream = null;
+	}
+	const video = document.getElementById("mp-video");
+	if (video) video.srcObject = null;
+	const overlayEl = document.getElementById("mediapipe-overlay");
+	if (overlayEl) overlayEl.hidden = true;
+	document.querySelector('.prim-btn[data-tool="mediapipe"]')?.classList.remove("active");
+	// Return to whatever the user's default right pane is.
+	if (typeof forceRightPane === "function" && typeof defaultRightPane === "function") {
+		forceRightPane(defaultRightPane());
+	}
+}
+window.closeMediaPipeTool = closeMediaPipeTool;
+// Mode tabs — swap the active landmarker.
+document.getElementById("mp-modes")?.addEventListener("click", async (e) => {
+	const btn = e.target.closest("button[data-mp-mode]");
+	if (!btn) return;
+	const mode = btn.dataset.mpMode;
+	if (mode === _mp.mode) return;
+	_mp.mode = mode;
+	for (const b of e.currentTarget.querySelectorAll("button")) b.classList.toggle("active", b === btn);
+	const status = document.getElementById("mp-status");
+	if (mode !== "none") {
+		if (status) status.textContent = `loading ${mode}…`;
+		await _ensureLandmarker(mode);
+	}
+	if (status) status.textContent = mode === "none" ? "raw feed" : `${mode} detection`;
+});
+// Take still — composite video + overlay onto an offscreen canvas
+// (un-mirrored), convert to a PNG blob, upload to the Assets library.
+// Compositing canvas — draws video + landmarks together each frame so a
+// MediaRecorder can capture the composited result. Started/stopped by the
+// record pipeline (see startRecording); off outside of recording so we
+// don't burn CPU when idle. Sized once to match the video's intrinsic
+// resolution (rescaling on canvas draw is cheap enough).
+function _startMediaPipeCompositor() {
+	const video = document.getElementById("mp-video");
+	const overlay = document.getElementById("mp-overlay");
+	if (!video || !overlay || !_mp.running) return null;
+	const w = video.videoWidth || 1280;
+	const h = video.videoHeight || 720;
+	if (!_mp.compositeCanvas) {
+		_mp.compositeCanvas = document.createElement("canvas");
+	}
+	_mp.compositeCanvas.width = w;
+	_mp.compositeCanvas.height = h;
+	const ctx = _mp.compositeCanvas.getContext("2d");
+	_mp.compositing = true;
+	const loop = () => {
+		if (!_mp.compositing) return;
+		try {
+			// Solid black background so opacity<1 on the video blends with
+			// black (same as the on-screen #mediapipe-overlay background).
+			ctx.save();
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.fillStyle = "#000";
+			ctx.fillRect(0, 0, w, h);
+			ctx.restore();
+			// Read the video's current visual state so the recording matches
+			// exactly what's on screen — opacity 0 skips the video entirely,
+			// non-zero blur passes through via canvas 2D context filter.
+			const vs = getComputedStyle(video);
+			const op = parseFloat(vs.opacity);
+			const alpha = isFinite(op) ? op : 1;
+			const flt = vs.filter && vs.filter !== "none" ? vs.filter : "none";
+			ctx.save();
+			// Un-mirror on capture so the saved video reads naturally (text
+			// isn't backwards). The live overlay stays mirrored via CSS for
+			// the user's benefit; only the capture path corrects.
+			ctx.translate(w, 0);
+			ctx.scale(-1, 1);
+			if (alpha > 0.001) {
+				ctx.globalAlpha = alpha;
+				ctx.filter = flt;
+				ctx.drawImage(video, 0, 0, w, h);
+				ctx.filter = "none";
+				ctx.globalAlpha = 1;
+			}
+			// Landmarks always draw at full alpha — they're the whole point
+			// of the recording; hiding them would defeat the tool.
+			ctx.drawImage(overlay, 0, 0, w, h);
+			ctx.restore();
+		} catch {}
+		requestAnimationFrame(loop);
+	};
+	loop();
+	return _mp.compositeCanvas;
+}
+function _stopMediaPipeCompositor() {
+	_mp.compositing = false;
+}
+
+// Video opacity + blur sliders — tuned live so the user can dial in the
+// mix they want (landmarks + faint background). Opacity 0 = landmarks
+// alone on black; blur softens facial features without hiding motion.
+(() => {
+	const video = () => document.getElementById("mp-video");
+	const opSlider = document.getElementById("mp-video-opacity");
+	const opVal = document.getElementById("mp-video-opacity-val");
+	const blurSlider = document.getElementById("mp-video-blur");
+	const blurVal = document.getElementById("mp-video-blur-val");
+	function applyStyles() {
+		const v = video();
+		if (!v) return;
+		const op = opSlider ? parseInt(opSlider.value, 10) / 100 : 1;
+		const bl = blurSlider ? parseInt(blurSlider.value, 10) : 0;
+		v.style.opacity = String(op);
+		v.style.filter = bl > 0 ? `blur(${bl}px)` : "";
+	}
+	opSlider?.addEventListener("input", () => {
+		if (opVal) opVal.textContent = `${opSlider.value}%`;
+		applyStyles();
+	});
+	blurSlider?.addEventListener("input", () => {
+		if (blurVal) blurVal.textContent = `${blurSlider.value}px`;
+		applyStyles();
+	});
+})();
+
+// Take still — freezes the current frame in the viewport, uploads it to
+// Assets, and stops the landmark loop so the still stays put. Button
+// flips to "Resume live" to un-freeze; clicking again restarts the video
+// + loop and swaps back.
+document.getElementById("mp-still")?.addEventListener("click", async () => {
+	const video = document.getElementById("mp-video");
+	const overlay = document.getElementById("mp-overlay");
+	const btn = document.getElementById("mp-still");
+	if (!video || !overlay || !btn || video.readyState < 2) return;
+	// Frozen — un-freeze, restart video + detection loop, restore label.
+	if (_mp.frozen) {
+		try { await video.play(); } catch {}
+		_mp.frozen = false;
+		_mp.running = true;
+		_mpLoop();
+		btn.textContent = "Take still";
+		return;
+	}
+	btn.disabled = true;
+	btn.textContent = "capturing…";
+	try {
+		const w = video.videoWidth, h = video.videoHeight;
+		const cvs = document.createElement("canvas");
+		cvs.width = w; cvs.height = h;
+		const ctx = cvs.getContext("2d");
+		// Solid black background so opacity<1 matches the on-screen look.
+		ctx.fillStyle = "#000";
+		ctx.fillRect(0, 0, w, h);
+		// Read the video's current opacity + blur so the saved still
+		// matches exactly what the user saw when they hit capture.
+		const vs = getComputedStyle(video);
+		const alpha = parseFloat(vs.opacity);
+		const flt = vs.filter && vs.filter !== "none" ? vs.filter : "none";
+		// Un-mirror by flipping the horizontal axis — the on-screen video
+		// is mirrored via CSS transform, but the saved asset should read
+		// naturally (text isn't backwards, etc.).
+		ctx.save();
+		ctx.translate(w, 0);
+		ctx.scale(-1, 1);
+		if (isFinite(alpha) && alpha > 0.001) {
+			ctx.globalAlpha = alpha;
+			ctx.filter = flt;
+			ctx.drawImage(video, 0, 0, w, h);
+			ctx.filter = "none";
+			ctx.globalAlpha = 1;
+		}
+		ctx.drawImage(overlay, 0, 0, w, h);
+		ctx.restore();
+		const blob = await new Promise(res => cvs.toBlob(res, "image/png"));
+		if (!blob) throw new Error("canvas produced no blob");
+		const file = new File([blob], `mediapipe_${Date.now()}.png`, { type: "image/png" });
+		await uploadObjectRefImage(file);
+		window.refreshAssets?.();
+		// Freeze in the viewport — pause the video (last decoded frame
+		// stays on screen) AND stop the detection loop so the drawn
+		// skeleton stays frozen on that exact frame. Button flips so the
+		// user knows how to resume.
+		video.pause();
+		_mp.running = false;
+		_mp.frozen = true;
+		btn.textContent = "Resume live";
+		btn.disabled = false;
+	} catch (e) {
+		console.error("[mediapipe] still capture failed:", e);
+		btn.textContent = "failed";
+		setTimeout(() => { btn.textContent = "Take still"; btn.disabled = false; }, 1400);
+	}
+});
 function addFx(kind) {
 	if (kind === "clouds") return addCloudsFx();
 	if (kind === "scatter") return addScatterFx();
@@ -6708,17 +7526,63 @@ function refreshViewportGenerateBtn() {
 	const btn = document.getElementById("vp-generate");
 	const iconEl = document.getElementById("vp-generate-icon");
 	if (!btn || !iconEl) return;
-	const cell = getActiveGenCell();
-	if (!cell) {
+	// Either a partner-API gen cell OR a local workflow cell being active
+	// makes the toolbar Generate button meaningful — it fires whichever one
+	// the user has selected in the sidebar.
+	const genCell = getActiveGenCell();
+	const hasTarget = !!genCell || !!activeWorkflowCellId;
+	if (!hasTarget) {
 		iconEl.innerHTML = "";
 		btn.disabled = true;
 		return;
 	}
 	iconEl.innerHTML = GENERATE_ARROW_SVG;
-	// Always enabled as long as a model cell exists — if auth isn't ready when the
-	// user clicks, the click handler shows a clear prompt to sign in (no need to
-	// pre-emptively dim the button while the auth poller is still warming up).
+	// Always enabled as long as SOME target cell exists — if auth isn't ready
+	// when the user clicks, the click handler shows a clear prompt to sign in
+	// (no pre-emptive dimming while the auth poller warms up).
 	btn.disabled = false;
+}
+
+// Toolbar Generate busy state — flipped by BOTH the button's own click handler
+// AND the per-cell workflow ▶ button so the viewport chip always reflects "a
+// generation is running" regardless of which entry point kicked it off. Nests
+// via a ref-count so concurrent runs don't accidentally clear the busy state
+// when only the first finishes.
+let _vpGenerateBusyRefs = 0;
+let _vpGenerateSaved = null;
+function setViewportGenerateBusy() {
+	const btn = document.getElementById("vp-generate");
+	if (!btn) return;
+	if (_vpGenerateBusyRefs === 0) {
+		const iconEl = document.getElementById("vp-generate-icon");
+		const labelEl = btn.querySelector("span:last-child");
+		const cancelBtn = document.getElementById("vp-cancel");
+		_vpGenerateSaved = {
+			icon: iconEl?.innerHTML ?? "",
+			label: labelEl?.textContent ?? "Generate",
+		};
+		btn.classList.add("busy");
+		if (iconEl) iconEl.innerHTML = VP_SPINNER_SVG;
+		if (labelEl) labelEl.textContent = "Running…";
+		if (cancelBtn) cancelBtn.hidden = false;
+	}
+	_vpGenerateBusyRefs++;
+}
+function clearViewportGenerateBusy() {
+	const btn = document.getElementById("vp-generate");
+	if (!btn) return;
+	_vpGenerateBusyRefs = Math.max(0, _vpGenerateBusyRefs - 1);
+	if (_vpGenerateBusyRefs === 0 && _vpGenerateSaved) {
+		const iconEl = document.getElementById("vp-generate-icon");
+		const labelEl = btn.querySelector("span:last-child");
+		const cancelBtn = document.getElementById("vp-cancel");
+		btn.classList.remove("busy");
+		if (iconEl) iconEl.innerHTML = _vpGenerateSaved.icon;
+		if (labelEl) labelEl.textContent = _vpGenerateSaved.label;
+		if (cancelBtn) cancelBtn.hidden = true;
+		_vpGenerateSaved = null;
+		refreshViewportGenerateBtn();
+	}
 }
 
 function newGenCellId() {
@@ -7094,7 +7958,17 @@ function renderGenCellProperties(cell) {
 			${promptWrap}
 			${emptyHint}
 		</div>
+		<button type="button" class="rp-generate-btn" data-run-cell="${cell.id}">
+			<span>Generate</span>
+			<svg viewBox="0 0 24 24" fill="currentColor" style="width:12px;height:12px" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+		</button>
 	`;
+
+	// Delegate to the sidebar row's ▶ — same wiring, same busy-state hooks,
+	// so the properties Generate button is just a bigger, closer entry point.
+	pane.querySelector(".rp-generate-btn")?.addEventListener("click", () => {
+		document.querySelector(`#workflow-cells .gen-cell[data-cell-id="${cell.id}"] .gen-run-btn`)?.click();
+	});
 
 	// Wire ref slots.
 	for (const slot of pane.querySelectorAll(".gen-slot")) {
@@ -7344,6 +8218,19 @@ document.getElementById("vp-generate")?.addEventListener("click", async () => {
 	const btn = document.getElementById("vp-generate");
 	if (!btn) { console.warn("[vp-generate] button not found"); return; }
 	if (btn.classList.contains("busy")) { console.warn("[vp-generate] busy"); return; }
+	// Workflow cells (local ComfyUI modules) have their own separate active-id
+	// track. If one of THEM is currently selected in the sidebar (SDXL Depth
+	// ControlNet Local, etc.), the toolbar Generate button should fire THAT
+	// cell — otherwise you'd have to walk over to the row's ▶ every time. We
+	// delegate to the row's ▶ so the workflow's own run pipeline (input
+	// building, busy state, result import) all fires exactly as before.
+	if (activeWorkflowCellId) {
+		const wfBtn = document.querySelector(`#workflow-cells .gen-cell[data-cell-id="${activeWorkflowCellId}"] .gen-run-btn`);
+		if (wfBtn) {
+			wfBtn.click();
+			return;
+		}
+	}
 	const cell = getActiveGenCell();
 	if (!cell) {
 		console.warn("[vp-generate] no active gen cell");
@@ -7409,19 +8296,10 @@ document.getElementById("vp-generate")?.addEventListener("click", async () => {
 	// the exact PNG being sent to the model alongside the live viewport + render.
 	window.revealBlockoutToggle?.();
 
-	// Manage vp-generate's busy state ourselves — runModule (in the IIFE) does
-	// `btn.textContent = "running…"` which would wipe the icon + label spans.
-	// Feed it a throwaway button so it can't mangle our DOM.
-	const iconEl = document.getElementById("vp-generate-icon");
-	const labelEl = btn.querySelector("span:last-child");
-	const cancelBtn = document.getElementById("vp-cancel");
-	const savedIcon = iconEl?.innerHTML ?? "";
-	const savedLabel = labelEl?.textContent ?? "Generate";
-	btn.classList.add("busy");
-	if (iconEl) iconEl.innerHTML = VP_SPINNER_SVG;
-	if (labelEl) labelEl.textContent = "Running…";
-	if (cancelBtn) cancelBtn.hidden = false;
-
+	// Manage vp-generate's busy state via the shared helper — the per-cell ▶
+	// workflow button flips the same state so the viewport chip always reads
+	// "a run is happening" regardless of which entry point kicked it off.
+	setViewportGenerateBusy();
 	try {
 		const dummy = document.createElement("button");
 		await window.runGenerateModule(cell.model, dummy, inputs, m.kind);
@@ -7430,11 +8308,7 @@ document.getElementById("vp-generate")?.addEventListener("click", async () => {
 		console.error("[vp-generate] threw:", err);
 		window.showAlert?.("Generate failed", String(err?.message || err));
 	} finally {
-		btn.classList.remove("busy");
-		if (iconEl) iconEl.innerHTML = savedIcon;
-		if (labelEl) labelEl.textContent = savedLabel;
-		if (cancelBtn) cancelBtn.hidden = true;
-		refreshViewportGenerateBtn();
+		clearViewportGenerateBusy();
 	}
 });
 
@@ -7519,6 +8393,10 @@ function setActiveWorkflowCell(id) {
 		activeGenCellId = null;
 		refreshGenCells();
 	}
+	// Toolbar Generate button reflects whichever cell is active — refresh so
+	// switching between gen cells and workflow cells swaps the arrow/disabled
+	// state cleanly.
+	refreshViewportGenerateBtn();
 	if (changed) {
 		refreshWorkflowCells();
 		refreshChatContextChip();
@@ -7661,12 +8539,17 @@ function _appendWorkflowRows(container) {
 			document.body.appendChild(proxy);
 			btn.disabled = true;
 			btn.classList.add("busy");
+			// Mirror the busy state on the toolbar Generate chip so the user
+			// gets the "Running…" + spinner treatment regardless of which
+			// button (per-cell ▶ vs. toolbar Generate) kicked off the run.
+			setViewportGenerateBusy();
 			try {
 				await window.runGenerateModule(cell.moduleId, proxy, inputs, resultKind);
 			} finally {
 				btn.disabled = false;
 				btn.classList.remove("busy");
 				proxy.remove();
+				clearViewportGenerateBusy();
 			}
 		});
 		container.appendChild(row);
@@ -7720,6 +8603,47 @@ function renderWorkflowCellProperties(cell) {
 					<span class="drag-val">0</span>
 				</div>
 			`;
+		} else if (spec.type === "dropdown") {
+			// COMBO widget picker — fully custom dropdown so styling matches
+			// the app (native <select> option lists can't be branded on all
+			// browsers). Label sits above the trigger; the trigger opens an
+			// absolutely-positioned menu with the options. Options baked into
+			// the manifest.
+			const opts = Array.isArray(spec.options) ? spec.options : [];
+			const cur = cell.values[spec.name] ?? spec.default ?? (opts[0] || "");
+			const curEsc = String(cur).replace(/</g, "&lt;").replace(/"/g, "&quot;");
+			const optsHtml = opts.map(o => {
+				const esc = String(o).replace(/</g, "&lt;").replace(/"/g, "&quot;");
+				const cls = "wf-dropdown-opt" + (String(o) === String(cur) ? " selected" : "");
+				return `<button type="button" class="${cls}" data-value="${esc}" role="option">${esc}</button>`;
+			}).join("");
+			inputsHtml += `
+				<div class="wf-dropdown" data-input="${spec.name}" style="margin-top:6px">
+					<div class="wf-dropdown-label">${label}</div>
+					<button type="button" class="wf-dropdown-btn" aria-haspopup="listbox" aria-expanded="false">
+						<span class="wf-dropdown-value">${curEsc}</span>
+						<svg class="wf-dropdown-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+					</button>
+					<div class="wf-dropdown-menu" role="listbox" hidden>${optsHtml}</div>
+				</div>
+			`;
+		} else if (spec.type === "scene-image") {
+			// Image source input — user can either upload a specific image OR
+			// leave the slot empty and the current viewport snapshot is used.
+			// Same .gen-slot markup as the partner-API cells (Nano Banana etc.)
+			// so the visual language is consistent across every generator.
+			const uploadIcon = `<svg class="gen-slot-upload" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2"/><path d="M8 9V2.5"/><path d="m5 5 3-3 3 3"/></svg>`;
+			inputsHtml += `
+				<div style="margin-top:6px">
+					<div class="gen-slot wf-scene-image" data-input="${spec.name}" data-accepts="image" title="Drop an image here, click to upload, or leave empty to use the current viewport snapshot.">
+						<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
+						<div class="gen-slot-label">${label}</div>
+						<button type="button" class="gen-slot-clear" hidden>×</button>
+						<input type="file" class="gen-slot-file" accept="image/*" hidden>
+					</div>
+					<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Empty = uses current viewport</div>
+				</div>
+			`;
 		} else {
 			inputsHtml += `
 				<div style="font-size:10px;color:rgba(255,255,255,0.4);padding:6px 0">
@@ -7739,7 +8663,17 @@ function renderWorkflowCellProperties(cell) {
 			${inputsHtml}
 			${emptyHint}
 		</div>
+		<button type="button" class="rp-generate-btn" data-run-cell="${cell.id}">
+			<span>Generate</span>
+			<svg viewBox="0 0 24 24" fill="currentColor" style="width:12px;height:12px" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+		</button>
 	`;
+
+	// Delegate to the sidebar row's ▶ — same wiring, same busy-state hooks,
+	// so the properties Generate button is just a bigger, closer entry point.
+	pane.querySelector(".rp-generate-btn")?.addEventListener("click", () => {
+		document.querySelector(`#workflow-cells .gen-cell[data-cell-id="${cell.id}"] .gen-run-btn`)?.click();
+	});
 
 	function autosize(ta) {
 		if (ta.tagName !== "TEXTAREA") return;
@@ -7753,6 +8687,76 @@ function renderWorkflowCellProperties(cell) {
 			saveSceneDebounced?.();
 		});
 		requestAnimationFrame(() => autosize(ta));
+	}
+	// Custom dropdowns — click the trigger to open the option menu, click an
+	// option to select. Only one menu open at a time; click-outside + Esc
+	// close. Same click-outside handler covers every dropdown on the pane.
+	for (const wrap of pane.querySelectorAll(".wf-dropdown")) {
+		const btn = wrap.querySelector(".wf-dropdown-btn");
+		const menu = wrap.querySelector(".wf-dropdown-menu");
+		const valueEl = wrap.querySelector(".wf-dropdown-value");
+		if (!btn || !menu || !valueEl) continue;
+		const specName = wrap.dataset.input;
+		const closeMenu = () => {
+			menu.hidden = true;
+			btn.setAttribute("aria-expanded", "false");
+			wrap.classList.remove("open");
+		};
+		const openMenu = () => {
+			// Close every other dropdown first so we never have two menus open.
+			for (const other of pane.querySelectorAll(".wf-dropdown.open")) {
+				if (other !== wrap) {
+					other.classList.remove("open");
+					other.querySelector(".wf-dropdown-menu").hidden = true;
+					other.querySelector(".wf-dropdown-btn")?.setAttribute("aria-expanded", "false");
+				}
+			}
+			menu.hidden = false;
+			btn.setAttribute("aria-expanded", "true");
+			wrap.classList.add("open");
+			// Scroll the currently-selected option into view so the user
+			// lands where they left off instead of at the top of a long list.
+			const sel = menu.querySelector(".wf-dropdown-opt.selected");
+			if (sel) sel.scrollIntoView({ block: "nearest" });
+		};
+		btn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			if (menu.hidden) openMenu(); else closeMenu();
+		});
+		menu.addEventListener("click", (e) => {
+			const opt = e.target.closest(".wf-dropdown-opt");
+			if (!opt) return;
+			const val = opt.dataset.value;
+			cell.values[specName] = val;
+			valueEl.textContent = val;
+			for (const other of menu.querySelectorAll(".wf-dropdown-opt.selected")) {
+				other.classList.remove("selected");
+			}
+			opt.classList.add("selected");
+			closeMenu();
+			saveSceneDebounced?.();
+		});
+		// Escape closes when the menu (or its trigger) has focus.
+		wrap.addEventListener("keydown", (e) => {
+			if (e.key === "Escape" && !menu.hidden) { e.stopPropagation(); closeMenu(); }
+		});
+	}
+	// Click-outside handler — wired ONCE per session (guarded via a flag on
+	// document) so re-renders of the pane don't pile up duplicate listeners.
+	// Closes any currently-open .wf-dropdown across the app when the click
+	// lands outside its wrapper.
+	if (!document.__wfDropdownOutsideBound) {
+		document.__wfDropdownOutsideBound = true;
+		document.addEventListener("click", (e) => {
+			for (const wrap of document.querySelectorAll(".wf-dropdown.open")) {
+				if (!wrap.contains(e.target)) {
+					wrap.classList.remove("open");
+					const m = wrap.querySelector(".wf-dropdown-menu");
+					if (m) m.hidden = true;
+					wrap.querySelector(".wf-dropdown-btn")?.setAttribute("aria-expanded", "false");
+				}
+			}
+		});
 	}
 	for (const dragEl of pane.querySelectorAll(".wf-drag")) {
 		const specName = dragEl.dataset.input;
@@ -7776,6 +8780,65 @@ function renderWorkflowCellProperties(cell) {
 			min: spec.min,
 			max: spec.max,
 			format: (v) => v.toFixed(decimals),
+		});
+	}
+	// Scene-image slots — click to upload, × to clear. Uploaded ref goes into
+	// cell.values[input.name] as { url, filename, kind } so the workflow run
+	// pipeline can forward it. Empty means the runner falls back to the
+	// current viewport snapshot (existing backend behavior).
+	for (const slot of pane.querySelectorAll(".wf-scene-image")) {
+		const key = slot.dataset.input;
+		const thumb = slot.querySelector(".gen-slot-thumb");
+		const labelEl = slot.querySelector(".gen-slot-label");
+		const clearBtn = slot.querySelector(".gen-slot-clear");
+		const fileInput = slot.querySelector(".gen-slot-file");
+		const paint = () => {
+			const asset = cell.values[key];
+			if (asset && typeof asset === "object" && asset.url) {
+				thumb.style.backgroundImage = `url("${asset.url}")`;
+				thumb.classList.add("has-image");
+				slot.classList.add("filled");
+				if (labelEl && asset.filename) labelEl.textContent = asset.filename;
+				if (clearBtn) clearBtn.hidden = false;
+			} else {
+				thumb.style.backgroundImage = "";
+				thumb.classList.remove("has-image");
+				slot.classList.remove("filled");
+				if (clearBtn) clearBtn.hidden = true;
+			}
+		};
+		paint();
+		slot.addEventListener("click", (e) => {
+			if (e.target.closest(".gen-slot-clear")) return;
+			if (cell.values[key]) return;
+			fileInput?.click();
+		});
+		fileInput?.addEventListener("change", async () => {
+			const f = fileInput.files?.[0];
+			fileInput.value = "";
+			if (!f) return;
+			try {
+				slot.classList.add("uploading");
+				const ref = await uploadObjectRefImage(f);
+				cell.values[key] = {
+					url: ref.signedUrl || ref.localUrl,
+					filename: ref.filename || f.name,
+					kind: "image",
+				};
+				paint();
+				saveSceneDebounced?.();
+			} catch (err) {
+				console.error("[wf-scene-image] upload failed", err);
+				window.showAlert?.("Upload failed", err.message || String(err));
+			} finally {
+				slot.classList.remove("uploading");
+			}
+		});
+		clearBtn?.addEventListener("click", (e) => {
+			e.stopPropagation();
+			cell.values[key] = null;
+			paint();
+			saveSceneDebounced?.();
 		});
 	}
 	for (const btn of pane.querySelectorAll(".wf-seed-mode")) {
@@ -7924,6 +8987,52 @@ const assistantLog = document.getElementById("assistant-log");
 const assistantInput = document.getElementById("assistant-input");
 const assistantStatus = document.getElementById("assistant-status");
 
+// Asset drag-drop into the chat — drop an image/video from the Assets pane
+// (or the viewport render overlay) anywhere on the input row or the chat
+// log surface and the URL gets appended to the textarea as markdown so the
+// agent sees a real reference alongside your prompt. Same `x-cb-asset` MIME
+// as every other drop target in the app, so behavior stays consistent.
+(() => {
+	const targets = [
+		document.querySelector("#rp-pane-assistant .assistant-input-row"),
+		document.getElementById("assistant-log"),
+	].filter(Boolean);
+	for (const el of targets) {
+		el.addEventListener("dragover", e => {
+			if (!e.dataTransfer?.types?.includes("application/x-cb-asset")) return;
+			e.preventDefault();
+			e.dataTransfer.dropEffect = "copy";
+			el.classList.add("cb-drop-target");
+		});
+		el.addEventListener("dragleave", e => {
+			if (el.contains(e.relatedTarget)) return;
+			el.classList.remove("cb-drop-target");
+		});
+		el.addEventListener("drop", e => {
+			el.classList.remove("cb-drop-target");
+			const raw = e.dataTransfer?.getData("application/x-cb-asset");
+			if (!raw) return;
+			e.preventDefault();
+			let asset;
+			try { asset = JSON.parse(raw); } catch { return; }
+			if (!asset?.url) return;
+			// Append as markdown so the URL is preserved verbatim and the
+			// agent (Claude) sees a real reference alongside the prompt.
+			// Prepend a space so it doesn't glue to whatever the user typed.
+			const ref = `${asset.kind === "video" ? "" : "!"}[${asset.filename || asset.kind || "image"}](${asset.url})`;
+			const cur = assistantInput.value || "";
+			assistantInput.value = cur + (cur && !cur.endsWith(" ") && !cur.endsWith("\n") ? " " : "") + ref + " ";
+			assistantInput.focus();
+			// Nudge the caret to the end so the next keystroke lands after
+			// the pasted ref.
+			assistantInput.selectionStart = assistantInput.selectionEnd = assistantInput.value.length;
+			// Re-run the autosize so the textarea grows to fit the new line
+			// if needed (handled elsewhere via its own input listener).
+			assistantInput.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+	}
+})();
+
 // Markdown rendering for bot replies — Claude returns GFM with headings,
 // tables, lists, bold/italic, code. We parse via marked then sanitize with
 // DOMPurify so the LLM can't inject scripts via the chat surface.
@@ -8016,16 +9125,28 @@ function refreshChatContextChip() {
 	const activeGen = genCells.find(c => c.id === activeGenCellId);
 	const activeWorkflow = workflowCells.find(c => c.id === activeWorkflowCellId);
 	const activeWorkflowMod = activeWorkflow ? workflowModules[activeWorkflow.moduleId] : null;
+	// Selected object joins the context too — the agent can then refer to it
+	// by name in tool calls without the user having to type it. Multi-selection
+	// (selectionSet.size > 1) shows a count so the agent knows it's a group.
+	const selObj = (selected && selected !== renderCam) ? selected : null;
+	const selCount = selectionSet?.size || 0;
+	const parts = [];
 	if (activeWorkflowMod) {
-		target.textContent = `${activeWorkflowMod.label} · workflow · local`;
-		chip.hidden = false;
+		parts.push(`${activeWorkflowMod.label} · workflow · local`);
 	} else if (activeGen) {
 		const label = GEN_MODELS[activeGen.model]?.name || activeGen.model;
-		target.textContent = `${label} · workflow · api`;
-		chip.hidden = false;
-	} else {
-		chip.hidden = true;
+		parts.push(`${label} · workflow · api`);
 	}
+	if (selObj) {
+		const name = selObj.name || selObj.userData?.primKind || "Object";
+		parts.push(selCount > 1 ? `${name} · +${selCount - 1} · object` : `${name} · object`);
+	}
+	if (parts.length === 0) {
+		chip.hidden = true;
+		return;
+	}
+	target.textContent = parts.join("  ·  ");
+	chip.hidden = false;
 }
 
 document.getElementById("assistant-context-clear")?.addEventListener("click", () => {
@@ -8033,7 +9154,10 @@ document.getElementById("assistant-context-clear")?.addEventListener("click", ()
 	activeGenCellId = null;
 	refreshWorkflowCells?.();
 	refreshGenCells?.();
-	refreshChatContextChip();
+	// Also drop object selection so the chip fully clears — otherwise the
+	// user would tap × expecting empty context and still see the object.
+	if (selected && selected !== renderCam) select(null);
+	else refreshChatContextChip();
 });
 
 // Initial paint — reflects whichever cell was seeded active at boot.
@@ -10620,14 +11744,29 @@ let resultMode = "viewport"; // "viewport" | "blockout" | "render" | "intermedia
 let lastResult = null;       // { kind, url, filename, intermediates: [{name,label,url,filename}] }
 
 function updateResultOverlayPos() {
-	if (!resultOverlay || resultOverlay.hidden) return;
 	const asp = currentAspect();
 	const fit = asp ? fitDimensions() : { w: canvasWrap.clientWidth, h: canvasWrap.clientHeight };
 	const vs = viewportSize();
-	resultOverlay.style.width = fit.w + "px";
-	resultOverlay.style.height = fit.h + "px";
-	resultOverlay.style.left = (vs.w - fit.w) / 2 + "px";
-	resultOverlay.style.top = (vs.h - fit.h) / 2 + "px";
+	const left = (vs.w - fit.w) / 2 + "px";
+	const top = (vs.h - fit.h) / 2 + "px";
+	const width = fit.w + "px";
+	const height = fit.h + "px";
+	if (resultOverlay && !resultOverlay.hidden) {
+		resultOverlay.style.width = width;
+		resultOverlay.style.height = height;
+		resultOverlay.style.left = left;
+		resultOverlay.style.top = top;
+	}
+	// MediaPipe overlay uses the same AR rectangle — keeping both in one
+	// updater means every resize / aspect-change / letterbox recompute
+	// covers both surfaces automatically.
+	const mpOverlay = document.getElementById("mediapipe-overlay");
+	if (mpOverlay && !mpOverlay.hidden) {
+		mpOverlay.style.width = width;
+		mpOverlay.style.height = height;
+		mpOverlay.style.left = left;
+		mpOverlay.style.top = top;
+	}
 }
 
 function refreshToggleActive() {
@@ -10769,6 +11908,32 @@ document.getElementById("result-save-overlay")?.addEventListener("click", () => 
 	a.download = lastResult.filename || "render.png";
 	document.body.appendChild(a); a.click(); a.remove();
 });
+
+// Result overlay drag source — lets the user drag the currently-visible
+// generated image/video straight into a workflow input slot, an outliner
+// image ref, or an object properties INPUT tile. Emits the same
+// `application/x-cb-asset` payload the Assets pane uses, so every existing
+// drop target already accepts it — no new drop handlers needed.
+function wireResultDrag(el) {
+	if (!el) return;
+	el.addEventListener("dragstart", e => {
+		if (!lastResult || resultMode !== "render") { e.preventDefault(); return; }
+		try {
+			e.dataTransfer.setData("application/x-cb-asset", JSON.stringify({
+				url: lastResult.url,
+				filename: lastResult.filename,
+				kind: lastResult.kind === "video" ? "video" : "image",
+			}));
+			e.dataTransfer.effectAllowed = "copy";
+			document.body.classList.add("dragging-asset");
+		} catch {}
+	});
+	el.addEventListener("dragend", () => {
+		document.body.classList.remove("dragging-asset");
+	});
+}
+wireResultDrag(document.getElementById("result-overlay-img"));
+wireResultDrag(document.getElementById("result-overlay-vid"));
 
 // Tear down the post-render UI (Save + Render/Blockout toggle, overlay) so the toolbar
 // only shows those things when there's actually a generated result to act on. Called
@@ -12411,13 +13576,26 @@ async function startRecording() {
 	};
 	animate();
 
-	const stream = canvas.captureStream(fps);
+	// If the MediaPipe tool is active, capture the webcam + landmarks composite
+	// instead of the 3D scene. The compositor loop runs only for the duration
+	// of the recording; stopped on onstop below.
+	let mpRecordingActive = false;
+	let stream;
+	if (_mp && _mp.running) {
+		const comp = _startMediaPipeCompositor();
+		if (comp) {
+			stream = comp.captureStream(fps);
+			mpRecordingActive = true;
+		}
+	}
+	if (!stream) stream = canvas.captureStream(fps);
 	recordChunks = [];
 	const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9") ? "video/webm;codecs=vp9" : "video/webm";
 	mediaRecorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
 	mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordChunks.push(e.data); };
 	mediaRecorder.onstop = async () => {
 		tweenRunning = false;
+		if (mpRecordingActive) _stopMediaPipeCompositor();
 		recordedBlob = new Blob(recordChunks, { type: "video/webm" });
 		recording = false;
 		setRecordingMode(false);
@@ -12479,7 +13657,17 @@ async function startRecording() {
 	setTimeout(() => { if (mediaRecorder.state === "recording") mediaRecorder.stop(); }, recDurationMs);
 }
 
-tlRec.addEventListener("click", startRecording);
+// Click-to-toggle — if a recording is running, click again to stop
+// immediately (previously the user had to wait for the duration timeout
+// or bail out with Esc). Same handler for the preview transport button.
+function toggleRecording() {
+	if (recording && mediaRecorder && mediaRecorder.state === "recording") {
+		mediaRecorder.stop();
+		return;
+	}
+	startRecording();
+}
+tlRec.addEventListener("click", toggleRecording);
 
 
 async function uploadImage(blob) {
@@ -13808,6 +14996,12 @@ async function autoSnapshot() {
 		// and restore after.
 		const camHelperWasVisible = renderCamHelper?.visible;
 		const animPathsWereVisible = animPathsGroup?.visible;
+		// Selection outline hulls are scene-root meshes (see applySelectionTint);
+		// they'd otherwise burn the amber rim into every snapshot, then get
+		// preserved by any ControlNet/depth pass that reads the blockout PNG.
+		// Snapshot with clean silhouettes; restore visibility after.
+		const rimStates = _rimOverlays.map(({ mesh }) => [mesh, mesh.visible]);
+		for (const { mesh } of _rimOverlays) mesh.visible = false;
 		// FX helper wireframes (scatter blue box, particle emitter box/sphere) —
 		// also editor-only overlays that leak into the blockout unless hidden.
 		// Collect + restore in one pass so we don't have to know the full FX
@@ -13844,6 +15038,7 @@ async function autoSnapshot() {
 			if (renderCamHelper) renderCamHelper.visible = !!camHelperWasVisible;
 			if (animPathsGroup) animPathsGroup.visible = !!animPathsWereVisible;
 			for (const [h, prev] of fxHelperStates) h.visible = prev;
+			for (const [mesh, prev] of rimStates) mesh.visible = prev;
 		}
 
 		renderer.readRenderTargetPixels(snapshotTarget, 0, 0, w, h, snapshotPixels);
@@ -13981,7 +15176,12 @@ if (IS_PREVIEW) {
 	pvRewind.addEventListener("click", rewindTransport);
 	pvPlay.addEventListener("click", () => isPlayingPreview ? stopPreview() : playPreview());
 	pvRec.addEventListener("click", () => {
-		if (recording) return;
+		// Click-to-toggle — same behavior as the timeline record button:
+		// clicking again mid-recording stops it immediately.
+		if (recording && mediaRecorder && mediaRecorder.state === "recording") {
+			mediaRecorder.stop();
+			return;
+		}
 		pvRec.classList.add("recording");
 		startRecording().finally(() => pvRec.classList.remove("recording"));
 	});
