@@ -2,10 +2,10 @@
   "1": {
     "class_type": "CheckpointLoaderSimple",
     "_meta": {
-      "title": "Load SDXL Checkpoint"
+      "title": "Load Juggernaut XL Checkpoint"
     },
     "inputs": {
-      "ckpt_name": "sd_xl_base_1.0.safetensors"
+      "ckpt_name": "juggernautXL_version9Rundiffusion.safetensors"
     }
   },
   "3": {
@@ -14,7 +14,7 @@
       "title": "KSampler"
     },
     "inputs": {
-      "seed": 42,
+      "seed": 43623624,
       "steps": 30,
       "cfg": 7,
       "sampler_name": "dpmpp_2m",
@@ -57,11 +57,11 @@
   "5": {
     "class_type": "EmptyLatentImage",
     "_meta": {
-      "title": "Empty Latent 1024x1024"
+      "title": "Empty Latent 1344x768"
     },
     "inputs": {
-      "width": 1024,
-      "height": 1024,
+      "width": 1344,
+      "height": 768,
       "batch_size": 1
     }
   },
@@ -71,7 +71,7 @@
       "title": "Positive Prompt"
     },
     "inputs": {
-      "text": "a cozy living room, warm lighting, photorealistic, highly detailed",
+      "text": "a wide open grass field with scattered rocks and boulders, blue sky with soft clouds, golden hour lighting, photorealistic, highly detailed, 8k",
       "clip": [
         "1",
         1
@@ -121,7 +121,8 @@
     },
     "inputs": {
       "image": "viewport.png",
-      "upload": "image"
+      "upload": "image",
+      "type": "input"
     }
   },
   "16": {

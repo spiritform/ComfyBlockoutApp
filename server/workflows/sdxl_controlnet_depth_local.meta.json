@@ -40,7 +40,7 @@
     },
     {
       "name": "seed",
-      "type": "number",
+      "type": "seed",
       "label": "Seed",
       "patch": {
         "node_id": 3,
@@ -51,12 +51,25 @@
     {
       "name": "controlnet_strength",
       "type": "number",
-      "label": "ControlNet Strength (0-1)",
+      "label": "Strength",
+      "default": 0.8,
+      "min": 0,
+      "max": 1,
+      "step": 0.05,
       "patch": {
         "node_id": 16,
         "widget_index": 0,
         "widget_name": "strength"
       }
+    }
+  ],
+  "intermediates": [
+    {
+      "name": "depth",
+      "label": "Depth",
+      "source_node_id": 9,
+      "source_slot": 0,
+      "filename_prefix": "sdxl_depth_cn_depth"
     }
   ]
 }

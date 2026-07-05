@@ -1716,6 +1716,9 @@ async def workflows_register(request: Request):
     runner = str(body.get("runner", "cloud")).strip().lower() or "cloud"
     workflow = body.get("workflow")
     inputs = body.get("inputs") or []
+    intermediates = body.get("intermediates") or []
+    if not isinstance(intermediates, list):
+        raise HTTPException(400, "intermediates must be a list")
 
     if not mod_id or not _SAFE_MODULE_ID.match(mod_id):
         raise HTTPException(400, "id must be snake_case, [a-zA-Z0-9_-] up to 64 chars")
@@ -1744,6 +1747,8 @@ async def workflows_register(request: Request):
         "runner": runner,
         "inputs": inputs,
     }
+    if intermediates:
+        manifest["intermediates"] = intermediates
 
     wf_path.write_text(json.dumps(workflow, indent=2), encoding="utf-8")
     meta_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
@@ -1777,6 +1782,14 @@ Rules:
 - Match `widget_index` to the widget position in `widgets_values` (0-based).
 - For `patch.node_id`, use the numeric `id` field of the node.
 - Prefer FEWER inputs over more. Only expose things the user must set for a useful generation.
+- ALWAYS expose the KSampler `seed` widget via `type: "seed"` — the UI renders a 🎲/🔒 toggle so the user gets random-per-run by default, with the ability to lock a value they liked. This is not a "hide it" input; users want reproducibility.
+- If the workflow has a ControlNet / IPAdapter / Loras strength that materially changes the output (typical range 0-1), expose it via `type: "number"` with `default`, `min: 0`, `max: 1`, `step: 0.05`. Same for guidance/CFG when the workflow author left it as a widget rather than baking it in.
+
+4. Preprocessor previews (INTERMEDIATES). If the workflow has a preprocessor step that produces a visualisable image the user would want to see (Depth-Anything / Zoe / Marigold / MiDaS depth, Canny / HED / Lineart / Scribble edges, OpenPose, Normal, Seg, etc.), add an entry to `intermediates`:
+   `{ name, label, source_node_id, source_slot }`
+   The runner splices in a SaveImage for each, and the editor shows a preview tab (e.g. DEPTH) between BLOCKOUT and RENDER. `source_node_id` is the preprocessor node's numeric id and `source_slot` is which output socket (0 for its main image output). Skip this for workflows without a visual preprocessor pass.
+
+Latent sizing note: for workflows with a `scene-image` input, DON'T worry about the EmptyLatentImage width/height — the runner auto-patches it at run time to match the source image's aspect ratio (snapped to /64) while preserving the authored long side. Whatever square (e.g. 1024×1024) the workflow ships with is fine; just don't hand-code a specific AR expecting it to survive.
 
 When you're done, call the `write_manifest` tool with the final manifest. Do not narrate — the tool call is your entire response."""
 
@@ -1797,10 +1810,14 @@ _MANIFEST_TOOL = {
                     "type": "object",
                     "properties": {
                         "name": {"type": "string", "description": "kwarg name, snake_case"},
-                        "type": {"type": "string", "enum": ["textarea", "text", "scene-image", "number"]},
+                        "type": {"type": "string", "enum": ["textarea", "text", "scene-image", "number", "seed"]},
                         "required": {"type": "boolean"},
                         "placeholder": {"type": "string"},
                         "label": {"type": "string"},
+                        "default": {"description": "Optional default value for number/seed fields."},
+                        "min": {"type": "number"},
+                        "max": {"type": "number"},
+                        "step": {"type": "number"},
                         "patch": {
                             "type": "object",
                             "properties": {
@@ -1811,6 +1828,26 @@ _MANIFEST_TOOL = {
                         },
                     },
                     "required": ["name", "type", "patch"],
+                },
+            },
+            "intermediates": {
+                "type": "array",
+                "description": (
+                    "Optional preprocessor previews (depth, canny, pose, normal, seg, etc.). "
+                    "Each entry causes the runner to splice a SaveImage onto the named node's "
+                    "output slot and the editor to render a preview tab between BLOCKOUT and "
+                    "RENDER. Omit when the workflow has no visual preprocessor stage."
+                ),
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "snake_case identifier (e.g. 'depth')"},
+                        "label": {"type": "string", "description": "Short tab label — 1-2 words (e.g. 'Depth')"},
+                        "source_node_id": {"type": "integer", "description": "Numeric id of the preprocessor node whose output you want to save"},
+                        "source_slot": {"type": "integer", "description": "Output socket index on that node — 0 for the primary image output"},
+                        "filename_prefix": {"type": "string", "description": "Optional. Defaults to intermediate_<name>."},
+                    },
+                    "required": ["name", "label", "source_node_id"],
                 },
             },
         },
@@ -2057,6 +2094,21 @@ async def run_module(module_id: str, request: Request):
         result["url"] = f"/data/{rel}"
     except ValueError:
         result["url"] = None
+
+    # Convert intermediate file paths to /data/ URLs so the frontend can render
+    # them as preview tabs alongside the final render. Runners that don't
+    # produce intermediates just leave the list empty.
+    intermediates = result.get("intermediates")
+    if isinstance(intermediates, list):
+        for inter in intermediates:
+            p = inter.get("path")
+            if not p:
+                continue
+            try:
+                rel_i = Path(p).relative_to(DATA_DIR).as_posix()
+                inter["url"] = f"/data/{rel_i}"
+            except ValueError:
+                inter["url"] = None
     return result
 
 
@@ -2174,9 +2226,17 @@ ASSISTANT_SYSTEM = (
     "result lands in the viewport overlay AND in the user's Assets pane "
     "(double-clickable, draggable, persistent). The raw MCP tools should only be "
     "used for inspection or for advanced flows the editor doesn't expose.\n\n"
-    "CREATING NEW GENERATORS: if the user asks for a generator that doesn't exist "
-    "yet (e.g. \"make me a local Flux 2 Klein T2I generator\", \"add an SDXL "
-    "text-to-image workflow\", \"build a Wan video generator\"), use the "
+    "TERMINOLOGY: the editor's left panel has a single WORKFLOWS section that "
+    "mixes two flavors — partner-API workflows (Nano Banana, Seedance, Tripo, "
+    "etc., which route through Comfy Cloud) and local ComfyUI workflows (the "
+    "manifest-driven modules registered via `create_workflow_module`). Both "
+    "are called 'workflows' in the UI. The scene_context block distinguishes "
+    "them via `source: api` vs `source: local` so you know which runtime "
+    "path each takes. Some legacy tool names still say \"generator\" (e.g. "
+    "`set_generator_prompt`) — they work the same for either kind.\n\n"
+    "CREATING NEW WORKFLOWS: if the user asks for a workflow that doesn't "
+    "exist yet (e.g. \"make me a local Flux 2 Klein T2I workflow\", \"add an "
+    "SDXL text-to-image workflow\", \"build a Wan video workflow\"), use the "
     "`create_workflow_module` editor tool:\n"
     "1. Get the workflow — either fetch a matching template via the Comfy Cloud "
     "MCP `get_template` tool, or construct it yourself from ComfyUI nodes if you "
@@ -2193,11 +2253,34 @@ ASSISTANT_SYSTEM = (
     "Upscale / Remove BG / Extend / etc. Include \"Local\" or \"Cloud\" only when "
     "both variants might exist. Good: `Flux 2 Klein · T2I · Local`, `SDXL · I2I`, "
     "`Tripo · I2M`. Bad: `Flux 2 Klein — Text to Image (Local)`.\n"
+    "3b. LATENT ASPECT RATIO: for workflows with a `scene-image` input, the local "
+    "runner auto-patches the EmptyLatentImage / EmptySDXLLatentImage / "
+    "EmptySD3LatentImage width and height at run time to match the viewport "
+    "snapshot's aspect ratio (long side preserved, snapped to /64). Don't hand-"
+    "code a square 1024×1024 assuming the user's viewport is square — leave the "
+    "workflow's authored resolution and the runner will reshape it. Only override "
+    "if you specifically want to lock a resolution.\n"
+    "3d. SEED + STRENGTH: for any KSampler in the workflow, always expose its "
+    "seed as `type: \"seed\"` (the UI adds a 🎲/🔒 random-vs-fixed toggle — "
+    "random by default, user can lock a seed they liked). For ControlNet, "
+    "IPAdapter, or LoRA strength widgets that materially affect the output "
+    "(typical 0-1 range), expose as `type: \"number\"` with `default`, `min: 0`, "
+    "`max: 1`, `step: 0.05`. Same treatment for CFG when it's not baked in. "
+    "These are the two most-common per-run knobs; skipping them forces the "
+    "user back into the raw workflow JSON.\n"
+    "3c. PREPROCESSOR PREVIEWS: if the workflow has a visual preprocessor stage "
+    "(depth, canny, pose, normal, seg, lineart, HED, MiDaS, Zoe, Marigold, "
+    "OpenPose, etc.), declare it under `intermediates`: "
+    "`[{name, label, source_node_id, source_slot}]`. The runner splices a "
+    "SaveImage onto that node and the editor shows a preview tab (e.g. DEPTH) "
+    "between BLOCKOUT and RENDER, so the user can compare the preprocessor "
+    "output against the final image. `source_node_id` is the preprocessor's "
+    "numeric id; `source_slot` is 0 for its main image output.\n"
     "4. If the user asked for a LOCAL generator, set runner=\"local\" and pass the "
     "workflow in ComfyUI's API/prompt format (dict keyed by node id, each entry "
     "has class_type + inputs). If the workflow you have is in graph/save format "
     "(top-level nodes[] array), convert it first — you know the node schemas.\n"
-    "5. Call `create_workflow_module`. The generator cell appears in the WORKFLOW "
+    "5. Call `create_workflow_module`. The workflow cell appears in the WORKFLOWS "
     "section immediately — no reload needed. To FIX or REPLACE an existing workflow "
     "module (e.g. wrong text encoder, missing node, agent mistake in the first pass), "
     "call `get_workflow_module` with its id to see the current JSON, work out what "
@@ -2462,6 +2545,28 @@ EDITOR_TOOLS = [
                         "if needed."
                     ),
                 },
+                "intermediates": {
+                    "type": "array",
+                    "description": (
+                        "Optional preprocessor previews (depth, canny, pose, normal, seg, "
+                        "lineart, etc.). Each entry causes the runner to splice a SaveImage "
+                        "onto the named node's output slot; the editor renders it as a preview "
+                        "tab (e.g. DEPTH) between BLOCKOUT and RENDER so the user can compare "
+                        "the preprocessor output to the final image. Skip when the workflow "
+                        "has no visual preprocessor stage (pure T2I, etc.)."
+                    ),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string", "description": "snake_case identifier (e.g. 'depth')"},
+                            "label": {"type": "string", "description": "Short tab label — 1-2 words (e.g. 'Depth')"},
+                            "source_node_id": {"type": "integer", "description": "Numeric id of the preprocessor node whose output should be saved"},
+                            "source_slot": {"type": "integer", "description": "Output socket index on that node — 0 for the primary image output"},
+                            "filename_prefix": {"type": "string", "description": "Optional. Defaults to intermediate_<name>."},
+                        },
+                        "required": ["name", "label", "source_node_id"],
+                    },
+                },
                 "inputs": {
                     "type": "array",
                     "description": (
@@ -2479,13 +2584,16 @@ EDITOR_TOOLS = [
                             },
                             "type": {
                                 "type": "string",
-                                "enum": ["textarea", "text", "scene-image", "number"],
+                                "enum": ["textarea", "text", "scene-image", "number", "seed"],
                                 "description": (
                                     "UI control type. 'textarea' = multi-line prompt, 'text' = "
                                     "single-line, 'scene-image' = uses the editor's viewport "
                                     "snapshot (or a picked source image) — the runner uploads it "
                                     "and patches the LoadImage node with the returned filename, "
-                                    "'number' = numeric field."
+                                    "'number' = numeric field (supports optional `default`, `min`, "
+                                    "`max`, `step`), 'seed' = numeric field with a 🎲/🔒 random-vs-"
+                                    "fixed toggle. Patch 'seed' onto KSampler.seed (or an int "
+                                    "primitive feeding it) so a fresh int is minted per run."
                                 ),
                             },
                             "required": {"type": "boolean"},
@@ -2497,6 +2605,10 @@ EDITOR_TOOLS = [
                                 "type": "string",
                                 "description": "Optional custom UI label (falls back to `name`).",
                             },
+                            "default": {"description": "Optional default value for number/seed fields (e.g. 0.8 for a ControlNet strength)."},
+                            "min": {"type": "number", "description": "Optional numeric lower bound (number type)."},
+                            "max": {"type": "number", "description": "Optional numeric upper bound (number type)."},
+                            "step": {"type": "number", "description": "Optional numeric step (e.g. 0.05 for strengths, 1 for counts)."},
                             "patch": {
                                 "type": "object",
                                 "description": (
@@ -2699,9 +2811,14 @@ def _format_scene_context(ctx: dict) -> str:
             parts.append(f"  - {name} ({kind}){ref}{notes}")
     else:
         parts.append("Objects in scene (0): NONE — the scene is empty.")
+    # The UI presents partner-API generators (Nano Banana, Seedance, Tripo...)
+    # and manifest-driven local ComfyUI modules together under one "Workflows"
+    # panel. Both are workflows from the user's POV; here we still list them
+    # in two blocks so the agent knows which runtime path they take (partner
+    # API call vs local ComfyUI job).
     cells = ctx.get("genCells") or []
     if cells:
-        parts.append(f"Generator cells ({len(cells)}):")
+        parts.append(f"API workflows ({len(cells)}):")
         for c in cells:
             model = c.get("model") or "?"
             prompt = (c.get("prompt") or "").strip()
@@ -2709,22 +2826,24 @@ def _format_scene_context(ctx: dict) -> str:
             parts.append(f"  - {model}: {prompt_preview or '(empty)'}")
     wfs = ctx.get("workflowModules") or []
     if wfs:
-        parts.append(f"Workflow modules ({len(wfs)}):")
+        parts.append(f"Local workflows ({len(wfs)}):")
         for w in wfs:
             parts.append(f"  - {w.get('id')}: {w.get('label')} ({w.get('kind')})")
-    # active_target is the disambiguator for underspecified commands like
-    # "generate one" — always prefer this over guessing from history.
+    # active_target is the disambiguator for underspecified commands like "run
+    # one" — always prefer this over guessing from history. kind is always
+    # "workflow" now; source ("api" vs "local") tells the agent which path.
     at = ctx.get("activeTarget")
     if at:
+        source = at.get("source") or ("local" if ctx.get("activeWorkflowModuleId") else "api")
         parts.append(
-            f"Active target: {at.get('kind')}='{at.get('id')}' (label: {at.get('label')})."
+            f"Active workflow: '{at.get('id')}' (label: {at.get('label')}, source: {source})."
         )
         awi = ctx.get("activeWorkflowInputs")
-        if at.get("kind") == "workflow" and awi:
+        if source == "local" and awi:
             names = ", ".join(str(i.get("name")) for i in awi if isinstance(i, dict))
             parts.append(f"  Its inputs: {names}")
     else:
-        parts.append("Active target: (none) — ask the user which generator to use if a command is ambiguous.")
+        parts.append("Active workflow: (none) — ask the user which workflow to use if a command is ambiguous.")
     parts.append(
         "NOTE: Objects above is authoritative. [Name] tokens inside generator "
         "prompts are saved text and may reference objects that were deleted — "

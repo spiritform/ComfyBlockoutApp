@@ -43,6 +43,79 @@ _KIND_EXTS: dict[str, list[str]] = {
     "audio": ["wav", "mp3", "flac", "ogg"],
 }
 
+# Any node whose latent dims should track the source image's aspect ratio.
+_LATENT_CLASSES = {"EmptyLatentImage", "EmptySDXLLatentImage", "EmptySD3LatentImage"}
+
+
+def _read_png_dims(path: Path) -> tuple[int, int] | None:
+    """Parse width/height out of a PNG's IHDR chunk without pulling in Pillow.
+    Returns None on any parse error — caller then leaves the latent alone."""
+    try:
+        with path.open("rb") as f:
+            head = f.read(24)
+        if len(head) < 24 or head[:8] != b"\x89PNG\r\n\x1a\n":
+            return None
+        return int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")
+    except Exception:
+        return None
+
+
+def apply_source_aspect_to_latents(workflow: dict, src_w: int, src_h: int) -> None:
+    """Rewrite width/height on every empty-latent node so the SDXL/SD3/SD1.5 render
+    matches the source image's aspect ratio, keeping the workflow-authored
+    resolution as the target long side (snapped to a /64 multiple as the samplers
+    require). Prevents square outputs from cropping wide viewports."""
+    if src_w <= 0 or src_h <= 0:
+        return
+    aspect = src_w / src_h
+    for node in workflow.values():
+        if not isinstance(node, dict) or node.get("class_type") not in _LATENT_CLASSES:
+            continue
+        inputs = node.setdefault("inputs", {})
+        try:
+            cw = int(inputs.get("width") or 1024)
+            ch = int(inputs.get("height") or 1024)
+        except (TypeError, ValueError):
+            cw, ch = 1024, 1024
+        long_side = max(cw, ch)
+        if aspect >= 1:
+            new_w, new_h = long_side, int(round(long_side / aspect))
+        else:
+            new_w, new_h = int(round(long_side * aspect)), long_side
+        # Samplers assume a /64 grid; without this the first attention pass
+        # errors out at "H*W must be divisible by 64".
+        new_w = max(64, (new_w // 64) * 64)
+        new_h = max(64, (new_h // 64) * 64)
+        inputs["width"] = new_w
+        inputs["height"] = new_h
+
+
+def inject_intermediate_saves(workflow: dict, intermediates: list[dict]) -> dict[str, str]:
+    """For each declared intermediate, splice in a synthetic SaveImage that fans
+    off the source node's chosen slot. Returns {intermediate_name -> synthetic
+    node id} so the caller can find the resulting files in /history."""
+    mapping: dict[str, str] = {}
+    for spec in intermediates or []:
+        name = spec.get("name")
+        src_id = spec.get("source_node_id", spec.get("node_id"))
+        if not name or src_id is None:
+            continue
+        src_slot = int(spec.get("source_slot", 0))
+        prefix = spec.get("filename_prefix") or f"intermediate_{name}"
+        synth_id = f"_int_{name}"
+        while synth_id in workflow:
+            synth_id += "_"
+        workflow[synth_id] = {
+            "class_type": "SaveImage",
+            "_meta": {"title": f"Intermediate · {name}"},
+            "inputs": {
+                "filename_prefix": prefix,
+                "images": [str(src_id), src_slot],
+            },
+        }
+        mapping[name] = synth_id
+    return mapping
+
 
 def is_api_format(workflow: dict) -> bool:
     """API/prompt format is a dict keyed by node ID strings. Graph/save format
@@ -193,6 +266,19 @@ def apply_manifest_inputs(workflow: dict, manifest: dict, kwargs: dict) -> None:
                 if spec.get("required"):
                     raise ValueError(f"{spec['name']} is required")
                 continue
+            # Coerce numeric widget types — the frontend serializes them as
+            # strings ("42", "0.8") but ComfyUI schema-checks KSampler.seed as
+            # int and ControlNetApply.strength as float. Falls back to the raw
+            # value on parse errors so a bad manifest doesn't silently drop it.
+            if input_type in ("seed", "number") and isinstance(value, str):
+                s = value.strip()
+                try:
+                    value = int(s) if input_type == "seed" else float(s)
+                except ValueError:
+                    try:
+                        value = float(s)
+                    except ValueError:
+                        pass
             inputs[widget_name] = value
 
 
@@ -213,7 +299,13 @@ def _guess_widget_name(class_type: str, input_type: str) -> str | None:
     if input_type == "number":
         if ct == "KSampler":
             return "seed"
+        if ct == "ControlNetApplyAdvanced" or ct == "ControlNetApply":
+            return "strength"
         return "value"
+    if input_type == "seed":
+        # KSampler's own seed widget is the common case; PrimitiveInt / other
+        # int-yielding nodes let the manifest override with explicit widget_name.
+        return "seed"
     return None
 
 
@@ -330,18 +422,80 @@ async def run_local_workflow(workflow_path: Path, manifest: dict, kwargs: dict, 
 
         # scene-image inputs get uploaded first, and the manifest patch gets
         # rewritten with the server-side filename. We mutate kwargs so
-        # apply_manifest_inputs writes the uploaded name.
+        # apply_manifest_inputs writes the uploaded name. We also read the
+        # source PNG's dimensions BEFORE the path is replaced so we can drive
+        # the latent size from it below.
+        src_dims: tuple[int, int] | None = None
+        blockout_asset_path: Path | None = None
         for spec in manifest.get("inputs", []):
             if spec.get("type") == "scene-image":
                 image_path = kwargs.get("image_path")
                 if image_path:
+                    src_dims = _read_png_dims(Path(image_path)) or src_dims
+                    # Persist a copy of the exact PNG uploaded to ComfyUI into
+                    # Assets so the user can inspect what the workflow actually
+                    # received (surfaces UI overlays like the camera frustum
+                    # bleeding into the blockout). Copy runs before the upload
+                    # so a network failure still leaves a preview on disk.
+                    try:
+                        blockout_asset_path = new_output_path(data_dir, f"{module_id}_blockout", "png")
+                        shutil.copyfile(Path(image_path), blockout_asset_path)
+                    except Exception:
+                        blockout_asset_path = None
                     uploaded_name = await upload_image_to_local(client, Path(image_path))
                     kwargs["image_path"] = uploaded_name
 
         apply_manifest_inputs(workflow, manifest, kwargs)
 
+        # Auto-match latent AR to source AR so wide viewports don't come back
+        # as squares that then get center-cropped in the RENDER overlay.
+        if src_dims:
+            apply_source_aspect_to_latents(workflow, src_dims[0], src_dims[1])
+
+        # Splice in SaveImage nodes for any preprocessor previews the manifest
+        # exposes (depth, canny, pose, etc.), then track their synthetic ids
+        # so we can lift the files out of /history after the run.
+        intermediates_spec = manifest.get("intermediates") or []
+        intermediates_map = inject_intermediate_saves(workflow, intermediates_spec)
+
         run_started_at = time.time() - 5
         _pid, outputs = await submit_and_wait(client, workflow)
+
+        # Peel the intermediate outputs first so pick_output can safely ignore
+        # them when it scans for the primary result.
+        intermediates_out: list[dict] = []
+        for spec in intermediates_spec:
+            name = spec.get("name")
+            synth_id = intermediates_map.get(name)
+            if not synth_id:
+                continue
+            node_outs = (outputs or {}).get(synth_id) or {}
+            picked = None
+            for val in node_outs.values():
+                if not isinstance(val, list):
+                    continue
+                for it in val:
+                    if isinstance(it, dict) and isinstance(it.get("filename"), str):
+                        e = Path(it["filename"]).suffix.lstrip(".").lower()
+                        if e in allowed_exts:
+                            picked = it
+                            break
+                if picked:
+                    break
+            if not picked:
+                continue
+            e = Path(picked["filename"]).suffix.lstrip(".").lower() or allowed_exts[0]
+            i_dst = new_output_path(data_dir, f"{module_id}_{name}", e)
+            await download_output(client, picked, i_dst)
+            intermediates_out.append({
+                "name": name,
+                "label": spec.get("label") or name,
+                "path": str(i_dst),
+                "filename": i_dst.name,
+                "ext": e,
+            })
+            outputs.pop(synth_id, None)
+
         item = pick_output(outputs, allowed_exts)
         if not item:
             raise RuntimeError(
@@ -350,4 +504,9 @@ async def run_local_workflow(workflow_path: Path, manifest: dict, kwargs: dict, 
         ext = Path(item["filename"]).suffix.lstrip(".").lower() or allowed_exts[0]
         dst = new_output_path(data_dir, module_id, ext)
         await download_output(client, item, dst)
-        return {"path": str(dst), "filename": dst.name, "ext": ext}
+        return {
+            "path": str(dst),
+            "filename": dst.name,
+            "ext": ext,
+            "intermediates": intermediates_out,
+        }

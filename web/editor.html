@@ -669,36 +669,16 @@
 	}
 	.section.collapsible.collapsed .section-head-row { margin-bottom: 0; }
 	.section.collapsible.collapsed { padding-bottom: 14px; }
-	.section.collapsible .collapse-caret {
-		display: inline-flex; align-items: center; justify-content: center;
-		width: 24px; height: 24px; border-radius: 4px;
-		cursor: pointer;
-		font-size: 0; color: transparent; /* hide the ▾ text glyph */
-		transition: background 0.12s;
-	}
-	/* Draw the arrow in a pseudo-element so ONLY the arrow rotates when the
-	   section collapses/expands — the outer 24x24 button box stays put and
-	   still serves as the hit target + hover chip. */
-	.section.collapsible .collapse-caret::before {
-		content: "▾";
-		display: inline-block;
-		font-size: 15px; color: rgba(255,255,255,0.4);
-		transition: transform 0.15s ease, color 0.12s;
-	}
-	.section.collapsible .collapse-caret:hover { background: rgba(255,255,255,0.06); }
-	.section.collapsible .collapse-caret:hover::before { color: #e6e6ea; }
-	/* The label side of the head-row is no longer a big click target — only
-	   the caret toggles collapse. Clicking the label just... clicks the label. */
-	.section.collapsible .section-head-row { cursor: default; }
-	.section.collapsible .section-label { cursor: default; }
-	.section.collapsible.collapsed .collapse-caret::before { transform: rotate(-90deg); }
+	/* Brighten the label while expanded; dim on collapse so the folded state
+	   reads as "asleep" at a glance. */
+	.section.collapsible .section-label { color: rgba(255,255,255,0.6); }
+	.section.collapsible.collapsed .section-label { color: rgba(255,255,255,0.32); }
 	.section.collapsible.collapsed > *:not(.section-head-row) { display: none; }
-	/* Inline action buttons in the head row don't make sense when the section is
-	   folded — hide them too so the head shows only the label + caret. */
+	/* Inline action buttons (Clear, + Add) in the head row don't make sense
+	   when the section is folded — hide them so only the label remains. */
 	.section.collapsible.collapsed .head-end .mini-btn,
 	.section.collapsible.collapsed .head-end .gen-add-btn { display: none; }
-	/* When there's an inline action button next to the chevron (Clear, + Add, etc.),
-	   group them tight at the end so the chevron always anchors the right edge. */
+	/* Group head-end actions tight against the right edge of the head-row. */
 	.section-head-row .head-end {
 		display: inline-flex; align-items: center; gap: 8px; margin-left: auto;
 	}
@@ -707,7 +687,10 @@
 		letter-spacing: 0.06em; color: rgba(255,255,255,0.4);
 		margin-bottom: 14px; display: block;
 	}
-	.section-head-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+	/* min-height keeps the head-row the same height whether or not the head-end
+	   has a visible button — otherwise the label jumps up ~2-3px when a section
+	   collapses (Clear/+ Add get hidden, row shrinks to label-height). */
+	.section-head-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; min-height: 20px; }
 	.section-head-row .section-label { margin-bottom: 0; }
 	.mini-btn {
 		background: rgba(255,255,255,0.05); border: none; border-radius: 4px;
@@ -717,10 +700,13 @@
 	.mini-btn:hover { background: rgba(255,80,80,0.15); color: #ff8a8a; }
 	.mini-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 	.mini-btn:disabled:hover { background: transparent; color: rgba(255,255,255,0.4); }
+	/* "+ Add" variant of mini-btn — same chip shape as Clear but orange tint
+	   on hover to signal an additive action instead of a destructive one. */
+	.mini-btn.add:hover { background: rgba(255,180,84,0.14); color: #ffb454; }
 
-	/* Add-generator dropdown — flows in place under the trailing .gen-cell-add
-	   placeholder. Lists every registered generator so the user can pick one
-	   instead of auto-inserting the next-missing default. */
+	/* Add-generator dropdown — flows in place below the .gen-cells list when
+	   triggered by the section header's "+ Add" button. Lists every registered
+	   generator so the user can pick one instead of auto-inserting a default. */
 	.gen-add-menu {
 		margin-top: 4px;
 		background: #1e1f22; border: 1px solid rgba(255,255,255,0.08);
@@ -806,7 +792,6 @@
 	}
 	#rp-pane-assistant .section-head-row { margin-bottom: 8px; }
 	#rp-pane-assistant .section-label { display: none; }
-	#rp-pane-assistant .collapse-caret { display: none; }
 	#rp-pane-assistant .assistant-shell { flex: 1; min-height: 0; }
 	#rp-pane-assistant .assistant-log {
 		flex: 1; height: auto; min-height: 0; resize: none;
@@ -1057,7 +1042,17 @@
 	.gen-head {
 		display: grid; grid-template-columns: 26px 1fr auto;
 		align-items: center; gap: 8px; cursor: pointer;
+		/* Kill text selection on the head — double-click is the expand gesture,
+		   and without this the browser highlights the label word ("SDXL") as a
+		   side-effect. Selection still works inside the prompt textarea because
+		   this rule doesn't cascade past the head. */
+		user-select: none;
 	}
+	/* Image icon on the left of the head is a single-click expand shortcut —
+	   different affordance from the rest of the head (which activates the
+	   cell). Cursor hint reflects that. */
+	.gen-icon { cursor: pointer; }
+	.gen-icon:hover { background: rgba(255,255,255,0.12); }
 	.gen-head-end { display: flex; align-items: center; gap: 2px; }
 	/* Per-cell Generate button — small amber play glyph in the head-end. Routes
 	   through the shared vp-generate pipeline; setActiveGenCell first so the run
@@ -1490,33 +1485,48 @@
 		width: 100%; height: 100%; object-fit: cover; display: block;
 	}
 	#result-overlay video { pointer-events: auto; }
-	/* Result toggle — the Viewport / Blockout / Render pill group. Lives in the
-	   left of the viewport toolbar (used to float top-center over the canvas). Each
-	   individual button is `hidden` until relevant, so the whole container reads as
-	   empty pre-generate. The × close button clears any active render. */
+	/* Result toggle — the Viewport / Blockout / Render pill group. Sits to the
+	   right of Generate in the viewport toolbar. Compact styling: 8px padding,
+	   9px font. Each button is `hidden` until relevant, so the whole container
+	   reads as empty pre-generate. The × close button clears any active render. */
 	#result-toggle {
 		display: flex; align-items: center; gap: 0;
 		background: rgba(14,14,18,0.92); border: 1px solid rgba(255,255,255,0.08);
 		border-radius: 5px; overflow: hidden;
-		height: 26px;
+		height: 22px; margin-left: 6px;
 	}
 	#result-toggle[hidden] { display: none; }
 	#result-toggle button {
 		background: transparent; border: none; color: rgba(255,255,255,0.55);
-		padding: 0 14px; height: 100%;
-		font: inherit; font-size: 10px;
-		letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
+		padding: 0 8px; height: 100%;
+		font: inherit; font-size: 9px;
+		letter-spacing: 0.05em; text-transform: uppercase; cursor: pointer;
 		display: inline-flex; align-items: center; justify-content: center;
 	}
 	#result-toggle button[hidden] { display: none; }
 	#result-toggle button:hover { color: #fff; }
 	#result-toggle button.active { background: rgba(255,180,84,0.18); color: #ffb454; }
 	#result-toggle #result-close {
-		padding: 0 8px; font-size: 14px; letter-spacing: 0;
+		padding: 0 6px; font-size: 12px; letter-spacing: 0;
 		color: rgba(255,255,255,0.45);
 		border-left: 1px solid rgba(255,255,255,0.06);
 	}
 	#result-toggle #result-close:hover { background: rgba(255,80,80,0.18); color: #ff8a8a; }
+	/* Save-render icon overlaid on the rendered image (top-right corner of the
+	   AR box). Replaces the toolbar Save button; only visible when a real
+	   render is on-screen (render mode + not viewing viewport). */
+	#result-save-overlay {
+		position: absolute; top: 10px; right: 10px; z-index: 9;
+		width: 28px; height: 28px; padding: 0;
+		border: none; border-radius: 4px; cursor: pointer;
+		background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
+		color: rgba(255,255,255,0.85);
+		display: none; align-items: center; justify-content: center;
+		pointer-events: auto;
+	}
+	#result-save-overlay:hover { background: rgba(0,0,0,0.75); color: #fff; }
+	#result-save-overlay svg { width: 15px; height: 15px; display: block; }
+	#result-save-overlay.visible { display: inline-flex; }
 	#aspect-frame {
 		position: absolute; z-index: 5; pointer-events: none;
 		border: 1px solid rgba(255,255,255,0.12);
@@ -1566,19 +1576,11 @@
 		display: flex; gap: 4px; z-index: 6;
 		pointer-events: auto;
 	}
-	/* Top-left mirror of viewport-mode-corner. Currently just holds the Scene
-	   properties button; grows if we add more overlay buttons (grid toggle,
-	   guides, etc.) later. */
-	#viewport-scene-corner {
-		position: absolute; top: 8px; left: 8px;
-		display: flex; gap: 4px; z-index: 6;
-		pointer-events: auto;
-	}
 	/* Static RGB "XYZ" reference — three colored letters, no camera-tracking.
-	   Sits under the scene-corner button so the top-left button row stays
-	   clean; the letters read as a quiet reference below. */
+	   The Scene properties button used to sit here; now that it lives in the
+	   viewport toolbar, XYZ occupies the top-left corner directly. */
 	#viewport-axes-corner {
-		position: absolute; top: 38px; left: 12px; z-index: 6;
+		position: absolute; top: 10px; left: 12px; z-index: 6;
 		pointer-events: none;
 		font: 700 12px ui-monospace, monospace;
 		text-shadow: 0 1px 2px rgba(0,0,0,0.7);
@@ -1689,16 +1691,21 @@
 	.vt-icon-btn { padding: 0 8px; }
 	.vt-icon-btn svg { width: 14px; height: 14px; display: block; }
 	.vt-sep { flex: 1; }
+	/* Toolbar Generate button — subtle grey chip with a play-arrow on the RIGHT,
+	   echoing the ▶ chip on individual workflow cells. row-reverse flips the
+	   DOM order [icon, label] into visual [label, icon] without touching the
+	   busy-state JS (which still targets `span:last-child` for the label). */
 	.vt-generate {
-		background: rgba(255,180,84,0.12) !important;
-		color: #ffb454 !important;
+		background: rgba(255,255,255,0.05) !important;
+		color: rgba(255,255,255,0.75) !important;
 		padding: 0 14px;
 		margin-left: 4px;
+		flex-direction: row-reverse;
 	}
-	.vt-generate:hover { background: rgba(255,180,84,0.22) !important; color: #fff !important; }
+	.vt-generate:hover { background: rgba(255,255,255,0.1) !important; color: #fff !important; }
 	.vt-generate:disabled { opacity: 0.45; cursor: not-allowed; }
 	.vt-generate.busy {
-		background: rgba(255,180,84,0.22) !important; color: #ffd28a !important;
+		background: rgba(255,255,255,0.1) !important; color: #e6e6ea !important;
 		cursor: progress;
 	}
 	/* Cancel button — only shown while Generate is busy. Sits directly right of
@@ -1757,13 +1764,20 @@
 		position: relative; aspect-ratio: 1;
 		background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.06);
 		border-radius: 6px; overflow: hidden; cursor: grab;
-		transition: border-color 0.12s;
+		transition: border-color 0.12s, box-shadow 0.12s;
 	}
 	.assets-tile:hover { border-color: rgba(255,180,84,0.4); }
 	.assets-tile:active { cursor: grabbing; }
 	.assets-tile.dragging {
 		opacity: 0.25;
 		border: 1px dashed rgba(255,180,84,0.5) !important;
+	}
+	/* Multi-select highlight — amber ring + subtle glow. Delete key nukes every
+	   selected tile in one shot; ctrl-click toggles, shift-click extends the
+	   range from the last-clicked (anchor) tile. */
+	.assets-tile.selected {
+		border-color: #ffb454 !important;
+		box-shadow: 0 0 0 2px rgba(255,180,84,0.55) inset, 0 0 8px rgba(255,180,84,0.25);
 	}
 	/* Drag-ghost — smaller chip that follows the cursor so it visually reads as
 	   "the asset is in flight", and roughly matches the drop-target footprint. */
@@ -1902,7 +1916,11 @@
 	/* Off state for the eye toggle — dimmer + slightly translucent so it reads as
 	   "disabled" next to the bright amber "on" state. */
 	#obj-texture-btn:not(.has-image) { opacity: 0.55; color: rgba(255,255,255,0.55); }
+	/* Object-INPUT image slot reuses .gen-slot for the workflow-input tile look
+	   but must stay clickable to replace even when filled (workflow slots use
+	   drag-drop for that; we don't). */
 	#obj-image-btn { cursor: pointer; }
+	#obj-image-btn.gen-slot.filled { cursor: pointer; }
 	.rp-bg-clear {
 		margin-left: auto;
 		width: 20px; height: 20px; border-radius: 3px;
@@ -2125,9 +2143,6 @@
 		<div class="section collapsible" data-section="objects">
 			<div class="section-head-row">
 				<span class="section-label">Objects</span>
-				<span class="head-end">
-					<span class="collapse-caret">▾</span>
-				</span>
 			</div>
 			<div class="prim-grid">
 				<button class="prim-btn" data-prim="cube" data-label="Cube"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12L4 7.5M12 12l8-4.5M12 12v9"/></svg></button>
@@ -2144,9 +2159,6 @@
 		<div class="section collapsible" data-section="fx">
 			<div class="section-head-row">
 				<span class="section-label">FX</span>
-				<span class="head-end">
-					<span class="collapse-caret">▾</span>
-				</span>
 			</div>
 			<div class="prim-grid">
 				<button class="prim-btn" data-fx="clouds" data-label="Clouds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M7 17h11a3.5 3.5 0 0 0 .5-6.9A5.5 5.5 0 0 0 8 8.5 4 4 0 0 0 7 17z"/></svg></button>
@@ -2161,21 +2173,31 @@
 				<span class="section-label">Outliner</span>
 				<span class="head-end">
 					<button class="mini-btn" id="clear-btn" title="Clear all objects" hidden>Clear</button>
-					<span class="collapse-caret">▾</span>
 				</span>
 			</div>
 			<div class="outliner" id="outliner"></div>
 		</div>
 
-		<div class="section collapsible" data-section="generate">
+		<!-- Unified Workflows panel — mixes built-in API generators (Nano Banana,
+		     Seedance, Tripo, etc.) with manifest-driven local ComfyUI workflows
+		     from /api/modules?source=workflow. From the user's POV they're all
+		     just "workflows" — the AI Agent tools + context chip use the same
+		     word so instructions like "run the active workflow" don't need to
+		     disambiguate. Internal state still lives in two arrays (genCells vs
+		     workflowCells) because each has its own runtime shape (ref slots +
+		     prompt vs. manifest inputs); the merge is at the render + label
+		     layer. -->
+		<div class="section collapsible" data-section="workflows">
 			<div class="section-head-row">
-				<span class="section-label">Generate</span>
+				<span class="section-label">Workflows</span>
 				<span class="head-end">
-					<span class="collapse-caret">▾</span>
+					<!-- Sole entry point for adding a workflow. Opens the shared
+					     #workflow-add-menu below the cells list. -->
+					<button type="button" class="mini-btn add" id="workflow-add-btn" title="Add workflow (API or local)">+ Add</button>
 				</span>
 			</div>
-			<div class="gen-cells" id="gen-cells"></div>
-			<div class="gen-add-menu" id="gen-add-menu" role="menu" hidden></div>
+			<div class="gen-cells" id="workflow-cells"></div>
+			<div class="gen-add-menu" id="workflow-add-menu" role="menu" hidden></div>
 			<!-- Hidden legacy buttons — runModule still routes through these so the top-header
 			     auth gating + status reuse work unchanged. Inline display:none because .gen-btn
 			     sets display:flex which would override the [hidden] attribute. -->
@@ -2183,28 +2205,11 @@
 			<button class="gen-btn" id="gen-sd" data-gen="seedance" disabled style="display:none"></button>
 		</div>
 
-		<!-- Sandboxed parallel section for manifest-driven workflow modules. Populated
-		     at load time from /api/modules where source === "workflow". Kept apart from
-		     Generate on purpose so the experimental import flow can't break the main
-		     path — deleting a workflow's .meta.json makes it vanish here without touching
-		     anything above. -->
-		<div class="section collapsible" data-section="workflow">
-			<div class="section-head-row">
-				<span class="section-label">Workflow</span>
-				<span class="head-end">
-					<span class="collapse-caret">▾</span>
-				</span>
-			</div>
-			<div class="gen-cells" id="workflow-cells"></div>
-			<div class="gen-add-menu" id="workflow-add-menu" role="menu" hidden></div>
-		</div>
-
 		<div class="section collapsible" id="assistant-section" data-section="assistant">
 			<div class="section-head-row">
 				<span class="section-label">AI Agent</span>
 				<span class="head-end">
 					<span class="assistant-status" id="assistant-status">MCP · idle</span>
-					<span class="collapse-caret">▾</span>
 				</span>
 			</div>
 			<div class="assistant-shell">
@@ -2230,14 +2235,20 @@
 
 	<div id="viewport-area">
 		<div id="viewport-toolbar">
-			<!-- Result toggle — Viewport / Blockout / Render pills. Individual buttons
-			     are hidden until relevant; the whole container is [hidden] pre-generate.
-			     × clears any active render and returns to the live scene. -->
-			<div id="result-toggle" hidden>
-				<button data-result="viewport" class="active" hidden>Viewport</button>
-				<button data-result="blockout" hidden>Blockout</button>
-				<button data-result="render" hidden>Render</button>
-				<button id="result-close" type="button" title="Close render — clear the overlay and go back to the live scene" hidden>×</button>
+			<div class="vt-group">
+				<!-- Scene properties pill — used to live top-left of the viewport
+				     overlay; hoisted into the toolbar so the XYZ axis legend can
+				     reclaim that corner. Snap + grid sit alongside it since they
+				     configure the whole viewport (not a per-object tool). -->
+				<button class="vt-btn vt-icon-btn" id="scene-props-btn" title="Scene properties — environment, fog, post FX. Opens on the right without changing the view.">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="17" cy="6" r="2"/><path d="M3 19l5-6 4 4 3-3 6 5"/><path d="M3 21h18"/></svg>
+				</button>
+				<button class="vt-btn vt-icon-btn active" id="toggle-grid" title="Show/hide ground grid">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M3 12h18"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+				</button>
+				<button class="vt-btn vt-icon-btn" id="toggle-snap" title="Snap — pivot snaps to nearest vertex/face, objects snap to each other">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 15 4 4"/><path d="M2.352 10.648a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.029-6.029a1 1 0 1 1 3 3l-6.029 6.029a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.365-6.367A1 1 0 0 0 8.716 4.282z"/><path d="m5 8 4 4"/></svg>
+				</button>
 			</div>
 			<div class="vt-group">
 				<button class="vt-btn" id="mode-translate" data-mode="translate">Move<span class="vt-key">W</span></button>
@@ -2247,25 +2258,21 @@
 					<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" style="width:12px;height:12px;vertical-align:-2px;margin-right:5px"><circle cx="8" cy="8" r="3.6"/><line x1="1.5" y1="8" x2="14.5" y2="8"/><line x1="8" y1="1.5" x2="8" y2="14.5"/></svg>Origin<span class="vt-key">Q</span></button>
 			</div>
 			<div class="vt-sep"></div>
-			<button class="vt-btn vt-icon-btn" id="toggle-snap" title="Snap — pivot snaps to nearest vertex/face, objects snap to each other">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 15 4 4"/><path d="M2.352 10.648a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.029-6.029a1 1 0 1 1 3 3l-6.029 6.029a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.365-6.367A1 1 0 0 0 8.716 4.282z"/><path d="m5 8 4 4"/></svg>
-			</button>
-			<button class="vt-btn vt-icon-btn active" id="toggle-grid" title="Show/hide ground grid">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M3 12h18"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-			</button>
 			<button class="vt-btn vt-generate" id="vp-generate" title="Generate with active model">
-				<span id="vp-generate-icon" style="display:flex;align-items:center;margin-right:6px"></span>
+				<span id="vp-generate-icon" style="display:flex;align-items:center"></span>
 				<span>Generate</span>
 			</button>
 			<button class="vt-btn vt-cancel" id="vp-cancel" title="Cancel the current generation" hidden>×</button>
-			<button class="vt-btn vt-save-render" id="vp-save-render" title="Download the current render" hidden>
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;margin-right:6px">
-					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-					<polyline points="7 10 12 15 17 10"/>
-					<line x1="12" y1="15" x2="12" y2="3"/>
-				</svg>
-				<span>Save</span>
-			</button>
+			<!-- Result toggle — Viewport / Blockout / Render pills. Sits right of
+			     Generate now (was on the left) and each button is [hidden] until
+			     relevant, so the whole container reads as empty pre-generate. The
+			     × close button clears any active render. -->
+			<div id="result-toggle" hidden>
+				<button data-result="viewport" class="active" hidden>Viewport</button>
+				<button data-result="blockout" hidden>Blockout</button>
+				<button data-result="render" hidden>Render</button>
+				<button id="result-close" type="button" title="Close render — clear the overlay and go back to the live scene" hidden>×</button>
+			</div>
 		</div>
 		<div id="canvas-wrap">
 			<div id="canvas-bg-layer"></div>
@@ -2281,25 +2288,23 @@
 				<span class="v1"></span><span class="v2"></span>
 				<div id="viewport-time-corner"><span id="tl-time">0.00s / 4.00s</span></div>
 				<div id="viewport-axes-corner"><span style="color:#ff5252">X</span><span style="color:#4ade80">Y</span><span style="color:#4a8aff">Z</span></div>
-				<div id="viewport-scene-corner">
-					<button class="vpm-btn" id="scene-props-btn" title="Scene properties — environment, fog, post FX. Opens on the right without changing the view.">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="17" cy="6" r="2"/><path d="M3 19l5-6 4 4 3-3 6 5"/><path d="M3 21h18"/></svg>
-					</button>
-				</div>
 				<div id="viewport-mode-corner">
-					<button class="vpm-btn" id="mode-camera" title="Camera view — look through the framed render camera. Also opens PROPERTIES : CAMERA and deselects so + / S keys the camera.">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
-					</button>
-					<button class="vpm-btn" id="mode-scene" title="Perspective view — orbit around the shot from an overview vantage.">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="1"/><path d="M18.944 12.33a1 1 0 0 0 0-.66 7.5 7.5 0 0 0-13.888 0 1 1 0 0 0 0 .66 7.5 7.5 0 0 0 13.888 0"/></svg>
-					</button>
+					<!-- Single view-toggle: flips between camera view (look through the
+					     framed render camera) and perspective/scene view (orbit around
+					     the shot). The SVG is swapped by updateViewToggleIcon() so the
+					     button always shows the ACTIVE view. -->
+					<button class="vpm-btn active" id="mode-view-toggle" title="Switch between camera view and perspective view"></button>
 				</div>
 			</div>
 			<!-- Generated result overlay — sits exactly on the AR rectangle, image
-			     (or first frame of video) shown when "After" is selected. -->
+			     (or first frame of video) shown when "After" is selected. Save
+			     button floats top-right so the toolbar can stay lean. -->
 			<div id="result-overlay" hidden>
 				<img id="result-overlay-img" alt="" draggable="false">
 				<video id="result-overlay-vid" loop muted playsinline></video>
+				<button id="result-save-overlay" type="button" title="Download this render">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+				</button>
 			</div>
 			<div id="status">idle · 0 objects</div>
 			<div id="info-block" style="display:none;position:absolute;top:6px;left:6px;background:rgba(20,20,24,0.85);border-radius:6px;z-index:11;flex-direction:column;align-items:flex-start">
@@ -2590,16 +2595,18 @@
 					<div class="hint">Locks the rig at the current playhead frame — scrub to find a pose, then freeze to prevent the transport from advancing it.</div>
 				</div>
 
+				<!-- Object-level INPUT — one image-ref tile (workflow-input tile style)
+				     and per-object prompting notes. The refImage stashed here is
+				     forwarded as an input reference by Nano Banana + any other
+				     model that consumes per-object refs, so this isn't cosmetic. -->
 				<div class="section">
-					<div class="section-label">Generate</div>
-					<div class="rp-bg-pair">
-						<div class="rp-bg-row rp-bg-img-btn" id="obj-image-btn" title="Image reference for prompting">
-							<span class="rp-bg-thumb" id="obj-image-thumb"></span>
-							<span class="rp-bg-label" id="obj-image-label">Image ref</span>
-							<button type="button" class="rp-bg-clear" id="obj-image-clear" title="Remove image" hidden>×</button>
-						</div>
-						<input type="file" id="obj-image-file" accept="image/*" hidden>
+					<div class="section-label">Input</div>
+					<div class="gen-slot" id="obj-image-btn" title="Image reference for prompting — forwarded as input reference when generating with Nano Banana etc.">
+						<div class="gen-slot-thumb" id="obj-image-thumb"><svg class="gen-slot-upload" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2"/><path d="M8 9V2.5"/><path d="m5 5 3-3 3 3"/></svg></div>
+						<div class="gen-slot-label" id="obj-image-label">Image ref</div>
+						<button type="button" class="gen-slot-clear" id="obj-image-clear" title="Remove image" hidden>×</button>
 					</div>
+					<input type="file" id="obj-image-file" accept="image/*" hidden>
 					<textarea id="rp-notes" rows="3" placeholder="Per-object notes for prompting…" style="margin-top:8px"></textarea>
 				</div>
 			</div>
@@ -2791,7 +2798,6 @@
 				<div class="section collapsible collapsed" id="sys-prompt-section">
 					<div class="section-head-row" onclick="this.parentElement.classList.toggle('collapsed')">
 						<span class="section-label">Prompt Tweaks</span>
-						<span class="collapse-caret">▾</span>
 					</div>
 					<div class="prompt-base-preview" id="prompt-base-preview" title="Base system prompt — locked, always sent. Edit your tweaks below.">
 						<div class="prompt-base-label">Base (locked)</div>
@@ -2807,6 +2813,16 @@
 			     Keeping DOM IDs intact means all listeners wired against
 			     #assistant-* keep working after the reparent. -->
 			<div class="rp-pane" id="rp-pane-assistant" hidden></div>
+
+			<!-- ===== GEN CELL TAB ===== -->
+			<!-- Parameters for the currently active generator cell (slots + prompt).
+			     Content is rebuilt on activation by renderGenCellProperties. -->
+			<div class="rp-pane" id="rp-pane-gencell" hidden></div>
+
+			<!-- ===== WORKFLOW CELL TAB ===== -->
+			<!-- Parameters for the currently active workflow module cell.
+			     Content is rebuilt on activation by renderWorkflowCellProperties. -->
+			<div class="rp-pane" id="rp-pane-workflowcell" hidden></div>
 
 			<!-- ===== ASSETS TAB ===== -->
 			<div class="rp-pane" id="rp-pane-assets" hidden>
@@ -2905,6 +2921,14 @@
 		// "image", or "video". Toggled by the pill row at the top of the pane.
 		let assetsFilter = "recent";
 		let assetsItems = [];
+		// Multi-select state — plain Set of filenames, plus an anchor for
+		// shift-range. Kept module-scope so DOM re-renders don't drop selection
+		// (a refresh after a batch delete rebuilds tiles; the survivors that
+		// were also selected should stay selected).
+		const assetSelection = new Set();
+		let assetSelectAnchor = null;
+		// Current filtered order — needed for shift-click range calculation.
+		let assetsFiltered = [];
 		// One shared observer across renders — cheap to reuse. Videos ship with
 		// preload="none" so the initial paint doesn't fire N metadata fetches; the
 		// observer flips them to preload="metadata" as they scroll into view so the
@@ -2931,6 +2955,12 @@
 			const filtered = (assetsFilter === "recent")
 				? assetsItems
 				: assetsItems.filter(it => it.kind === assetsFilter);
+			assetsFiltered = filtered;
+			// Prune selection of any filenames that no longer exist (typical
+			// after a delete + refresh) so leftover ghosts don't stick around.
+			const present = new Set(filtered.map(x => x.filename));
+			for (const f of [...assetSelection]) if (!present.has(f)) assetSelection.delete(f);
+			if (assetSelectAnchor && !present.has(assetSelectAnchor)) assetSelectAnchor = null;
 			assetsEmpty.hidden = filtered.length > 0;
 			if (filtered.length === 0) {
 				const kindLabel = { image: "images", video: "videos", "3d": "3D assets" }[assetsFilter] || assetsFilter;
@@ -2986,7 +3016,7 @@
 		});
 		function renderAssetTile(asset) {
 			const tile = document.createElement("div");
-			tile.className = "assets-tile";
+			tile.className = "assets-tile" + (assetSelection.has(asset.filename) ? " selected" : "");
 			tile.draggable = true;
 			tile.dataset.url = asset.url;
 			tile.dataset.kind = asset.kind;
@@ -3073,17 +3103,49 @@
 				a.href = asset.url; a.download = asset.filename;
 				document.body.appendChild(a); a.click(); a.remove();
 			});
+			// Single-tile delete → straight DELETE, no confirm. Bulk cleanup
+			// is the whole point of the multi-select flow (shift/ctrl-click
+			// + keyboard Del below); a modal per click made that unusable.
 			tile.querySelector(".del").addEventListener("click", async (e) => {
 				e.stopPropagation();
-				const ok = await (window.showConfirm
-					? window.showConfirm("Delete asset?", `<strong style="color:#fff">${asset.filename}</strong>`, { confirmText: "Delete", danger: true })
-					: confirm(`Delete ${asset.filename}?`));
-				if (!ok) return;
+				assetSelection.delete(asset.filename);
+				if (assetSelectAnchor === asset.filename) assetSelectAnchor = null;
 				try {
 					await fetch(`/api/assets/${encodeURIComponent(asset.filename)}`, { method: "DELETE" });
 					await refreshAssets();
 				} catch (err) {
 					window.showAlert?.("Delete failed", err.message);
+				}
+			});
+			// Selection click: plain = single-select, ctrl/⌘ = toggle, shift =
+			// range from the last anchor. Ignored on drags (dragstart fires
+			// before click, and the tile-level click below skips when the target
+			// is inside the actions bar or is the media element in drag).
+			tile.addEventListener("click", (e) => {
+				if (e.target.closest(".actions")) return;
+				if (e.shiftKey && assetSelectAnchor) {
+					const names = assetsFiltered.map(x => x.filename);
+					const a = names.indexOf(assetSelectAnchor);
+					const b = names.indexOf(asset.filename);
+					if (a >= 0 && b >= 0) {
+						const [lo, hi] = a <= b ? [a, b] : [b, a];
+						if (!(e.ctrlKey || e.metaKey)) assetSelection.clear();
+						for (let i = lo; i <= hi; i++) assetSelection.add(names[i]);
+					}
+				} else if (e.ctrlKey || e.metaKey) {
+					if (assetSelection.has(asset.filename)) assetSelection.delete(asset.filename);
+					else assetSelection.add(asset.filename);
+					assetSelectAnchor = asset.filename;
+				} else {
+					assetSelection.clear();
+					assetSelection.add(asset.filename);
+					assetSelectAnchor = asset.filename;
+				}
+				// Cheap targeted repaint — flip .selected on every tile that's
+				// currently in the grid rather than re-running renderAssetsFiltered
+				// (which would rebuild media elements + drop scroll position).
+				for (const t of assetsGrid.querySelectorAll(".assets-tile")) {
+					t.classList.toggle("selected", assetSelection.has(t.dataset.filename));
 				}
 			});
 			// Register pending video for on-demand metadata load. Falls back gracefully
@@ -3098,8 +3160,25 @@
 		}
 
 		if (assetsBtn) assetsBtn.addEventListener("click", toggleAssets);
-		document.addEventListener("keydown", (e) => {
+		document.addEventListener("keydown", async (e) => {
 			if (e.key === "Escape" && isAssetsOpen()) closeAssets();
+			// Bulk-delete selected assets on Delete / Backspace, but only when the
+			// Assets pane is open AND focus is not in a text-edit field (typing in
+			// the prompt textarea shouldn't blow away Assets).
+			if ((e.key === "Delete" || e.key === "Backspace") && isAssetsOpen() && assetSelection.size > 0) {
+				const t = e.target;
+				const tag = t?.tagName;
+				const isEditable = tag === "INPUT" || tag === "TEXTAREA" || t?.isContentEditable;
+				if (isEditable) return;
+				e.preventDefault();
+				const names = [...assetSelection];
+				assetSelection.clear();
+				assetSelectAnchor = null;
+				await Promise.all(names.map(n =>
+					fetch(`/api/assets/${encodeURIComponent(n)}`, { method: "DELETE" }).catch(() => {})
+				));
+				await refreshAssets();
+			}
 		});
 
 		// Expose so other parts (post-Generate hook) can refresh the listing without reopening.
@@ -3309,12 +3388,23 @@
 		});
 
 		// ---------- result toast ----------
-		function showResult(kind, url, filename) {
+		function showResult(kind, url, filename, intermediates) {
 			const ts = Date.now();
 			const bust = url.includes("?") ? `${url}&t=${ts}` : `${url}?t=${ts}`;
+			// Cache-bust intermediates the same way so a repeat generation
+			// swaps the DEPTH tab in place instead of showing the stale cached
+			// PNG under the same /data/ path.
+			const inters = Array.isArray(intermediates)
+				? intermediates.filter(x => x && x.url).map(x => ({
+					name: x.name,
+					label: x.label || x.name,
+					url: x.url.includes("?") ? `${x.url}&t=${ts}` : `${x.url}?t=${ts}`,
+					filename: x.filename,
+				}))
+				: [];
 			// Result lands in the viewport overlay (with Before/After toggle).
 			// The old corner toast popup was redundant with that, so it's gone.
-			if (window.showResultInViewport) window.showResultInViewport(kind, bust, filename);
+			if (window.showResultInViewport) window.showResultInViewport(kind, bust, filename, inters);
 		}
 		toastClose.addEventListener("click", () => toast.classList.remove("show"));
 
@@ -3440,7 +3530,7 @@
 							if (window.showAlert) window.showAlert("Import failed", impErr.message || String(impErr));
 						}
 					} else {
-						showResult(resultKind, out.url, out.filename);
+						showResult(resultKind, out.url, out.filename, out.intermediates);
 					}
 				}
 			} catch (e) {
@@ -3563,11 +3653,19 @@ async function ensureAOComposer() {
 		// RT otherwise matches three's default EffectComposer target so OutputPass
 		// handles the color-space conversion the way three expects — setting
 		// `colorSpace` explicitly here was double-triggering sRGB conversion.
+		// Packed depth24_stencil8 texture: N8AO still gets a sampleable depth
+		// buffer (24-bit is plenty), AND the composer's render target has a
+		// stencil attachment — required for the selection outline shader
+		// (stencil-masked hull) to work when AO is on. Without stencil, the
+		// outline's NotEqual test never fires and the hull fills the object
+		// interior with amber.
 		const depthTex = new THREE.DepthTexture(s.x, s.y);
-		depthTex.type = THREE.UnsignedIntType;
+		depthTex.type = THREE.UnsignedInt248Type;
+		depthTex.format = THREE.DepthStencilFormat;
 		const rt = new THREE.WebGLRenderTarget(s.x, s.y, {
 			type: THREE.HalfFloatType,
 			depthTexture: depthTex,
+			stencilBuffer: true,
 		});
 		rt.texture.name = "cb-ao-composer.rt";
 		aoComposer = new EffectComposer(renderer, rt);
@@ -3784,14 +3882,18 @@ function setActiveView(which) {
 	if (typeof updateCameraSliders === "function") updateCameraSliders();
 	// Camera motion path is Scene-view only — rebuild so it appears/disappears with the swap.
 	if (typeof refreshAnimPaths === "function") refreshAnimPaths();
-	// mode-scene is a pure view-toggle now — amber = you're in perspective view.
-	// mode-camera still tracks the Camera pane (its click still opens/closes it);
-	// scene-props-btn tracks the Scene pane visibility (see forceRightPane).
-	document.getElementById("mode-scene")?.classList.toggle("active", which === "scene");
+	// One combined view-toggle now — swap its glyph to whichever view we're in
+	// so the icon reflects the current state (camera vs perspective).
+	window.updateViewToggleIcon?.(which);
 }
 window.setActiveView = setActiveView;
 
-let grid = new THREE.GridHelper(20, 20, 0xdddddd, 0x888888);
+// The two color args are (centerAxisColor, gridLineColor). Center axis matches
+// the field color now — at 0.18 opacity even a slightly-brighter center line
+// reads as a hard white bar cutting the viewport. If you want origin cues,
+// switch to an AxesHelper (dedicated color-coded arrows) rather than boosting
+// the grid axis line.
+let grid = new THREE.GridHelper(20, 20, 0x888888, 0x888888);
 grid.material.transparent = true;
 grid.material.opacity = 0.18;
 scene.add(grid);
@@ -3856,7 +3958,18 @@ applyRoomEnvironment();
 scene.environmentIntensity = 0.2;
 
 const objects = [];
+// Multi-selection model: `selectionSet` holds every currently-selected object;
+// `selected` is the "primary" (the last-clicked one) and drives the transform
+// gizmo, properties panel, and keyframe hooks. Shift/Ctrl-click toggles set
+// membership. Group drag (translate only) shifts every set member by the
+// primary's world-position delta — see the transform mouseDown/objectChange
+// hooks further down.
 let selected = null;
+const selectionSet = new Set();
+// Group-drag snapshot — captured in transform mouseDown when the set has >1
+// member, consumed in objectChange to apply the primary's delta to the rest.
+// Null outside a drag or during single-select drags.
+let groupDragSnapshot = null;
 
 const PRIM_DEFS = {
 	cube:     () => new THREE.BoxGeometry(1, 1, 1),
@@ -4780,6 +4893,10 @@ function deleteObject(obj) {
 	if (!obj) return;
 	snapshotForUndo();
 	if (selected === obj) {
+		// The selection rim shells live in the scene root (see applySelectionTint),
+		// so removing `obj` alone leaves them orphaned and still rendering the amber
+		// silhouette after delete. Clear before we detach.
+		clearSelectionTint();
 		transform.detach();
 		selected = null;
 		forceRightPane(defaultRightPane());
@@ -5402,6 +5519,8 @@ function forceRightPane(which, label) {
 	const camPane = document.getElementById("rp-pane-camera");
 	const astPane = document.getElementById("rp-pane-assets");
 	const asstPane = document.getElementById("rp-pane-assistant");
+	const genPane = document.getElementById("rp-pane-gencell");
+	const wfPane  = document.getElementById("rp-pane-workflowcell");
 	const titleEl = document.getElementById("rp-title");
 	const kickerEl = document.getElementById("rp-kicker");
 	const sepEl = document.getElementById("rp-sep");
@@ -5410,9 +5529,11 @@ function forceRightPane(which, label) {
 	if (camPane) camPane.hidden = which !== "camera";
 	if (astPane) astPane.hidden = which !== "assets";
 	if (asstPane) asstPane.hidden = which !== "assistant";
+	if (genPane) genPane.hidden = which !== "gencell";
+	if (wfPane)  wfPane.hidden  = which !== "workflowcell";
 	// Assets + Assistant own the kicker label with no sub-title. Object / Scene /
-	// Camera use "Properties : <label>". "none" hides the whole header for a blank
-	// right panel.
+	// Camera / GenCell / WorkflowCell use "Properties : <label>". "none" hides the
+	// whole header for a blank right panel.
 	const isAssets = which === "assets";
 	const isAssistant = which === "assistant";
 	const isFullPane = isAssets || isAssistant;
@@ -5424,7 +5545,7 @@ function forceRightPane(which, label) {
 	if (sepEl) sepEl.style.display = (isFullPane || isBlank) ? "none" : "";
 	if (titleEl) {
 		titleEl.style.display = (isFullPane || isBlank) ? "none" : "";
-		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : "Object");
+		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : which === "gencell" ? "Generator" : which === "workflowcell" ? "Workflow" : "Object");
 	}
 	// Keep top-header + viewport-toolbar buttons in sync with whichever full-pane
 	// view is active.
@@ -5432,10 +5553,10 @@ function forceRightPane(which, label) {
 	document.getElementById("th-assistant")?.classList.toggle("active", isAssistant);
 	// Toolbar pills light amber ONLY while their pane is the visible one. That
 	// makes "lit" == "properties currently showing this".
-	document.getElementById("mode-camera")?.classList.toggle("active", which === "camera");
-	// mode-scene is now a pure view-toggle — its amber state is driven from
-	// setActiveView. The new top-left scene-props-btn takes over "scene pane
-	// is showing" here.
+	// #scene-props-btn (top toolbar) is amber whenever the Scene properties
+	// pane is open. The old #mode-camera pill was folded into a single
+	// #mode-view-toggle, whose glyph is driven from setActiveView instead of
+	// from the active properties pane, so no pane-side sync is needed here.
 	document.getElementById("scene-props-btn")?.classList.toggle("active", which === "scene");
 	// Filter chips live in the right-panel header (so they sit on the ASSETS baseline)
 	// — only meaningful while the assets pane is the active one.
@@ -5510,73 +5631,204 @@ applyAssistantEnablement();
 	});
 })();
 
-// Selection highlight — plain uniform amber emissive at low intensity. No
-// shader injection, no fresnel. Robust across every material that exposes
-// an emissive slot; splats are skipped (spark has no standard emissive path).
+// Selection highlight — inverted-hull silhouette. Per selected mesh we spawn
+// an expanded back-face hull with LessEqualDepth. The hull's back faces project
+// to the object's screen area + a ~6px rim. Depth test naturally masks the
+// interior (back-face vertex depth > object's own front-face depth in the
+// buffer), so only the rim actually paints. The rim gets occluded where other
+// geometry is in front of it — which reads as "outline hidden behind that
+// thing", exactly what we want for a stroke that respects depth.
+//
+// Why not EdgesGeometry: crease-based edges disappear on smooth shapes.
+// Why not stencil-masked always-on-top: three's opaque/transparent queue
+// split kept resetting stencil state between the write and the read, so
+// the mask leaked and the interior filled with amber.
+// Why not OutlinePass: needs a composer refactor so both AO-on and AO-off
+// render paths route through it.
 const SELECTION_TINT = 0xffb454;
-const SELECTION_INTENSITY = 0.08;
-let _tintedMaterials = [];
-function clearSelectionTint() {
-	for (const entry of _tintedMaterials) {
-		const { mat, emissive, intensity } = entry;
-		if (mat.emissive && emissive) mat.emissive.copy(emissive);
-		if (typeof intensity === "number") mat.emissiveIntensity = intensity;
-		mat.needsUpdate = true;
+const SELECTION_OUTLINE_WIDTH = 0.006; // clip-space fraction — ~6px at 1080p
+let _rimOverlays = []; // { host, mesh } — host = original mesh, mesh = outline hull
+
+const SELECTION_OUTLINE_VS = `
+	// Push each vertex outward along its normal, converted to clip space so the
+	// resulting outline has roughly constant screen thickness regardless of the
+	// object's distance or scale.
+	uniform float outlineWidth;
+	void main() {
+		vec4 viewPos = modelViewMatrix * vec4(position, 1.0);
+		vec4 clipPos = projectionMatrix * viewPos;
+		vec3 viewNormal = normalize(normalMatrix * normal);
+		vec2 offset = normalize((projectionMatrix * vec4(viewNormal, 0.0)).xy);
+		clipPos.xy += offset * outlineWidth * clipPos.w;
+		gl_Position = clipPos;
 	}
-	_tintedMaterials = [];
+`;
+const SELECTION_OUTLINE_FS = `
+	uniform vec3 outlineColor;
+	uniform float outlineOpacity;
+	void main() { gl_FragColor = vec4(outlineColor, outlineOpacity); }
+`;
+
+function clearSelectionTint() {
+	for (const { mesh } of _rimOverlays) {
+		mesh.parent?.remove(mesh);
+		mesh.material?.dispose?.();
+		// Geometry is shared with the host mesh — do NOT dispose here.
+	}
+	_rimOverlays = [];
 }
+
 function applySelectionTint(obj) {
 	if (!obj || obj === renderCam) return;
 	if (obj.userData?.primKind === "splat") return;
-	const seen = new Set();
 	obj.traverse(c => {
-		const mats = Array.isArray(c.material) ? c.material : c.material ? [c.material] : [];
-		for (const mat of mats) {
-			if (seen.has(mat) || !mat.emissive) continue;
-			seen.add(mat);
-			_tintedMaterials.push({
-				mat,
-				emissive: mat.emissive.clone(),
-				intensity: mat.emissiveIntensity,
-			});
-			mat.emissive.setHex(SELECTION_TINT);
-			mat.emissiveIntensity = SELECTION_INTENSITY;
-			mat.needsUpdate = true;
-		}
+		if (!c.isMesh || !c.geometry) return;
+		// SkinnedMesh outlines would need per-frame bone-driven vertex expansion
+		// on the CPU; skip and rely on the gizmo + outliner to communicate.
+		if (c.isSkinnedMesh) return;
+		// The vertex shader needs normals — geometries built without them (rare,
+		// mostly custom Points/Lines) can't drive the outline, so bail.
+		if (!c.geometry.attributes?.normal) return;
+
+		// Outline hull — expanded back-face pass, LessEqualDepth. Back-face +
+		// normal-expanded means the hull's back faces project to the object's
+		// screen area PLUS a ~6px rim. Depth test does the interior-mask job
+		// natively: back-face hull vertex depth > object's own front-face
+		// depth in the buffer, so LessEqual fails at interior and it never
+		// paints there. At rim pixels: passes against empty background or
+		// objects farther than the hull; occluded where something is closer.
+		// Clean stroke, no fill, and hides where crossed by other geometry.
+		const outMat = new THREE.ShaderMaterial({
+			uniforms: {
+				outlineColor: { value: new THREE.Color(SELECTION_TINT) },
+				outlineWidth: { value: SELECTION_OUTLINE_WIDTH },
+			},
+			vertexShader: SELECTION_OUTLINE_VS,
+			fragmentShader: `
+				uniform vec3 outlineColor;
+				void main() { gl_FragColor = vec4(outlineColor, 1.0); }
+			`,
+			side: THREE.BackSide,
+			depthWrite: false,
+			depthTest: true,
+			depthFunc: THREE.LessEqualDepth,
+		});
+		const hull = new THREE.Mesh(c.geometry, outMat);
+		hull.name = "__cb_selection_rim";
+		hull.renderOrder = 2001;
+		hull.matrixAutoUpdate = false;
+		hull.matrixWorldAutoUpdate = false;
+		hull.onBeforeRender = () => {
+			hull.matrix.copy(c.matrixWorld);
+			hull.matrixWorld.copy(c.matrixWorld);
+		};
+		scene.add(hull);
+		_rimOverlays.push({ host: c, mesh: hull });
+
+		// X-ray ghost — paints a dim silhouette of the selected object on the
+		// SURFACE of any object it's intersecting/behind. Uses the RAW
+		// (unexpanded) geometry with depthFunc: Greater so it only fires where
+		// scene depth is CLOSER than the object's own depth = where an
+		// occluder is in front of the object at that pixel.
+		//   • Where the object is directly visible → object wrote its own
+		//     depth → Greater against equal depth fails → skip. The selected
+		//     object itself never gets x-ray'd.
+		//   • Where an occluder is in front → occluder wrote its front-face
+		//     depth (closer) → object_depth > occluder_depth → passes → dim
+		//     amber draws on the occluder's surface at those pixels. Reveals
+		//     where the selection is punching through other geometry.
+		const xrayMat = new THREE.MeshBasicMaterial({
+			color: SELECTION_TINT,
+			transparent: true,
+			opacity: 0.35,
+			depthWrite: false,
+			depthTest: true,
+			depthFunc: THREE.GreaterDepth,
+			side: THREE.FrontSide,
+		});
+		const xrayGhost = new THREE.Mesh(c.geometry, xrayMat);
+		xrayGhost.name = "__cb_selection_xray";
+		xrayGhost.renderOrder = 2002;
+		xrayGhost.matrixAutoUpdate = false;
+		xrayGhost.matrixWorldAutoUpdate = false;
+		xrayGhost.onBeforeRender = () => {
+			xrayGhost.matrix.copy(c.matrixWorld);
+			xrayGhost.matrixWorld.copy(c.matrixWorld);
+		};
+		scene.add(xrayGhost);
+		_rimOverlays.push({ host: c, mesh: xrayGhost });
 	});
 }
+
 function updateSelectionOutline() {
-	// no-op: kept as a name-alias for the animate-loop hook. Emissive tint is
-	// applied/cleared at select time and doesn't need per-frame syncing.
+	// no-op: kept as a name-alias for the animate-loop hook. The rim shell rides
+	// the host mesh's transform natively (child parenting) so nothing per-frame.
 }
 
-function select(obj) {
+function select(obj, opts = {}) {
+	const additive = !!opts.additive;
 	clearSelectionTint();
-	selected = obj;
-	window.__selectedObj = obj;
-	if (obj) transform.attach(obj);
-	else transform.detach();
-	if (anchorMode) {
-		if (obj) tintGizmo(0xffb454);
-		else pivotMarker.visible = false;
-	}
-	if (obj && obj !== renderCam) applySelectionTint(obj);
-	// Selecting the render camera locks the sceneCam orbit so the user's drag can't
-	// accidentally tumble the viewport while they're adjusting the shot. Re-enabled
-	// as soon as anything else (or nothing) is selected.
-	orbit.enabled = obj !== renderCam;
+	// renderCam is a pinned viewport-shot picker — it never joins a multi-selection,
+	// and clicking it always drops back to single-select regardless of shift/ctrl.
 	if (obj === renderCam) {
-		// Selecting the render camera opens the Camera pane instead of the Object
-		// inspector — the gizmo still attaches for direct manipulation, but the right
-		// panel shows FOV / position drag fields tied to the active camera.
+		selectionSet.clear();
+		selected = renderCam;
+		window.__selectedObj = renderCam;
+		transform.attach(renderCam);
+		if (anchorMode) pivotMarker.visible = false;
+		// Selecting the render camera locks the sceneCam orbit so the user's drag can't
+		// accidentally tumble the viewport while they're adjusting the shot.
+		orbit.enabled = false;
 		forceRightPane("camera", "Camera");
-	} else if (obj) {
-		const label = obj.name || obj.userData.primKind || "Object";
+		refreshOutliner();
+		return;
+	}
+	if (!obj) {
+		selectionSet.clear();
+		selected = null;
+		window.__selectedObj = null;
+		transform.detach();
+		if (anchorMode) pivotMarker.visible = false;
+		orbit.enabled = true;
+		// Deselect returns to whatever the user's "home" pane is (AI Agent when
+		// enabled, otherwise blank). Camera + Scene stay strictly button-driven.
+		forceRightPane(defaultRightPane());
+		refreshOutliner();
+		return;
+	}
+	if (additive) {
+		// Shift/Ctrl-click: toggle membership. Deselecting the primary promotes
+		// another set member (arbitrary — last remaining) so the gizmo keeps an
+		// anchor while the set has any content.
+		if (selectionSet.has(obj)) {
+			selectionSet.delete(obj);
+			if (selected === obj) {
+				selected = selectionSet.size ? Array.from(selectionSet).pop() : null;
+			}
+		} else {
+			selectionSet.add(obj);
+			selected = obj;
+		}
+	} else {
+		// Plain click: single-select — replace the set with just this object.
+		selectionSet.clear();
+		selectionSet.add(obj);
+		selected = obj;
+	}
+	window.__selectedObj = selected;
+	// Outline every set member — primary + additive members read the same.
+	for (const o of selectionSet) applySelectionTint(o);
+	if (selected) {
+		transform.attach(selected);
+		if (anchorMode) tintGizmo(0xffb454);
+		orbit.enabled = true;
+		const label = selected.name || selected.userData.primKind || "Object";
 		forceRightPane("object", label);
 		refreshObjectInspector?.();
 	} else {
-		// Deselect returns to whatever the user's "home" pane is (AI Agent when
-		// enabled, otherwise blank). Camera + Scene stay strictly button-driven.
+		transform.detach();
+		if (anchorMode) pivotMarker.visible = false;
+		orbit.enabled = true;
 		forceRightPane(defaultRightPane());
 	}
 	refreshOutliner();
@@ -5605,7 +5857,7 @@ function refreshOutliner() {
 	}
 	for (const obj of objects) {
 		const row = document.createElement("div");
-		row.className = "out-row" + (obj === selected ? " selected" : "") + (obj.visible === false ? " hidden" : "");
+		row.className = "out-row" + (selectionSet.has(obj) ? " selected" : "") + (obj.visible === false ? " hidden" : "");
 		const ps = obj.userData.particleSystem;
 		const hex = ps
 			? "#" + ps.config.color.toString(16).padStart(6, "0")
@@ -5794,7 +6046,7 @@ function refreshOutliner() {
 			if (e.target.closest(".out-vis")) { toggleVisibility(obj); return; }
 			if (e.target.closest(".out-expand-toggle, .out-context")) return;
 			if (e.target.closest(".out-color, .out-img, .out-name-edit")) return;
-			select(obj);
+			select(obj, { additive: e.shiftKey || e.ctrlKey || e.metaKey });
 		});
 
 		outlinerEl.appendChild(row);
@@ -5925,18 +6177,41 @@ canvas.addEventListener("pointerup", e => {
 	// Gizmo absorbed the click but nothing real was under it — keep the current selection
 	// instead of deselecting to empty space.
 	if (!meshHit && !sphereHit && transform.axis) return;
+	const additive = e.shiftKey || e.ctrlKey || e.metaKey;
 	if (meshHit && (!sphereHit || meshHit.distance < sphereHitDist)) {
 		let root = meshHit.object;
 		while (root && !objects.includes(root)) root = root.parent;
-		if (root) select(root);
+		if (root) select(root, { additive });
 	} else if (sphereHit) {
-		select(sphereHit);
+		select(sphereHit, { additive });
 	} else {
 		// Empty viewport background — deselect only. Scene properties get
 		// opened via the top-header Scene button; clicking the void used to
 		// pop the pane too, but that stole focus from whichever pane the user
 		// already had open (Assistant, Assets, etc.) every time they clicked
 		// off an object.
+		select(null);
+	}
+});
+
+// Canvas-wrap letterbox click → deselect. The WebGL canvas resizes to the
+// aspect-ratio rectangle, so clicks in the surrounding letterbox never reach
+// the canvas pointerup handler above and used to leave the selection stuck.
+// Using `click` (not pointerup) means the browser has already filtered out
+// drags for us; e.target === canvasWrap gates on "click landed on the wrap
+// background itself", not on the canvas / overlay / result-image inside it.
+canvasWrap?.addEventListener("click", (e) => {
+	if (e.target !== canvasWrap) return;
+	select(null);
+});
+
+// Outliner background click → deselect. Same idea as the letterbox: clicking
+// between rows (or on the "add an object" empty placeholder) is a clear "I'm
+// not interacting with any object" gesture. Rows own their own click handlers
+// so this fires only for the container / empty state.
+outlinerEl?.addEventListener("click", (e) => {
+	const t = e.target;
+	if (t === outlinerEl || (t instanceof HTMLElement && t.classList.contains("out-empty"))) {
 		select(null);
 	}
 });
@@ -6012,16 +6287,21 @@ const GEN_MODELS = {
 
 const genCells = [];
 let activeGenCellId = null;
+// Hoisted from the workflow-module section below so the unified refresh
+// (_appendWorkflowRows reads both) works from the very first render, i.e. the
+// default nano-banana / seedance seeding a few dozen lines down. Left `let` on
+// the arrays so we can reassign in scene load if we ever need to; without the
+// hoist they're in the TDZ during boot and the whole init IIFE explodes.
+const workflowModules = {};
+const workflowCells = [];
+let activeWorkflowCellId = null;
 
 function getActiveGenCell() {
 	return genCells.find(c => c.id === activeGenCellId) || genCells[0] || null;
 }
 
 function setActiveGenCell(id) {
-	// No-op guard — mousedown/focusin listeners fire on every cell interaction,
-	// including typing into a prompt textarea. refreshGenCells rebuilds the DOM,
-	// which would blow away focus mid-keystroke. Only refresh on an actual change.
-	if (activeGenCellId === id) return;
+	const changed = activeGenCellId !== id;
 	activeGenCellId = id;
 	// Single "active target" model — activating a Generate cell clears any
 	// active WORKFLOW selection so the chat context chip agrees with the
@@ -6030,9 +6310,31 @@ function setActiveGenCell(id) {
 		activeWorkflowCellId = null;
 		if (typeof refreshWorkflowCells === "function") refreshWorkflowCells();
 	}
-	refreshGenCells();
-	refreshViewportGenerateBtn();
-	if (typeof refreshChatContextChip === "function") refreshChatContextChip();
+	if (changed) {
+		refreshGenCells();
+		refreshViewportGenerateBtn();
+		if (typeof refreshChatContextChip === "function") refreshChatContextChip();
+	}
+	// Sync the right-hand properties pane. Only rebuild the pane DOM when the
+	// active id actually changed OR the pane isn't currently showing gencell
+	// (e.g. user clicked a scene object then came back). Skipping the rebuild
+	// while typing preserves focus + caret in the prompt textarea.
+	if (id) {
+		const cell = getActiveGenCell();
+		if (cell) {
+			const m = GEN_MODELS[cell.model] || GEN_MODELS["nano-banana"];
+			const paneEl = document.getElementById("rp-pane-gencell");
+			const isPaneOpen = paneEl && !paneEl.hidden;
+			if (!isPaneOpen) {
+				forceRightPane("gencell", m.name);
+				renderGenCellProperties(cell);
+			} else if (changed) {
+				const titleEl = document.getElementById("rp-title");
+				if (titleEl) titleEl.textContent = m.name;
+				renderGenCellProperties(cell);
+			}
+		}
+	}
 }
 
 const KIND_ICONS = {
@@ -6040,6 +6342,11 @@ const KIND_ICONS = {
 	video: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>`,
 	"3d": `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 16l9 5 9-5"/></svg>`,
 };
+
+// Play-arrow used on the right side of the toolbar Generate button. Matches the
+// ▶ chip on individual workflow cells so the two paths (per-cell run vs. the
+// active-cell viewport run) visually rhyme.
+const GENERATE_ARROW_SVG = `<svg viewBox="0 0 24 24" fill="currentColor" style="width:9px;height:9px" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>`;
 
 function refreshViewportGenerateBtn() {
 	const btn = document.getElementById("vp-generate");
@@ -6051,8 +6358,7 @@ function refreshViewportGenerateBtn() {
 		btn.disabled = true;
 		return;
 	}
-	const m = GEN_MODELS[cell.model];
-	iconEl.innerHTML = m ? (KIND_ICONS[m.kind] || "") : "";
+	iconEl.innerHTML = GENERATE_ARROW_SVG;
 	// Always enabled as long as a model cell exists — if auth isn't ready when the
 	// user clicks, the click handler shows a clear prompt to sign in (no need to
 	// pre-emptively dim the button while the auth poller is still warming up).
@@ -6100,11 +6406,30 @@ function addGenCell(init = {}) {
 function removeGenCell(id) {
 	const i = genCells.findIndex(c => c.id === id);
 	if (i >= 0) genCells.splice(i, 1);
-	if (activeGenCellId === id) activeGenCellId = genCells[0]?.id || null;
+	const wasActive = activeGenCellId === id;
+	if (wasActive) activeGenCellId = genCells[0]?.id || null;
 	refreshGenCells();
 	refreshViewportGenerateBtn();
 	refreshGenAddBtn();
 	maybeSaveDebounced();
+	// Sync the right pane if we just removed the cell it was showing. If there's
+	// a fallback active cell, re-populate; otherwise revert to the default pane.
+	if (wasActive) {
+		const genPane = document.getElementById("rp-pane-gencell");
+		if (genPane && !genPane.hidden) {
+			if (activeGenCellId) {
+				const nextCell = getActiveGenCell();
+				const m = nextCell ? (GEN_MODELS[nextCell.model] || GEN_MODELS["nano-banana"]) : null;
+				if (nextCell && m) {
+					const titleEl = document.getElementById("rp-title");
+					if (titleEl) titleEl.textContent = m.name;
+					renderGenCellProperties(nextCell);
+				}
+			} else {
+				forceRightPane(defaultRightPane?.() || "none");
+			}
+		}
+	}
 }
 
 function refreshGenAddBtn() {
@@ -6251,129 +6576,63 @@ function resolveGenReferences(promptText) {
 	return buildGenPayload(promptText).references;
 }
 
-function refreshGenCells() {
-	const container = document.getElementById("gen-cells");
+// Unified Workflows panel — clears #workflow-cells and repaints both API
+// generator rows (from genCells) and local ComfyUI workflow rows (from
+// workflowCells) into the same list. The section header's "+ Add" button
+// (in the head-end) is the sole entry point for adding a new workflow.
+// Legacy `refreshGenCells` and `refreshWorkflowCells` both delegate here so
+// every existing caller (there are many across selection, delete, scene-load)
+// just triggers one unified repaint.
+function refreshWorkflowsList() {
+	const container = document.getElementById("workflow-cells");
 	if (!container) return;
 	container.innerHTML = "";
+	// API generators first — Nano Banana, Seedance, Tripo, etc. These are the
+	// zero-config partner-API cells; local ComfyUI workflows follow below.
+	_appendGenRows(container);
+	// Local ComfyUI workflows — manifest-driven modules registered via
+	// /api/modules?source=workflow. Runs against the user's local ComfyUI.
+	_appendWorkflowRows(container);
+}
+
+function _appendGenRows(container) {
 	for (const cell of genCells) {
 		const m = GEN_MODELS[cell.model] || GEN_MODELS["nano-banana"];
 		const row = document.createElement("div");
-		row.className = "gen-cell" + (cell.expanded ? " expanded" : "") + (cell.id === activeGenCellId ? " active" : "");
+		// Left column is now a compact list — parameters (slots + prompt) live in the
+		// right-hand properties panel, populated by renderGenCellProperties on
+		// activation. The .active class marks the currently selected cell.
+		row.className = "gen-cell" + (cell.id === activeGenCellId ? " active" : "");
 		// tabindex makes the row focusable so the top-level Delete-key handler
 		// can tell "the user is targeting a gen-cell" (via document.activeElement
-		// closest #gen-cells) instead of nuking the selected scene object.
+		// closest #workflow-cells) instead of nuking the selected scene object.
 		row.tabIndex = -1;
 		row.dataset.cellId = cell.id;
-		// Per-model reference slots above the prompt. Each slot is a drop target for
-		// assets from the right-panel Assets pane (drag-and-drop).
-		//   nano-banana: 1 slot — style reference (aesthetic only, not subject/content)
-		//   seedance:    2 slots — start frame + reference video
-		let slotsHtml = "";
-		// Each slot accepts both drag-from-Assets AND click-to-upload-from-desktop. The
-		// upload icon is a visual hint; clicking anywhere on an empty slot opens the picker.
-		const uploadIcon = `<svg class="gen-slot-upload" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2"/><path d="M8 9V2.5"/><path d="m5 5 3-3 3 3"/></svg>`;
-		if (cell.model === "seedance") {
-			slotsHtml = `
-				<div class="gen-slots">
-					<div class="gen-slot" data-slot="startFrame" data-accepts="image" title="Start frame — drag an image from Assets, or click to upload">
-						<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
-						<div class="gen-slot-label">Start frame</div>
-						<button type="button" class="gen-slot-clear" hidden>×</button>
-						<input type="file" class="gen-slot-file" accept="image/*" hidden>
-					</div>
-					<div class="gen-slot" data-slot="refVideo" data-accepts="video" title="Reference video — drag from Assets or click to upload; matches motion / timing">
-						<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
-						<div class="gen-slot-label">Ref video</div>
-						<button type="button" class="gen-slot-clear" hidden>×</button>
-						<input type="file" class="gen-slot-file" accept="video/*" hidden>
-					</div>
-				</div>
-			`;
-		} else if (cell.model === "nano-banana") {
-			slotsHtml = `
-				<div class="gen-slots">
-					<div class="gen-slot" data-slot="styleRef" data-accepts="image" title="Style reference — aesthetic only (cartoon, anime, paint, etc.) not the subject. Drag from Assets or click to upload.">
-						<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
-						<div class="gen-slot-label">Style ref</div>
-						<button type="button" class="gen-slot-clear" hidden>×</button>
-						<input type="file" class="gen-slot-file" accept="image/*" hidden>
-					</div>
-				</div>
-			`;
-		} else if (cell.model === "tripo-i2m" || cell.model === "triposplat-local") {
-			// Every image-in-only module (except depth-anything, which always uses
-			// the viewport snapshot) shares the same source-image slot layout.
-			const helpByModel = {
-				"triposplat-local": "Source image — TripoSplat runs locally on your GPU and converts this to a gaussian splat (.ply). Drag from Assets, click to upload, or leave empty to use the current viewport snapshot.",
-				"tripo-i2m": "Source image — the picture Tripo converts to a .glb mesh. Drag from Assets, click to upload, or leave empty to use the current viewport snapshot.",
-			};
-			const help = helpByModel[cell.model];
-			slotsHtml = `
-				<div class="gen-slots">
-					<div class="gen-slot" data-slot="sourceImage" data-accepts="image" title="${help}">
-						<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
-						<div class="gen-slot-label">Source image</div>
-						<button type="button" class="gen-slot-clear" hidden>×</button>
-						<input type="file" class="gen-slot-file" accept="image/*" hidden>
-					</div>
-				</div>
-			`;
-		}
-		// Depth-Anything is viewport-only: no inputs at all, and the cell doesn't
-		// need to expand (there's nothing to configure). Flag it so we skip the
-		// slot block AND the head-click expand toggle below.
-		const nonExpandable = cell.model === "depth-anything-local";
-		// Prompt-less models — hide the prompt textarea so the cell doesn't suggest a
-		// text input that gets silently ignored. Text-to-model KEEPS the prompt.
-		const promptLessModels = ["tripo-i2m", "triposplat-local", "depth-anything-local"];
-		const promptWrap = promptLessModels.includes(cell.model) ? "" : `
-			<div class="gen-prompt-wrap">
-				<div class="gen-prompt-hl" aria-hidden="true"></div>
-				<textarea class="gen-prompt" placeholder="Enter prompt here…" spellcheck="false">${cell.prompt.replace(/</g, "&lt;")}</textarea>
-				<div class="gen-ref-suggest" hidden></div>
-			</div>
-		`;
+		row.dataset.workflowSource = "api";
 		row.innerHTML = `
 			<div class="gen-head">
 				<div class="gen-icon">${m.iconSvg}</div>
 				<span class="gen-name">${m.name}</span>
 				<div class="gen-head-end">
 					<button class="gen-del-btn" title="Remove ${m.name} from the list" type="button">×</button>
-					<button class="gen-run-btn" title="Generate with ${m.name}" type="button">▶</button>
+					<button class="gen-run-btn" title="Run ${m.name}" type="button">▶</button>
 				</div>
 			</div>
-			${nonExpandable ? "" : `<div class="out-expand">${slotsHtml}${promptWrap}</div>`}
 		`;
 
-		const head = row.querySelector(".gen-head");
-		head.addEventListener("click", (e) => {
-			// Per-cell Generate button lives in the head-end — don't toggle expand
-			// when the user clicks it.
-			if (e.target.closest(".gen-run-btn")) return;
-			// Non-expandable cells (Depth Anything) still promote to active but
-			// don't toggle expansion since there's nothing configurable.
-			if (nonExpandable) { setActiveGenCell(cell.id); return; }
-			cell.expanded = !cell.expanded;
-			row.classList.toggle("expanded", cell.expanded);
+		row.querySelector(".gen-head")?.addEventListener("click", (e) => {
+			if (e.target.closest(".gen-run-btn, .gen-del-btn")) return;
 			setActiveGenCell(cell.id);
 		});
-		// Any interaction anywhere in the cell body — clicking the prompt textarea,
-		// focusing a ref slot, using an upload input — should promote that cell to
-		// active. Otherwise you can be editing TripoSplat's source-image slot while
-		// vp-generate is still armed for Nano Banana.
 		row.addEventListener("focusin", () => setActiveGenCell(cell.id));
 		row.addEventListener("mousedown", (e) => {
 			setActiveGenCell(cell.id);
-			// Only steal focus for a bare-row click. If the user is clicking into
-			// a textarea / input / button inside the cell, let that element keep
-			// focus — Delete inside a prompt should type, not delete the cell.
 			if (!e.target.closest("input,textarea,button,select")) {
 				row.focus({ preventScroll: true });
 			}
 		});
-		// Per-cell Generate — routes through the shared vp-generate pipeline so the
+		// Per-cell Run — routes through the shared vp-generate pipeline so the
 		// input-building / busy-state / result-import logic all stays in one place.
-		// setActiveGenCell first so vp-generate reads this cell.
 		row.querySelector(".gen-run-btn")?.addEventListener("click", (e) => {
 			e.stopPropagation();
 			setActiveGenCell(cell.id);
@@ -6384,330 +6643,343 @@ function refreshGenCells() {
 			removeGenCell(cell.id);
 		});
 
-		// Wire ref slots (no-op for cells that didn't get slot markup).
-		for (const slot of row.querySelectorAll(".gen-slot")) {
-			const key = slot.dataset.slot;            // "startFrame" | "refVideo" | "styleRef"
-			const accepts = slot.dataset.accepts;     // "image" | "video"
-			const thumb = slot.querySelector(".gen-slot-thumb");
-			const labelEl = slot.querySelector(".gen-slot-label");
-			const clearBtn = slot.querySelector(".gen-slot-clear");
-			const fileInput = slot.querySelector(".gen-slot-file");
-			const paintSlot = () => {
-				const asset = cell[key];
-				if (asset) {
-					thumb.style.backgroundImage = `url("${asset.url}")`;
+		container.appendChild(row);
+	}
+}
+
+// Kept as a name-alias so every caller (selection, delete, scene load) fires
+// the unified repaint without changes.
+function refreshGenCells() { refreshWorkflowsList(); }
+
+// Right-panel renderer — builds the reference slots + prompt textarea for the
+// active generator cell into #rp-pane-gencell and wires all listeners. Kept
+// separate from refreshGenCells so left-column interactions don't tear down
+// the properties DOM (which would blow away focus / caret while typing).
+function renderGenCellProperties(cell) {
+	const pane = document.getElementById("rp-pane-gencell");
+	if (!pane || !cell) return;
+	pane.innerHTML = "";
+
+	// Per-model reference slots. Same layout / semantics as the old inline
+	// expand body — mounted here instead so the left column stays compact.
+	//   nano-banana: 1 slot — style reference
+	//   seedance:    2 slots — start frame + reference video
+	//   tripo-i2m / triposplat-local: 1 slot — source image
+	//   depth-anything-local: no slots (viewport-only)
+	let slotsHtml = "";
+	const uploadIcon = `<svg class="gen-slot-upload" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2"/><path d="M8 9V2.5"/><path d="m5 5 3-3 3 3"/></svg>`;
+	if (cell.model === "seedance") {
+		slotsHtml = `
+			<div class="gen-slots">
+				<div class="gen-slot" data-slot="startFrame" data-accepts="image" title="Start frame — drag an image from Assets, or click to upload">
+					<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
+					<div class="gen-slot-label">Start frame</div>
+					<button type="button" class="gen-slot-clear" hidden>×</button>
+					<input type="file" class="gen-slot-file" accept="image/*" hidden>
+				</div>
+				<div class="gen-slot" data-slot="refVideo" data-accepts="video" title="Reference video — drag from Assets or click to upload; matches motion / timing">
+					<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
+					<div class="gen-slot-label">Ref video</div>
+					<button type="button" class="gen-slot-clear" hidden>×</button>
+					<input type="file" class="gen-slot-file" accept="video/*" hidden>
+				</div>
+			</div>
+		`;
+	} else if (cell.model === "nano-banana") {
+		slotsHtml = `
+			<div class="gen-slots">
+				<div class="gen-slot" data-slot="styleRef" data-accepts="image" title="Style reference — aesthetic only (cartoon, anime, paint, etc.) not the subject. Drag from Assets or click to upload.">
+					<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
+					<div class="gen-slot-label">Style ref</div>
+					<button type="button" class="gen-slot-clear" hidden>×</button>
+					<input type="file" class="gen-slot-file" accept="image/*" hidden>
+				</div>
+			</div>
+		`;
+	} else if (cell.model === "tripo-i2m" || cell.model === "triposplat-local") {
+		const helpByModel = {
+			"triposplat-local": "Source image — TripoSplat runs locally on your GPU and converts this to a gaussian splat (.ply). Drag from Assets, click to upload, or leave empty to use the current viewport snapshot.",
+			"tripo-i2m": "Source image — the picture Tripo converts to a .glb mesh. Drag from Assets, click to upload, or leave empty to use the current viewport snapshot.",
+		};
+		const help = helpByModel[cell.model];
+		slotsHtml = `
+			<div class="gen-slots">
+				<div class="gen-slot" data-slot="sourceImage" data-accepts="image" title="${help}">
+					<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
+					<div class="gen-slot-label">Source image</div>
+					<button type="button" class="gen-slot-clear" hidden>×</button>
+					<input type="file" class="gen-slot-file" accept="image/*" hidden>
+				</div>
+			</div>
+		`;
+	}
+
+	// Prompt-less models — hide the prompt textarea so the pane doesn't suggest a
+	// text input that gets silently ignored.
+	const promptLessModels = ["tripo-i2m", "triposplat-local", "depth-anything-local"];
+	const promptWrap = promptLessModels.includes(cell.model) ? "" : `
+		<div class="gen-prompt-wrap">
+			<div class="gen-prompt-hl" aria-hidden="true"></div>
+			<textarea class="gen-prompt" placeholder="Enter prompt here…" spellcheck="false">${cell.prompt.replace(/</g, "&lt;")}</textarea>
+			<div class="gen-ref-suggest" hidden></div>
+		</div>
+	`;
+
+	// Depth-Anything is viewport-only: show a short hint so the empty pane
+	// doesn't look broken.
+	const emptyHint = (cell.model === "depth-anything-local")
+		? `<div class="hint" style="margin-top:8px">No inputs — this generator always runs on the current viewport snapshot. Hit ▶ to run.</div>`
+		: "";
+
+	pane.innerHTML = `
+		<div class="section">
+			<div class="section-label">Inputs</div>
+			${slotsHtml}
+			${promptWrap}
+			${emptyHint}
+		</div>
+	`;
+
+	// Wire ref slots.
+	for (const slot of pane.querySelectorAll(".gen-slot")) {
+		const key = slot.dataset.slot;            // "startFrame" | "refVideo" | "styleRef" | "sourceImage"
+		const accepts = slot.dataset.accepts;     // "image" | "video"
+		const thumb = slot.querySelector(".gen-slot-thumb");
+		const labelEl = slot.querySelector(".gen-slot-label");
+		const clearBtn = slot.querySelector(".gen-slot-clear");
+		const fileInput = slot.querySelector(".gen-slot-file");
+		const paintSlot = () => {
+			const asset = cell[key];
+			if (asset) {
+				thumb.style.backgroundImage = `url("${asset.url}")`;
+				thumb.classList.add("has-image");
+				slot.classList.add("filled");
+				labelEl.textContent = asset.filename || labelEl.dataset.empty || labelEl.textContent;
+				if (clearBtn) clearBtn.hidden = false;
+			} else {
+				thumb.style.backgroundImage = "";
+				thumb.classList.remove("has-image");
+				slot.classList.remove("filled");
+				labelEl.textContent = labelEl.dataset.empty || labelEl.textContent;
+				if (clearBtn) clearBtn.hidden = true;
+			}
+		};
+		labelEl.dataset.empty = labelEl.textContent;
+		paintSlot();
+		slot.addEventListener("click", e => {
+			if (e.target.closest(".gen-slot-clear")) return;
+			if (cell[key]) return;
+			fileInput?.click();
+		});
+		fileInput?.addEventListener("change", async () => {
+			const f = fileInput.files?.[0];
+			fileInput.value = "";
+			if (!f) return;
+			let localBlobUrl = null;
+			try {
+				const previewUrl = await localSlotThumbUrl(f, accepts);
+				if (previewUrl) {
+					localBlobUrl = previewUrl.startsWith("blob:") ? previewUrl : null;
+					thumb.style.backgroundImage = `url("${previewUrl}")`;
 					thumb.classList.add("has-image");
-					slot.classList.add("filled");
-					labelEl.textContent = asset.filename || labelEl.dataset.empty || labelEl.textContent;
-					if (clearBtn) clearBtn.hidden = false;
-				} else {
-					thumb.style.backgroundImage = "";
-					thumb.classList.remove("has-image");
-					slot.classList.remove("filled");
-					labelEl.textContent = labelEl.dataset.empty || labelEl.textContent;
-					if (clearBtn) clearBtn.hidden = true;
 				}
-			};
-			labelEl.dataset.empty = labelEl.textContent;
-			paintSlot();
-			// Click an empty slot → open file picker. (Filled slots ignore the click so
-			// the user can interact with × / drag-out without re-opening the picker.)
-			slot.addEventListener("click", e => {
-				if (e.target.closest(".gen-slot-clear")) return;
-				if (cell[key]) return;
-				fileInput?.click();
-			});
-			fileInput?.addEventListener("change", async () => {
-				const f = fileInput.files?.[0];
-				fileInput.value = "";
-				if (!f) return;
-				// Local preview + spinner immediately, before the upload starts. Videos
-				// especially need this — the round-trip can run 5–30s and the empty
-				// square with no feedback made it feel broken.
-				let localBlobUrl = null;
-				try {
-					const previewUrl = await localSlotThumbUrl(f, accepts);
-					if (previewUrl) {
-						localBlobUrl = previewUrl.startsWith("blob:") ? previewUrl : null;
-						thumb.style.backgroundImage = `url("${previewUrl}")`;
-						thumb.classList.add("has-image");
-					}
-				} catch { /* preview is best-effort — no local thumb is fine, spinner still shows */ }
-				try {
-					slot.classList.add("uploading");
-					const ref = await uploadObjectRefImage(f);
-					cell[key] = {
-						url: ref.signedUrl || ref.localUrl,
-						filename: ref.filename || f.name,
-						kind: accepts,
-					};
-					paintSlot();
-					// Confirm the drop landed once the round-trip clears.
-					slot.classList.add("just-dropped");
-					setTimeout(() => slot.classList.remove("just-dropped"), 700);
-					maybeSaveDebounced();
-				} catch (err) {
-					console.error("[gen-slot] upload failed", err);
-					// Roll back the optimistic preview so a failed upload doesn't leave a
-					// misleading thumbnail in the slot.
-					thumb.style.backgroundImage = "";
-					thumb.classList.remove("has-image");
-					window.showAlert?.("Upload failed", err.message || String(err));
-				} finally {
-					slot.classList.remove("uploading");
-					if (localBlobUrl) URL.revokeObjectURL(localBlobUrl);
-				}
-			});
-			// Drag from the Assets pane → land here.
-			slot.addEventListener("dragover", e => {
-				if (!e.dataTransfer?.types?.includes("application/x-cb-asset")) return;
-				e.preventDefault();
-				e.dataTransfer.dropEffect = "copy";
-				slot.classList.add("drop-target");
-			});
-			slot.addEventListener("dragleave", () => slot.classList.remove("drop-target"));
-			slot.addEventListener("drop", e => {
-				slot.classList.remove("drop-target");
-				const raw = e.dataTransfer?.getData("application/x-cb-asset");
-				if (!raw) return;
-				e.preventDefault();
-				let asset;
-				try { asset = JSON.parse(raw); } catch { return; }
-				if (asset.kind !== accepts) {
-					window.showAlert?.("Wrong kind", `This slot only accepts ${accepts}s.`);
-					return;
-				}
-				cell[key] = { url: asset.url, filename: asset.filename, kind: asset.kind };
+			} catch { /* best-effort preview */ }
+			try {
+				slot.classList.add("uploading");
+				const ref = await uploadObjectRefImage(f);
+				cell[key] = {
+					url: ref.signedUrl || ref.localUrl,
+					filename: ref.filename || f.name,
+					kind: accepts,
+				};
 				paintSlot();
-				// Success flash — confirms the drop landed on the right target.
 				slot.classList.add("just-dropped");
 				setTimeout(() => slot.classList.remove("just-dropped"), 700);
 				maybeSaveDebounced();
-			});
-			clearBtn?.addEventListener("click", e => {
-				e.stopPropagation();
-				cell[key] = null;
-				paintSlot();
-				maybeSaveDebounced();
-			});
-			// Double-click → fullscreen viewer if there's a value.
-			slot.addEventListener("dblclick", e => {
-				if (!cell[key]) return;
-				e.stopPropagation();
-				window.openAssetViewer?.(cell[key]);
-			});
-		}
-
-		const promptEl = row.querySelector(".gen-prompt");
-		const suggestEl = row.querySelector(".gen-ref-suggest");
-		const hlEl = row.querySelector(".gen-prompt-hl");
-		// TripoSplat cells skip the prompt textarea, so the rest of the prompt-wiring
-		// setup (highlight sync, [ref] suggestions, save-on-input) has nothing to bind to.
-		if (!promptEl) {
-			container.appendChild(row);
-			continue;
-		}
-		let suggestActiveIdx = 0;
-		let suggestMatches = [];
-
-		function escHtml(s) {
-			return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
-		}
-		function objColorHex(o) {
-			if (!o) return "#ffb454";
-			if (o.userData.particleSystem) return "#" + o.userData.particleSystem.config.color.toString(16).padStart(6, "0");
-			if (o.material?.color) return "#" + o.material.color.getHexString();
-			return "#ffb454";
-		}
-		function renderHighlight() {
-			const v = promptEl.value;
-			let html = "";
-			let i = 0;
-			const re = /\[([^\]\n]+)\]/g;
-			let m;
-			while ((m = re.exec(v)) !== null) {
-				if (m.index > i) html += escHtml(v.slice(i, m.index));
-				const name = m[1].trim();
-				const obj = objects.find(o => (o.name || "").toLowerCase() === name.toLowerCase());
-				if (obj) {
-					const col = objColorHex(obj);
-					html += `<span class="ref-tag" style="--ref-color:${col}">${escHtml(m[0])}</span>`;
-				} else {
-					html += escHtml(m[0]);
-				}
-				i = m.index + m[0].length;
-			}
-			if (i < v.length) html += escHtml(v.slice(i));
-			// Trailing newline trick: textarea wraps an empty trailing line, our div doesn't —
-			// append a zero-width space line so heights match for scroll sync.
-			if (v.endsWith("\n")) html += " ";
-			hlEl.innerHTML = html;
-		}
-		function syncScroll() {
-			hlEl.scrollTop = promptEl.scrollTop;
-			hlEl.scrollLeft = promptEl.scrollLeft;
-		}
-		renderHighlight();
-
-		function findOpenBracket() {
-			const v = promptEl.value;
-			const c = promptEl.selectionStart;
-			const slice = v.slice(0, c);
-			const open = slice.lastIndexOf("[");
-			if (open < 0) return null;
-			const close = slice.lastIndexOf("]");
-			if (close > open) return null;
-			// Stop if newline between [ and caret — keeps multiline prompts sane
-			if (slice.slice(open).includes("\n")) return null;
-			return { open, partial: slice.slice(open + 1) };
-		}
-
-		function renderSuggestions() {
-			const ctx = findOpenBracket();
-			if (!ctx) { suggestEl.hidden = true; suggestMatches = []; return; }
-			const q = ctx.partial.toLowerCase();
-			suggestMatches = objects
-				.filter(o => (o.name || "").toLowerCase().includes(q))
-				.slice(0, 8);
-			if (suggestMatches.length === 0) { suggestEl.hidden = true; return; }
-			suggestActiveIdx = Math.min(suggestActiveIdx, suggestMatches.length - 1);
-			suggestEl.innerHTML = suggestMatches.map((o, i) => {
-				const ri = o.userData.refImage;
-				const thumb = refImageThumbUrl(ri);
-				const colorHex = o.userData.particleSystem
-					? "#" + o.userData.particleSystem.config.color.toString(16).padStart(6, "0")
-					: (o.material?.color ? "#" + o.material.color.getHexString() : "#888888");
-				const sw = thumb
-					? `<span class="swatch" style="background-image:url('${thumb}')"></span>`
-					: `<span class="swatch" style="background:${colorHex}"></span>`;
-				return `<div data-idx="${i}"${i === suggestActiveIdx ? ' class="active"' : ""}>${sw}<span>${o.name}</span></div>`;
-			}).join("");
-			suggestEl.hidden = false;
-		}
-
-		function insertSuggestion(obj) {
-			const ctx = findOpenBracket();
-			if (!ctx || !obj) return;
-			const v = promptEl.value;
-			const before = v.slice(0, ctx.open);
-			const afterCaret = v.slice(promptEl.selectionStart);
-			const insert = `[${obj.name}] `;
-			promptEl.value = before + insert + afterCaret;
-			const newCaret = (before + insert).length;
-			promptEl.setSelectionRange(newCaret, newCaret);
-			cell.prompt = promptEl.value;
-			suggestEl.hidden = true;
-			suggestMatches = [];
-			renderHighlight();
-			maybeSaveDebounced();
-		}
-
-		promptEl.addEventListener("click", e => { e.stopPropagation(); renderSuggestions(); });
-		promptEl.addEventListener("input", () => {
-			cell.prompt = promptEl.value;
-			renderHighlight();
-			renderSuggestions();
-			maybeSaveDebounced();
-		});
-		promptEl.addEventListener("scroll", syncScroll);
-		promptEl.addEventListener("keydown", e => {
-			if (suggestEl.hidden || !suggestMatches.length) return;
-			if (e.key === "ArrowDown") {
-				e.preventDefault();
-				suggestActiveIdx = (suggestActiveIdx + 1) % suggestMatches.length;
-				renderSuggestions();
-			} else if (e.key === "ArrowUp") {
-				e.preventDefault();
-				suggestActiveIdx = (suggestActiveIdx - 1 + suggestMatches.length) % suggestMatches.length;
-				renderSuggestions();
-			} else if (e.key === "Enter" || e.key === "Tab") {
-				e.preventDefault();
-				insertSuggestion(suggestMatches[suggestActiveIdx]);
-			} else if (e.key === "Escape") {
-				e.preventDefault();
-				suggestEl.hidden = true;
+			} catch (err) {
+				console.error("[gen-slot] upload failed", err);
+				thumb.style.backgroundImage = "";
+				thumb.classList.remove("has-image");
+				window.showAlert?.("Upload failed", err.message || String(err));
+			} finally {
+				slot.classList.remove("uploading");
+				if (localBlobUrl) URL.revokeObjectURL(localBlobUrl);
 			}
 		});
-		promptEl.addEventListener("blur", () => setTimeout(() => { suggestEl.hidden = true; }, 120));
-		suggestEl.addEventListener("mousedown", e => {
-			const target = e.target.closest("[data-idx]");
-			if (!target) return;
+		slot.addEventListener("dragover", e => {
+			if (!e.dataTransfer?.types?.includes("application/x-cb-asset")) return;
 			e.preventDefault();
-			insertSuggestion(suggestMatches[parseInt(target.dataset.idx, 10)]);
-			promptEl.focus();
+			e.dataTransfer.dropEffect = "copy";
+			slot.classList.add("drop-target");
 		});
-
-
-		container.appendChild(row);
+		slot.addEventListener("dragleave", () => slot.classList.remove("drop-target"));
+		slot.addEventListener("drop", e => {
+			slot.classList.remove("drop-target");
+			const raw = e.dataTransfer?.getData("application/x-cb-asset");
+			if (!raw) return;
+			e.preventDefault();
+			let asset;
+			try { asset = JSON.parse(raw); } catch { return; }
+			if (asset.kind !== accepts) {
+				window.showAlert?.("Wrong kind", `This slot only accepts ${accepts}s.`);
+				return;
+			}
+			cell[key] = { url: asset.url, filename: asset.filename, kind: asset.kind };
+			paintSlot();
+			slot.classList.add("just-dropped");
+			setTimeout(() => slot.classList.remove("just-dropped"), 700);
+			maybeSaveDebounced();
+		});
+		clearBtn?.addEventListener("click", e => {
+			e.stopPropagation();
+			cell[key] = null;
+			paintSlot();
+			maybeSaveDebounced();
+		});
+		slot.addEventListener("dblclick", e => {
+			if (!cell[key]) return;
+			e.stopPropagation();
+			window.openAssetViewer?.(cell[key]);
+		});
 	}
-	// Trailing placeholder — the "add another generator" chip. Clicking opens the
-	// same dropdown that lives outside the loop, positioned under this cell.
-	const addCell = document.createElement("div");
-	addCell.className = "gen-cell-add";
-	addCell.id = "gen-add-cell";
-	addCell.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span>Add generator</span>`;
-	container.appendChild(addCell);
+
+	const promptEl = pane.querySelector(".gen-prompt");
+	const suggestEl = pane.querySelector(".gen-ref-suggest");
+	const hlEl = pane.querySelector(".gen-prompt-hl");
+	if (!promptEl) return;
+
+	let suggestActiveIdx = 0;
+	let suggestMatches = [];
+
+	function escHtml(s) {
+		return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+	}
+	function objColorHex(o) {
+		if (!o) return "#ffb454";
+		if (o.userData.particleSystem) return "#" + o.userData.particleSystem.config.color.toString(16).padStart(6, "0");
+		if (o.material?.color) return "#" + o.material.color.getHexString();
+		return "#ffb454";
+	}
+	function renderHighlight() {
+		const v = promptEl.value;
+		let html = "";
+		let i = 0;
+		const re = /\[([^\]\n]+)\]/g;
+		let m;
+		while ((m = re.exec(v)) !== null) {
+			if (m.index > i) html += escHtml(v.slice(i, m.index));
+			const name = m[1].trim();
+			const obj = objects.find(o => (o.name || "").toLowerCase() === name.toLowerCase());
+			if (obj) {
+				const col = objColorHex(obj);
+				html += `<span class="ref-tag" style="--ref-color:${col}">${escHtml(m[0])}</span>`;
+			} else {
+				html += escHtml(m[0]);
+			}
+			i = m.index + m[0].length;
+		}
+		if (i < v.length) html += escHtml(v.slice(i));
+		if (v.endsWith("\n")) html += " ";
+		hlEl.innerHTML = html;
+	}
+	function syncScroll() {
+		hlEl.scrollTop = promptEl.scrollTop;
+		hlEl.scrollLeft = promptEl.scrollLeft;
+	}
+	renderHighlight();
+
+	function findOpenBracket() {
+		const v = promptEl.value;
+		const c = promptEl.selectionStart;
+		const slice = v.slice(0, c);
+		const open = slice.lastIndexOf("[");
+		if (open < 0) return null;
+		const close = slice.lastIndexOf("]");
+		if (close > open) return null;
+		if (slice.slice(open).includes("\n")) return null;
+		return { open, partial: slice.slice(open + 1) };
+	}
+
+	function renderSuggestions() {
+		const ctx = findOpenBracket();
+		if (!ctx) { suggestEl.hidden = true; suggestMatches = []; return; }
+		const q = ctx.partial.toLowerCase();
+		suggestMatches = objects
+			.filter(o => (o.name || "").toLowerCase().includes(q))
+			.slice(0, 8);
+		if (suggestMatches.length === 0) { suggestEl.hidden = true; return; }
+		suggestActiveIdx = Math.min(suggestActiveIdx, suggestMatches.length - 1);
+		suggestEl.innerHTML = suggestMatches.map((o, i) => {
+			const ri = o.userData.refImage;
+			const thumb = refImageThumbUrl(ri);
+			const colorHex = o.userData.particleSystem
+				? "#" + o.userData.particleSystem.config.color.toString(16).padStart(6, "0")
+				: (o.material?.color ? "#" + o.material.color.getHexString() : "#888888");
+			const sw = thumb
+				? `<span class="swatch" style="background-image:url('${thumb}')"></span>`
+				: `<span class="swatch" style="background:${colorHex}"></span>`;
+			return `<div data-idx="${i}"${i === suggestActiveIdx ? ' class="active"' : ""}>${sw}<span>${o.name}</span></div>`;
+		}).join("");
+		suggestEl.hidden = false;
+	}
+
+	function insertSuggestion(obj) {
+		const ctx = findOpenBracket();
+		if (!ctx || !obj) return;
+		const v = promptEl.value;
+		const before = v.slice(0, ctx.open);
+		const afterCaret = v.slice(promptEl.selectionStart);
+		const insert = `[${obj.name}] `;
+		promptEl.value = before + insert + afterCaret;
+		const newCaret = (before + insert).length;
+		promptEl.setSelectionRange(newCaret, newCaret);
+		cell.prompt = promptEl.value;
+		suggestEl.hidden = true;
+		suggestMatches = [];
+		renderHighlight();
+		maybeSaveDebounced();
+	}
+
+	promptEl.addEventListener("click", e => { e.stopPropagation(); renderSuggestions(); });
+	promptEl.addEventListener("input", () => {
+		cell.prompt = promptEl.value;
+		renderHighlight();
+		renderSuggestions();
+		maybeSaveDebounced();
+	});
+	promptEl.addEventListener("scroll", syncScroll);
+	promptEl.addEventListener("keydown", e => {
+		if (suggestEl.hidden || !suggestMatches.length) return;
+		if (e.key === "ArrowDown") {
+			e.preventDefault();
+			suggestActiveIdx = (suggestActiveIdx + 1) % suggestMatches.length;
+			renderSuggestions();
+		} else if (e.key === "ArrowUp") {
+			e.preventDefault();
+			suggestActiveIdx = (suggestActiveIdx - 1 + suggestMatches.length) % suggestMatches.length;
+			renderSuggestions();
+		} else if (e.key === "Enter" || e.key === "Tab") {
+			e.preventDefault();
+			insertSuggestion(suggestMatches[suggestActiveIdx]);
+		} else if (e.key === "Escape") {
+			e.preventDefault();
+			suggestEl.hidden = true;
+		}
+	});
+	promptEl.addEventListener("blur", () => setTimeout(() => { suggestEl.hidden = true; }, 120));
+	suggestEl.addEventListener("mousedown", e => {
+		const target = e.target.closest("[data-idx]");
+		if (!target) return;
+		e.preventDefault();
+		insertSuggestion(suggestMatches[parseInt(target.dataset.idx, 10)]);
+		promptEl.focus();
+	});
 }
 
-// Add dropdown — shows every registered generator with existing ones tagged as
-// already-added. addGenCell() is idempotent per model, so re-picking one just
-// focuses the existing cell instead of creating a duplicate. Anchor is the
-// placeholder cell at the bottom of #gen-cells.
-(() => {
-	const menu = document.getElementById("gen-add-menu");
-	if (!menu) return;
-	function getAnchor() { return document.getElementById("gen-add-cell"); }
-
-	function paintMenu() {
-		menu.innerHTML = "";
-		for (const [id, m] of Object.entries(GEN_MODELS)) {
-			const exists = genCells.some(c => c.model === id);
-			const item = document.createElement("button");
-			item.type = "button";
-			item.className = "gen-add-item";
-			item.role = "menuitem";
-			item.disabled = exists;
-			item.innerHTML = `${m.iconSvg}<span>${m.name}</span>${exists ? '<span class="gen-add-check">added</span>' : ''}`;
-			item.addEventListener("click", () => {
-				closeMenu();
-				if (exists) {
-					const existing = genCells.find(c => c.model === id);
-					if (existing) setActiveGenCell(existing.id);
-					return;
-				}
-				const cell = addGenCell({ model: id, expanded: true });
-				setActiveGenCell(cell.id);
-			});
-			menu.appendChild(item);
-		}
-	}
-	function openMenu() {
-		paintMenu();
-		menu.hidden = false;
-		getAnchor()?.setAttribute("aria-expanded", "true");
-		setTimeout(() => document.addEventListener("mousedown", onDocDown, true), 0);
-		document.addEventListener("keydown", onEsc, true);
-	}
-	function closeMenu() {
-		menu.hidden = true;
-		getAnchor()?.setAttribute("aria-expanded", "false");
-		document.removeEventListener("mousedown", onDocDown, true);
-		document.removeEventListener("keydown", onEsc, true);
-	}
-	function onDocDown(e) {
-		if (e.target.closest("#gen-add-menu") || e.target.closest("#gen-add-cell")) return;
-		closeMenu();
-	}
-	function onEsc(e) { if (e.key === "Escape") { e.stopPropagation(); closeMenu(); } }
-	// The placeholder cell is recreated on every refreshGenCells, so bind via
-	// delegation on the surrounding container instead of the button directly.
-	document.getElementById("gen-cells")?.addEventListener("click", (e) => {
-		if (!e.target.closest("#gen-add-cell")) return;
-		e.stopPropagation();
-		if (menu.hidden) openMenu(); else closeMenu();
-	});
-	window._refreshGenAddMenu = () => { if (!menu.hidden) paintMenu(); };
-})();
+// The unified Add Workflow dropdown lives further down in the file (bound to
+// #workflow-add-menu). It lists both built-in GEN_MODELS and manifest-driven
+// workflow modules, so a single "+ Add workflow" chip covers both. See the
+// IIFE below the workflow module section for the implementation.
 
 const VP_SPINNER_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:12px;height:12px;animation:vpSpin 0.9s linear infinite"><path d="M21 12a9 9 0 1 1-6.2-8.55"/></svg>`;
 
@@ -6848,29 +7120,26 @@ if (genCells.length === 0) {
 	addGenCell({ model: "seedance",    expanded: false });
 }
 
-// Click off in the GENERATE or WORKFLOW section body (i.e. anywhere in the
-// section that isn't a cell, add-chip, button, or header) → deselect. Both
-// panels share a single "active target" so clearing here nukes both, which
-// matches the mental model of the context chip vanishing.
+// Click off in the merged WORKFLOWS section body (anywhere that isn't a cell,
+// add-chip, button, or header) → deselect. API + local rows share a single
+// "active target" so clearing here nukes both, which matches the mental
+// model of the context chip vanishing.
 function clearActiveTargets() {
 	const changed = activeGenCellId || activeWorkflowCellId;
 	activeGenCellId = null;
 	activeWorkflowCellId = null;
 	if (changed) {
-		refreshGenCells();
-		refreshWorkflowCells();
+		refreshWorkflowsList();
 		refreshViewportGenerateBtn();
 		refreshChatContextChip();
 	}
 }
-for (const sel of ['[data-section="generate"]', '[data-section="workflow"]']) {
-	document.querySelector(sel)?.addEventListener("click", (e) => {
-		// Ignore clicks on any interactive child so cell selection, run/delete
-		// buttons, and section-collapse-on-head still work as-is.
-		if (e.target.closest(".gen-cell, .gen-cell-add, .section-head-row, .gen-add-menu, button, input, textarea, select")) return;
-		clearActiveTargets();
-	});
-}
+document.querySelector('[data-section="workflows"]')?.addEventListener("click", (e) => {
+	// Ignore clicks on any interactive child so cell selection, run/delete
+	// buttons, and section-collapse-on-head still work as-is.
+	if (e.target.closest(".gen-cell, .gen-cell-add, .section-head-row, .gen-add-menu, button, input, textarea, select")) return;
+	clearActiveTargets();
+});
 refreshViewportGenerateBtn();
 refreshGenAddBtn();
 
@@ -6881,16 +7150,12 @@ refreshGenAddBtn();
 // The run button routes through the same /api/run/{id} pipeline as GENERATE
 // via window.runGenerateModule, so results still land in the viewport overlay
 // AND the Assets pane.
-const workflowModules = {}; // id → {id, label, kind, inputs[], output_ext}
-const workflowCells = [];   // [{ id, moduleId, values: {name: string} }]
-// Only one target is active across GENERATE + WORKFLOW at a time — same mental
-// model as the built-in cells. Activating a workflow cell clears activeGenCellId,
-// and vice versa (handled in the click paths so the chat + agent get an
-// unambiguous "current target" via assistantSceneContext).
-let activeWorkflowCellId = null;
+// State (workflowModules / workflowCells / activeWorkflowCellId) is declared
+// alongside genCells further up so the unified refresh can touch it during the
+// first render without hitting a TDZ error.
 
 function setActiveWorkflowCell(id) {
-	if (activeWorkflowCellId === id) return;
+	const changed = activeWorkflowCellId !== id;
 	activeWorkflowCellId = id;
 	if (id) {
 		// Selecting a workflow releases the gen cell — chip is a single-target
@@ -6898,8 +7163,28 @@ function setActiveWorkflowCell(id) {
 		activeGenCellId = null;
 		refreshGenCells();
 	}
-	refreshWorkflowCells();
-	refreshChatContextChip();
+	if (changed) {
+		refreshWorkflowCells();
+		refreshChatContextChip();
+	}
+	// Open the right-hand properties pane for this cell. See setActiveGenCell
+	// for the "skip rebuild while typing" rationale.
+	if (id) {
+		const cell = workflowCells.find(c => c.id === id);
+		const m = cell ? workflowModules[cell.moduleId] : null;
+		if (cell && m) {
+			const paneEl = document.getElementById("rp-pane-workflowcell");
+			const isPaneOpen = paneEl && !paneEl.hidden;
+			if (!isPaneOpen) {
+				forceRightPane("workflowcell", m.label);
+				renderWorkflowCellProperties(cell);
+			} else if (changed) {
+				const titleEl = document.getElementById("rp-title");
+				if (titleEl) titleEl.textContent = m.label;
+				renderWorkflowCellProperties(cell);
+			}
+		}
+	}
 }
 
 async function fetchWorkflowModules() {
@@ -6925,48 +7210,21 @@ async function fetchWorkflowModules() {
 	refreshWorkflowCells();
 }
 
-function refreshWorkflowCells() {
-	const container = document.getElementById("workflow-cells");
-	if (!container) return;
-	container.innerHTML = "";
-
+// Manifest-driven local workflow rows appended into the unified #workflow-cells
+// container. Called from refreshWorkflowsList after the API generator rows.
+function _appendWorkflowRows(container) {
 	for (const cell of workflowCells) {
 		const m = workflowModules[cell.moduleId];
 		if (!m) continue;
 		const row = document.createElement("div");
 		const isActive = cell.id === activeWorkflowCellId;
-		row.className = "gen-cell" + (cell.expanded ? " expanded" : "") + (isActive ? " active" : "");
+		// Left column is now a compact list — inputs live in the right-hand
+		// properties panel, populated by renderWorkflowCellProperties on activation.
+		row.className = "gen-cell" + (isActive ? " active" : "");
+		row.tabIndex = -1;
 		row.dataset.cellId = cell.id;
+		row.dataset.workflowSource = "local";
 		const kindIcon = KIND_ICONS[m.kind] || KIND_ICONS.image;
-		// Render one input per manifest spec. Only textarea/text supported so far;
-		// scene-image / number / etc. get a "coming soon" note so we notice missing
-		// wiring rather than silently skip.
-		let inputsHtml = "";
-		for (const spec of (m.inputs || [])) {
-			const label = spec.label || spec.name;
-			const placeholder = (spec.placeholder || "").replace(/"/g, "&quot;");
-			if (spec.type === "textarea" || spec.type === "text") {
-				const rows = spec.type === "textarea" ? 3 : 1;
-				const val = (cell.values[spec.name] || "").replace(/</g, "&lt;");
-				// Own class + inline styles — .gen-prompt is transparent-text on purpose
-				// so it can layer under the [name]-tag highlight div, which we don't wire
-				// for workflow cells yet. `overflow: hidden` on the textarea is required
-				// for the JS autosize below — without it, scrollHeight returns the
-				// content height + scrollbar allowance and we get a slow height drift.
-				inputsHtml += `
-					<div style="margin-top:6px">
-						<textarea class="wf-input" data-input="${spec.name}" rows="${rows}" placeholder="${placeholder}" spellcheck="false"
-							style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.06);border-radius:4px;padding:6px 8px;color:#e6e6ea;caret-color:#fff;font:inherit;font-size:11px;line-height:1.4;resize:none;outline:none;overflow:hidden">${val}</textarea>
-					</div>
-				`;
-			} else {
-				inputsHtml += `
-					<div style="font-size:10px;color:rgba(255,255,255,0.4);padding:6px 0">
-						Input "${label}" (${spec.type}) not yet wired in the workflow section.
-					</div>
-				`;
-			}
-		}
 		row.innerHTML = `
 			<div class="gen-head">
 				<div class="gen-icon">${kindIcon}</div>
@@ -6976,80 +7234,71 @@ function refreshWorkflowCells() {
 					<button class="gen-run-btn" title="Run ${m.label}" type="button">▶</button>
 				</div>
 			</div>
-			<div class="out-expand">${inputsHtml}</div>
 		`;
-		// Single click on the head activates the cell (hoists it into the chat
-		// context chip so agent commands like "generate" target this module).
-		// Double-click toggles expand/collapse so the compact row can reveal the
-		// prompt textarea. ×/▶ button clicks skip both.
-		const wfHead = row.querySelector(".gen-head");
-		wfHead.addEventListener("click", (e) => {
+		row.querySelector(".gen-head")?.addEventListener("click", (e) => {
 			if (e.target.closest(".gen-run-btn, .gen-del-btn")) return;
 			setActiveWorkflowCell(cell.id);
 		});
-		wfHead.addEventListener("dblclick", (e) => {
-			if (e.target.closest(".gen-run-btn, .gen-del-btn")) return;
-			cell.expanded = !cell.expanded;
-			row.classList.toggle("expanded", cell.expanded);
-			saveSceneDebounced?.();
+		row.addEventListener("focusin", () => setActiveWorkflowCell(cell.id));
+		row.addEventListener("mousedown", (e) => {
+			setActiveWorkflowCell(cell.id);
+			if (!e.target.closest("input,textarea,button,select")) {
+				row.focus({ preventScroll: true });
+			}
 		});
-		// Save typed values into the cell so re-renders don't lose state.
-		// Also grow the textarea to fit its content so an agent-injected long
-		// prompt reveals the whole thing at a glance instead of being trapped
-		// behind an inner scroll.
-		function autosize(ta) {
-			ta.style.height = "auto";
-			// +2 covers the border so the last line doesn't get its descender clipped.
-			ta.style.height = (ta.scrollHeight + 2) + "px";
-		}
-		for (const ta of row.querySelectorAll(".wf-input")) {
-			ta.addEventListener("input", () => {
-				cell.values[ta.dataset.input] = ta.value;
-				autosize(ta);
-				saveSceneDebounced?.();
-			});
-			// Initial paint is deferred to the next frame because textareas
-			// report 0 for scrollHeight until they're attached to a laid-out
-			// DOM — running the sizing synchronously before appendChild fires
-			// gives us the placeholder height, not the content height.
-			requestAnimationFrame(() => autosize(ta));
-		}
 		row.querySelector(".gen-del-btn").addEventListener("click", (e) => {
 			e.stopPropagation();
 			// Session-only — the module stays registered on disk so it shows up
-			// again in the "+ Add workflow" menu. Matches the built-in Generate
-			// cells' semantics. Permanent deletion goes through the agent (or
-			// the DELETE endpoint directly).
+			// again in the "+ Add workflow" menu. Permanent deletion goes through
+			// the agent (or the DELETE endpoint directly).
 			const i = workflowCells.findIndex(c => c.id === cell.id);
 			if (i >= 0) workflowCells.splice(i, 1);
 			if (activeWorkflowCellId === cell.id) {
 				activeWorkflowCellId = null;
 				refreshChatContextChip();
+				// If the right-pane was showing this cell's properties, revert
+				// to the user's default pane (assistant or blank).
+				const wfPane = document.getElementById("rp-pane-workflowcell");
+				if (wfPane && !wfPane.hidden) forceRightPane(defaultRightPane?.() || "none");
 			}
-			refreshWorkflowCells();
+			refreshWorkflowsList();
 			saveSceneDebounced?.();
 		});
 		row.querySelector(".gen-run-btn").addEventListener("click", async (e) => {
 			e.stopPropagation();
+			setActiveWorkflowCell(cell.id);
 			const btn = e.currentTarget;
 			// Build inputs dict from the manifest spec so we only forward known keys.
 			const inputs = {};
 			for (const spec of (m.inputs || [])) {
-				const v = cell.values[spec.name];
+				let v = cell.values[spec.name];
+				if (spec.type === "seed") {
+					// Random mode → fresh 31-bit int each run (max int KSampler
+					// accepts without overflow warnings), then write it back so
+					// the field shows the seed we actually used. Fixed mode → keep
+					// whatever the user typed; empty falls through to 0.
+					const mode = cell.values[spec.name + "_mode"] || "random";
+					if (mode === "random") {
+						v = String(Math.floor(Math.random() * 0x7fffffff));
+						cell.values[spec.name] = v;
+						// Update the input's value in place in the right-pane if
+						// it's currently rendered — avoids a full re-render that
+						// would detach the ▶ button mid-run.
+						const wfPane = document.getElementById("rp-pane-workflowcell");
+						const inputEl = wfPane?.querySelector(`.wf-input[data-input="${spec.name}"]`);
+						if (inputEl) inputEl.value = v;
+						saveSceneDebounced?.();
+					} else if (v === undefined || v === "") {
+						v = "0";
+					}
+				}
 				if (v !== undefined && v !== "") inputs[spec.name] = v;
 			}
-			// Match the resultKind vocabulary runModule expects (image/video/3d).
 			const resultKind = m.kind === "3d" ? "3d" : m.kind;
 			if (!window.runGenerateModule) {
 				console.warn("[workflow] runGenerateModule missing");
 				return;
 			}
-			// runModule mutates btn.textContent to "running…", which crowds the
-			// compact ▶ icon button. Give it a hidden proxy button to trash while
-			// we express busy state on the visible one via `.busy` class → the
-			// CSS pseudo-element paints a spinning ring inside the button. The
-			// ▶ glyph stays as textContent for a11y / hover-title fallback; CSS
-			// hides it with `color: transparent` while spinning.
 			const proxy = document.createElement("button");
 			proxy.style.display = "none";
 			proxy.textContent = "▶";
@@ -7066,25 +7315,129 @@ function refreshWorkflowCells() {
 		});
 		container.appendChild(row);
 	}
+}
 
-	// Empty-state hint — shown only when there are no cells AND no registered
-	// modules to add. Once at least one module exists, the "+ Add workflow"
-	// chip becomes the discovery affordance.
-	const moduleIds = Object.keys(workflowModules);
-	if (workflowCells.length === 0 && moduleIds.length === 0) {
-		const empty = document.createElement("div");
-		empty.style.cssText = "font-size:10.5px;color:rgba(255,255,255,0.35);padding:8px 4px;font-style:italic;line-height:1.5";
-		empty.textContent = "No workflow modules yet. Ask the AI Agent to build one — e.g. \"make me a local Flux 2 Klein T2I generator\".";
-		container.appendChild(empty);
+// Kept as a name-alias so every existing caller fires the unified repaint.
+function refreshWorkflowCells() { refreshWorkflowsList(); }
+
+// Right-panel renderer — builds the workflow module's inputs (textarea / seed /
+// drag-number) into #rp-pane-workflowcell and wires listeners. Called from
+// setActiveWorkflowCell on activation.
+function renderWorkflowCellProperties(cell) {
+	const pane = document.getElementById("rp-pane-workflowcell");
+	if (!pane || !cell) return;
+	const m = workflowModules[cell.moduleId];
+	if (!m) { pane.innerHTML = ""; return; }
+	pane.innerHTML = "";
+
+	let inputsHtml = "";
+	for (const spec of (m.inputs || [])) {
+		const label = spec.label || spec.name;
+		const placeholder = (spec.placeholder || "").replace(/"/g, "&quot;");
+		if (spec.type === "textarea" || spec.type === "text") {
+			const rows = spec.type === "textarea" ? 3 : 1;
+			const val = (cell.values[spec.name] || "").replace(/</g, "&lt;");
+			inputsHtml += `
+				<div style="margin-top:6px">
+					<textarea class="wf-input" data-input="${spec.name}" rows="${rows}" placeholder="${placeholder}" spellcheck="false"
+						style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.06);border-radius:4px;padding:6px 8px;color:#e6e6ea;caret-color:#fff;font:inherit;font-size:11px;line-height:1.4;resize:none;outline:none;overflow:hidden">${val}</textarea>
+				</div>
+			`;
+		} else if (spec.type === "seed") {
+			const mode = cell.values[spec.name + "_mode"] || "random";
+			const rawSeed = cell.values[spec.name];
+			const val = (rawSeed === undefined || rawSeed === "") ? "" : String(rawSeed).replace(/"/g, "&quot;");
+			const isRandom = mode === "random";
+			inputsHtml += `
+				<div style="margin-top:6px;display:flex;align-items:center;gap:6px">
+					<span style="font-size:10px;color:rgba(255,255,255,0.55);min-width:52px">${label}</span>
+					<input class="wf-input" data-input="${spec.name}" data-input-type="seed" type="number" value="${val}" placeholder="${isRandom ? "random" : "0"}" ${isRandom ? "disabled" : ""}
+						style="flex:1;box-sizing:border-box;background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.06);border-radius:4px;padding:4px 6px;color:${isRandom ? "rgba(255,255,255,0.35)" : "#e6e6ea"};font:inherit;font-size:11px;outline:none">
+					<button class="wf-seed-mode" data-input="${spec.name}" type="button" title="${isRandom ? "Random — new seed each run. Click to lock." : "Fixed — same seed each run. Click to randomize."}"
+						style="width:26px;height:22px;padding:0;border:none;border-radius:4px;background:${isRandom ? "rgba(255,180,84,0.15)" : "rgba(255,255,255,0.06)"};color:${isRandom ? "#ffb454" : "rgba(255,255,255,0.55)"};font-size:11px;cursor:pointer">${isRandom ? "🎲" : "🔒"}</button>
+				</div>
+			`;
+		} else if (spec.type === "number") {
+			inputsHtml += `
+				<div class="drag-num wf-drag" data-input="${spec.name}" title="${label}" style="margin-top:6px;flex:none;width:100%">
+					<span class="drag-label">${label}</span>
+					<span class="drag-val">0</span>
+				</div>
+			`;
+		} else {
+			inputsHtml += `
+				<div style="font-size:10px;color:rgba(255,255,255,0.4);padding:6px 0">
+					Input "${label}" (${spec.type}) not yet wired in the workflow section.
+				</div>
+			`;
+		}
 	}
-	// Trailing "+ Add workflow" chip — mirrors the Generate section's + Add
-	// Generator. Opens a menu of registered workflow modules; already-added
-	// ones show a checkmark and re-picking them is a no-op.
-	const addCell = document.createElement("div");
-	addCell.className = "gen-cell-add";
-	addCell.id = "workflow-add-cell";
-	addCell.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span>Add workflow</span>`;
-	container.appendChild(addCell);
+
+	const emptyHint = (!m.inputs || m.inputs.length === 0)
+		? `<div class="hint" style="margin-top:8px">No configurable inputs — hit ▶ to run.</div>`
+		: "";
+
+	pane.innerHTML = `
+		<div class="section">
+			<div class="section-label">Inputs</div>
+			${inputsHtml}
+			${emptyHint}
+		</div>
+	`;
+
+	function autosize(ta) {
+		if (ta.tagName !== "TEXTAREA") return;
+		ta.style.height = "auto";
+		ta.style.height = (ta.scrollHeight + 2) + "px";
+	}
+	for (const ta of pane.querySelectorAll(".wf-input")) {
+		ta.addEventListener("input", () => {
+			cell.values[ta.dataset.input] = ta.value;
+			autosize(ta);
+			saveSceneDebounced?.();
+		});
+		requestAnimationFrame(() => autosize(ta));
+	}
+	for (const dragEl of pane.querySelectorAll(".wf-drag")) {
+		const specName = dragEl.dataset.input;
+		const spec = (m.inputs || []).find(s => s.name === specName);
+		if (!spec) continue;
+		const step = typeof spec.step === "number" ? spec.step : 0.01;
+		const decimals = step >= 1 ? 0 : Math.max(0, Math.min(4, -Math.floor(Math.log10(step))));
+		const defaultVal = typeof spec.default === "number" ? spec.default : (parseFloat(spec.default) || 0);
+		const sens = (typeof spec.min === "number" && typeof spec.max === "number")
+			? (spec.max - spec.min) / 200
+			: step;
+		setupDragField(dragEl, {
+			get: () => {
+				const raw = cell.values[specName];
+				if (raw === undefined || raw === "") return defaultVal;
+				const n = parseFloat(raw);
+				return isFinite(n) ? n : defaultVal;
+			},
+			set: (v) => { cell.values[specName] = String(v); saveSceneDebounced?.(); },
+			sens: sens,
+			min: spec.min,
+			max: spec.max,
+			format: (v) => v.toFixed(decimals),
+		});
+	}
+	for (const btn of pane.querySelectorAll(".wf-seed-mode")) {
+		btn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			const key = btn.dataset.input;
+			const modeKey = key + "_mode";
+			const nextMode = (cell.values[modeKey] || "random") === "random" ? "fixed" : "random";
+			cell.values[modeKey] = nextMode;
+			if (nextMode === "fixed" && !cell.values[key]) {
+				cell.values[key] = "0";
+			}
+			saveSceneDebounced?.();
+			// Re-render this pane in place so the input enables/disables and the
+			// button swaps 🎲 ↔ 🔒. Doesn't touch the left column.
+			renderWorkflowCellProperties(cell);
+		});
+	}
 }
 
 // Generators land in the WORKFLOW section via the AI Agent's create_workflow_module
@@ -7092,29 +7445,47 @@ function refreshWorkflowCells() {
 // so previously-registered ones re-hydrate.
 fetchWorkflowModules();
 
-// Add-workflow dropdown — clones the Generate add-menu behavior. Menu shows
-// every registered workflow module with existing cells tagged as "added" and
-// disabled (re-picking focuses the existing cell instead of duplicating).
+// Unified Add Workflow dropdown — one menu listing built-in API generators
+// (Nano Banana, Seedance, Tripo, ...) followed by manifest-driven local
+// ComfyUI workflow modules. Each item shows a small "api" or "local" hint
+// so the user can tell them apart without splitting the list. Existing
+// cells (either kind) are tagged "added" and disabled; re-picking one
+// focuses the existing cell rather than duplicating.
 (() => {
 	const menu = document.getElementById("workflow-add-menu");
 	if (!menu) return;
-	function getAnchor() { return document.getElementById("workflow-add-cell"); }
-	// Reuse the KIND_ICONS lookup from the Generate section so image / video /
-	// 3d workflows get an appropriate SVG next to their label without us having
-	// to invent a separate icon set.
+	const headerBtn = document.getElementById("workflow-add-btn");
 	function iconFor(m) {
 		return (KIND_ICONS && KIND_ICONS[m.kind]) || KIND_ICONS.image;
 	}
 	function paintMenu() {
 		menu.innerHTML = "";
-		const modules = Object.values(workflowModules);
-		if (modules.length === 0) {
-			const empty = document.createElement("div");
-			empty.style.cssText = "font-size:10.5px;color:rgba(255,255,255,0.4);padding:8px 10px;font-style:italic";
-			empty.textContent = "No workflow modules registered yet.";
-			menu.appendChild(empty);
-			return;
+		// Built-in API generators.
+		for (const [id, m] of Object.entries(GEN_MODELS)) {
+			const exists = genCells.some(c => c.model === id);
+			const item = document.createElement("button");
+			item.type = "button";
+			item.className = "gen-add-item";
+			item.role = "menuitem";
+			item.disabled = exists;
+			const suffix = exists
+				? '<span class="gen-add-check">added</span>'
+				: '<span class="gen-add-check" style="opacity:0.4">api</span>';
+			item.innerHTML = `${m.iconSvg}<span>${m.name}</span>${suffix}`;
+			item.addEventListener("click", () => {
+				closeMenu();
+				if (exists) {
+					const existing = genCells.find(c => c.model === id);
+					if (existing) setActiveGenCell(existing.id);
+					return;
+				}
+				const cell = addGenCell({ model: id, expanded: true });
+				setActiveGenCell(cell.id);
+			});
+			menu.appendChild(item);
 		}
+		// Local ComfyUI workflow modules.
+		const modules = Object.values(workflowModules);
 		for (const m of modules) {
 			const exists = workflowCells.some(c => c.moduleId === m.id);
 			const item = document.createElement("button");
@@ -7122,7 +7493,10 @@ fetchWorkflowModules();
 			item.className = "gen-add-item";
 			item.role = "menuitem";
 			item.disabled = exists;
-			item.innerHTML = `${iconFor(m)}<span>${m.label}</span>${exists ? '<span class="gen-add-check">added</span>' : ''}`;
+			const suffix = exists
+				? '<span class="gen-add-check">added</span>'
+				: '<span class="gen-add-check" style="opacity:0.4">local</span>';
+			item.innerHTML = `${iconFor(m)}<span>${m.label}</span>${suffix}`;
 			item.addEventListener("click", () => {
 				closeMenu();
 				if (exists) {
@@ -7132,52 +7506,59 @@ fetchWorkflowModules();
 				}
 				const cell = { id: newGenCellId(), moduleId: m.id, values: {}, expanded: true };
 				workflowCells.push(cell);
-				refreshWorkflowCells();
+				refreshWorkflowsList();
 				setActiveWorkflowCell(cell.id);
 				saveSceneDebounced?.();
 			});
 			menu.appendChild(item);
 		}
+		if (Object.keys(GEN_MODELS).length === 0 && modules.length === 0) {
+			const empty = document.createElement("div");
+			empty.style.cssText = "font-size:10.5px;color:rgba(255,255,255,0.4);padding:8px 10px;font-style:italic";
+			empty.textContent = "No workflows registered yet.";
+			menu.appendChild(empty);
+		}
 	}
 	function openMenu() {
 		paintMenu();
 		menu.hidden = false;
-		getAnchor()?.setAttribute("aria-expanded", "true");
+		headerBtn?.setAttribute("aria-expanded", "true");
 		setTimeout(() => document.addEventListener("mousedown", onDocDown, true), 0);
 		document.addEventListener("keydown", onEsc, true);
 	}
 	function closeMenu() {
 		menu.hidden = true;
-		getAnchor()?.setAttribute("aria-expanded", "false");
+		headerBtn?.setAttribute("aria-expanded", "false");
 		document.removeEventListener("mousedown", onDocDown, true);
 		document.removeEventListener("keydown", onEsc, true);
 	}
 	function onDocDown(e) {
-		if (e.target.closest("#workflow-add-menu") || e.target.closest("#workflow-add-cell")) return;
+		if (e.target.closest("#workflow-add-menu") || e.target.closest("#workflow-add-btn")) return;
 		closeMenu();
 	}
 	function onEsc(e) { if (e.key === "Escape") { e.stopPropagation(); closeMenu(); } }
-	// Delegated on the container since refreshWorkflowCells re-creates the chip.
-	document.getElementById("workflow-cells")?.addEventListener("click", (e) => {
-		if (!e.target.closest("#workflow-add-cell")) return;
+	// Header "+ Add" — the sole entry point for adding a workflow.
+	headerBtn?.addEventListener("click", (e) => {
 		e.stopPropagation();
 		if (menu.hidden) openMenu(); else closeMenu();
 	});
-	// Called when create_workflow_module lands a new module so the open menu
-	// re-paints with the fresh entry.
+	// Both aliases exposed for legacy callers: addGenCell fires _refreshGenAddMenu
+	// after a built-in row is added, and create_workflow_module (agent tool) fires
+	// _refreshWorkflowAddMenu after a local workflow lands.
+	window._refreshGenAddMenu = () => { if (!menu.hidden) paintMenu(); };
 	window._refreshWorkflowAddMenu = () => { if (!menu.hidden) paintMenu(); };
 })();
 
 // ── Section collapse toggles ──────────────────────────────────────
-// Only the caret toggles collapse now — the wider head-row used to be the click
-// target, but that made an accidental collapse very easy while reaching for the
-// label area. The caret is a bit bigger (24×24, was 18) with a hover chip so it
-// reads as a button.
+// Click anywhere on the head-row toggles collapse — the label doubles as the
+// hit target now that the caret has been removed. Clicks on the head-end
+// buttons/status (Clear, + Add, etc.) fall through the .closest() guard so
+// they run their own handlers instead of folding the section.
 for (const section of document.querySelectorAll("#panel .section.collapsible")) {
-	const caret = section.querySelector(".collapse-caret");
-	if (!caret) continue;
-	caret.addEventListener("click", (e) => {
-		e.stopPropagation();
+	const row = section.querySelector(".section-head-row");
+	if (!row) continue;
+	row.addEventListener("click", (e) => {
+		if (e.target.closest("button, input, textarea, select")) return;
 		section.classList.toggle("collapsed");
 	});
 }
@@ -7257,12 +7638,15 @@ function assistantSceneContext() {
 		workflowModules: Object.values(workflowModules).map(m => ({
 			id: m.id, label: m.label, kind: m.kind,
 		})),
-		// One unambiguous target the agent should read to disambiguate commands
-		// like "generate" or "set prompt" without asking.
+		// One unambiguous target the agent reads to disambiguate commands like
+		// "run" or "set prompt". The UI now presents API generators and local
+		// modules under a single "Workflows" panel — reflect that here by using
+		// kind: "workflow" for both, with source: "api" | "local" preserving
+		// the runtime distinction (partner-API call vs local ComfyUI job).
 		activeTarget: activeWorkflowMod
-			? { kind: "workflow", id: activeWorkflowMod.id, label: activeWorkflowMod.label }
+			? { kind: "workflow", source: "local", id: activeWorkflowMod.id, label: activeWorkflowMod.label }
 			: (activeGen
-				? { kind: "generator", id: activeGen.model, label: activeGen.model }
+				? { kind: "workflow", source: "api", id: activeGen.model, label: (GEN_MODELS[activeGen.model]?.name || activeGen.model) }
 				: null),
 	};
 }
@@ -7277,11 +7661,11 @@ function refreshChatContextChip() {
 	const activeWorkflow = workflowCells.find(c => c.id === activeWorkflowCellId);
 	const activeWorkflowMod = activeWorkflow ? workflowModules[activeWorkflow.moduleId] : null;
 	if (activeWorkflowMod) {
-		target.textContent = `${activeWorkflowMod.label} · workflow`;
+		target.textContent = `${activeWorkflowMod.label} · workflow · local`;
 		chip.hidden = false;
 	} else if (activeGen) {
-		const model = activeGen.model;
-		target.textContent = `${model} · generator`;
+		const label = GEN_MODELS[activeGen.model]?.name || activeGen.model;
+		target.textContent = `${label} · workflow · api`;
 		chip.hidden = false;
 	} else {
 		chip.hidden = true;
@@ -8144,19 +8528,39 @@ document.getElementById("mode-anchor").addEventListener("click", togglePivotMode
 // Camera pill — swap the viewport to look through the framed render camera, deselect
 // any picked object so + / S key the camera, and toggle PROPERTIES : CAMERA on the
 // right. Clicking again closes the pane but leaves the view state alone.
-document.getElementById("mode-camera")?.addEventListener("click", () => {
-	setActiveView("camera");
-	select(null);
-	const pane = document.getElementById("rp-pane-camera");
-	if (pane && !pane.hidden) forceRightPane(defaultRightPane());
-	else forceRightPane("camera", "Camera");
+// SVG glyphs the view-toggle swaps between. `camera` = filmstrip/lens icon
+// (you're looking through the framed render camera). `scene` = 3D-crosshair
+// icon (you're in orbit-around-the-shot perspective mode). Kept as strings
+// so updateViewToggleIcon can drop them in with one innerHTML write.
+const _VIEW_TOGGLE_SVGS = {
+	camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>',
+	scene:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="1"/><path d="M18.944 12.33a1 1 0 0 0 0-.66 7.5 7.5 0 0 0-13.888 0 1 1 0 0 0 0 .66 7.5 7.5 0 0 0 13.888 0"/></svg>',
+};
+
+function updateViewToggleIcon(which) {
+	const btn = document.getElementById("mode-view-toggle");
+	if (!btn) return;
+	btn.innerHTML = _VIEW_TOGGLE_SVGS[which] || _VIEW_TOGGLE_SVGS.scene;
+	btn.dataset.mode = which;
+	btn.title = which === "camera"
+		? "Camera view — click to switch to perspective (orbit)"
+		: "Perspective view — click to switch to camera view";
+}
+window.updateViewToggleIcon = updateViewToggleIcon;
+
+// Single view-toggle: flips between camera and scene each click. When entering
+// camera view we also drop the current selection so + / S keys the render cam,
+// matching the old dedicated Camera-pill behavior. The Camera / Scene property
+// panes stay accessible via the right-panel header.
+document.getElementById("mode-view-toggle")?.addEventListener("click", () => {
+	const next = (typeof activeView !== "undefined" && activeView === "camera") ? "scene" : "camera";
+	setActiveView(next);
+	if (next === "camera") select(null);
+	updateViewToggleIcon(next);
 });
-// Scene pill — pure Perspective-view toggle. Opening Scene properties is now
-// handled by the top-left #scene-props-btn so you can inspect env/fog/post FX
-// without leaving the framed camera view.
-document.getElementById("mode-scene")?.addEventListener("click", () => {
-	setActiveView("scene");
-});
+// Boot state: whichever view is active when the DOM parses runs through
+// setActiveView after this file loads, so seed the icon from the current mode.
+updateViewToggleIcon(typeof activeView !== "undefined" ? activeView : "scene");
 // Top-left Scene-properties button — opens/closes the Scene pane without
 // touching the viewport view. Second click closes back to the default pane
 // (Object if something is selected, else nothing).
@@ -8360,6 +8764,25 @@ transform.addEventListener("mouseDown", () => {
 	// (perpendicular translates grow |pos - target| each tick), so cache once.
 	renderCamDragDist = selected === renderCam ? (renderCam.position.distanceTo(renderCamTarget) || 3) : null;
 	scaleDragStart = (transform.mode === "scale" && selected) ? selected.scale.clone() : null;
+	// Group-drag prep: when the multi-selection has >1 member and we're in
+	// translate mode, snapshot the primary's world position + each other
+	// member's world position. objectChange consumes these to apply the same
+	// delta to every set member. Rotate/scale intentionally stay per-primary
+	// in this first pass — group rotate/scale needs pivot math and can wait.
+	if (transform.mode === "translate" && selected && selectionSet.size > 1) {
+		const primaryPos = new THREE.Vector3();
+		selected.getWorldPosition(primaryPos);
+		const others = new Map();
+		for (const o of selectionSet) {
+			if (o === selected) continue;
+			const p = new THREE.Vector3();
+			o.getWorldPosition(p);
+			others.set(o, p);
+		}
+		groupDragSnapshot = { primaryPos, others };
+	} else {
+		groupDragSnapshot = null;
+	}
 });
 transform.addEventListener("objectChange", () => {
 	if (anchorMode && selected && anchorStartPos) {
@@ -8417,6 +8840,26 @@ transform.addEventListener("objectChange", () => {
 			scaleDragStart.y + (selected.scale.y - scaleDragStart.y) * SCALE_FINE,
 			scaleDragStart.z + (selected.scale.z - scaleDragStart.z) * SCALE_FINE,
 		);
+	}
+	// Group-drag delta pass — runs last so it picks up the primary's FINAL
+	// world position after any snap / anchor adjustments applied above. Every
+	// other set member gets the same world-space translation. Converts through
+	// the member's parent to keep the change consistent for parented hierarchies.
+	if (groupDragSnapshot && selected && transform.mode === "translate") {
+		selected.updateMatrixWorld();
+		const currentPos = new THREE.Vector3();
+		selected.getWorldPosition(currentPos);
+		const delta = new THREE.Vector3().subVectors(currentPos, groupDragSnapshot.primaryPos);
+		const worldTarget = new THREE.Vector3();
+		for (const [o, snapshotPos] of groupDragSnapshot.others) {
+			worldTarget.copy(snapshotPos).add(delta);
+			if (o.parent && o.parent !== scene) {
+				const inv = new THREE.Matrix4().copy(o.parent.matrixWorld).invert();
+				worldTarget.applyMatrix4(inv);
+			}
+			o.position.copy(worldTarget);
+			o.updateMatrixWorld();
+		}
 	}
 });
 
@@ -8712,12 +9155,12 @@ function refreshObjectInspector() {
 		const url = objImageUrl(img);
 		objImageThumb.style.backgroundImage = `url("${url}")`;
 		objImageThumb.classList.add("has-image");
-		objImageBtn.classList.add("has-image");
+		objImageBtn.classList.add("filled");
 		if (clearBtn) clearBtn.hidden = false;
 	} else {
 		objImageThumb.style.backgroundImage = "";
 		objImageThumb.classList.remove("has-image");
-		objImageBtn.classList.remove("has-image");
+		objImageBtn.classList.remove("filled");
 		if (clearBtn) clearBtn.hidden = true;
 	}
 	objImageLabel.textContent = "Image ref";
@@ -9817,8 +10260,8 @@ window.revealBlockoutToggle = function () {
 	if (blockoutToggleBtn) blockoutToggleBtn.hidden = false;
 	syncResultToggleContainer();
 };
-let resultMode = "viewport"; // "viewport" | "blockout" | "render"
-let lastResult = null;       // { kind: "image"|"video", url, filename }
+let resultMode = "viewport"; // "viewport" | "blockout" | "render" | "intermediate:<name>"
+let lastResult = null;       // { kind, url, filename, intermediates: [{name,label,url,filename}] }
 
 function updateResultOverlayPos() {
 	if (!resultOverlay || resultOverlay.hidden) return;
@@ -9868,10 +10311,27 @@ function showRenderResult() {
 		resultOverlayVid.style.display = "none";
 		resultOverlayImg.style.display = "";
 		resultOverlayImg.src = lastResult.url;
-		// Renders are produced at the AR crop already, so cover is correct here.
-		resultOverlayImg.style.objectFit = "cover";
-		resultOverlayImg.style.background = "";
+		// contain (not cover) so /64-snapped latent mismatches letterbox cleanly
+		// against the aspect frame instead of silently cropping the top/bottom.
+		resultOverlayImg.style.objectFit = "contain";
+		resultOverlayImg.style.background = "#000";
 	}
+	updateResultOverlayPos();
+}
+
+// Show a preprocessor preview (depth map, canny edges, etc.) declared by the
+// workflow manifest. Same overlay treatment as the blockout — contain so the
+// image renders at its native AR without cropping.
+function showIntermediate(name) {
+	const inter = (lastResult?.intermediates || []).find(x => x.name === name);
+	if (!inter) { resultMode = "viewport"; applyResultMode(); return; }
+	resultOverlay.hidden = false;
+	resultOverlayVid.removeAttribute("src");
+	resultOverlayVid.style.display = "none";
+	resultOverlayImg.style.display = "";
+	resultOverlayImg.src = inter.url;
+	resultOverlayImg.style.objectFit = "contain";
+	resultOverlayImg.style.background = "#000";
 	updateResultOverlayPos();
 }
 
@@ -9881,21 +10341,62 @@ function applyResultMode() {
 		showBlockoutSnapshot();
 	} else if (resultMode === "render") {
 		showRenderResult();
+	} else if (typeof resultMode === "string" && resultMode.startsWith("intermediate:")) {
+		showIntermediate(resultMode.slice("intermediate:".length));
 	} else {
 		// viewport — overlay hidden, live 3D scene visible
 		resultOverlay.hidden = true;
 	}
+	// The floating save-icon in the top-right of the overlay only makes sense
+	// when a real render is on-screen — hide it for blockout / intermediate /
+	// viewport (those are ephemeral previews, not something you'd download).
+	const saveOv = document.getElementById("result-save-overlay");
+	if (saveOv) saveOv.classList.toggle("visible", resultMode === "render" && !!lastResult);
 }
 
-window.showResultInViewport = function (kind, url, filename) {
-	lastResult = { kind, url, filename };
+// Wipe any dynamically-added preview pills (DEPTH, CANNY, etc.) — called
+// between runs so a workflow without intermediates doesn't inherit stale
+// tabs from a previous workflow with them.
+function clearIntermediateButtons() {
+	if (!resultToggle) return;
+	for (const b of [...resultToggle.querySelectorAll('button[data-result^="intermediate:"]')]) {
+		b.remove();
+	}
+}
+
+// Insert a single preview pill for `inter` right before RENDER so the tab
+// order reads VIEWPORT | BLOCKOUT | DEPTH | RENDER.
+function addIntermediateButton(inter) {
+	if (!resultToggle) return;
+	const btn = document.createElement("button");
+	btn.type = "button";
+	btn.dataset.result = `intermediate:${inter.name}`;
+	btn.textContent = inter.label || inter.name;
+	btn.addEventListener("click", () => {
+		resultMode = btn.dataset.result;
+		applyResultMode();
+	});
+	// renderToggleBtn is the anchor; if it's gone, append.
+	if (renderToggleBtn && renderToggleBtn.parentNode === resultToggle) {
+		resultToggle.insertBefore(btn, renderToggleBtn);
+	} else {
+		resultToggle.appendChild(btn);
+	}
+}
+
+window.showResultInViewport = function (kind, url, filename, intermediates) {
+	const inters = Array.isArray(intermediates) ? intermediates : [];
+	lastResult = { kind, url, filename, intermediates: inters };
 	// Reveal Viewport + Render pills now that there's a render to compare against;
 	// Blockout was already revealed when Generate fired.
 	if (renderToggleBtn) renderToggleBtn.hidden = false;
 	if (viewportToggleBtn) viewportToggleBtn.hidden = false;
+	// Rebuild the preview pills fresh — a re-run of the same workflow just
+	// swaps the images under existing tabs, but a switch to a workflow with
+	// different intermediates should drop the old ones.
+	clearIntermediateButtons();
+	for (const inter of inters) addIntermediateButton(inter);
 	syncResultToggleContainer();
-	const saveBtn = document.getElementById("vp-save-render");
-	if (saveBtn) saveBtn.hidden = false;
 	resultMode = "render";
 	applyResultMode();
 	// Newly-generated output is now on disk — refresh the Assets list so it
@@ -9903,8 +10404,9 @@ window.showResultInViewport = function (kind, url, filename) {
 	window.refreshAssets?.();
 };
 
-// Save the current render to the user's local disk.
-document.getElementById("vp-save-render")?.addEventListener("click", () => {
+// Save the current render to the user's local disk. Button lives on the
+// result overlay (top-right of the AR box) — replaces the old toolbar Save.
+document.getElementById("result-save-overlay")?.addEventListener("click", () => {
 	if (!lastResult) return;
 	const a = document.createElement("a");
 	a.href = lastResult.url;
@@ -9918,11 +10420,10 @@ document.getElementById("vp-save-render")?.addEventListener("click", () => {
 function resetResultUI() {
 	lastResult = null;
 	resultMode = "viewport";
-	const saveBtn = document.getElementById("vp-save-render");
-	if (saveBtn) saveBtn.hidden = true;
 	if (renderToggleBtn) renderToggleBtn.hidden = true;
 	if (blockoutToggleBtn) blockoutToggleBtn.hidden = true;
 	if (viewportToggleBtn) viewportToggleBtn.hidden = true;
+	clearIntermediateButtons();
 	syncResultToggleContainer();
 	applyResultMode?.();
 }
@@ -10034,14 +10535,32 @@ window.addEventListener("keydown", (e) => {
 	else if (e.key === "f" || e.key === "F") frameScene();
 	else if (e.key === "Home") { camera.position.set(2.2, 1.6, 2.8); orbit.target.set(0, 0, 0); camera.up.set(0, 1, 0); camera.updateProjectionMatrix(); }
 	else if (e.key === "Delete" || e.key === "Backspace") {
-		// Gen-cell focused? Remove it and don't touch scene selection. Row is
-		// tab-focusable and grabs focus on mousedown (unless the click landed in
-		// an input/textarea, where the browser handles Delete for text editing).
-		const activeInGen = document.activeElement?.closest?.("#gen-cells .gen-cell");
-		if (activeInGen && activeGenCellId) {
-			e.preventDefault();
-			removeGenCell(activeGenCellId);
-			return;
+		// Workflow row focused? Remove it and don't touch scene selection. Row
+		// is tab-focusable and grabs focus on mousedown (unless the click landed
+		// in an input/textarea, where the browser handles Delete for text
+		// editing). API rows are tagged data-workflow-source="api", local rows
+		// "local" — either can be nuked from the keyboard here.
+		const focusedRow = document.activeElement?.closest?.('#workflow-cells .gen-cell');
+		if (focusedRow) {
+			if (focusedRow.dataset.workflowSource === "api" && activeGenCellId) {
+				e.preventDefault();
+				removeGenCell(activeGenCellId);
+				return;
+			}
+			if (focusedRow.dataset.workflowSource === "local" && activeWorkflowCellId) {
+				e.preventDefault();
+				// Local workflow rows don't have a removeWorkflowCell helper — the
+				// delete button in the row runs an inline splice. Do the same here.
+				const i = workflowCells.findIndex(c => c.id === activeWorkflowCellId);
+				if (i >= 0) workflowCells.splice(i, 1);
+				activeWorkflowCellId = null;
+				refreshChatContextChip();
+				refreshWorkflowsList();
+				const wfPane = document.getElementById("rp-pane-workflowcell");
+				if (wfPane && !wfPane.hidden) forceRightPane(defaultRightPane?.() || "none");
+				saveSceneDebounced?.();
+				return;
+			}
 		}
 		if (selectedKeys.size) deleteKeyframes();
 		else deleteObject(selected);
@@ -12861,10 +13380,36 @@ async function autoSnapshot() {
 
 		const gridWasVisible = grid.visible;
 		const helperWasVisible = transformHelper.visible;
+		// The render-camera frustum wireframe and the animation motion paths
+		// are editor overlays — great in the live viewport, but they burn into
+		// the blockout PNG and then get preserved by the depth ControlNet as
+		// yellow/cyan lines in the final render. Hide them for the snapshot
+		// and restore after.
+		const camHelperWasVisible = renderCamHelper?.visible;
+		const animPathsWereVisible = animPathsGroup?.visible;
+		// FX helper wireframes (scatter blue box, particle emitter box/sphere) —
+		// also editor-only overlays that leak into the blockout unless hidden.
+		// Collect + restore in one pass so we don't have to know the full FX
+		// taxonomy up front; anything with a `.boxHelper` / `.sphereHelper` gets
+		// swept.
+		const fxHelperStates = [];
+		for (const o of objects) {
+			const fx = o.userData?.scatterFx || o.userData?.particleSystem;
+			if (!fx) continue;
+			for (const key of ["boxHelper", "sphereHelper"]) {
+				const h = fx[key];
+				if (h && typeof h.visible === "boolean") {
+					fxHelperStates.push([h, h.visible]);
+					h.visible = false;
+				}
+			}
+		}
 		const prevAspect = camera.aspect;
 		try {
 			grid.visible = false;
 			transformHelper.visible = false;
+			if (renderCamHelper) renderCamHelper.visible = false;
+			if (animPathsGroup) animPathsGroup.visible = false;
 			camera.aspect = w / h;
 			camera.updateProjectionMatrix();
 			renderer.setRenderTarget(snapshotTarget);
@@ -12875,6 +13420,9 @@ async function autoSnapshot() {
 			camera.updateProjectionMatrix();
 			grid.visible = gridWasVisible;
 			transformHelper.visible = helperWasVisible;
+			if (renderCamHelper) renderCamHelper.visible = !!camHelperWasVisible;
+			if (animPathsGroup) animPathsGroup.visible = !!animPathsWereVisible;
+			for (const [h, prev] of fxHelperStates) h.visible = prev;
 		}
 
 		renderer.readRenderTargetPixels(snapshotTarget, 0, 0, w, h, snapshotPixels);
