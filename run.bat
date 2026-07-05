@@ -18,9 +18,14 @@ echo.
 echo [cb-app] starting on http://127.0.0.1:8765
 echo.
 
-REM Open the editor in the default browser ~2s after the server starts.
-REM `start /b` runs in background so the wait + browser open don't block uvicorn.
-start "" /b cmd /c "timeout /t 2 /nobreak >nul && start http://127.0.0.1:8765"
+REM Auto-open the editor in the default browser once the server is up.
+REM Uses PowerShell's Start-Sleep + Start-Process so the delay is reliable
+REM regardless of shell quirks. `start /min` runs the launcher minimized so it
+REM doesn't steal focus from the visible uvicorn console, and it's detached so
+REM uvicorn's blocking call below isn't affected. NO_BROWSER=1 skips this.
+if not defined NO_BROWSER (
+  start "" /min powershell -NoProfile -Command "Start-Sleep -Seconds 3; Start-Process 'http://127.0.0.1:8765'"
+)
 
 python -m uvicorn server.main:app --host 127.0.0.1 --port 8765 --reload
 exit /b 0

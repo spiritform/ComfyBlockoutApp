@@ -1,6 +1,6 @@
 {
   "id": "flux2_klein_t2i_local",
-  "label": "Flux 2 Klein \u2014 Text to Image (Local)",
+  "label": "Flux 2 Klein · T2I · Local",
   "kind": "image",
   "output_ext": "png",
   "runner": "local",

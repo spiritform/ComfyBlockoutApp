@@ -1,0 +1,62 @@
+{
+  "id": "sdxl_controlnet_depth_local",
+  "label": "SDXL \u00b7 Depth ControlNet \u00b7 Local",
+  "kind": "image",
+  "output_ext": "png",
+  "runner": "local",
+  "inputs": [
+    {
+      "name": "image",
+      "type": "scene-image",
+      "label": "Viewport / Source Image",
+      "patch": {
+        "node_id": 10,
+        "widget_index": 0,
+        "widget_name": "image"
+      }
+    },
+    {
+      "name": "prompt",
+      "type": "textarea",
+      "label": "Positive Prompt",
+      "placeholder": "a cozy living room, warm lighting, photorealistic, highly detailed",
+      "required": true,
+      "patch": {
+        "node_id": 6,
+        "widget_index": 0,
+        "widget_name": "text"
+      }
+    },
+    {
+      "name": "negative_prompt",
+      "type": "textarea",
+      "label": "Negative Prompt",
+      "placeholder": "blurry, lowres, jpeg artifacts, watermark, ugly",
+      "patch": {
+        "node_id": 7,
+        "widget_index": 0,
+        "widget_name": "text"
+      }
+    },
+    {
+      "name": "seed",
+      "type": "number",
+      "label": "Seed",
+      "patch": {
+        "node_id": 3,
+        "widget_index": 0,
+        "widget_name": "seed"
+      }
+    },
+    {
+      "name": "controlnet_strength",
+      "type": "number",
+      "label": "ControlNet Strength (0-1)",
+      "patch": {
+        "node_id": 16,
+        "widget_index": 0,
+        "widget_name": "strength"
+      }
+    }
+  ]
+}

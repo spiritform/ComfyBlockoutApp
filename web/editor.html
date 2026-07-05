@@ -93,6 +93,20 @@
 		padding: 22px 22px 20px;
 		box-shadow: 0 30px 80px rgba(0,0,0,0.55);
 	}
+	.modal-card.wide { width: min(720px, 94vw); }
+	.modal-cols {
+		display: grid; grid-template-columns: 1fr 1fr;
+		gap: 26px 32px;
+	}
+	.modal-col-title {
+		font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
+		text-transform: uppercase; color: rgba(255,255,255,0.4);
+		padding-bottom: 8px; margin-bottom: 14px;
+		border-bottom: 1px solid rgba(255,255,255,0.06);
+	}
+	@media (max-width: 620px) {
+		.modal-cols { grid-template-columns: 1fr; gap: 24px; }
+	}
 	.modal-head {
 		display: flex; justify-content: space-between; align-items: center;
 		margin-bottom: 20px;
@@ -485,7 +499,7 @@
 
 	#tl-scrub-wrap {
 		flex: 1; position: relative; height: 36px;
-		background: #2a2a32; border-radius: 6px;
+		background: #2a2a32;
 		overflow: visible; cursor: pointer;
 	}
 	#tl-ruler {
@@ -494,7 +508,6 @@
 			linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px),
 			linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px);
 		background-size: 5% 100%, 25% 100%;
-		border-radius: 6px;
 	}
 	#tl-playhead {
 		position: absolute; top: 0; bottom: 0; width: 5px;
@@ -624,6 +637,10 @@
 		overflow-y: auto; overflow-x: hidden; padding: 0 20px 28px;
 		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
 	}
+	/* First section's head-row is 40px tall to match the right panel's
+	   #rp-header (also 40px), so OBJECTS and AI AGENT labels sit on the same
+	   vertical line. The head-row centers the label vertically, which places
+	   the label at ~y=14px from the section top — same as the right pane. */
 	#panel > .section:first-of-type > .section-head-row {
 		min-height: 40px; align-items: center;
 	}
@@ -639,7 +656,7 @@
 	   Bleed past the panel's 20px horizontal padding so the line spans the column. */
 	#panel .section {
 		margin: 0 -20px 0;
-		padding: 16px 20px;
+		padding: 12px 20px;
 		border-bottom: 1px solid rgba(255,255,255,0.06);
 	}
 	#panel .section:first-of-type { padding-top: 0; }
@@ -648,18 +665,33 @@
 	/* Collapsible sections — click the head-row to fold the body */
 	.section.collapsible .section-head-row {
 		cursor: pointer; user-select: none;
-		margin-bottom: 8px;
+		margin-bottom: 4px;
 	}
 	.section.collapsible.collapsed .section-head-row { margin-bottom: 0; }
 	.section.collapsible.collapsed { padding-bottom: 14px; }
 	.section.collapsible .collapse-caret {
-		font-size: 12px; color: rgba(255,255,255,0.4);
-		transition: transform 0.15s ease;
 		display: inline-flex; align-items: center; justify-content: center;
-		width: 18px; height: 18px;
+		width: 24px; height: 24px; border-radius: 4px;
+		cursor: pointer;
+		font-size: 0; color: transparent; /* hide the ▾ text glyph */
+		transition: background 0.12s;
 	}
-	.section.collapsible .section-head-row:hover .collapse-caret { color: #e6e6ea; }
-	.section.collapsible.collapsed .collapse-caret { transform: rotate(-90deg); }
+	/* Draw the arrow in a pseudo-element so ONLY the arrow rotates when the
+	   section collapses/expands — the outer 24x24 button box stays put and
+	   still serves as the hit target + hover chip. */
+	.section.collapsible .collapse-caret::before {
+		content: "▾";
+		display: inline-block;
+		font-size: 15px; color: rgba(255,255,255,0.4);
+		transition: transform 0.15s ease, color 0.12s;
+	}
+	.section.collapsible .collapse-caret:hover { background: rgba(255,255,255,0.06); }
+	.section.collapsible .collapse-caret:hover::before { color: #e6e6ea; }
+	/* The label side of the head-row is no longer a big click target — only
+	   the caret toggles collapse. Clicking the label just... clicks the label. */
+	.section.collapsible .section-head-row { cursor: default; }
+	.section.collapsible .section-label { cursor: default; }
+	.section.collapsible.collapsed .collapse-caret::before { transform: rotate(-90deg); }
 	.section.collapsible.collapsed > *:not(.section-head-row) { display: none; }
 	/* Inline action buttons in the head row don't make sense when the section is
 	   folded — hide them too so the head shows only the label + caret. */
@@ -800,8 +832,10 @@
 		padding: 0;
 	}
 	#rp-pane-assistant .assistant-input-row:focus-within { background: rgba(255,255,255,0.03); }
-	#rp-pane-assistant .assistant-input { height: 100%; padding: 12px 12px 12px 26px; }
-	#rp-pane-assistant .assistant-prompt-arrow { top: 12px; }
+	/* Docked pane: input padding + arrow position tuned together so the arrow's
+	   crossbar sits ~2px above the first line of typed text. */
+	#rp-pane-assistant .assistant-input { height: 100%; padding: 17px 12px 12px 28px; }
+	#rp-pane-assistant .assistant-prompt-arrow { top: 15px; }
 	/* section-head-row is empty (label/reset/status/caret all hidden or hoisted) —
 	   suppress it entirely so it doesn't reserve a slice of vertical space. */
 	#rp-pane-assistant .section-head-row { display: none; }
@@ -920,8 +954,8 @@
 		border-top: 1px solid rgba(255,255,255,0.05);
 	}
 	.assistant-prompt-arrow {
-		position: absolute; left: 10px; top: 9px;
-		color: #ffb454; font-size: 12px; font-weight: 700;
+		position: absolute; left: 10px; top: 7px;
+		color: #ffb454; font-size: 16px; font-weight: 700;
 		line-height: 1; pointer-events: none; user-select: none;
 		font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
 	}
@@ -929,7 +963,10 @@
 		width: 100%; height: 56px; resize: none;
 		background: transparent;
 		border: none;
-		padding: 8px 10px 8px 24px;
+		/* Left padding bumped to match the bigger prompt arrow.
+		   Top padding at 10px so the first line sits ~2px below the arrow's
+		   crossbar instead of level with it — visually reads better. */
+		padding: 10px 10px 8px 28px;
 		color: rgba(255,255,255,0.85); font: inherit; font-size: 11px;
 		box-sizing: border-box; overflow-y: auto;
 		display: block;
@@ -1046,14 +1083,17 @@
 	}
 	.gen-run-btn.busy::after {
 		content: ""; position: absolute;
-		width: 14px; height: 14px;
-		border: 2px solid rgba(255,180,84,0.2);
+		/* `inset: 0; margin: auto` centers a fixed-size box inside the
+		   positioned parent. Uses margin (not transform) so the `spin`
+		   keyframe's transform doesn't fight it — the ring stays put, only
+		   its border-arc rotates. */
+		inset: 0; margin: auto;
+		width: 11px; height: 11px;
+		border: 1.5px solid rgba(255,180,84,0.2);
 		border-top-color: #ffb454;
 		border-radius: 50%;
 		animation: spin 0.7s linear infinite;
 	}
-	/* Position: relative here so ::after's absolute lands centered inside the
-	   button box (via flex on the parent). */
 	.gen-run-btn { position: relative; }
 	.gen-del-btn {
 		background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.4);
@@ -1526,9 +1566,19 @@
 		display: flex; gap: 4px; z-index: 6;
 		pointer-events: auto;
 	}
-	/* Static RGB "XYZ" reference — three colored letters, no camera-tracking. */
+	/* Top-left mirror of viewport-mode-corner. Currently just holds the Scene
+	   properties button; grows if we add more overlay buttons (grid toggle,
+	   guides, etc.) later. */
+	#viewport-scene-corner {
+		position: absolute; top: 8px; left: 8px;
+		display: flex; gap: 4px; z-index: 6;
+		pointer-events: auto;
+	}
+	/* Static RGB "XYZ" reference — three colored letters, no camera-tracking.
+	   Sits under the scene-corner button so the top-left button row stays
+	   clean; the letters read as a quiet reference below. */
 	#viewport-axes-corner {
-		position: absolute; top: 10px; left: 12px; z-index: 6;
+		position: absolute; top: 38px; left: 12px; z-index: 6;
 		pointer-events: none;
 		font: 700 12px ui-monospace, monospace;
 		text-shadow: 0 1px 2px rgba(0,0,0,0.7);
@@ -1983,39 +2033,73 @@
 	     (drop = set as that object's refImage). Save button per tile downloads
 	     to the user's disk. -->
 	<div class="modal-backdrop" id="settings-modal">
-		<div class="modal-card">
+		<div class="modal-card wide">
 			<div class="modal-head">
 				<span class="modal-title">Settings</span>
 				<button class="modal-close" id="settings-close">×</button>
 			</div>
-			<div class="modal-section">
-				<div class="section-label">Comfy Cloud API Key</div>
-				<div class="modal-status" id="settings-status"></div>
-				<div class="modal-input-row">
-					<input class="modal-input" type="password" id="settings-key" placeholder="comfyui-…" autocomplete="off" spellcheck="false">
-					<button class="modal-btn-secondary" id="settings-clear">Clear</button>
-					<button class="modal-btn-primary" id="settings-save">Save</button>
+			<div class="modal-cols">
+				<div>
+					<div class="modal-col-title">Cloud &amp; Assistant</div>
+					<div class="modal-section">
+						<div class="section-label">Comfy Cloud API Key</div>
+						<div class="modal-status" id="settings-status"></div>
+						<div class="modal-input-row">
+							<input class="modal-input" type="password" id="settings-key" placeholder="comfyui-…" autocomplete="off" spellcheck="false">
+							<button class="modal-btn-secondary" id="settings-clear">Clear</button>
+							<button class="modal-btn-primary" id="settings-save">Save</button>
+						</div>
+						<div class="modal-hint">Get yours at <a href="https://platform.comfy.org/profile/api-keys" target="_blank">platform.comfy.org/profile/api-keys</a></div>
+					</div>
+					<div class="modal-section">
+						<label class="modal-toggle-row" for="assistant-toggle">
+							<span class="toggle-labels">
+								<span class="toggle-title">Enable AI Agent</span>
+								<span class="toggle-sub">Chat + Comfy MCP tools</span>
+							</span>
+							<input type="checkbox" id="assistant-toggle">
+						</label>
+					</div>
+					<div class="modal-section" id="llm-key-section">
+						<div class="section-label">Anthropic API Key (Assistant)</div>
+						<div class="modal-status" id="llm-key-status"></div>
+						<div class="modal-input-row">
+							<input class="modal-input" type="password" id="llm-key-input" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
+							<button class="modal-btn-secondary" id="llm-key-clear">Clear</button>
+							<button class="modal-btn-primary" id="llm-key-save">Save</button>
+						</div>
+						<div class="modal-hint">Powers the in-editor Assistant. Get yours at <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com/settings/keys</a></div>
+					</div>
 				</div>
-				<div class="modal-hint">Get yours at <a href="https://platform.comfy.org/profile/api-keys" target="_blank">platform.comfy.org/profile/api-keys</a></div>
-			</div>
-			<div class="modal-section">
-				<label class="modal-toggle-row" for="assistant-toggle">
-					<span class="toggle-labels">
-						<span class="toggle-title">Enable AI Agent</span>
-						<span class="toggle-sub">Chat + Comfy MCP tools</span>
-					</span>
-					<input type="checkbox" id="assistant-toggle">
-				</label>
-			</div>
-			<div class="modal-section" id="llm-key-section">
-				<div class="section-label">Anthropic API Key (Assistant)</div>
-				<div class="modal-status" id="llm-key-status"></div>
-				<div class="modal-input-row">
-					<input class="modal-input" type="password" id="llm-key-input" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
-					<button class="modal-btn-secondary" id="llm-key-clear">Clear</button>
-					<button class="modal-btn-primary" id="llm-key-save">Save</button>
+
+				<div>
+					<div class="modal-col-title">Local ComfyUI paths</div>
+					<div class="modal-status" id="paths-status" style="margin-bottom:10px"></div>
+					<div class="modal-section">
+						<div class="section-label">Custom nodes directory</div>
+						<div class="modal-input-row">
+							<input class="modal-input" type="text" id="paths-nodes" placeholder="H:\ComfyUI\custom_nodes" autocomplete="off" spellcheck="false">
+						</div>
+					</div>
+					<div class="modal-section">
+						<div class="section-label">Models directory</div>
+						<div class="modal-input-row">
+							<input class="modal-input" type="text" id="paths-models" placeholder="H:\ComfyUI\models" autocomplete="off" spellcheck="false">
+						</div>
+					</div>
+					<div class="modal-section">
+						<div class="section-label">ComfyUI Python (for pip)</div>
+						<div class="modal-input-row">
+							<input class="modal-input" type="text" id="paths-python" placeholder="H:\ComfyUI\.venv\Scripts\python.exe" autocomplete="off" spellcheck="false">
+						</div>
+					</div>
+					<div class="modal-input-row" style="margin-top:16px">
+						<button class="modal-btn-secondary" id="paths-detect">Auto-detect</button>
+						<button class="modal-btn-secondary" id="paths-clear">Clear</button>
+						<button class="modal-btn-primary" id="paths-save">Save</button>
+					</div>
+					<div class="modal-hint">Point at the ComfyUI install you actually run. Leave blank to fall back to auto-detection.</div>
 				</div>
-				<div class="modal-hint">Powers the in-editor Assistant. Get yours at <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com/settings/keys</a></div>
 			</div>
 		</div>
 	</div>
@@ -2054,6 +2138,21 @@
 				<button class="prim-btn" data-prim="plane" data-label="Plane"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 16l9-4 9 4-9 4-9-4z"/></svg></button>
 				<button class="prim-btn" data-prim="custom" data-label="Import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 6v6M9 9l3-3 3 3" stroke="#ffb454"/></svg></button>
 				<button class="prim-btn" data-prim="particles" data-label="Particles"><svg viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="1.3" fill="currentColor"/><circle cx="12" cy="4" r="0.9" fill="currentColor"/><circle cx="18" cy="7" r="1.1" fill="currentColor"/><circle cx="5" cy="13" r="0.9" fill="currentColor"/><circle cx="11" cy="11" r="1.4" fill="currentColor"/><circle cx="17" cy="14" r="1" fill="currentColor"/><circle cx="8" cy="18" r="1.1" fill="currentColor"/><circle cx="15" cy="20" r="0.9" fill="currentColor"/><circle cx="20" cy="17" r="0.8" fill="currentColor"/></svg></button>
+			</div>
+		</div>
+
+		<div class="section collapsible" data-section="fx">
+			<div class="section-head-row">
+				<span class="section-label">FX</span>
+				<span class="head-end">
+					<span class="collapse-caret">▾</span>
+				</span>
+			</div>
+			<div class="prim-grid">
+				<button class="prim-btn" data-fx="clouds" data-label="Clouds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M7 17h11a3.5 3.5 0 0 0 .5-6.9A5.5 5.5 0 0 0 8 8.5 4 4 0 0 0 7 17z"/></svg></button>
+				<button class="prim-btn" data-fx="water" data-label="Water"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 8c3-2 6 2 9 0s6-2 9 0"/><path d="M3 13c3-2 6 2 9 0s6-2 9 0"/><path d="M3 18c3-2 6 2 9 0s6-2 9 0"/></svg></button>
+				<button class="prim-btn" data-fx="smoke" data-label="Smoke"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 20c0-2 3-2 3-4s-3-2-3-4 3-2 3-4"/><path d="M15 19c0-2 2-2 2-4s-2-2-2-4"/></svg></button>
+				<button class="prim-btn" data-fx="scatter" data-label="Scatter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M3 18l9-4 9 4-9 4-9-4z"/><path d="M7 13l1.5-4 1.5 4"/><path d="M12.5 11l1.5-5 1.5 5"/><path d="M16.5 15l1.5-4 1.5 4"/></svg></button>
 			</div>
 		</div>
 
@@ -2097,13 +2196,13 @@
 				</span>
 			</div>
 			<div class="gen-cells" id="workflow-cells"></div>
+			<div class="gen-add-menu" id="workflow-add-menu" role="menu" hidden></div>
 		</div>
 
 		<div class="section collapsible" id="assistant-section" data-section="assistant">
 			<div class="section-head-row">
 				<span class="section-label">AI Agent</span>
 				<span class="head-end">
-					<button class="assistant-reset" id="assistant-reset" title="Clear chat history">↻</button>
 					<span class="assistant-status" id="assistant-status">MCP · idle</span>
 					<span class="collapse-caret">▾</span>
 				</span>
@@ -2122,7 +2221,7 @@
 				</div>
 				<div class="assistant-input-row">
 					<span class="assistant-prompt-arrow" aria-hidden="true">&gt;</span>
-					<textarea class="assistant-input" id="assistant-input" rows="2" placeholder="Ask the AI agent… (Enter to send · Shift+Enter for new line)"></textarea>
+					<textarea class="assistant-input" id="assistant-input" rows="2" placeholder="Ask the AI agent… (Enter to send · Shift+Enter for new line · /clear resets)"></textarea>
 				</div>
 			</div>
 		</div>
@@ -2182,11 +2281,16 @@
 				<span class="v1"></span><span class="v2"></span>
 				<div id="viewport-time-corner"><span id="tl-time">0.00s / 4.00s</span></div>
 				<div id="viewport-axes-corner"><span style="color:#ff5252">X</span><span style="color:#4ade80">Y</span><span style="color:#4a8aff">Z</span></div>
+				<div id="viewport-scene-corner">
+					<button class="vpm-btn" id="scene-props-btn" title="Scene properties — environment, fog, post FX. Opens on the right without changing the view.">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="17" cy="6" r="2"/><path d="M3 19l5-6 4 4 3-3 6 5"/><path d="M3 21h18"/></svg>
+					</button>
+				</div>
 				<div id="viewport-mode-corner">
 					<button class="vpm-btn" id="mode-camera" title="Camera view — look through the framed render camera. Also opens PROPERTIES : CAMERA and deselects so + / S keys the camera.">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
 					</button>
-					<button class="vpm-btn" id="mode-scene" title="Perspective view — orbit around the shot from an overview vantage. Also opens PROPERTIES : SCENE.">
+					<button class="vpm-btn" id="mode-scene" title="Perspective view — orbit around the shot from an overview vantage.">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="1"/><path d="M18.944 12.33a1 1 0 0 0 0-.66 7.5 7.5 0 0 0-13.888 0 1 1 0 0 0 0 .66 7.5 7.5 0 0 0 13.888 0"/></svg>
 					</button>
 				</div>
@@ -2229,6 +2333,7 @@
 		<div id="timeline">
 			<button class="tl-btn rec" id="tl-rec" title="Record (auto-tween if keyframes exist)">●</button>
 			<button class="tl-btn" id="tl-play" title="Play / pause (space)">▶</button>
+			<button class="tl-btn" id="tl-loop" title="Loop playback — restart at trim start when the playhead hits the end">↻</button>
 			<button class="tl-btn" id="tl-rewind" title="Rewind to start">◀◀</button>
 			<button class="tl-btn" id="tl-addkey" title="Add keyframe at playhead — keys the selected object's pos/rot/scale, or the camera if nothing is selected">+</button>
 			<button class="tl-btn" id="tl-clearkey" title="Delete selected keyframe (or all if none selected)">✕</button>
@@ -2282,6 +2387,10 @@
 							<span class="rp-bg-label" id="obj-texture-label">Texture</span>
 						</button>
 					</div>
+					<label class="checkbox-row" id="obj-doublesided-row" style="display:none;align-items:center;gap:8px;cursor:pointer;margin-top:8px" title="Render both faces of every polygon — useful for planes and single-sided imports">
+						<input type="checkbox" id="obj-doublesided">
+						<span>Double-sided</span>
+					</label>
 				</div>
 
 				<div class="section" id="obj-particles-emitter" hidden>
@@ -2348,14 +2457,14 @@
 					<div class="section-label">Particle</div>
 					<div class="select-row" style="margin-bottom:6px">
 						<select id="ps-style">
+							<option value="solid">Solid dot</option>
 							<option value="soft">Soft dot</option>
 							<option value="point">Point</option>
-							<option value="solid">Solid dot</option>
 							<option value="square">Square</option>
 						</select>
 					</div>
 					<div class="drag-row">
-						<div class="drag-num" id="ps-size"><span class="drag-label">Size</span><span class="drag-val">0.10</span></div>
+						<div class="drag-num" id="ps-size"><span class="drag-label">Size</span><span class="drag-val">0.015</span></div>
 						<div class="drag-num" id="ps-random"><span class="drag-label">Random</span><span class="drag-val">0.40</span></div>
 					</div>
 				</div>
@@ -2373,6 +2482,10 @@
 						<div class="drag-num" id="ps-rate" style="flex:1"><span class="drag-label">Rate</span><span class="drag-val">500</span></div>
 						<div class="drag-num" id="ps-life" style="flex:1"><span class="drag-label">Life</span><span class="drag-val">2.0</span></div>
 					</div>
+					<div class="drag-row" style="margin-top:6px">
+						<div class="drag-num" id="ps-prerun" style="flex:1"><span class="drag-label">Prerun</span><span class="drag-val">0.0s</span></div>
+					</div>
+					<div class="hint">Prerun fast-forwards the sim so particles are already in flight at frame 0 — set ≥ Life for a fully populated start.</div>
 				</div>
 
 				<div class="section" id="obj-particles-velocity" hidden>
@@ -2400,6 +2513,72 @@
 						<div class="drag-num" id="ps-eff-speed"><span class="drag-label">Speed</span><span class="drag-val">1.00</span></div>
 						<div class="drag-num" id="ps-eff-scale"><span class="drag-label">Scale</span><span class="drag-val">1.00</span></div>
 					</div>
+				</div>
+
+				<div class="section" id="obj-clouds-appearance" hidden>
+					<div class="section-label">Appearance</div>
+					<div class="rp-bg-pair">
+						<label class="rp-bg-row" id="cf-color-btn" title="Cloud color">
+							<input type="color" id="cf-color" value="#ffffff">
+							<span class="rp-bg-label">Color</span>
+						</label>
+					</div>
+				</div>
+
+				<div class="section" id="obj-clouds-shape" hidden>
+					<div class="section-label">Shape</div>
+					<div class="drag-row">
+						<div class="drag-num" id="cf-density"><span class="drag-label">Density</span><span class="drag-val">0.50</span></div>
+						<div class="drag-num" id="cf-scale"><span class="drag-label">Scale</span><span class="drag-val">1.00</span></div>
+					</div>
+					<div class="hint">Density thickens the cloud; Scale controls noise frequency (higher = smaller puffs).</div>
+				</div>
+
+				<div class="section" id="obj-clouds-motion" hidden>
+					<div class="section-label">Motion</div>
+					<div class="drag-row">
+						<div class="drag-num" id="cf-speed" style="flex:1"><span class="drag-label">Wind speed</span><span class="drag-val">1.00</span></div>
+					</div>
+				</div>
+
+				<div class="section" id="obj-scatter-source" hidden>
+					<div class="section-label">Source</div>
+					<div class="select-row">
+						<select id="sc-source"></select>
+					</div>
+					<div class="hint">The object being scattered (e.g. cone, rock, tree).</div>
+					<div class="sub-label" style="margin-top:10px">Surface</div>
+					<div class="select-row">
+						<select id="sc-surface-obj"></select>
+					</div>
+					<div class="hint">Optional. Pick a plane or mesh to scatter onto — its top face becomes the spawn area. Leave as "None" to use the container box below.</div>
+				</div>
+
+				<div class="section" id="obj-scatter-distribution" hidden>
+					<div class="section-label">Distribution</div>
+					<div class="drag-row">
+						<div class="drag-num" id="sc-count" style="flex:1"><span class="drag-label">Count</span><span class="drag-val">200</span></div>
+						<div class="drag-num" id="sc-seed" style="flex:1"><span class="drag-label">Seed</span><span class="drag-val">1</span></div>
+						<div class="drag-num" id="sc-scatter" style="flex:1"><span class="drag-label">Scatter</span><span class="drag-val">1.00</span></div>
+					</div>
+					<div class="hint">Scatter goes full random at 1.0 or settles into an even grid at 0.0.</div>
+					<label class="checkbox-row" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:8px" title="Pin all instances to the bottom face of the volume (good for scattering onto a plane).">
+						<input type="checkbox" id="sc-surface">
+						<span>Surface only</span>
+					</label>
+				</div>
+
+				<div class="section" id="obj-scatter-variation" hidden>
+					<div class="section-label">Variation</div>
+					<div class="sub-label">Scale</div>
+					<div class="drag-row">
+						<div class="drag-num" id="sc-scale-min"><span class="drag-label">Min</span><span class="drag-val">0.70</span></div>
+						<div class="drag-num" id="sc-scale-max"><span class="drag-label">Max</span><span class="drag-val">1.30</span></div>
+					</div>
+					<label class="checkbox-row" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:8px" title="Random spin around each instance's up axis.">
+						<input type="checkbox" id="sc-rot-y" checked>
+						<span>Random Y rotation</span>
+					</label>
 				</div>
 
 				<div class="section" id="obj-fbx-anim-section" hidden>
@@ -2498,6 +2677,35 @@
 						<input type="range" id="env-intensity" min="0" max="3" step="0.05" value="0.2">
 						<span class="slider-val" id="env-intensity-val">0.20</span>
 					</div>
+				</div>
+
+				<div class="section" id="fog-section">
+					<div class="section-head-row">
+						<span class="section-label">Fog</span>
+						<span class="head-end">
+							<label class="checkbox-row" title="Enable scene fog" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:rgba(255,255,255,0.6)">
+								<input type="checkbox" id="fog-enabled">
+								<span>Enabled</span>
+							</label>
+						</span>
+					</div>
+					<div class="rp-bg-pair">
+						<label class="rp-bg-row" id="fog-color-btn" title="Fog color">
+							<input type="color" id="fog-color" value="#c8d4e0">
+							<span class="rp-bg-label">Color</span>
+						</label>
+					</div>
+					<div class="slider-row" style="margin-top:8px">
+						<label>Near</label>
+						<input type="range" id="fog-near" min="0" max="100" step="0.1" value="2">
+						<span class="slider-val" id="fog-near-val">2.0</span>
+					</div>
+					<div class="slider-row">
+						<label>Far</label>
+						<input type="range" id="fog-far" min="1" max="500" step="1" value="60">
+						<span class="slider-val" id="fog-far-val">60</span>
+					</div>
+					<div class="hint">Linear fog fades everything past Near toward the color at Far.</div>
 				</div>
 
 				<div class="section" id="postfx-section">
@@ -2917,7 +3125,7 @@
 			document.body.appendChild(backdrop);
 		}
 
-		function openSettings() {
+		async function openSettings() {
 			settingsModal.classList.add("open");
 			settingsKey.value = "";
 			settingsStatus.className = "modal-status";
@@ -2926,6 +3134,17 @@
 			// opens, so users see the current state even after a reload.
 			const asstToggle = document.getElementById("assistant-toggle");
 			if (asstToggle) asstToggle.checked = window.isAssistantEnabled?.() ?? false;
+			// Hydrate the ComfyUI paths column — pre-fill whatever the backend
+			// currently has, so the user can either edit or leave-and-detect.
+			try {
+				const r = await fetch("/api/paths");
+				if (r.ok) {
+					const p = await r.json();
+					document.getElementById("paths-nodes").value = p.custom_nodes_dir || "";
+					document.getElementById("paths-models").value = p.models_dir || "";
+					document.getElementById("paths-python").value = p.python_exe || "";
+				}
+			} catch { /* silent — user can still enter values manually */ }
 			setTimeout(() => settingsKey.focus(), 50);
 		}
 		function closeSettings() { settingsModal.classList.remove("open"); }
@@ -3023,6 +3242,70 @@
 				llmKeyInput.value = "";
 				flashLlmStatus("success", "Cleared");
 			} catch (e) { /* swallow */ }
+		});
+
+		// ---------- ComfyUI paths ----------
+		const pathsNodes  = document.getElementById("paths-nodes");
+		const pathsModels = document.getElementById("paths-models");
+		const pathsPython = document.getElementById("paths-python");
+		const pathsSave   = document.getElementById("paths-save");
+		const pathsClear  = document.getElementById("paths-clear");
+		const pathsDetect = document.getElementById("paths-detect");
+		const pathsStatus = document.getElementById("paths-status");
+		function flashPathsStatus(kind, text, hideMs = 2000) {
+			pathsStatus.className = `modal-status ${kind}`;
+			pathsStatus.textContent = text;
+			if (hideMs) {
+				setTimeout(() => {
+					pathsStatus.className = "modal-status";
+					pathsStatus.textContent = "";
+				}, hideMs);
+			}
+		}
+		pathsSave.addEventListener("click", async () => {
+			try {
+				const r = await fetch("/api/paths", {
+					method: "POST", headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						custom_nodes_dir: pathsNodes.value.trim(),
+						models_dir: pathsModels.value.trim(),
+						python_exe: pathsPython.value.trim(),
+					}),
+				});
+				if (!r.ok) {
+					const err = await r.json().catch(() => ({ detail: r.statusText }));
+					flashPathsStatus("error", err.detail || "save failed", 3000);
+					return;
+				}
+				flashPathsStatus("success", "Saved");
+			} catch (e) {
+				flashPathsStatus("error", e.message || "save failed", 3000);
+			}
+		});
+		pathsClear.addEventListener("click", async () => {
+			pathsNodes.value = "";
+			pathsModels.value = "";
+			pathsPython.value = "";
+			try {
+				await fetch("/api/paths", {
+					method: "POST", headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ custom_nodes_dir: "", models_dir: "", python_exe: "" }),
+				});
+				flashPathsStatus("success", "Cleared — using auto-detect");
+			} catch { /* swallow */ }
+		});
+		pathsDetect.addEventListener("click", async () => {
+			try {
+				const r = await fetch("/api/paths/detect", { method: "POST" });
+				const p = await r.json();
+				pathsNodes.value  = p.custom_nodes_dir || "";
+				pathsModels.value = p.models_dir       || "";
+				pathsPython.value = p.python_exe       || "";
+				const found = [p.custom_nodes_dir, p.models_dir, p.python_exe].filter(Boolean).length;
+				flashPathsStatus(found ? "success" : "error", found ? `Detected ${found}/3` : "Nothing detected — enter paths manually");
+			} catch (e) {
+				flashPathsStatus("error", e.message || "detect failed", 3000);
+			}
 		});
 
 		// ---------- result toast ----------
@@ -3371,6 +3654,7 @@ transform.addEventListener("dragging-changed", (e) => {
 	orbit.enabled = !e.value && selected !== renderCam;
 	if (!e.value) {
 		renderCamDragDist = null;
+		scaleDragStart = null;
 		saveSceneDebounced();
 	}
 });
@@ -3500,8 +3784,10 @@ function setActiveView(which) {
 	if (typeof updateCameraSliders === "function") updateCameraSliders();
 	// Camera motion path is Scene-view only — rebuild so it appears/disappears with the swap.
 	if (typeof refreshAnimPaths === "function") refreshAnimPaths();
-	// The mode-scene / mode-camera pill amber state is driven by pane visibility, not
-	// view state — coupling happens in their click handlers (open pane → also swap view).
+	// mode-scene is a pure view-toggle now — amber = you're in perspective view.
+	// mode-camera still tracks the Camera pane (its click still opens/closes it);
+	// scene-props-btn tracks the Scene pane visibility (see forceRightPane).
+	document.getElementById("mode-scene")?.classList.toggle("active", which === "scene");
 }
 window.setActiveView = setActiveView;
 
@@ -3592,7 +3878,8 @@ const primCounters = {};
 const DEFAULT_PARTICLE_CONFIG = {
 	count: 1000,
 	rate: 500,              // birth rate (particles/second) — how fast new particles emit from the source
-	size: 0.1,
+	prerun: 0,              // seconds of simulation to fast-forward before frame 0 (so scene opens mid-flight, not empty)
+	size: 0.015,
 	random: 0.4,            // per-particle size variance (0 = uniform, 1 = ±100%)
 	lifetime: 2.0,
 	initialSpeed: 1.0,
@@ -3604,7 +3891,7 @@ const DEFAULT_PARTICLE_CONFIG = {
 	effScale: 1.0,          // effectors: spatial-factor divisor (bigger = wider/smoother swirls)
 	color: 0xffffff,
 	blending: "additive",   // "additive" | "normal"
-	style: "soft",          // "soft" | "point" | "solid" | "square"
+	style: "solid",         // "soft" | "point" | "solid" | "square"
 	emitter: "point",       // "point" | "box" | "sphere" (unit-sized; use object Scale to resize)
 	direction: "directional", // "directional" | "omni" — omni emits uniformly on a sphere, ignores Spread
 	image: null,            // { assetId, ext } | null
@@ -3907,7 +4194,7 @@ function tickParticleSystems() {
 	for (const points of particleSystems) {
 		const ps = points.userData?.particleSystem;
 		if (!ps) continue;
-		ps.mat.uniforms.uTime.value = t;
+		ps.mat.uniforms.uTime.value = t + (ps.config.prerun || 0);
 	}
 }
 
@@ -4497,6 +4784,32 @@ function deleteObject(obj) {
 		selected = null;
 		forceRightPane(defaultRightPane());
 	}
+	// Any scatter that references `obj` as its source needs to rebuild BEFORE
+	// obj's geometry is disposed below — otherwise the InstancedMesh keeps a
+	// dangling pointer. Rebuild finds a new eligible source (or produces an
+	// empty scatter if none remain).
+	if (obj.userData.primKind !== "scatter") {
+		for (const s of scatterSystems) {
+			if (s === obj) continue;
+			const cfg = s.userData?.scatterFx?.config;
+			if (!cfg) continue;
+			let touched = false;
+			if (cfg.sourceName === obj.name) {
+				cfg.sourceName = null; // let the rebuild pick a fallback
+				touched = true;
+			}
+			if (cfg.surfaceName === obj.name) {
+				// Losing the surface reverts to the container box — no
+				// automatic fallback since there's usually only one plane in
+				// play, and any other object as a fallback would be surprising.
+				cfg.surfaceName = null;
+				const fx = s.userData.scatterFx;
+				if (fx?.boxHelper) fx.boxHelper.visible = true;
+				touched = true;
+			}
+			if (touched) rebuildScatterInstances(s);
+		}
+	}
 	if (obj.userData.primKind === "particles") {
 		const i = particleSystems.indexOf(obj);
 		if (i >= 0) particleSystems.splice(i, 1);
@@ -4504,6 +4817,23 @@ function deleteObject(obj) {
 		if (ps?.helperGroup?.parent) ps.helperGroup.parent.remove(ps.helperGroup);
 		ps?.geom?.dispose();
 		ps?.mat?.dispose();
+	}
+	if (obj.userData.primKind === "clouds") {
+		const i = cloudsSystems.indexOf(obj);
+		if (i >= 0) cloudsSystems.splice(i, 1);
+		const fx = obj.userData.cloudsFx;
+		fx?.geom?.dispose();
+		fx?.mat?.dispose();
+	}
+	if (obj.userData.primKind === "scatter") {
+		const i = scatterSystems.indexOf(obj);
+		if (i >= 0) scatterSystems.splice(i, 1);
+		const fx = obj.userData.scatterFx;
+		// Only dispose the InstancedMesh's cloned material — its geometry is
+		// shared with the source object and disposing it would break the source.
+		fx?.instMesh?.material?.dispose?.();
+		fx?.boxHelper?.geometry?.dispose?.();
+		fx?.boxHelper?.material?.dispose?.();
 	}
 	if (obj.userData.mixer) {
 		const idx = fbxMixers.indexOf(obj.userData.mixer);
@@ -4577,14 +4907,466 @@ function addParticleEmitter(initialConfig) {
 	return points;
 }
 
+// ─── Clouds FX ────────────────────────────────────────────────────────
+// Volumetric fbm-noise cloud inside a unit box mesh. The fragment shader ray-
+// marches through the box's local space, sampling animated fbm noise, so the
+// cloud stays anchored to a normal Object3D — you can gizmo it, keyframe it,
+// and pass it around like a primitive. uTime is driven by the transport
+// playhead (see tickCloudsFx), matching how particles handle scrub/pause.
+const DEFAULT_CLOUDS_CONFIG = {
+	color: 0xffffff,
+	density: 0.5,   // 0..1, coverage threshold — higher = thicker cloud
+	speed: 1.0,     // wind advection speed multiplier
+	scale: 1.0,     // noise frequency (higher = smaller puffs)
+};
+const cloudsSystems = [];
+
+const CLOUDS_VERT = `
+	varying vec3 vObjectCamPos;
+	varying vec3 vObjectRay;
+	uniform mat4 uInvModel;
+	void main() {
+		vec4 objectCam = uInvModel * vec4(cameraPosition, 1.0);
+		vObjectCamPos = objectCam.xyz;
+		vObjectRay = position - objectCam.xyz;
+		gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0);
+	}
+`;
+const CLOUDS_FRAG = `
+	precision highp float;
+	uniform float uTime;
+	uniform vec3  uColor;
+	uniform float uDensity;
+	uniform float uSpeed;
+	uniform float uScale;
+	varying vec3 vObjectCamPos;
+	varying vec3 vObjectRay;
+
+	vec3 hash3(vec3 p) {
+		p = vec3(dot(p, vec3(127.1,311.7,74.7)),
+		         dot(p, vec3(269.5,183.3,246.1)),
+		         dot(p, vec3(113.5,271.9,124.6)));
+		return fract(sin(p) * 43758.5453);
+	}
+	float noise3D(vec3 p) {
+		vec3 i = floor(p);
+		vec3 f = fract(p);
+		vec3 u = f * f * (3.0 - 2.0 * f);
+		float n000 = dot(hash3(i + vec3(0.0, 0.0, 0.0)) * 2.0 - 1.0, f - vec3(0.0, 0.0, 0.0));
+		float n100 = dot(hash3(i + vec3(1.0, 0.0, 0.0)) * 2.0 - 1.0, f - vec3(1.0, 0.0, 0.0));
+		float n010 = dot(hash3(i + vec3(0.0, 1.0, 0.0)) * 2.0 - 1.0, f - vec3(0.0, 1.0, 0.0));
+		float n110 = dot(hash3(i + vec3(1.0, 1.0, 0.0)) * 2.0 - 1.0, f - vec3(1.0, 1.0, 0.0));
+		float n001 = dot(hash3(i + vec3(0.0, 0.0, 1.0)) * 2.0 - 1.0, f - vec3(0.0, 0.0, 1.0));
+		float n101 = dot(hash3(i + vec3(1.0, 0.0, 1.0)) * 2.0 - 1.0, f - vec3(1.0, 0.0, 1.0));
+		float n011 = dot(hash3(i + vec3(0.0, 1.0, 1.0)) * 2.0 - 1.0, f - vec3(0.0, 1.0, 1.0));
+		float n111 = dot(hash3(i + vec3(1.0, 1.0, 1.0)) * 2.0 - 1.0, f - vec3(1.0, 1.0, 1.0));
+		return mix(mix(mix(n000, n100, u.x), mix(n010, n110, u.x), u.y),
+		           mix(mix(n001, n101, u.x), mix(n011, n111, u.x), u.y), u.z);
+	}
+	float fbm(vec3 p) {
+		float s = 0.0, a = 0.5;
+		for (int i = 0; i < 4; i++) {
+			s += noise3D(p) * a;
+			p *= 2.0;
+			a *= 0.5;
+		}
+		return s;
+	}
+
+	void main() {
+		vec3 ro = vObjectCamPos;
+		vec3 rd = normalize(vObjectRay);
+		vec3 invRd = 1.0 / rd;
+		vec3 tMin = (vec3(-0.5) - ro) * invRd;
+		vec3 tMax = (vec3(0.5) - ro) * invRd;
+		vec3 t1 = min(tMin, tMax);
+		vec3 t2 = max(tMin, tMax);
+		float tEnter = max(max(max(t1.x, t1.y), t1.z), 0.0);
+		float tExit = min(min(t2.x, t2.y), t2.z);
+		if (tExit <= tEnter) discard;
+
+		const int STEPS = 48;
+		float dt = (tExit - tEnter) / float(STEPS);
+		vec3 wind = vec3(uTime * uSpeed * 0.08, 0.0, uTime * uSpeed * 0.03);
+
+		float alpha = 0.0;
+		vec3 col = vec3(0.0);
+		for (int i = 0; i < STEPS; i++) {
+			if (alpha > 0.98) break;
+			float ti = tEnter + (float(i) + 0.5) * dt;
+			vec3 p = ro + rd * ti;
+			float n = fbm((p + wind) * uScale * 3.0) * 0.5 + 0.5;
+			float d = smoothstep(1.0 - uDensity, 1.0, n);
+			// Altitude falloff — clouds pinch at top and bottom of the box.
+			float alt = p.y + 0.5;
+			d *= smoothstep(0.0, 0.15, alt) * smoothstep(1.0, 0.75, alt);
+			// Cheap self-shadow — samples closer to the top read brighter.
+			float shade = 0.4 + 0.6 * smoothstep(0.2, 0.8, alt);
+			float a = clamp(d * dt * 6.0, 0.0, 1.0);
+			col += uColor * shade * a * (1.0 - alpha);
+			alpha += a * (1.0 - alpha);
+		}
+		gl_FragColor = vec4(col, alpha);
+	}
+`;
+
+function buildCloudsFx(overrides) {
+	const cfg = { ...DEFAULT_CLOUDS_CONFIG, ...(overrides || {}) };
+	const geom = new THREE.BoxGeometry(1, 1, 1);
+	const mat = new THREE.ShaderMaterial({
+		uniforms: {
+			uTime:     { value: 0 },
+			uColor:    { value: new THREE.Color(cfg.color) },
+			uDensity:  { value: cfg.density },
+			uSpeed:    { value: cfg.speed },
+			uScale:    { value: cfg.scale },
+			uInvModel: { value: new THREE.Matrix4() },
+		},
+		vertexShader: CLOUDS_VERT,
+		fragmentShader: CLOUDS_FRAG,
+		transparent: true,
+		depthWrite: false,
+		// BackSide so the box still draws pixels when the camera is inside the
+		// volume (front faces would be culled). Ray-box intersection in the
+		// fragment handles both inside- and outside-camera cases.
+		side: THREE.BackSide,
+	});
+	const mesh = new THREE.Mesh(geom, mat);
+	// Volumetric raymarch bakes the actual visible extent — Three's default
+	// frustum test uses the mesh's boundingSphere which lies about coverage
+	// once you scale non-uniformly. Skip the test to avoid pop-out.
+	mesh.frustumCulled = false;
+	mesh.onBeforeRender = () => {
+		mesh.updateMatrixWorld();
+		mat.uniforms.uInvModel.value.copy(mesh.matrixWorld).invert();
+	};
+	mesh.userData.cloudsFx = { config: cfg, mat, geom };
+	return mesh;
+}
+
+function addCloudsFx(initialConfig) {
+	snapshotForUndo();
+	primCounters.clouds = (primCounters.clouds || 0) + 1;
+	const mesh = buildCloudsFx(initialConfig || {});
+	mesh.name = `Clouds.${String(primCounters.clouds).padStart(3, "0")}`;
+	// Default placement: floating slab above origin, wider than tall so the
+	// noise reads as a cloud field rather than a cube.
+	mesh.position.set(0, 2, 0);
+	mesh.scale.set(4, 1, 4);
+	mesh.userData.primKind = "clouds";
+	stashInitialTransform(mesh);
+	scene.add(mesh);
+	objects.push(mesh);
+	cloudsSystems.push(mesh);
+	select(mesh);
+	refreshOutliner();
+	updateStatus();
+	if (typeof saveScene === "function") saveScene();
+	return mesh;
+}
+
+function tickCloudsFx() {
+	// Same transport gate as particles: derive uTime from the playhead so
+	// scrubbing shows the exact cloud state at that frame and paused = frozen.
+	const dur = (typeof currentDuration === "function") ? currentDuration() : 4;
+	const t = playhead * dur;
+	for (const m of cloudsSystems) {
+		const fx = m.userData?.cloudsFx;
+		if (!fx) continue;
+		fx.mat.uniforms.uTime.value = t;
+	}
+}
+
+function syncCloudsUniforms(obj) {
+	const fx = obj?.userData?.cloudsFx;
+	if (!fx) return;
+	fx.mat.uniforms.uColor.value.setHex(fx.config.color);
+	fx.mat.uniforms.uDensity.value = fx.config.density;
+	fx.mat.uniforms.uSpeed.value = fx.config.speed;
+	fx.mat.uniforms.uScale.value = fx.config.scale;
+}
+
+// ─── Scatter FX ───────────────────────────────────────────────────────
+// InstancedMesh of a picked source object, sprayed inside a box volume. Fast
+// because every instance is one draw call; edit-loop stays snappy for a few
+// thousand instances. Layout is seeded so the same seed = the same layout —
+// tweaking count/scale-range doesn't randomize where every instance lands,
+// only extending count adds new stable slots.
+const DEFAULT_SCATTER_CONFIG = {
+	sourceName: null,    // what to scatter (the mesh being instanced)
+	surfaceName: null,   // OPTIONAL scatter surface — an object to scatter onto.
+	                     // When null, instances fill the container box below.
+	count: 200,
+	scaleMin: 0.7,
+	scaleMax: 1.3,
+	rotateY: true,       // random spin about local Y per instance
+	surface: false,      // container-box mode: clamp to bottom face — ignored when surfaceName is set
+	seed: 1,
+	scatter: 1,          // 1 = pure random, 0 = grid (evenly spaced, no clumping)
+};
+const scatterSystems = [];
+
+// Deterministic PRNG (mulberry32) — same seed always returns the same
+// sequence, so scatters stay put across reloads, undos, and re-selects.
+function makeSeededRng(seed) {
+	let s = (seed >>> 0) || 1;
+	return function () {
+		s = (s + 0x6D2B79F5) | 0;
+		let t = s;
+		t = Math.imul(t ^ t >>> 15, t | 1);
+		t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+		return ((t ^ t >>> 14) >>> 0) / 4294967296;
+	};
+}
+
+// Which objects can act as a scatter source? Anything with real polygonal
+// geometry we can hand to InstancedMesh. Excludes particles / clouds / other
+// scatters (would be a recursive nightmare) and pure Groups with no meshes.
+function isValidScatterSource(o) {
+	if (!o) return false;
+	const kind = o.userData?.primKind;
+	if (kind === "particles" || kind === "clouds" || kind === "scatter") return false;
+	let ok = false;
+	o.traverse?.(c => { if (c.isMesh && c.geometry) ok = true; });
+	return ok;
+}
+
+// Grab the first mesh's geometry + material we can find. Good enough for
+// primitives (root IS the mesh) and imports (first Mesh in the tree). Doesn't
+// handle multi-material Groups perfectly — that's a v2 problem.
+function extractSourceGeomMat(source) {
+	let geom = null, mat = null;
+	source.traverse?.(c => {
+		if (geom) return;
+		if (c.isMesh && c.geometry) { geom = c.geometry; mat = c.material; }
+	});
+	return { geom, mat: Array.isArray(mat) ? mat[0] : mat };
+}
+
+function buildScatterFx(overrides) {
+	const cfg = { ...DEFAULT_SCATTER_CONFIG, ...(overrides || {}) };
+	const group = new THREE.Group();
+	// Wireframe box helper — mirrors particles' emitter helper. Shows the
+	// scatter's transform anchor so users have something to click / gizmo
+	// even when instances are scattered elsewhere (e.g. onto a Surface).
+	// Hidden during recording so the box doesn't bake into the render.
+	const helperEdges = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
+	const helperMat = new THREE.LineBasicMaterial({ color: 0x66ccff, transparent: true, opacity: 0.35 });
+	const helper = new THREE.LineSegments(helperEdges, helperMat);
+	helper.userData._scatterHelper = true;
+	group.add(helper);
+	// Invisible pick target — a solid unit box the raycaster can hit. Without
+	// this, clicks only register when they graze the 1px wireframe edges, so
+	// the scatter becomes near-impossible to select once instances move onto
+	// a Surface. Material is fully transparent (opacity 0) rather than
+	// visible=false, because visible=false skips raycast entirely.
+	const pickMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+	const pickMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), pickMat);
+	pickMesh.userData._scatterPickTarget = true;
+	group.add(pickMesh);
+	group.userData.scatterFx = { config: cfg, instMesh: null, boxHelper: helper, pickMesh };
+	return group;
+}
+
+function rebuildScatterInstances(group) {
+	const fx = group.userData?.scatterFx;
+	if (!fx) return;
+	const cfg = fx.config;
+	// Tear down the old InstancedMesh. Only its instance-attribute buffer
+	// belongs to us — geometry and material are shared with the source, so
+	// disposing them here would nuke the source's mesh too.
+	if (fx.instMesh) {
+		group.remove(fx.instMesh);
+		fx.instMesh.dispose?.();
+		fx.instMesh = null;
+	}
+	// Resolve source. Two paths:
+	//   sourceName is set → look it up; if gone (deleted), fall back to keep
+	//     the scatter alive rather than blanking on the user.
+	//   sourceName is null → do NOT auto-pick. The scatter renders empty and
+	//     the dropdown surfaces a "select a source" placeholder. Otherwise
+	//     adding a scatter first and a sphere second would show "sphere" in
+	//     the UI while cfg.sourceName was silently null — confusing.
+	let source = null;
+	if (cfg.sourceName) {
+		source = objects.find(o => o.name === cfg.sourceName && o !== group && isValidScatterSource(o));
+		if (!source) {
+			source = objects.find(o => o !== group && isValidScatterSource(o));
+			if (source) cfg.sourceName = source.name;
+		}
+	}
+	if (!source) return;
+	const { geom, mat } = extractSourceGeomMat(source);
+	if (!geom || !mat) return;
+	const count = Math.max(1, Math.floor(cfg.count));
+	// Share the source's material directly. Any color/roughness/texture edit
+	// on the source now shows up on every instance without a manual rebuild.
+	// Deleting the source triggers a rebuild-with-fallback before the source's
+	// material is disposed, so we never render with a stale reference.
+	const im = new THREE.InstancedMesh(geom, mat, count);
+	im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+	const rng = makeSeededRng(cfg.seed);
+	const m = new THREE.Matrix4();
+	const q = new THREE.Quaternion();
+	const t = new THREE.Vector3();
+	const s = new THREE.Vector3();
+	const e = new THREE.Euler();
+	// Instances are children of the group, so the group's scale multiplies
+	// each instance's local scale. For a wide+flat scatter box (say 6×1×6),
+	// that would squash cones horizontally. Pre-divide by the group's scale
+	// so the world-space instance size stays uniform regardless of volume
+	// aspect. objectChange re-runs this when the user drags the gizmo.
+	const gsx = Math.abs(group.scale.x) || 1;
+	const gsy = Math.abs(group.scale.y) || 1;
+	const gsz = Math.abs(group.scale.z) || 1;
+	// Source's scale propagates into every instance — resize the source and
+	// the whole scatter grows/shrinks in lockstep. Position and rotation on
+	// the source deliberately DON'T propagate: position would drag every
+	// instance out of the volume, and rotation would fight the per-instance
+	// Y spin. Users keep the source at any location as a template.
+	const srcSx = source.scale.x;
+	const srcSy = source.scale.y;
+	const srcSz = source.scale.z;
+	// Optional Surface object. When set, we sample points on its LOCAL top
+	// face (works cleanly for a Plane primitive, which is a unit quad in its
+	// local XZ) and transform each point through the surface's world matrix
+	// then back into the scatter group's local space. That respects the
+	// surface's position/rotation/scale — tilted planes get instances on
+	// their actual tilted surface, not a flat AABB approximation.
+	let surface = null;
+	let surfaceBox = null;
+	const groupInv = new THREE.Matrix4();
+	const wpos = new THREE.Vector3();
+	if (cfg.surfaceName) {
+		surface = objects.find(o => o.name === cfg.surfaceName && o !== group && isValidScatterSource(o));
+		if (surface && surface.geometry) {
+			if (!surface.geometry.boundingBox) surface.geometry.computeBoundingBox();
+			surfaceBox = surface.geometry.boundingBox;
+			surface.updateMatrixWorld(true);
+			group.updateMatrixWorld(true);
+			groupInv.copy(group.matrixWorld).invert();
+		} else {
+			surface = null;
+		}
+	}
+	// Scatter lerps each instance between its slot in an even grid (0) and a
+	// pure-random position (1). Surface mode (container floor) uses a 2D
+	// grid; volume mode uses a 3D cube grid. Surface-object mode is always
+	// 2D since we're sampling a top face.
+	const scatter = Math.max(0, Math.min(1, cfg.scatter ?? 1));
+	const useSurface = !!surface;
+	const twoD = useSurface || cfg.surface;
+	let gridX, gridY, gridZ;
+	if (twoD) {
+		gridX = Math.max(1, Math.ceil(Math.sqrt(count)));
+		gridZ = Math.max(1, Math.ceil(count / gridX));
+		gridY = 1;
+	} else {
+		const side = Math.max(1, Math.ceil(Math.cbrt(count)));
+		gridX = gridY = gridZ = side;
+	}
+	for (let i = 0; i < count; i++) {
+		// Random position first — always consume the same RNG values so seed
+		// stability holds regardless of spread. 2D modes pin Y.
+		const rx = rng() - 0.5;
+		const ry = twoD ? -0.5 : rng() - 0.5;
+		const rz = rng() - 0.5;
+		// Grid position — walk indices in row-major order.
+		let gx, gy, gz;
+		if (twoD) {
+			const xi = i % gridX;
+			const zi = Math.floor(i / gridX);
+			gx = (xi + 0.5) / gridX - 0.5;
+			gy = -0.5;
+			gz = (zi + 0.5) / gridZ - 0.5;
+		} else {
+			const xi = i % gridX;
+			const yi = Math.floor(i / gridX) % gridY;
+			const zi = Math.floor(i / (gridX * gridY));
+			gx = (xi + 0.5) / gridX - 0.5;
+			gy = (yi + 0.5) / gridY - 0.5;
+			gz = (zi + 0.5) / gridZ - 0.5;
+		}
+		let px = gx * (1 - scatter) + rx * scatter;
+		let py = gy * (1 - scatter) + ry * scatter;
+		let pz = gz * (1 - scatter) + rz * scatter;
+		if (useSurface) {
+			// Map normalized (px, pz) in [-0.5..0.5] to the surface's local
+			// XZ bounds; Y sits at the top face. Transform to world, then to
+			// scatter-group local so the instance matrix stays in the right
+			// space and the group's own transform still lets you offset the
+			// scatter without moving the actual surface.
+			const lx = surfaceBox.min.x + (px + 0.5) * (surfaceBox.max.x - surfaceBox.min.x);
+			const lz = surfaceBox.min.z + (pz + 0.5) * (surfaceBox.max.z - surfaceBox.min.z);
+			const ly = surfaceBox.max.y;
+			wpos.set(lx, ly, lz);
+			surface.localToWorld(wpos);
+			wpos.applyMatrix4(groupInv);
+			px = wpos.x; py = wpos.y; pz = wpos.z;
+		}
+		const scl = cfg.scaleMin + rng() * Math.max(0, cfg.scaleMax - cfg.scaleMin);
+		const rotY = cfg.rotateY ? rng() * Math.PI * 2 : 0;
+		t.set(px, py, pz);
+		e.set(0, rotY, 0);
+		q.setFromEuler(e);
+		s.set(
+			(scl * srcSx) / gsx,
+			(scl * srcSy) / gsy,
+			(scl * srcSz) / gsz,
+		);
+		m.compose(t, q, s);
+		im.setMatrixAt(i, m);
+	}
+	im.instanceMatrix.needsUpdate = true;
+	im.frustumCulled = false; // avoid pop-out on wide scatters — cheap for InstancedMesh
+	group.add(im);
+	fx.instMesh = im;
+}
+
+function addScatterFx(initialConfig) {
+	snapshotForUndo();
+	primCounters.scatter = (primCounters.scatter || 0) + 1;
+	const group = buildScatterFx(initialConfig || {});
+	// Convenience: if the scene already has an eligible source when the
+	// scatter is created, pre-pick it so instances render immediately. If
+	// the scene is empty, sourceName stays null and the panel shows the
+	// "(select a source…)" placeholder until the user adds and picks one.
+	const cfg = group.userData.scatterFx.config;
+	if (!cfg.sourceName) {
+		const firstEligible = objects.find(o => isValidScatterSource(o));
+		if (firstEligible) cfg.sourceName = firstEligible.name;
+	}
+	group.name = `Scatter.${String(primCounters.scatter).padStart(3, "0")}`;
+	// Default footprint: wide, thin slab centered at ground level — the shape
+	// most useful for scattering rocks / cones / trees / props on a plane.
+	group.position.set(0, 0.5, 0);
+	group.scale.set(6, 1, 6);
+	group.userData.primKind = "scatter";
+	stashInitialTransform(group);
+	scene.add(group);
+	objects.push(group);
+	scatterSystems.push(group);
+	rebuildScatterInstances(group);
+	select(group);
+	refreshOutliner();
+	updateStatus();
+	if (typeof saveScene === "function") saveScene();
+	return group;
+}
+
 function addPrimitive(kind) {
 	if (kind === "particles") return addParticleEmitter();
+	if (kind === "clouds") return addCloudsFx();
+	if (kind === "scatter") return addScatterFx();
 	snapshotForUndo();
 	primCounters[kind] = (primCounters[kind] || 0) + 1;
 	const geom = PRIM_DEFS[kind]();
 	const mat = new THREE.MeshStandardMaterial({
 		color: new THREE.Color(pickNamedBlockColor()),
 		roughness: 0.7, metalness: 0.0,
+		// Planes are almost always meant to be visible from both sides — the
+		// checkbox in Appearance lets any other primitive opt in later.
+		side: kind === "plane" ? THREE.DoubleSide : THREE.FrontSide,
 	});
 	const mesh = new THREE.Mesh(geom, mat);
 	mesh.name = `${kind[0].toUpperCase()}${kind.slice(1)}.${String(primCounters[kind]).padStart(3,"0")}`;
@@ -4651,7 +5433,10 @@ function forceRightPane(which, label) {
 	// Toolbar pills light amber ONLY while their pane is the visible one. That
 	// makes "lit" == "properties currently showing this".
 	document.getElementById("mode-camera")?.classList.toggle("active", which === "camera");
-	document.getElementById("mode-scene")?.classList.toggle("active", which === "scene");
+	// mode-scene is now a pure view-toggle — its amber state is driven from
+	// setActiveView. The new top-left scene-props-btn takes over "scene pane
+	// is showing" here.
+	document.getElementById("scene-props-btn")?.classList.toggle("active", which === "scene");
 	// Filter chips live in the right-panel header (so they sit on the ASSETS baseline)
 	// — only meaningful while the assets pane is the active one.
 	const filterEl = document.getElementById("assets-filter");
@@ -4702,16 +5487,12 @@ applyAssistantEnablement();
 	const dst = document.getElementById("rp-pane-assistant");
 	if (src && dst && src.parentElement !== dst) dst.appendChild(src);
 
-	// Hoist the reset button + MCP status pill up to the right-panel header slot
-	// so they sit on the same baseline as the "AI AGENT" kicker. The section-head-row
-	// is left empty (hidden via CSS) since its label/caret are already suppressed.
+	// Hoist the MCP status pill up to the right-panel header slot so it sits on
+	// the same baseline as the "AI AGENT" kicker. The reset button lived here
+	// too but was retired in favor of a `/clear` slash-command in the input.
 	const headerEnd = document.getElementById("rp-header-end");
-	const reset = document.getElementById("assistant-reset");
 	const status = document.getElementById("assistant-status");
-	if (headerEnd) {
-		if (reset) headerEnd.appendChild(reset);
-		if (status) headerEnd.appendChild(status);
-	}
+	if (headerEnd && status) headerEnd.appendChild(status);
 
 	const btn = document.getElementById("th-assistant");
 	if (!btn) return;
@@ -5160,7 +5941,7 @@ canvas.addEventListener("pointerup", e => {
 	}
 });
 
-document.querySelectorAll(".prim-btn").forEach(b => {
+document.querySelectorAll(".prim-btn[data-prim]").forEach(b => {
 	b.addEventListener("click", () => {
 		const kind = b.dataset.prim;
 		// "custom" = open the file dialog for arbitrary GLB/FBX/OBJ/PLY/SPLAT/SPZ imports
@@ -5171,6 +5952,21 @@ document.querySelectorAll(".prim-btn").forEach(b => {
 		addPrimitive(kind);
 	});
 });
+
+// FX panel — shader-based effects (clouds/water/smoke/…). Buttons share
+// .prim-btn styling but dispatch via data-fx so addPrimitive stays clean.
+document.querySelectorAll(".prim-btn[data-fx]").forEach(b => {
+	b.addEventListener("click", () => addFx(b.dataset.fx));
+});
+function addFx(kind) {
+	if (kind === "clouds") return addCloudsFx();
+	if (kind === "scatter") return addScatterFx();
+	// Water/smoke: not implemented yet — ping the status bar so the button
+	// still gives feedback while the shaders are being written. Fog moved to
+	// Scene properties → Environment because it's a scene-level setting, not
+	// a placeable object.
+	updateStatus(`${kind[0].toUpperCase() + kind.slice(1)} FX — coming soon`);
+}
 
 // ── Generate cells ─────────────────────────────────────────────────
 const GEN_MODELS = {
@@ -5288,7 +6084,12 @@ function addGenCell(init = {}) {
 	// Enforce one cell per model (at least for now — user can delete and re-add).
 	if (genCells.some(c => c.model === cell.model)) return genCells.find(c => c.model === cell.model);
 	genCells.push(cell);
-	if (!activeGenCellId) activeGenCellId = cell.id;
+	// Only auto-activate when the caller explicitly opts in. The old "activate
+	// the first cell" heuristic meant nano-banana got stealth-selected at boot
+	// and re-selected itself on every reload via the persisted active id, even
+	// after the user clicked away. User-driven activation (clicking a cell)
+	// still runs setActiveGenCell, so nothing else is affected.
+	if (init.activate && !activeGenCellId) activeGenCellId = cell.id;
 	refreshGenCells();
 	refreshViewportGenerateBtn();
 	refreshGenAddBtn();
@@ -6040,15 +6841,35 @@ new MutationObserver(refreshViewportGenerateBtn).observe(
 );
 
 // Seed default cells on first render so the section ships with the built-in modules.
+// addGenCell no longer auto-activates (see its definition), so no extra clearing
+// needed here — activeGenCellId stays null until the user clicks a cell.
 if (genCells.length === 0) {
 	addGenCell({ model: "nano-banana", expanded: false });
 	addGenCell({ model: "seedance",    expanded: false });
-	// addGenCell auto-activates the first cell so `activeGenCellId` isn't null
-	// when the user starts poking around, but at boot that means whichever cell
-	// happened to be seeded first (nano-banana) shows up as the active target
-	// in the chat context chip without the user ever clicking it. Start clean —
-	// the user picks a target explicitly by clicking a cell.
+}
+
+// Click off in the GENERATE or WORKFLOW section body (i.e. anywhere in the
+// section that isn't a cell, add-chip, button, or header) → deselect. Both
+// panels share a single "active target" so clearing here nukes both, which
+// matches the mental model of the context chip vanishing.
+function clearActiveTargets() {
+	const changed = activeGenCellId || activeWorkflowCellId;
 	activeGenCellId = null;
+	activeWorkflowCellId = null;
+	if (changed) {
+		refreshGenCells();
+		refreshWorkflowCells();
+		refreshViewportGenerateBtn();
+		refreshChatContextChip();
+	}
+}
+for (const sel of ['[data-section="generate"]', '[data-section="workflow"]']) {
+	document.querySelector(sel)?.addEventListener("click", (e) => {
+		// Ignore clicks on any interactive child so cell selection, run/delete
+		// buttons, and section-collapse-on-head still work as-is.
+		if (e.target.closest(".gen-cell, .gen-cell-add, .section-head-row, .gen-add-menu, button, input, textarea, select")) return;
+		clearActiveTargets();
+	});
 }
 refreshViewportGenerateBtn();
 refreshGenAddBtn();
@@ -6092,12 +6913,13 @@ async function fetchWorkflowModules() {
 	} catch (e) {
 		console.warn("[workflow] module list fetch failed:", e);
 	}
-	// Seed one cell per registered workflow module. Users can × them off the
-	// list; adding one back is a re-import (for now) or clicking a future
-	// "restore" affordance.
-	for (const id of Object.keys(workflowModules)) {
-		if (!workflowCells.some(c => c.moduleId === id)) {
-			workflowCells.push({ id: newGenCellId(), moduleId: id, values: {} });
+	// Every registered module gets a cell so it's visible above the Add chip
+	// instead of hiding in the dropdown. Cells the user explicitly removed
+	// (× button) leave the module registered on disk but re-appear here on
+	// reload — same as Generate's built-in cells always come back if wiped.
+	for (const m of Object.values(workflowModules)) {
+		if (!workflowCells.some(c => c.moduleId === m.id)) {
+			workflowCells.push({ id: newGenCellId(), moduleId: m.id, values: {}, expanded: false });
 		}
 	}
 	refreshWorkflowCells();
@@ -6113,7 +6935,7 @@ function refreshWorkflowCells() {
 		if (!m) continue;
 		const row = document.createElement("div");
 		const isActive = cell.id === activeWorkflowCellId;
-		row.className = "gen-cell expanded" + (isActive ? " active" : "");
+		row.className = "gen-cell" + (cell.expanded ? " expanded" : "") + (isActive ? " active" : "");
 		row.dataset.cellId = cell.id;
 		const kindIcon = KIND_ICONS[m.kind] || KIND_ICONS.image;
 		// Render one input per manifest spec. Only textarea/text supported so far;
@@ -6156,13 +6978,20 @@ function refreshWorkflowCells() {
 			</div>
 			<div class="out-expand">${inputsHtml}</div>
 		`;
-		// Click the head-row (anywhere except the ×/▶ buttons) to activate this
-		// cell. Same pattern as the built-in gen cells — activating hoists it
-		// into the chat context chip so agent commands like "generate" target
-		// the right module.
-		row.querySelector(".gen-head").addEventListener("click", (e) => {
+		// Single click on the head activates the cell (hoists it into the chat
+		// context chip so agent commands like "generate" target this module).
+		// Double-click toggles expand/collapse so the compact row can reveal the
+		// prompt textarea. ×/▶ button clicks skip both.
+		const wfHead = row.querySelector(".gen-head");
+		wfHead.addEventListener("click", (e) => {
 			if (e.target.closest(".gen-run-btn, .gen-del-btn")) return;
 			setActiveWorkflowCell(cell.id);
+		});
+		wfHead.addEventListener("dblclick", (e) => {
+			if (e.target.closest(".gen-run-btn, .gen-del-btn")) return;
+			cell.expanded = !cell.expanded;
+			row.classList.toggle("expanded", cell.expanded);
+			saveSceneDebounced?.();
 		});
 		// Save typed values into the cell so re-renders don't lose state.
 		// Also grow the textarea to fit its content so an agent-injected long
@@ -6177,6 +7006,7 @@ function refreshWorkflowCells() {
 			ta.addEventListener("input", () => {
 				cell.values[ta.dataset.input] = ta.value;
 				autosize(ta);
+				saveSceneDebounced?.();
 			});
 			// Initial paint is deferred to the next frame because textareas
 			// report 0 for scrollHeight until they're attached to a laid-out
@@ -6184,35 +7014,20 @@ function refreshWorkflowCells() {
 			// gives us the placeholder height, not the content height.
 			requestAnimationFrame(() => autosize(ta));
 		}
-		row.querySelector(".gen-del-btn").addEventListener("click", async (e) => {
+		row.querySelector(".gen-del-btn").addEventListener("click", (e) => {
 			e.stopPropagation();
-			// Destructive on purpose — × permanently removes the manifest so
-			// a reboot doesn't resurrect the module. Confirm first because it's
-			// impossible to undo (the agent can re-create it, but not identically).
-			const ok = window.showConfirm
-				? await window.showConfirm(
-					"Delete workflow module?",
-					`This permanently removes "${m.label}" from server/workflows/. The agent can build it again if you ask.`,
-					{ confirmText: "Delete", cancelText: "Cancel" },
-				)
-				: confirm(`Delete "${m.label}" permanently? This removes it from server/workflows/.`);
-			if (!ok) return;
-			try {
-				const r = await fetch(`/api/workflows/${encodeURIComponent(cell.moduleId)}`, { method: "DELETE" });
-				if (!r.ok) {
-					const err = await r.json().catch(() => ({ detail: r.statusText }));
-					window.showAlert?.("Delete failed", err.detail || r.statusText);
-					return;
-				}
-			} catch (err) {
-				window.showAlert?.("Delete failed", err.message || String(err));
-				return;
-			}
-			// Drop the in-memory caches so the cell disappears immediately.
+			// Session-only — the module stays registered on disk so it shows up
+			// again in the "+ Add workflow" menu. Matches the built-in Generate
+			// cells' semantics. Permanent deletion goes through the agent (or
+			// the DELETE endpoint directly).
 			const i = workflowCells.findIndex(c => c.id === cell.id);
 			if (i >= 0) workflowCells.splice(i, 1);
-			delete workflowModules[cell.moduleId];
+			if (activeWorkflowCellId === cell.id) {
+				activeWorkflowCellId = null;
+				refreshChatContextChip();
+			}
 			refreshWorkflowCells();
+			saveSceneDebounced?.();
 		});
 		row.querySelector(".gen-run-btn").addEventListener("click", async (e) => {
 			e.stopPropagation();
@@ -6252,15 +7067,24 @@ function refreshWorkflowCells() {
 		container.appendChild(row);
 	}
 
-	// Empty-state hint — generators are built by asking the AI Agent to make one.
-	// The upload path has been retired; the section is populated exclusively via
-	// the agent's create_workflow_module tool.
-	if (workflowCells.length === 0) {
+	// Empty-state hint — shown only when there are no cells AND no registered
+	// modules to add. Once at least one module exists, the "+ Add workflow"
+	// chip becomes the discovery affordance.
+	const moduleIds = Object.keys(workflowModules);
+	if (workflowCells.length === 0 && moduleIds.length === 0) {
 		const empty = document.createElement("div");
 		empty.style.cssText = "font-size:10.5px;color:rgba(255,255,255,0.35);padding:8px 4px;font-style:italic;line-height:1.5";
 		empty.textContent = "No workflow modules yet. Ask the AI Agent to build one — e.g. \"make me a local Flux 2 Klein T2I generator\".";
 		container.appendChild(empty);
 	}
+	// Trailing "+ Add workflow" chip — mirrors the Generate section's + Add
+	// Generator. Opens a menu of registered workflow modules; already-added
+	// ones show a checkmark and re-picking them is a no-op.
+	const addCell = document.createElement("div");
+	addCell.className = "gen-cell-add";
+	addCell.id = "workflow-add-cell";
+	addCell.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span>Add workflow</span>`;
+	container.appendChild(addCell);
 }
 
 // Generators land in the WORKFLOW section via the AI Agent's create_workflow_module
@@ -6268,15 +7092,92 @@ function refreshWorkflowCells() {
 // so previously-registered ones re-hydrate.
 fetchWorkflowModules();
 
+// Add-workflow dropdown — clones the Generate add-menu behavior. Menu shows
+// every registered workflow module with existing cells tagged as "added" and
+// disabled (re-picking focuses the existing cell instead of duplicating).
+(() => {
+	const menu = document.getElementById("workflow-add-menu");
+	if (!menu) return;
+	function getAnchor() { return document.getElementById("workflow-add-cell"); }
+	// Reuse the KIND_ICONS lookup from the Generate section so image / video /
+	// 3d workflows get an appropriate SVG next to their label without us having
+	// to invent a separate icon set.
+	function iconFor(m) {
+		return (KIND_ICONS && KIND_ICONS[m.kind]) || KIND_ICONS.image;
+	}
+	function paintMenu() {
+		menu.innerHTML = "";
+		const modules = Object.values(workflowModules);
+		if (modules.length === 0) {
+			const empty = document.createElement("div");
+			empty.style.cssText = "font-size:10.5px;color:rgba(255,255,255,0.4);padding:8px 10px;font-style:italic";
+			empty.textContent = "No workflow modules registered yet.";
+			menu.appendChild(empty);
+			return;
+		}
+		for (const m of modules) {
+			const exists = workflowCells.some(c => c.moduleId === m.id);
+			const item = document.createElement("button");
+			item.type = "button";
+			item.className = "gen-add-item";
+			item.role = "menuitem";
+			item.disabled = exists;
+			item.innerHTML = `${iconFor(m)}<span>${m.label}</span>${exists ? '<span class="gen-add-check">added</span>' : ''}`;
+			item.addEventListener("click", () => {
+				closeMenu();
+				if (exists) {
+					const existing = workflowCells.find(c => c.moduleId === m.id);
+					if (existing) setActiveWorkflowCell(existing.id);
+					return;
+				}
+				const cell = { id: newGenCellId(), moduleId: m.id, values: {}, expanded: true };
+				workflowCells.push(cell);
+				refreshWorkflowCells();
+				setActiveWorkflowCell(cell.id);
+				saveSceneDebounced?.();
+			});
+			menu.appendChild(item);
+		}
+	}
+	function openMenu() {
+		paintMenu();
+		menu.hidden = false;
+		getAnchor()?.setAttribute("aria-expanded", "true");
+		setTimeout(() => document.addEventListener("mousedown", onDocDown, true), 0);
+		document.addEventListener("keydown", onEsc, true);
+	}
+	function closeMenu() {
+		menu.hidden = true;
+		getAnchor()?.setAttribute("aria-expanded", "false");
+		document.removeEventListener("mousedown", onDocDown, true);
+		document.removeEventListener("keydown", onEsc, true);
+	}
+	function onDocDown(e) {
+		if (e.target.closest("#workflow-add-menu") || e.target.closest("#workflow-add-cell")) return;
+		closeMenu();
+	}
+	function onEsc(e) { if (e.key === "Escape") { e.stopPropagation(); closeMenu(); } }
+	// Delegated on the container since refreshWorkflowCells re-creates the chip.
+	document.getElementById("workflow-cells")?.addEventListener("click", (e) => {
+		if (!e.target.closest("#workflow-add-cell")) return;
+		e.stopPropagation();
+		if (menu.hidden) openMenu(); else closeMenu();
+	});
+	// Called when create_workflow_module lands a new module so the open menu
+	// re-paints with the fresh entry.
+	window._refreshWorkflowAddMenu = () => { if (!menu.hidden) paintMenu(); };
+})();
+
 // ── Section collapse toggles ──────────────────────────────────────
-// Click the head-row (label or chevron) to collapse the module. Inline action
-// buttons inside the head-end (Clear, + Add, status pill) ignore the click so
-// they keep working without folding the section.
+// Only the caret toggles collapse now — the wider head-row used to be the click
+// target, but that made an accidental collapse very easy while reaching for the
+// label area. The caret is a bit bigger (24×24, was 18) with a hover chip so it
+// reads as a button.
 for (const section of document.querySelectorAll("#panel .section.collapsible")) {
-	const head = section.querySelector(".section-head-row");
-	if (!head) continue;
-	head.addEventListener("click", e => {
-		if (e.target.closest("button, input, select, textarea, .assistant-status")) return;
+	const caret = section.querySelector(".collapse-caret");
+	if (!caret) continue;
+	caret.addEventListener("click", (e) => {
+		e.stopPropagation();
 		section.classList.toggle("collapsed");
 	});
 }
@@ -6311,6 +7212,25 @@ function pushAssistantMsg(kind, text) {
 	assistantLog.scrollTop = assistantLog.scrollHeight;
 	return el;
 }
+
+// Rehydrate the visible chat from the server's persisted log on boot. Server
+// history survives restarts (see _chat_history_path in main.py), but the UI
+// was blank on reload — this loop paints the past user/agent turns into the
+// panel so "where were we?" is answerable at a glance, not just via the
+// agent's own recall.
+async function hydrateAssistantHistory() {
+	try {
+		const r = await fetch(`/api/llm/history?node_id=${encodeURIComponent(NODE_ID)}`);
+		if (!r.ok) return;
+		const data = await r.json();
+		const msgs = Array.isArray(data.messages) ? data.messages : [];
+		if (!msgs.length) return;
+		for (const m of msgs) {
+			pushAssistantMsg(m.role === "user" ? "user" : "bot", m.text);
+		}
+	} catch { /* silent — a broken log shouldn't block startup */ }
+}
+hydrateAssistantHistory();
 
 // Snapshot the current scene state for the assistant's context block.
 function assistantSceneContext() {
@@ -6609,9 +7529,10 @@ const ASSISTANT_TOOLS = {
 			const mod = out.module;
 			workflowModules[mod.id] = mod;
 			if (!workflowCells.some(c => c.moduleId === mod.id)) {
-				workflowCells.push({ id: newGenCellId(), moduleId: mod.id, values: {} });
+				workflowCells.push({ id: newGenCellId(), moduleId: mod.id, values: {}, expanded: true });
 			}
 			refreshWorkflowCells();
+			saveSceneDebounced?.();
 			return `registered workflow module '${mod.id}' (${mod.label}); cell added to WORKFLOW section — runner=${mod.source === "workflow" ? (spec.runner || "cloud") : "?"}`;
 		} catch (e) {
 			return `error: ${e.message || e}`;
@@ -6734,7 +7655,7 @@ const ASSISTANT_TOOLS = {
 		}
 	},
 
-	async install_custom_node({ git_url, name }) {
+	async install_custom_node({ git_url, name, force }) {
 		// SSE stream — mirror download_model_to_comfy: one live-updating line
 		// in chat so the user watches git's own progress output tick.
 		if (!git_url) return "error: git_url is required";
@@ -6750,7 +7671,7 @@ const ASSISTANT_TOOLS = {
 			resp = await fetch("/api/local/install-custom-node", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ git_url, name }),
+				body: JSON.stringify({ git_url, name, force: !!force }),
 			});
 		} catch (e) {
 			progressLine.textContent = `✕ Install request failed: ${e.message || e}`;
@@ -6805,6 +7726,29 @@ const ASSISTANT_TOOLS = {
 		return JSON.stringify(doneEvent);
 	},
 
+	async restart_comfy() {
+		// One-shot POST to ComfyUI-Manager's reboot endpoint. The server
+		// handles the "manager missing" and "socket dropped mid-restart"
+		// cases; we just render a live chat line and return the result JSON
+		// so the agent can pivot if manager isn't available.
+		const line = document.createElement("div");
+		line.className = "assistant-msg system";
+		line.textContent = "→ Restarting ComfyUI…";
+		assistantLog.appendChild(line);
+		assistantLog.scrollTop = assistantLog.scrollHeight;
+		try {
+			const r = await fetch("/api/local/restart-comfy", { method: "POST" });
+			const out = await r.json().catch(() => ({ restarted: false, error: r.statusText }));
+			line.textContent = out.restarted
+				? "✓ ComfyUI restart requested — should be back up in a few seconds"
+				: `✕ Restart failed: ${out.error || "unknown"}`;
+			return JSON.stringify(out);
+		} catch (e) {
+			line.textContent = `✕ Restart request failed: ${e.message || e}`;
+			return `error: ${e.message || e}`;
+		}
+	},
+
 	async check_local_models({ models }) {
 		// Thin proxy to the backend endpoint — the server does the /object_info
 		// scan; we just serialize the result back to Claude as tool_result content.
@@ -6847,6 +7791,19 @@ async function sendAssistant(message, opts = {}) {
 	if (assistantBusy) return;
 	const text = (message ?? assistantInput.value).trim();
 	if (!text) return;
+	// Slash commands run locally instead of hitting the LLM. `/clear` flushes
+	// server-side history and wipes the log — replaces the retired ↻ button.
+	if (text === "/clear" || text === "/reset") {
+		assistantInput.value = "";
+		try {
+			await fetch("/api/llm/reset", {
+				method: "POST", headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ node_id: NODE_ID }),
+			});
+		} catch {}
+		assistantLog.innerHTML = `<div class="assistant-msg system" id="assistant-intro">Ask the agent to refine a prompt, structure a generation JSON, or call a Comfy MCP tool.</div>`;
+		return;
+	}
 	if (opts.silent) {
 		pushAssistantMsg("system", opts.systemLine || "→ command sent to agent");
 	} else {
@@ -6926,18 +7883,8 @@ assistantInput.addEventListener("keydown", e => {
 	}
 });
 
-// Reset chat — flush server-side history + clear the log so stale references
-// (e.g. an object name from a previous session) don't poison new turns.
-document.getElementById("assistant-reset")?.addEventListener("click", async (e) => {
-	e.stopPropagation();
-	try {
-		await fetch("/api/llm/reset", {
-			method: "POST", headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ node_id: NODE_ID }),
-		});
-	} catch {}
-	assistantLog.innerHTML = `<div class="assistant-msg system" id="assistant-intro">Ask the agent to refine a prompt, structure a generation JSON, or call a Comfy MCP tool.</div>`;
-});
+// Reset chat was previously wired here to the ↻ button; it's now handled by
+// the `/clear` slash command inside sendAssistant.
 
 // Hide the placeholder the moment the user focuses the input so it feels
 // ready-to-type instead of "read the suggestion first". Restored on blur if
@@ -7204,11 +8151,16 @@ document.getElementById("mode-camera")?.addEventListener("click", () => {
 	if (pane && !pane.hidden) forceRightPane(defaultRightPane());
 	else forceRightPane("camera", "Camera");
 });
-// Scene pill — swap to the overview camera + PROPERTIES : SCENE (background / env /
-// render / prompt tweaks). Does not touch selection so it's safe to open while an
-// object is picked.
+// Scene pill — pure Perspective-view toggle. Opening Scene properties is now
+// handled by the top-left #scene-props-btn so you can inspect env/fog/post FX
+// without leaving the framed camera view.
 document.getElementById("mode-scene")?.addEventListener("click", () => {
 	setActiveView("scene");
+});
+// Top-left Scene-properties button — opens/closes the Scene pane without
+// touching the viewport view. Second click closes back to the default pane
+// (Object if something is selected, else nothing).
+document.getElementById("scene-props-btn")?.addEventListener("click", () => {
 	const pane = document.getElementById("rp-pane-scene");
 	if (pane && !pane.hidden) forceRightPane(defaultRightPane());
 	else forceRightPane("scene", "Scene");
@@ -7229,6 +8181,12 @@ const snapToggle = document.getElementById("toggle-snap");
 const TRANSLATE_SNAP_STEP = 0.25;
 const ROTATE_SNAP_STEP_DEG = 15;
 const SCALE_SNAP_STEP = 0.25;
+// Scale-gizmo default sensitivity multiplier. TransformControls' scale drag maps
+// pointer motion directly to a size ratio, which grows/shrinks fast on small
+// objects (the handle can be as big as the mesh). Dampening the per-frame delta
+// gives smoother fine control by default. Snap mode skips this so the 0.25 step
+// still feels like 0.25.
+const SCALE_FINE = 0.4;
 function snapActive() { return snapEnabled || shiftSnapHeld; }
 function applyTransformSnap() {
 	const on = snapActive();
@@ -7391,6 +8349,7 @@ function applyPivotShift(obj, P) {
 }
 
 let renderCamDragDist = null;
+let scaleDragStart = null;
 transform.addEventListener("mouseDown", () => {
 	// Snapshot pre-drag state so Ctrl+Z restores the object's transform from before the
 	// gizmo drag. One snapshot per gesture; objectChange fires per pixel and intentionally
@@ -7400,6 +8359,7 @@ transform.addEventListener("mouseDown", () => {
 	// Lock renderCam's target distance at gesture start. Recomputing it per-frame drifts
 	// (perpendicular translates grow |pos - target| each tick), so cache once.
 	renderCamDragDist = selected === renderCam ? (renderCam.position.distanceTo(renderCamTarget) || 3) : null;
+	scaleDragStart = (transform.mode === "scale" && selected) ? selected.scale.clone() : null;
 });
 transform.addEventListener("objectChange", () => {
 	if (anchorMode && selected && anchorStartPos) {
@@ -7448,6 +8408,15 @@ transform.addEventListener("objectChange", () => {
 		// corner / bbox face-center) to the nearest such anchor on any other visible object.
 		const offset = findObjectToObjectSnapOffset(selected);
 		if (offset) selected.position.add(offset);
+	} else if (!snapActive() && selected && transform.mode === "scale" && scaleDragStart) {
+		// Compress the delta between drag-start and what TransformControls just set,
+		// so a pixel of pointer motion produces a smaller scale change. Skipped when
+		// snap is on so the 0.25 quantization steps still land visibly.
+		selected.scale.set(
+			scaleDragStart.x + (selected.scale.x - scaleDragStart.x) * SCALE_FINE,
+			scaleDragStart.y + (selected.scale.y - scaleDragStart.y) * SCALE_FINE,
+			scaleDragStart.z + (selected.scale.z - scaleDragStart.z) * SCALE_FINE,
+		);
 	}
 });
 
@@ -7617,6 +8586,8 @@ function updateCameraSliders() {
 // ── Object inspector (right panel) ─────────────────────────────────
 const objColorInput = document.getElementById("obj-color");
 const objColorBtn = document.getElementById("obj-color-btn");
+const objDoubleSidedRow = document.getElementById("obj-doublesided-row");
+const objDoubleSided = document.getElementById("obj-doublesided");
 const objTextureBtn = document.getElementById("obj-texture-btn");
 const objTextureIcon = document.getElementById("obj-texture-icon");
 const objTextureLabel = document.getElementById("obj-texture-label");
@@ -7650,10 +8621,41 @@ function collectColorMaterials(obj) {
 	return out;
 }
 
+// All materials in the subtree that meaningfully honor `.side` — used by the
+// Double-sided toggle. Excludes materials without a `side` property (rare) so
+// the checkbox only appears when it can actually do something.
+function collectSidedMaterials(obj) {
+	const out = [];
+	obj.traverse?.(c => {
+		const mats = Array.isArray(c.material) ? c.material : (c.material ? [c.material] : []);
+		for (const m of mats) if (m && "side" in m) out.push(m);
+	});
+	return out;
+}
+
 function setObjAxis(prop, axis, v) {
 	if (!selected) return;
 	selected[prop][axis] = v;
 	if (prop === "rotation") selected.rotation.set(selected.rotation.x, selected.rotation.y, selected.rotation.z);
+	// Numeric drag fields bypass TransformControls, so my objectChange hooks
+	// don't catch them. Re-run the scatter rebuild here so scaling the
+	// container (via typed value OR field drag) keeps instance world-size
+	// uniform — otherwise a Y=2.57 container leaves the spheres stretched.
+	if (prop === "scale" && selected.userData?.primKind === "scatter") {
+		rebuildScatterInstances(selected);
+	}
+	// Source-scale bakes into instance matrices; surface transforms flow
+	// through localToWorld each rebuild. Both need a rebuild when their
+	// referenced object changes via numeric fields.
+	if (prop === "scale" || prop === "position" || prop === "rotation") {
+		for (const s of scatterSystems) {
+			const cfg = s.userData?.scatterFx?.config;
+			if (!cfg) continue;
+			const isSource = cfg.sourceName === selected.name && prop === "scale";
+			const isSurface = cfg.surfaceName === selected.name;
+			if (isSource || isSurface) rebuildScatterInstances(s);
+		}
+	}
 }
 const RAD = Math.PI / 180;
 function deg(v) { return v / RAD; }
@@ -7684,6 +8686,21 @@ function refreshObjectInspector() {
 	}
 	objAppearance.style.display = "";
 	objColorBtn.style.display = hasColor ? "" : "none";
+
+	// Double-sided toggle — visible when the selection has real polygonal
+	// meshes (splats and Points don't have a meaningful `side` to flip).
+	const sidedMats = (isSplatObj || selected.userData?.primKind === "particles" || selected.userData?.primKind === "clouds")
+		? []
+		: collectSidedMaterials(selected);
+	if (sidedMats.length) {
+		objDoubleSidedRow.style.display = "flex";
+		// If ANY material in the subtree is DoubleSide, treat the object as
+		// double-sided — imports with mixed materials still get a consistent
+		// visual state and one click makes them uniform on the way out.
+		objDoubleSided.checked = sidedMats.some(m => m.side === THREE.DoubleSide);
+	} else {
+		objDoubleSidedRow.style.display = "none";
+	}
 
 	// Import-only surface: Texture toggle + Image ref only appear on custom
 	// objects (FBX/GLB/OBJ imports), NOT primitives (cube/sphere/particles).
@@ -7729,6 +8746,8 @@ function refreshObjectInspector() {
 	// button feels sibling to Texture. Real depth-pass AO will replace this.
 
 	refreshParticlesInspector?.();
+	refreshCloudsInspector?.();
+	refreshScatterInspector?.();
 	// FBX animation controls — only shown when the object has a mixer with clips.
 	const animSection = document.getElementById("obj-fbx-anim-section");
 	const animFreeze  = document.getElementById("obj-anim-freeze");
@@ -7841,6 +8860,16 @@ objColorInput.addEventListener("input", e => {
 });
 objColorInput.addEventListener("change", () => saveScene?.());
 
+objDoubleSided.addEventListener("change", () => {
+	if (!selected) return;
+	const side = objDoubleSided.checked ? THREE.DoubleSide : THREE.FrontSide;
+	for (const m of collectSidedMaterials(selected)) {
+		m.side = side;
+		m.needsUpdate = true;
+	}
+	saveScene?.();
+});
+
 objImageBtn.addEventListener("click", (e) => {
 	if (!selected) return;
 	// The × button has its own click handler with stopPropagation, so this only fires
@@ -7948,6 +8977,8 @@ setupPSField("ps-rate", c => c.rate ?? (c.count / Math.max(0.001, c.lifetime)),
 	{ sens: 2, min: 1, max: 20000, format: v => `${Math.round(v)}`, rebuild: true });
 setupPSField("ps-life", c => c.lifetime, (c, v) => { c.lifetime = Math.max(0.1, v); },
 	{ sens: 0.02, min: 0.1, format: v => v.toFixed(2) });
+setupPSField("ps-prerun", c => c.prerun ?? 0, (c, v) => { c.prerun = Math.max(0, v); },
+	{ sens: 0.05, min: 0, format: v => `${v.toFixed(1)}s` });
 setupPSField("ps-size", c => c.size, (c, v) => { c.size = Math.max(0.001, v); },
 	{ sens: 0.002, min: 0.001, format: v => v.toFixed(3) });
 setupPSField("ps-random", c => c.random ?? 0.4, (c, v) => { c.random = Math.max(0, Math.min(1, v)); },
@@ -8041,6 +9072,205 @@ psSpriteFile.addEventListener("change", async () => {
 	}
 });
 
+const cfSections = [
+	"obj-clouds-appearance",
+	"obj-clouds-shape",
+	"obj-clouds-motion",
+].map(id => document.getElementById(id));
+const cfColorInput = document.getElementById("cf-color");
+
+function currentCloudsCfg() {
+	return selected?.userData?.primKind === "clouds"
+		? selected.userData.cloudsFx.config
+		: null;
+}
+function pushCloudsUniforms() {
+	if (selected?.userData?.primKind === "clouds") syncCloudsUniforms(selected);
+}
+function setupCFField(id, getter, setter, opts = {}) {
+	setupDragField(document.getElementById(id), {
+		get: () => { const c = currentCloudsCfg(); return c ? getter(c) : 0; },
+		set: v => {
+			const c = currentCloudsCfg();
+			if (!c) return;
+			setter(c, v);
+			pushCloudsUniforms();
+		},
+		sens: opts.sens, min: opts.min, max: opts.max, format: opts.format,
+	});
+}
+setupCFField("cf-density", c => c.density, (c, v) => { c.density = Math.max(0, Math.min(1, v)); },
+	{ sens: 0.005, min: 0, max: 1, format: v => v.toFixed(2) });
+setupCFField("cf-scale", c => c.scale, (c, v) => { c.scale = Math.max(0.05, v); },
+	{ sens: 0.01, min: 0.05, format: v => v.toFixed(2) });
+setupCFField("cf-speed", c => c.speed, (c, v) => { c.speed = v; },
+	{ sens: 0.02, format: v => v.toFixed(2) });
+
+cfColorInput.addEventListener("input", e => {
+	const c = currentCloudsCfg();
+	if (!c) return;
+	c.color = parseInt(e.target.value.slice(1), 16);
+	pushCloudsUniforms();
+});
+cfColorInput.addEventListener("change", () => saveScene?.());
+
+function refreshCloudsInspector() {
+	const isClouds = selected?.userData?.primKind === "clouds";
+	for (const s of cfSections) if (s) s.hidden = !isClouds;
+	if (!isClouds) return;
+	// Standard Appearance overlaps our own — hide it while clouds is selected.
+	objAppearance.hidden = true;
+	const cfg = currentCloudsCfg();
+	cfColorInput.value = "#" + cfg.color.toString(16).padStart(6, "0");
+	for (const el of dragFields) el._refresh?.();
+}
+
+// ─── Scatter inspector ────────────────────────────────────────────────
+const scSections = [
+	"obj-scatter-source",
+	"obj-scatter-distribution",
+	"obj-scatter-variation",
+].map(id => document.getElementById(id));
+const scSourceSel = document.getElementById("sc-source");
+const scSurfaceSel = document.getElementById("sc-surface-obj");
+const scSurface = document.getElementById("sc-surface");
+const scRotY = document.getElementById("sc-rot-y");
+
+function currentScatterCfg() {
+	return selected?.userData?.primKind === "scatter"
+		? selected.userData.scatterFx.config
+		: null;
+}
+function scheduleScatterRebuild() {
+	// Debounce — count / seed / min / max drags fire dozens of events per second.
+	clearTimeout(scheduleScatterRebuild._t);
+	scheduleScatterRebuild._t = setTimeout(() => {
+		if (selected?.userData?.primKind === "scatter") rebuildScatterInstances(selected);
+	}, 60);
+}
+function setupSCField(id, getter, setter, opts = {}) {
+	setupDragField(document.getElementById(id), {
+		get: () => { const c = currentScatterCfg(); return c ? getter(c) : 0; },
+		set: v => {
+			const c = currentScatterCfg();
+			if (!c) return;
+			setter(c, v);
+			scheduleScatterRebuild();
+		},
+		sens: opts.sens, min: opts.min, max: opts.max, format: opts.format,
+	});
+}
+setupSCField("sc-count", c => c.count, (c, v) => { c.count = Math.max(1, Math.round(v)); },
+	{ sens: 2, min: 1, max: 50000, format: v => `${Math.round(v)}` });
+setupSCField("sc-seed", c => c.seed, (c, v) => { c.seed = Math.max(0, Math.round(v)); },
+	{ sens: 1, min: 0, format: v => `${Math.round(v)}` });
+setupSCField("sc-scatter", c => c.scatter ?? 1, (c, v) => { c.scatter = Math.max(0, Math.min(1, v)); },
+	{ sens: 0.01, min: 0, max: 1, format: v => v.toFixed(2) });
+setupSCField("sc-scale-min", c => c.scaleMin, (c, v) => { c.scaleMin = Math.max(0.01, v); },
+	{ sens: 0.01, min: 0.01, format: v => v.toFixed(2) });
+setupSCField("sc-scale-max", c => c.scaleMax, (c, v) => { c.scaleMax = Math.max(0.01, v); },
+	{ sens: 0.01, min: 0.01, format: v => v.toFixed(2) });
+
+scSourceSel.addEventListener("change", () => {
+	const c = currentScatterCfg();
+	if (!c) return;
+	c.sourceName = scSourceSel.value || null;
+	rebuildScatterInstances(selected);
+	saveScene?.();
+});
+scSurfaceSel.addEventListener("change", () => {
+	const c = currentScatterCfg();
+	if (!c) return;
+	c.surfaceName = scSurfaceSel.value || null;
+	rebuildScatterInstances(selected);
+	saveScene?.();
+});
+scSurface.addEventListener("change", () => {
+	const c = currentScatterCfg();
+	if (!c) return;
+	c.surface = scSurface.checked;
+	rebuildScatterInstances(selected);
+	saveScene?.();
+});
+scRotY.addEventListener("change", () => {
+	const c = currentScatterCfg();
+	if (!c) return;
+	c.rotateY = scRotY.checked;
+	rebuildScatterInstances(selected);
+	saveScene?.();
+});
+
+function refreshScatterSourceList() {
+	// Populate the source dropdown with every eligible object in the scene.
+	// Called on selection change AND whenever the outliner changes (so a
+	// newly-added cone shows up without re-selecting the scatter).
+	const c = currentScatterCfg();
+	if (!c) return;
+	scSourceSel.innerHTML = "";
+	const options = objects.filter(o => o !== selected && isValidScatterSource(o));
+	if (options.length === 0) {
+		const opt = document.createElement("option");
+		opt.value = "";
+		opt.textContent = "(no eligible objects — add a primitive or import)";
+		opt.disabled = true;
+		scSourceSel.appendChild(opt);
+	} else {
+		// When cfg.sourceName is unset or the saved source is gone, we lead with
+		// a placeholder option so the user has to actively pick. Otherwise the
+		// dropdown would silently display an option that isn't the actual source
+		// (e.g. add scatter → then add sphere → dropdown shows sphere, but the
+		// config has no sourceName so nothing renders).
+		const hasSaved = c.sourceName && options.some(o => o.name === c.sourceName);
+		if (!hasSaved) {
+			const placeholder = document.createElement("option");
+			placeholder.value = "";
+			placeholder.textContent = "(select a source…)";
+			scSourceSel.appendChild(placeholder);
+		}
+		for (const o of options) {
+			const opt = document.createElement("option");
+			opt.value = o.name;
+			opt.textContent = `${o.name}${o.userData?.primKind ? ` (${o.userData.primKind})` : ""}`;
+			scSourceSel.appendChild(opt);
+		}
+		scSourceSel.value = hasSaved ? c.sourceName : "";
+	}
+	// Surface dropdown — always includes a "None" first option so users can
+	// go back to the container box after picking a surface. Only objects
+	// with mesh geometry AND excluding the current scatter/source qualify.
+	scSurfaceSel.innerHTML = "";
+	const noneOpt = document.createElement("option");
+	noneOpt.value = "";
+	noneOpt.textContent = "(none — use container box)";
+	scSurfaceSel.appendChild(noneOpt);
+	for (const o of objects) {
+		if (o === selected) continue;
+		if (o.name === c.sourceName) continue; // can't be both source and surface
+		if (!isValidScatterSource(o)) continue;
+		if (!o.geometry) continue; // surface sampling needs root geometry
+		const opt = document.createElement("option");
+		opt.value = o.name;
+		opt.textContent = `${o.name}${o.userData?.primKind ? ` (${o.userData.primKind})` : ""}`;
+		scSurfaceSel.appendChild(opt);
+	}
+	const hasSurface = c.surfaceName && Array.from(scSurfaceSel.options).some(o => o.value === c.surfaceName);
+	scSurfaceSel.value = hasSurface ? c.surfaceName : "";
+}
+
+function refreshScatterInspector() {
+	const isScatter = selected?.userData?.primKind === "scatter";
+	for (const s of scSections) if (s) s.hidden = !isScatter;
+	if (!isScatter) return;
+	// Scatter has its own Source section; the general Appearance color doesn't
+	// apply cleanly (it'd tint every instance's cloned material, confusing UX).
+	objAppearance.hidden = true;
+	const cfg = currentScatterCfg();
+	refreshScatterSourceList();
+	scSurface.checked = !!cfg.surface;
+	scRotY.checked = !!cfg.rotateY;
+	for (const el of dragFields) el._refresh?.();
+}
+
 function refreshParticlesInspector() {
 	const isParticles = selected?.userData?.primKind === "particles";
 	for (const s of psSections) if (s) s.hidden = !isParticles;
@@ -8075,6 +9305,31 @@ transform.addEventListener("objectChange", () => {
 		// stale pre-gizmo point). Cached distance prevents perpendicular-translate drift.
 		const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(renderCam.quaternion);
 		renderCamTarget.copy(renderCam.position).add(fwd.multiplyScalar(renderCamDragDist));
+	}
+	// Scale-drag on a scatter: rebuild INLINE (no debounce) so instances stay
+	// world-uniform through the whole drag. The visible effect is that the
+	// gizmo grows/shrinks only the volume box — instances slide apart into
+	// the new area at their intrinsic size instead of stretching mid-drag.
+	if (selected?.userData?.primKind === "scatter" && transform.mode === "scale") {
+		rebuildScatterInstances(selected);
+	}
+	// Scaling a SOURCE object should propagate live to every scatter that
+	// uses it — the sphere's own scale is baked into each instance matrix at
+	// rebuild time, so we re-run rebuild for any dependent scatter.
+	if (selected && selected.userData?.primKind !== "scatter" && transform.mode === "scale") {
+		for (const s of scatterSystems) {
+			const cfg = s.userData?.scatterFx?.config;
+			if (cfg?.sourceName === selected.name) rebuildScatterInstances(s);
+		}
+	}
+	// Any transform on a SURFACE object needs to reshuffle instances onto its
+	// new pose — surface sampling reads position/rotation/scale live through
+	// localToWorld, so a translate, rotate, OR scale all warrant a rebuild.
+	if (selected && selected.userData?.primKind !== "scatter") {
+		for (const s of scatterSystems) {
+			const cfg = s.userData?.scatterFx?.config;
+			if (cfg?.surfaceName === selected.name) rebuildScatterInstances(s);
+		}
 	}
 	if (selected) for (const el of dragFields) el._refresh?.();
 });
@@ -8358,6 +9613,58 @@ envIntensity.addEventListener("input", e => {
 	envIntensityVal.textContent = v.toFixed(2);
 });
 envIntensity.addEventListener("change", () => { if (typeof saveSceneDebounced === "function") saveSceneDebounced(); });
+
+// ── Fog ──────────────────────────────────────────────────────────────
+// Scene-level linear fog. Kept as raw sliders (not a chip like Post FX) so
+// enable + tune live on the same panel — matches how Environment works above.
+const fogEnabled = document.getElementById("fog-enabled");
+const fogColorInput = document.getElementById("fog-color");
+const fogNear = document.getElementById("fog-near");
+const fogFar = document.getElementById("fog-far");
+const fogNearVal = document.getElementById("fog-near-val");
+const fogFarVal = document.getElementById("fog-far-val");
+// Config lives in JS (not read back from scene.fog) so toggling Enabled off
+// doesn't lose the near/far/color the user set — flipping back restores it.
+const fogState = { enabled: false, color: 0xc8d4e0, near: 2, far: 60 };
+
+function applyFog() {
+	if (fogState.enabled) {
+		scene.fog = new THREE.Fog(fogState.color, fogState.near, fogState.far);
+	} else {
+		scene.fog = null;
+	}
+}
+function refreshFogUI() {
+	fogEnabled.checked = fogState.enabled;
+	fogColorInput.value = "#" + fogState.color.toString(16).padStart(6, "0");
+	fogNear.value = fogState.near;
+	fogFar.value = fogState.far;
+	fogNearVal.textContent = fogState.near.toFixed(1);
+	fogFarVal.textContent = String(fogState.far);
+}
+
+fogEnabled.addEventListener("change", () => {
+	fogState.enabled = fogEnabled.checked;
+	applyFog();
+	saveScene?.();
+});
+fogColorInput.addEventListener("input", e => {
+	fogState.color = parseInt(e.target.value.slice(1), 16);
+	if (scene.fog) scene.fog.color.setHex(fogState.color);
+});
+fogColorInput.addEventListener("change", () => saveScene?.());
+fogNear.addEventListener("input", e => {
+	fogState.near = parseFloat(e.target.value);
+	fogNearVal.textContent = fogState.near.toFixed(1);
+	if (scene.fog) scene.fog.near = fogState.near;
+});
+fogNear.addEventListener("change", () => saveSceneDebounced?.());
+fogFar.addEventListener("input", e => {
+	fogState.far = parseFloat(e.target.value);
+	fogFarVal.textContent = String(fogState.far);
+	if (scene.fog) scene.fog.far = fogState.far;
+});
+fogFar.addEventListener("change", () => saveSceneDebounced?.());
 
 // SSAO shading section — toggle rebuilds the composer lazily; sliders live-tune
 // n8ao's configuration so the effect updates in real time.
@@ -8962,6 +10269,22 @@ function loop() {
 					p.visible = p.userData._userVisible !== false;
 				}
 				tickParticleSystems();
+			}
+			// Clouds tick sits outside the particles-length gate — a scene can
+			// have clouds with no particles, and clouds still need uTime bumped
+			// per frame or they freeze at t=0.
+			if (cloudsSystems.length) tickCloudsFx();
+			// Scatter helpers — hide the blue wireframe box while recording so
+			// it doesn't bake into the render. Stay visible even when a Surface
+			// object is set: the box marks the scatter's own transform anchor
+			// and is the visible click-target region for selecting it. No
+			// per-frame matrix updates; InstancedMesh matrices are static
+			// until config changes.
+			if (scatterSystems.length) {
+				for (const g of scatterSystems) {
+					const fx = g.userData?.scatterFx;
+					if (fx?.boxHelper) fx.boxHelper.visible = !recording;
+				}
 			}
 		}
 		tickFlyMovement(dt);
@@ -9944,6 +11267,8 @@ function setMixersPlaying(playing) {
 	for (const m of fbxMixers) m.timeScale = (playing && !m._frozen) ? 1 : 0;
 }
 
+let loopPlayback = false;
+
 async function playPreview() {
 	if (isPlayingPreview) return;
 	const hasCameraTween = keyframes.length >= 2;
@@ -9960,7 +11285,7 @@ async function playPreview() {
 	const playStart = trimStart + gap;
 	const playEnd = trimEnd - gap;
 	// Resume from current playhead when it's inside the play window; otherwise loop back to start.
-	const resumeT = (playhead > playStart && playhead < playEnd - 1e-4) ? playhead : playStart;
+	let resumeT = (playhead > playStart && playhead < playEnd - 1e-4) ? playhead : playStart;
 	setPlayhead(resumeT);
 	// Snap camera to the resume frame BEFORE the first paint so the viewer
 	// doesn't see a one-frame flash of the previous (end-of-timeline) state
@@ -9975,7 +11300,7 @@ async function playPreview() {
 	setMixersPlaying(true);
 	// Frozen mixers don't seek — they stay wherever the user posed them.
 	for (const m of fbxMixers) if (!m._frozen) m.setTime(resumeT * (dur / 1000));
-	const startMs = performance.now();
+	let startMs = performance.now();
 	while (isPlayingPreview) {
 		const elapsed = performance.now() - startMs;
 		// 1ms of real time advances normalized-time by 1/dur
@@ -9985,7 +11310,18 @@ async function playPreview() {
 			const s = sampleCameraAt(t);
 			if (s) applyCameraState(s);
 		}
-		if (t >= playEnd) break;
+		if (t >= playEnd) {
+			if (!loopPlayback) break;
+			// Loop: rewind transport (playhead + mixers) and restart the timing window.
+			resumeT = playStart;
+			startMs = performance.now();
+			setPlayhead(resumeT);
+			for (const m of fbxMixers) if (!m._frozen) m.setTime(resumeT * (dur / 1000));
+			if (hasCameraTween) {
+				const s = sampleCameraAt(resumeT);
+				if (s) applyCameraState(s);
+			}
+		}
 		await new Promise(r => requestAnimationFrame(r));
 	}
 	isPlayingPreview = false;
@@ -10001,6 +11337,13 @@ function stopPreview() {
 }
 
 tlPlay.addEventListener("click", () => isPlayingPreview ? stopPreview() : playPreview());
+
+const tlLoop = document.getElementById("tl-loop");
+tlLoop.addEventListener("click", () => {
+	loopPlayback = !loopPlayback;
+	tlLoop.classList.toggle("active", loopPlayback);
+	saveSceneDebounced?.();
+});
 
 function rewindTransport() {
 	stopPreview();
@@ -10280,6 +11623,7 @@ function serializeScene() {
 			rotation: [o.rotation.x, o.rotation.y, o.rotation.z],
 			scale: o.scale.toArray(),
 			color: o.material?.color?.getHex?.() ?? 0xffffff,
+			doubleSided: o.material?.side === THREE.DoubleSide ? true : undefined,
 			visible: o.visible !== false,
 			notes: o.userData.notes || undefined,
 			refImage: o.userData.refImage || undefined,
@@ -10309,6 +11653,9 @@ function serializeScene() {
 			styleRef: c.styleRef || undefined,
 		})),
 		activeGenCellId,
+		workflowCells: workflowCells.map(c => ({
+			id: c.id, moduleId: c.moduleId, values: { ...c.values }, expanded: c.expanded,
+		})),
 		particles: objects.filter(o => o.userData.primKind === "particles").map(o => ({
 			name: o.name,
 			position: o.position.toArray(),
@@ -10317,6 +11664,26 @@ function serializeScene() {
 			visible: o.visible !== false,
 			notes: o.userData.notes || undefined,
 			config: o.userData.particleSystem.config,
+			keyframes: serializeObjectKeyframes(o),
+		})),
+		clouds: objects.filter(o => o.userData.primKind === "clouds").map(o => ({
+			name: o.name,
+			position: o.position.toArray(),
+			rotation: [o.rotation.x, o.rotation.y, o.rotation.z],
+			scale: o.scale.toArray(),
+			visible: o.visible !== false,
+			notes: o.userData.notes || undefined,
+			config: o.userData.cloudsFx.config,
+			keyframes: serializeObjectKeyframes(o),
+		})),
+		scatters: objects.filter(o => o.userData.primKind === "scatter").map(o => ({
+			name: o.name,
+			position: o.position.toArray(),
+			rotation: [o.rotation.x, o.rotation.y, o.rotation.z],
+			scale: o.scale.toArray(),
+			visible: o.visible !== false,
+			notes: o.userData.notes || undefined,
+			config: o.userData.scatterFx.config,
 			keyframes: serializeObjectKeyframes(o),
 		})),
 		camera: {
@@ -10338,6 +11705,12 @@ function serializeScene() {
 		env: {
 			preset: envSelect.value,
 			intensity: parseFloat(envIntensity.value),
+			fog: {
+				enabled: fogState.enabled,
+				color: fogState.color,
+				near: fogState.near,
+				far: fogState.far,
+			},
 		},
 		viewport: {
 			grid: grid.visible,
@@ -10350,6 +11723,7 @@ function serializeScene() {
 		},
 		trim: { start: trimStart, end: trimEnd },
 		playhead,
+		loopPlayback,
 		keyframes: keyframes.map(k => ({
 			t: k.t,
 			pos: k.pos.toArray(),
@@ -10381,6 +11755,10 @@ async function deserializeScene(state, opts = {}) {
 		mesh.rotation.set(p.rotation[0], p.rotation[1], p.rotation[2]);
 		mesh.scale.fromArray(p.scale);
 		if (p.color !== undefined) mesh.material.color.setHex(p.color);
+		if (p.doubleSided) {
+			mesh.material.side = THREE.DoubleSide;
+			mesh.material.needsUpdate = true;
+		}
 		if (p.visible === false) mesh.visible = false;
 		if (p.notes) mesh.userData.notes = p.notes;
 		if (p.refImage) mesh.userData.refImage = p.refImage;
@@ -10443,13 +11821,33 @@ async function deserializeScene(state, opts = {}) {
 				styleRef: c.styleRef || null,
 			});
 		}
-		activeGenCellId = state.activeGenCellId && genCells.some(c => c.id === state.activeGenCellId)
-			? state.activeGenCellId
-			: (genCells[0]?.id || null);
+		// Always boot with no active target regardless of what's persisted —
+		// the "active generator" is a per-interaction pick, not a durable
+		// preference. Restoring it made nano-banana permanently stealth-selected
+		// on every reload since the seed pass auto-activated it once and the
+		// saved value kept resurrecting itself. User clicks to select.
+		activeGenCellId = null;
 		refreshGenCells();
 		refreshViewportGenerateBtn();
-		refreshGenAddBtn();
 	}
+
+	if (Array.isArray(state.workflowCells)) {
+		workflowCells.length = 0;
+		const seenModules = new Set();
+		for (const c of state.workflowCells) {
+			if (!c || !c.moduleId || seenModules.has(c.moduleId)) continue;
+			seenModules.add(c.moduleId);
+			workflowCells.push({
+				id: c.id || newGenCellId(),
+				moduleId: c.moduleId,
+				values: (c.values && typeof c.values === "object") ? { ...c.values } : {},
+				expanded: c.expanded === true,
+			});
+		}
+		activeWorkflowCellId = null;
+		refreshWorkflowCells();
+	}
+	refreshGenAddBtn();
 
 	for (const pp of (state.particles || [])) {
 		const obj = addParticleEmitter(pp.config || {});
@@ -10461,6 +11859,34 @@ async function deserializeScene(state, opts = {}) {
 		if (pp.notes) obj.userData.notes = pp.notes;
 		if (pp.config?.image) applyParticleImage(obj, pp.config.image);
 		if (Array.isArray(pp.keyframes)) obj.userData.keyframes = deserializeObjectKeyframes(pp.keyframes);
+	}
+
+	for (const cc of (state.clouds || [])) {
+		const obj = addCloudsFx(cc.config || {});
+		if (cc.name) obj.name = cc.name;
+		if (cc.position) obj.position.fromArray(cc.position);
+		if (cc.rotation) obj.rotation.set(cc.rotation[0], cc.rotation[1], cc.rotation[2]);
+		if (cc.scale) obj.scale.fromArray(cc.scale);
+		if (cc.visible === false) obj.visible = false;
+		if (cc.notes) obj.userData.notes = cc.notes;
+		if (Array.isArray(cc.keyframes)) obj.userData.keyframes = deserializeObjectKeyframes(cc.keyframes);
+		syncCloudsUniforms(obj);
+	}
+
+	// Scatters hydrate LAST so their sourceName references resolve — every
+	// primitive/import from earlier loops is already in `objects` by now.
+	for (const sc of (state.scatters || [])) {
+		const obj = addScatterFx(sc.config || {});
+		if (sc.name) obj.name = sc.name;
+		if (sc.position) obj.position.fromArray(sc.position);
+		if (sc.rotation) obj.rotation.set(sc.rotation[0], sc.rotation[1], sc.rotation[2]);
+		if (sc.scale) obj.scale.fromArray(sc.scale);
+		if (sc.visible === false) obj.visible = false;
+		if (sc.notes) obj.userData.notes = sc.notes;
+		if (Array.isArray(sc.keyframes)) obj.userData.keyframes = deserializeObjectKeyframes(sc.keyframes);
+		// Re-resolve now that the whole scene exists — first pass in addScatterFx
+		// may have fallen back to the first eligible object.
+		rebuildScatterInstances(obj);
 	}
 
 	if (state.camera) {
@@ -10509,6 +11935,15 @@ async function deserializeScene(state, opts = {}) {
 			envIntensityVal.textContent = state.env.intensity.toFixed(2);
 			scene.environmentIntensity = state.env.intensity;
 		}
+		if (state.env.fog) {
+			const f = state.env.fog;
+			if (typeof f.enabled === "boolean") fogState.enabled = f.enabled;
+			if (typeof f.color === "number") fogState.color = f.color;
+			if (typeof f.near === "number") fogState.near = f.near;
+			if (typeof f.far === "number") fogState.far = f.far;
+			refreshFogUI();
+			applyFog();
+		}
 	}
 
 	if (state.viewport) {
@@ -10547,6 +11982,9 @@ async function deserializeScene(state, opts = {}) {
 	} else if (state.trim) {
 		setPlayhead(clampPlayheadToTrim(trimStart));
 	}
+
+	loopPlayback = !!state.loopPlayback;
+	tlLoop.classList.toggle("active", loopPlayback);
 
 	if (Array.isArray(state.keyframes)) {
 		keyframes = state.keyframes.map(k => ({

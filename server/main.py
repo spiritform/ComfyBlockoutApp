@@ -13,10 +13,25 @@ import os
 import re
 import shutil
 import subprocess
+import sys
+import threading
 import time
 import uuid
 from pathlib import Path
 from typing import Any
+
+# Windows-only: uvicorn's --reload mode picks SelectorEventLoop, which raises
+# NotImplementedError the moment `asyncio.create_subprocess_exec` runs. Every
+# git-clone / pip-install / restart-comfy call would crash. Force the Proactor
+# policy at import time so the loop uvicorn spawns actually supports
+# subprocesses. No-op on macOS/Linux.
+if sys.platform == "win32":
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    except Exception:
+        # Fall through — old Python versions or unusual runtimes will error
+        # on the specific tool calls instead of at import time, which is fine.
+        pass
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
@@ -771,6 +786,56 @@ async def auth_key_clear():
     return {"cleared": True}
 
 
+@app.get("/api/paths")
+async def paths_get():
+    """Return the currently-configured ComfyUI paths so the settings modal can
+    pre-fill on open. Blanks mean 'fall back to auto-detect' — the finders
+    already treat empty env vars that way."""
+    return {
+        "custom_nodes_dir": os.environ.get("COMFY_CUSTOM_NODES_DIR", ""),
+        "models_dir": os.environ.get("COMFY_MODELS_DIR", ""),
+        "python_exe": os.environ.get("COMFY_PYTHON_EXE", ""),
+    }
+
+
+@app.post("/api/paths")
+async def paths_set(request: Request):
+    """Persist ComfyUI paths to .env and load them into the current process so
+    the very next tool call (install_custom_node, download_model, etc.) picks
+    them up — no restart needed for the paths themselves. Any field the user
+    left blank in the modal reverts to auto-detect."""
+    body = await request.json()
+    fields = {
+        "COMFY_CUSTOM_NODES_DIR": str(body.get("custom_nodes_dir", "")).strip(),
+        "COMFY_MODELS_DIR": str(body.get("models_dir", "")).strip(),
+        "COMFY_PYTHON_EXE": str(body.get("python_exe", "")).strip(),
+    }
+    kv = _read_env_kv()
+    for k, v in fields.items():
+        if v:
+            os.environ[k] = v
+            kv[k] = v
+        else:
+            os.environ.pop(k, None)
+            kv.pop(k, None)
+    _write_env_kv(kv)
+    return {"saved": True}
+
+
+@app.post("/api/paths/detect")
+async def paths_detect():
+    """Run the same finders the tools use, so users can see what would be
+    picked up if they leave the fields blank. Doesn't persist anything."""
+    cn = _find_local_custom_nodes_dir()
+    md = _find_local_models_dir()
+    py = _find_local_python()
+    return {
+        "custom_nodes_dir": str(cn) if cn else "",
+        "models_dir": str(md) if md else "",
+        "python_exe": str(py) if py else "",
+    }
+
+
 @app.post("/api/llm/key")
 async def llm_key(request: Request):
     """Persist the Anthropic API key alongside the Comfy key in .env."""
@@ -1089,6 +1154,59 @@ _SAFE_MODEL_FILENAME = re.compile(r"^[A-Za-z0-9._\-]+$")
 _SAFE_MODEL_FOLDER = re.compile(r"^[A-Za-z0-9._\-/]+$")
 
 
+def _find_local_python() -> Path | None:
+    """Locate ComfyUI's embedded Python interpreter. Non-technical users can't
+    be expected to know which `python` on PATH matches their ComfyUI env — so
+    we sniff the same install roots we use for models/custom_nodes and look
+    for the standard portable/embedded layouts (python_embeded, venv/Scripts,
+    etc.). COMFY_PYTHON_EXE env override wins for weird layouts."""
+    env_v = os.environ.get("COMFY_PYTHON_EXE", "").strip()
+    if env_v:
+        p = Path(env_v)
+        if p.exists() and p.is_file():
+            return p
+    candidates: list[Path] = []
+    models_dir = _find_local_models_dir()
+    roots: list[Path] = []
+    if models_dir:
+        # ComfyUI root is the parent of `models/`. Two layers up covers the
+        # Easy-Install-style `ComfyUI-Easy-Install/ComfyUI/models` where the
+        # portable python sits at `ComfyUI-Easy-Install/python_embeded/`.
+        roots.append(models_dir.parent)
+        roots.append(models_dir.parent.parent)
+    roots.extend([
+        Path(r"H:\ComfyUI-Easy-Install"),
+        Path(r"H:\ComfyUI-Easy-Install\ComfyUI"),
+        Path(r"H:\Comfy-Desktop\ComfyUI-Installs\ComfyDesktop\ComfyUI"),
+        Path(r"H:\ComfyUI_windows_portable"),
+        Path(r"H:\ComfyUI_windows_portable\ComfyUI"),
+        Path(r"H:\Krita\ComfyUI\ComfyUI"),
+    ])
+    rel_paths = [
+        Path("python_embeded/python.exe"),
+        Path("python_embedded/python.exe"),
+        Path("venv/Scripts/python.exe"),
+        Path(".venv/Scripts/python.exe"),
+        Path("python/python.exe"),
+        Path("bin/python.exe"),
+        # POSIX
+        Path("python_embeded/bin/python"),
+        Path("venv/bin/python"),
+        Path(".venv/bin/python"),
+    ]
+    for root in roots:
+        for rel in rel_paths:
+            p = root / rel
+            candidates.append(p)
+    for c in candidates:
+        try:
+            if c.exists() and c.is_file():
+                return c
+        except OSError:
+            continue
+    return None
+
+
 def _find_local_custom_nodes_dir() -> Path | None:
     """Locate `<ComfyUI>/custom_nodes/`. Same candidate list as models —
     custom_nodes and models are siblings under the ComfyUI root — plus a
@@ -1156,6 +1274,51 @@ _SAFE_REPO_NAME = re.compile(r"^[A-Za-z0-9._\-]{1,120}$")
 _GIT_URL_RE = re.compile(r"^https?://[A-Za-z0-9._\-]+(?:/[A-Za-z0-9._\-/]+)+?(?:\.git)?$")
 
 
+async def _stream_process(args: list[str]):
+    """Run a subprocess in a background thread and yield ('line', str) events
+    as output streams, then a final ('done', int) or ('error', str) event.
+
+    Why not `asyncio.create_subprocess_exec`? On Windows, uvicorn's --reload
+    mode uses SelectorEventLoopPolicy inside the reloader subprocess, and
+    SelectorEventLoop can't spawn processes — every call raises
+    NotImplementedError. Setting Proactor policy at module import doesn't
+    stick past uvicorn's supervisor. A blocking `subprocess.Popen` in a
+    daemon thread sidesteps the whole event-loop compatibility problem —
+    line reads happen off-loop, and a threadsafe put pushes them onto a
+    Queue the async caller awaits."""
+    loop = asyncio.get_event_loop()
+    q: asyncio.Queue = asyncio.Queue()
+
+    def _put(item):
+        loop.call_soon_threadsafe(q.put_nowait, item)
+
+    def _runner():
+        try:
+            proc = subprocess.Popen(
+                args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=1,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                _put(("line", line.rstrip()))
+            proc.wait()
+            _put(("done", proc.returncode))
+        except Exception as e:
+            _put(("error", str(e)))
+
+    threading.Thread(target=_runner, daemon=True).start()
+    while True:
+        item = await q.get()
+        yield item
+        if item[0] in ("done", "error"):
+            return
+
+
 @app.post("/api/local/install-custom-node")
 async def local_install_custom_node(request: Request):
     """SSE stream that runs `git clone <url> <custom_nodes>/<name>` in the
@@ -1168,6 +1331,10 @@ async def local_install_custom_node(request: Request):
     body = await request.json()
     git_url = str(body.get("git_url", "")).strip()
     name = str(body.get("name", "")).strip()
+    # force=true → nuke any existing folder and re-clone. Used when a prior
+    # install landed in a broken state (partial clone, wrong ComfyUI, deps
+    # never installed, etc.) and the agent wants a clean-slate retry.
+    force = bool(body.get("force", False))
     if not git_url or not _GIT_URL_RE.match(git_url):
         raise HTTPException(400, "git_url must be a public https/http git URL")
     # Derive name from URL when not supplied. Strip trailing .git and pull the
@@ -1189,17 +1356,98 @@ async def local_install_custom_node(request: Request):
         )
     dst = cn_dir / name
 
+    async def _run_pip(req_path: Path):
+        """Run pip against ComfyUI's own Python. Yields SSE progress events
+        AND captures the last chunk of output so a non-zero exit can surface
+        the actual failing package to the agent."""
+        py = _find_local_python()
+        if not py:
+            yield ("evt", _sse("progress", message="requirements.txt found but ComfyUI's Python interpreter wasn't detected — user will need to run pip manually"))
+            yield ("result", False, None, "python interpreter not found")
+            return
+        # Pre-flight: sanity-check the interpreter itself.
+        yield ("evt", _sse("progress", message=f"Verifying {py}"))
+        probe_lines: list[str] = []
+        probe_rc: int | None = None
+        async for kind, payload in _stream_process([str(py), "-m", "pip", "--version"]):
+            if kind == "line" and payload:
+                probe_lines.append(payload)
+            elif kind == "done":
+                probe_rc = payload
+            elif kind == "error":
+                yield ("result", True, False, f"failed to invoke {py}: {payload}")
+                return
+        if probe_rc != 0:
+            probe_text = "\n".join(probe_lines) or f"rc={probe_rc}"
+            yield ("evt", _sse("progress", message=f"pip probe failed: {probe_text}"))
+            yield ("result", True, False, f"pip is not usable in {py}: {probe_text}")
+            return
+        yield ("evt", _sse("progress", message=(probe_lines[0] if probe_lines else "pip available")))
+        yield ("evt", _sse("progress", message=f"Installing requirements from {req_path}"))
+        # Ring-buffer the last N lines so we can attach them to a failure
+        # report — pip's actual error line is usually within the last ~30.
+        tail: list[str] = []
+        prc: int | None = None
+        async for kind, payload in _stream_process([str(py), "-m", "pip", "install", "-r", str(req_path)]):
+            if kind == "line":
+                if payload:
+                    yield ("evt", _sse("progress", message=payload))
+                    tail.append(payload)
+                    if len(tail) > 60:
+                        tail.pop(0)
+            elif kind == "done":
+                prc = payload
+            elif kind == "error":
+                yield ("result", True, False, str(payload))
+                return
+        if prc == 0:
+            yield ("result", True, True, None)
+        else:
+            if not tail:
+                yield ("result", True, False, f"pip exited with rc={prc} and produced no output — the interpreter or the requirements file may be corrupt")
+                return
+            summary_lines = [l for l in tail if l.startswith(("ERROR", "WARNING")) or "not found" in l.lower() or "conflict" in l.lower() or "no matching distribution" in l.lower()]
+            if not summary_lines:
+                summary_lines = tail[-20:]
+            summary = "\n".join(summary_lines[-20:])
+            yield ("result", True, False, f"pip exited with rc={prc}\n{summary}")
+
     async def gen():
         try:
+            # Force: nuke the existing folder so the clone-from-scratch path
+            # runs. Common recovery when a prior install landed in the wrong
+            # ComfyUI (Easy Install vs Desktop) or half-succeeded and left
+            # deps unresolvable in-place.
+            if force and dst.exists():
+                yield _sse("progress", message=f"force=true — removing existing {dst}")
+                try:
+                    shutil.rmtree(dst)
+                except Exception as e:
+                    yield _sse("error", message=f"failed to remove {dst}: {e}")
+                    return
             if dst.exists():
-                yield _sse("progress", message=f"{name} already present at {dst} — skipping clone")
+                yield _sse("progress", message=f"{name} already present at {dst} — running pip in case deps were never installed")
                 req = dst / "requirements.txt"
+                pip_ran = False
+                pip_ok = None
+                pip_error = None
+                if req.exists():
+                    async for item in _run_pip(req):
+                        if item[0] == "evt":
+                            yield item[1]
+                        else:
+                            _, pip_ran, pip_ok, pip_error = item
                 yield _sse(
                     "done",
-                    message=f"already installed at {dst}",
+                    message=f"already installed at {dst}" + (" + pip installed requirements" if pip_ok else ""),
                     path=str(dst),
                     requirements=str(req) if req.exists() else None,
-                    restart_required=False,
+                    pip_ran=pip_ran,
+                    pip_ok=pip_ok,
+                    pip_error=pip_error,
+                    # Even a re-pip means ComfyUI needs to restart to pick up
+                    # any newly-installed classes.
+                    restart_required=bool(pip_ok),
                 )
                 return
 
@@ -1209,20 +1457,22 @@ async def local_install_custom_node(request: Request):
                 yield _sse("error", message="`git` not on PATH — install Git for Windows or add it to PATH.")
                 return
 
-            proc = await asyncio.create_subprocess_exec(
-                git, "clone", "--depth=1", git_url, str(dst),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-            )
             # Stream git output as-is so the user watches "Receiving objects: 42%..."
-            # etc. instead of just staring at a spinner. `errors="replace"` keeps
-            # anything non-UTF-8 (some git installs print CP-1252) from crashing us.
-            assert proc.stdout is not None
-            async for raw in proc.stdout:
-                line = raw.decode("utf-8", errors="replace").rstrip()
-                if line:
-                    yield _sse("progress", message=line)
-            rc = await proc.wait()
+            # etc. instead of just staring at a spinner. _stream_process runs
+            # the clone in a worker thread — works under any event loop policy.
+            rc: int | None = None
+            async for kind, payload in _stream_process([git, "clone", "--depth=1", git_url, str(dst)]):
+                if kind == "line":
+                    if payload:
+                        yield _sse("progress", message=payload)
+                elif kind == "done":
+                    rc = payload
+                elif kind == "error":
+                    if dst.exists():
+                        try: shutil.rmtree(dst)
+                        except OSError: pass
+                    yield _sse("error", message=f"git clone failed: {payload}")
+                    return
             if rc != 0:
                 # Clean up partial clone so a retry doesn't hit "already present".
                 if dst.exists():
@@ -1235,19 +1485,53 @@ async def local_install_custom_node(request: Request):
 
             req = dst / "requirements.txt"
             requirements_preview = None
+            pip_ran = False
+            pip_ok = None
+            pip_error = None
             if req.exists():
                 try:
                     lines = [l.strip() for l in req.read_text(encoding="utf-8").splitlines() if l.strip() and not l.strip().startswith("#")]
                     requirements_preview = lines[:20]
                 except Exception:
                     pass
+                # Auto-run pip against ComfyUI's own Python interpreter. This
+                # is the critical UX unlock for non-technical users — cloning
+                # the repo without installing its deps means ComfyUI won't
+                # register the custom node classes, and the whole "install
+                # then restart" loop stalls.
+                py = _find_local_python()
+                if not py:
+                    yield _sse("progress", message="requirements.txt found but ComfyUI's Python interpreter wasn't detected — will report as manual step")
+                else:
+                    yield _sse("progress", message=f"Installing requirements with {py}")
+                    pip_ran = True
+                    fresh_prc: int | None = None
+                    fresh_err: str | None = None
+                    async for kind, payload in _stream_process([str(py), "-m", "pip", "install", "-r", str(req)]):
+                        if kind == "line":
+                            if payload:
+                                yield _sse("progress", message=payload)
+                        elif kind == "done":
+                            fresh_prc = payload
+                        elif kind == "error":
+                            fresh_err = str(payload)
+                    if fresh_err:
+                        pip_ok = False
+                        pip_error = fresh_err
+                    else:
+                        pip_ok = fresh_prc == 0
+                        if not pip_ok:
+                            pip_error = f"pip exited with rc={fresh_prc}"
 
             yield _sse(
                 "done",
-                message=f"Cloned to {dst}",
+                message=f"Cloned to {dst}" + (" + pip installed requirements" if pip_ok else ""),
                 path=str(dst),
                 requirements=str(req) if req.exists() else None,
                 requirements_preview=requirements_preview,
+                pip_ran=pip_ran,
+                pip_ok=pip_ok,
+                pip_error=pip_error,
                 restart_required=True,
             )
         except Exception as e:
@@ -1782,6 +2066,100 @@ async def run_module(module_id: str, request: Request):
 # plain dict is fine; if this ever runs multi-tenant move to a TTL store.
 _chat_history: dict[str, list[dict]] = {}
 
+
+def _chat_history_path(node_id: str) -> Path:
+    """Where a node's chat history persists on disk. Mirrors the scene-file
+    layout so users can find/back-up conversations alongside their scenes."""
+    return DATA_DIR / f"node_{node_id}.chatlog.json"
+
+
+def _sanitize_history(messages: list[dict]) -> list[dict]:
+    """Anthropic requires: any `tool_result` block on a user turn must have a
+    matching `tool_use` block in the immediately-preceding assistant turn.
+    History-trimming or a mid-conversation crash can leave orphans on either
+    end (or MIXED user turns with a stray tool_result alongside text) and
+    break the next call with a 400. We walk the log message-by-message and
+    keep only well-formed blocks — orphan tool_results get dropped, and if
+    stripping them leaves a user turn empty, the turn itself is dropped."""
+    out: list[dict] = []
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        role = msg.get("role")
+        content = msg.get("content")
+        if role == "user" and isinstance(content, list):
+            # Valid tool_use_ids = whatever the LAST kept message (assistant)
+            # advertised. Empty set if the previous turn wasn't an assistant.
+            valid_ids: set[str] = set()
+            prev = out[-1] if out else None
+            if isinstance(prev, dict) and prev.get("role") == "assistant" and isinstance(prev.get("content"), list):
+                for b in prev["content"]:
+                    if isinstance(b, dict) and b.get("type") == "tool_use":
+                        tid = b.get("id")
+                        if isinstance(tid, str):
+                            valid_ids.add(tid)
+            new_content = []
+            for b in content:
+                if isinstance(b, dict) and b.get("type") == "tool_result":
+                    if b.get("tool_use_id") in valid_ids:
+                        new_content.append(b)
+                    # else: drop orphan silently
+                else:
+                    new_content.append(b)
+            if not new_content:
+                # Whole turn was orphaned tool_results — drop the turn too.
+                continue
+            out.append({**msg, "content": new_content})
+        else:
+            out.append(msg)
+    # Trailing assistant with unresolved tool_use blocks would break the next
+    # user turn's API call — drop it so the next user turn goes through cleanly.
+    if out:
+        last = out[-1]
+        if isinstance(last, dict) and last.get("role") == "assistant" and isinstance(last.get("content"), list):
+            has_tool_use = any(isinstance(b, dict) and b.get("type") == "tool_use" for b in last["content"])
+            if has_tool_use:
+                out = out[:-1]
+    return out
+
+
+def _load_chat_history(node_id: str) -> list[dict]:
+    """Hydrate in-memory history from disk on first request after a restart.
+    Returns [] if there's nothing saved OR if the file is corrupt (we don't
+    want a bad file to brick the assistant — a fresh conversation is fine).
+    Applies the same sanitization as trim so a mid-tool-call crash doesn't
+    resurrect a broken history."""
+    if node_id in _chat_history:
+        return _chat_history[node_id]
+    p = _chat_history_path(node_id)
+    if not p.exists():
+        _chat_history[node_id] = []
+        return _chat_history[node_id]
+    try:
+        loaded = json.loads(p.read_text(encoding="utf-8"))
+        if isinstance(loaded, list):
+            _chat_history[node_id] = _sanitize_history(loaded)
+            return _chat_history[node_id]
+    except Exception:
+        pass
+    _chat_history[node_id] = []
+    return _chat_history[node_id]
+
+
+def _save_chat_history(node_id: str) -> None:
+    """Flush current in-memory history to disk. Called after each turn so a
+    server crash mid-tool-loop still leaves the next request with a
+    reconstructable state."""
+    history = _chat_history.get(node_id)
+    if history is None:
+        return
+    try:
+        _chat_history_path(node_id).write_text(json.dumps(history), encoding="utf-8")
+    except Exception:
+        # Persistence is best-effort — never let a disk hiccup take down the
+        # live chat. In-memory history still works this session.
+        pass
+
 ASSISTANT_SYSTEM = (
     "You are an in-editor agent for ComfyBlockout, a 3D blockout tool that "
     "feeds scenes to generative image/video models via Comfy Cloud. You help "
@@ -1809,6 +2187,12 @@ ASSISTANT_SYSTEM = (
     "3. For each input, work out the node id + widget slot to patch. Include both "
     "widget_index (0-based) AND widget_name (e.g. \"text\" for CLIPTextEncode) — "
     "the cloud runner uses index, the local runner uses name.\n"
+    "3a. LABEL FORMAT: keep the module `label` short enough to fit on ONE line in "
+    "a ~200px cell — roughly 24 chars. Use `·` (middle dot) as a separator and "
+    "prefer abbreviations: T2I / I2I / T2V / I2V / T2M / I2M / T2S / Depth / "
+    "Upscale / Remove BG / Extend / etc. Include \"Local\" or \"Cloud\" only when "
+    "both variants might exist. Good: `Flux 2 Klein · T2I · Local`, `SDXL · I2I`, "
+    "`Tripo · I2M`. Bad: `Flux 2 Klein — Text to Image (Local)`.\n"
     "4. If the user asked for a LOCAL generator, set runner=\"local\" and pass the "
     "workflow in ComfyUI's API/prompt format (dict keyed by node id, each entry "
     "has class_type + inputs). If the workflow you have is in graph/save format "
@@ -1822,12 +2206,15 @@ ASSISTANT_SYSTEM = (
     "registers the updated module in place.\n"
     "6. If runner=\"local\", IMMEDIATELY call `check_custom_nodes` with every "
     "third-party node class_type the workflow references (skip built-ins like "
-    "KSampler / CLIPTextEncode / VAEDecode / etc.). If any are missing, tell the "
-    "user which ones and offer to install them via `install_custom_node` — pass "
-    "the github/gitlab URL for the repo. On success the tool reports "
-    "`restart_required: true` and any requirements.txt lines; remind the user to "
-    "`pip install -r requirements.txt` in ComfyUI's Python env AND restart "
-    "ComfyUI before running the workflow. Do NOT try to pip install yourself.\n"
+    "KSampler / CLIPTextEncode / VAEDecode / etc.). For every missing repo, "
+    "IMMEDIATELY call `install_custom_node` yourself — the tool clones AND "
+    "auto-pips the requirements against ComfyUI's own Python. Do NOT hand the "
+    "user manual `git clone` or `pip install` commands; the tool does both in "
+    "one round-trip. If `pip_ok: true` (deps installed), IMMEDIATELY call "
+    "`restart_comfy` — do NOT ask the user to Ctrl+C. Only fall back to asking "
+    "the user manually when the tool reports `pip_ran: false` (ComfyUI's Python "
+    "interpreter wasn't detected) or `restart_comfy` returns restarted=false "
+    "with a manager-missing error.\n"
     "7. Also call `check_local_models` with every model file (checkpoints, VAEs, "
     "text encoders, LoRAs, etc.). Format the result as a compact bulleted list "
     "(the chat panel is narrow — NO wide tables). For any missing model, group by "
@@ -2209,14 +2596,22 @@ EDITOR_TOOLS = [
     {
         "name": "install_custom_node",
         "description": (
-            "Clone a ComfyUI custom-node repo into the user's local install. "
-            "Backend runs `git clone --depth=1 <git_url> <ComfyUI>/custom_nodes/<name>` "
-            "and streams the git output into the chat. Requires ComfyUI restart "
-            "afterward — the tool_result reports `restart_required: true` and any "
-            "requirements.txt lines the repo ships (do NOT try to pip install "
-            "yourself; the ComfyUI Python env is not ours, and the user should run "
-            "pip themselves against the right interpreter). If the target dir "
-            "already exists we skip cloning and report already-installed."
+            "Clone a ComfyUI custom-node repo into the user's local install AND "
+            "auto-install its Python dependencies. Backend runs "
+            "`git clone --depth=1 <git_url> <ComfyUI>/custom_nodes/<name>` and, "
+            "if the repo ships a requirements.txt, ALSO runs "
+            "`<comfyui-python> -m pip install -r requirements.txt` against the "
+            "detected ComfyUI interpreter. Streams git AND pip output into the "
+            "chat. The tool_result reports `restart_required: true` (call "
+            "`restart_comfy` next), plus `pip_ran`, `pip_ok`, and `pip_error`. "
+            "If the target dir already exists, we skip the clone but still re-"
+            "run pip — that's the common recovery path when a node was cloned "
+            "on an earlier install but its deps never got installed. Pass "
+            "`force: true` to nuke an existing folder and re-clone from scratch "
+            "— use this when the previous install landed in the WRONG ComfyUI "
+            "(e.g. Easy Install vs Desktop) and you want a clean retry. The "
+            "only manual fallback is when `pip_ran: false` (couldn't find "
+            "ComfyUI's Python) — then tell the user to run pip themselves."
         ),
         "input_schema": {
             "type": "object",
@@ -2229,8 +2624,29 @@ EDITOR_TOOLS = [
                     "type": "string",
                     "description": "Directory name under custom_nodes/ (defaults to the repo's basename)",
                 },
+                "force": {
+                    "type": "boolean",
+                    "description": "Delete any existing folder at the target path and re-clone from scratch. Use this when a prior install went to the wrong ComfyUI or left the pack in a broken state.",
+                },
             },
             "required": ["git_url"],
+        },
+    },
+    {
+        "name": "restart_comfy",
+        "description": (
+            "Restart the user's local ComfyUI so any newly-installed custom "
+            "nodes register on next boot. Requires ComfyUI-Manager (installed "
+            "by default on most easy-install builds). Call this IMMEDIATELY "
+            "after `install_custom_node` returns `restart_required: true` — "
+            "the user should not have to hit Ctrl+C themselves. Returns "
+            "{restarted: bool, error?: str}. If restarted=false with a 'not "
+            "installed' error, fall back to asking the user to restart "
+            "manually (Easy Install: close and reopen; CLI: Ctrl+C then re-run)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
         },
     },
     {
@@ -2351,6 +2767,28 @@ def _call_claude(history, ctx_block_for_caching):
 
     import anthropic
     client = anthropic.Anthropic()
+    # Anthropic caps requests at 4 cache_control blocks. The MCP beta and the
+    # scene-context blocks stack up fast, and even "keep only the latest" hits
+    # the ceiling on longer conversations. Strip cache_control from every user
+    # message — keep it only on the system prompt (which is what actually
+    # matters for cost, since the system prompt is huge and stable across all
+    # turns). Scene-block caching wasn't earning much anyway because the scene
+    # mutates almost every turn.
+    trimmed_history = []
+    for msg in history:
+        content = msg.get("content") if isinstance(msg, dict) else None
+        if not isinstance(content, list):
+            trimmed_history.append(msg)
+            continue
+        new_content = []
+        for block in content:
+            if isinstance(block, dict) and "cache_control" in block:
+                b = dict(block)
+                b.pop("cache_control", None)
+                new_content.append(b)
+            else:
+                new_content.append(block)
+        trimmed_history.append({**msg, "content": new_content})
     kwargs = dict(
         model="claude-sonnet-4-6",
         max_tokens=2048,
@@ -2359,7 +2797,7 @@ def _call_claude(history, ctx_block_for_caching):
             "text": ASSISTANT_SYSTEM,
             "cache_control": {"type": "ephemeral"},
         }],
-        messages=history,
+        messages=trimmed_history,
         tools=tools,
     )
     if mcp_servers:
@@ -2383,7 +2821,10 @@ async def llm_chat(request: Request):
     if not message and not tool_results:
         raise HTTPException(400, "empty message")
 
-    history = _chat_history.setdefault(node_id, [])
+    # Hydrate from disk on first request after a restart so mid-conversation
+    # server crashes don't lose "where we are." Subsequent requests read
+    # from memory directly.
+    history = _load_chat_history(node_id)
 
     if tool_results:
         # Continuation turn — frontend ran the editor tools we asked for and is
@@ -2454,7 +2895,12 @@ async def llm_chat(request: Request):
         reply_text = "(no reply)"
 
     if len(history) > 40:
-        _chat_history[node_id] = history[-20:]
+        # Sanitize the boundary — a bare tool_result at the new start would
+        # violate Anthropic's invariant on the next call.
+        _chat_history[node_id] = _sanitize_history(history[-20:])
+
+    # Persist the turn so a server restart doesn't drop the conversation.
+    _save_chat_history(node_id)
 
     return {
         "reply": reply_text,
@@ -2469,12 +2915,109 @@ async def llm_chat(request: Request):
     }
 
 
+@app.get("/api/llm/history")
+async def llm_history(node_id: str = ""):
+    """Return the persisted chat history for a node so the client can render
+    the past conversation on page load. Only visible text is surfaced — we
+    strip tool_use / tool_result blocks (they're noise in a rehydrated log)
+    and keep just the user's text and the assistant's replies.
+    Returns {messages: [{role, text}, ...]} — trailing pending tool_use turns
+    are dropped since they'd be orphaned without a matching tool_result."""
+    node_id = node_id.strip() or "default"
+    history = _load_chat_history(node_id)
+    out = []
+    for msg in history:
+        role = msg.get("role") if isinstance(msg, dict) else None
+        content = msg.get("content") if isinstance(msg, dict) else None
+        if role not in ("user", "assistant"):
+            continue
+        # Flatten multi-block content down to plain text. Skip tool blocks —
+        # they were part of the round-trip but shouldn't clutter the rehydrated
+        # chat log.
+        text_parts = []
+        if isinstance(content, str):
+            text_parts.append(content)
+        elif isinstance(content, list):
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                btype = block.get("type")
+                if btype == "text":
+                    text_parts.append(block.get("text") or "")
+                # Skip tool_use / tool_result / image blocks — they're not
+                # user-legible on their own.
+        text = "\n".join(p for p in text_parts if p).strip()
+        # Strip the scene_context block that every user turn carries — it's a
+        # verbose <scene_context>…</scene_context> payload the user never sees
+        # in the live chat, so it shouldn't appear in the rehydrated log either.
+        if text.startswith("<scene_context>"):
+            end = text.find("</scene_context>")
+            if end >= 0:
+                text = text[end + len("</scene_context>"):].strip()
+        if text:
+            out.append({"role": role, "text": text})
+    return JSONResponse({"messages": out}, headers=_NO_CACHE)
+
+
 @app.post("/api/llm/reset")
 async def llm_reset(request: Request):
     body = await request.json()
     node_id = str(body.get("node_id", "")).strip() or "default"
     _chat_history.pop(node_id, None)
+    # Also remove the on-disk log so /clear is a true reset, not "clear this
+    # session but rehydrate the old convo on next restart."
+    try:
+        p = _chat_history_path(node_id)
+        if p.exists():
+            p.unlink()
+    except Exception:
+        pass
     return {"cleared": True}
+
+
+@app.post("/api/local/restart-comfy")
+async def local_restart_comfy():
+    """Ask ComfyUI-Manager to reboot the local ComfyUI. Only works when the
+    Manager custom node is installed (which is standard on the common easy-
+    install builds). Fires and returns — the Manager kills the current
+    process, and the launcher relaunches it on its own. If Manager isn't
+    present, ComfyUI returns 404 and we surface the error so the agent can
+    fall back to telling the user to restart manually."""
+    import httpx as _httpx
+    # ComfyUI-Manager uses GET for /manager/reboot (POST returns 405). Some
+    # forks expose /api/manager/reboot too — try the canonical path first,
+    # fall back to the /api/ variant if the GET returns 404.
+    async def _try_reboot(url):
+        try:
+            async with _httpx.AsyncClient(timeout=5.0) as client:
+                r = await client.get(url)
+                return r.status_code, r.text
+        except _httpx.RemoteProtocolError:
+            # Server dropped the connection while shutting down — the reboot
+            # is in progress. Treat as success.
+            return 200, "connection dropped mid-restart"
+        except Exception as e:
+            return None, str(e)
+
+    urls = [f"{_LOCAL_COMFY_URL}/manager/reboot", f"{_LOCAL_COMFY_URL}/api/manager/reboot"]
+    last_err = "unknown"
+    for u in urls:
+        status, body = await _try_reboot(u)
+        if status is None:
+            last_err = body
+            continue
+        if 200 <= status < 400 or status == 205:
+            return {"restarted": True, "target": "local-comfyui"}
+        if status == 404:
+            last_err = "endpoint not found"
+            continue
+        last_err = f"HTTP {status}: {(body or '')[:200]}"
+    if "not found" in last_err.lower():
+        return {
+            "restarted": False,
+            "error": "ComfyUI-Manager not installed or doesn't expose /manager/reboot. Install https://github.com/Comfy-Org/ComfyUI-Manager and try again, or restart ComfyUI manually.",
+        }
+    return {"restarted": False, "error": last_err}
 
 
 @app.post("/api/cancel-local")
