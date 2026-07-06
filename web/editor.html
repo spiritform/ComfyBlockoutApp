@@ -274,25 +274,6 @@
 	.th-btn.secondary:hover { background: rgba(255,255,255,0.08); color: #fff; }
 
 	#main-row { flex: 1; min-height: 0; display: flex; }
-	/* Bottom bumper — a slim row below everything so the timeline / panels
-	   don't sit flush against the taskbar edge. Three flex slots (left,
-	   center, right) available for future global chips. */
-	#bottom-bumper {
-		flex: 0 0 24px;
-		display: flex; align-items: center;
-		padding: 0 14px; gap: 8px;
-		background: #16181d;
-		border-top: 1px solid rgba(255,255,255,0.05);
-		font-size: 10px; color: rgba(255,255,255,0.4);
-		letter-spacing: 0.04em;
-	}
-	.bumper-brand { font-size: 10px; color: rgba(255,255,255,0.4); letter-spacing: 0.04em; }
-	.bumper-brand strong { color: rgba(255,255,255,0.7); font-weight: 600; letter-spacing: 0.02em; }
-	.bumper-brand-by { opacity: 0.55; margin: 0 4px; }
-	.bumper-slot { display: flex; align-items: center; gap: 8px; }
-	.bumper-slot-left { flex: 0 0 auto; }
-	.bumper-slot-center { flex: 1 1 auto; justify-content: center; }
-	.bumper-slot-right { flex: 0 0 auto; }
 
 	/* Floating result viewer — shows the latest generation. */
 	#result-toast {
@@ -381,13 +362,26 @@
 	/* Background-image layer sits BEHIND the canvas so we can `filter: blur()` the
 	   image without also blurring the WebGL scene. Inset -60px so the blur's soft
 	   edge is clipped by canvas-wrap's overflow:hidden instead of showing seams. */
+	/* BG layers align with the aspect-fit canvas so what the user sees inside
+	   the aspect frame matches the snapshot the models get. Size + position
+	   are driven from JS (updateAspectFrame) instead of a static inset — a
+	   pure CSS `inset:-60px` would cover the whole canvasWrap and cover-fit
+	   the image against the WRONG target, producing a different crop live
+	   than what the snapshot captures. overflow:hidden on canvasWrap clips
+	   the small blur slop we add via JS. */
 	#canvas-bg-layer {
-		position: absolute; inset: -60px;
+		position: absolute;
 		z-index: 0; pointer-events: none;
 		background-size: cover; background-position: center; background-repeat: no-repeat;
 		display: none;
 	}
 	#canvas-bg-layer.active { display: block; }
+	#canvas-bg-video {
+		position: absolute;
+		z-index: 0; pointer-events: none;
+		object-fit: cover; display: none;
+	}
+	#canvas-bg-video.active { display: block; }
 
 	/* Boot curtain — covers the canvas while the scene hydrates so a mid-load orbit
 	   or click doesn't get clobbered when deserializeScene restores camera+objects.
@@ -909,9 +903,12 @@
 	#rp-pane-assistant .assistant-input-row {
 		background: transparent;
 		border-top: 1px solid rgba(255,255,255,0.05);
-		/* Match the timeline row height so the bottom edge of the right pane and the
-		   bottom timeline read as one horizontal band. */
-		height: 78px; box-sizing: border-box;
+		/* Fixed 78px — matches the timeline row height so the chat input's
+		   bottom AND top edges line up 1:1 with the transport bar to its
+		   left. The CONTEXT chip sits ABOVE this box (floating in the log
+		   area) so the input itself always stays anchored to the transport. */
+		flex: 0 0 78px; height: 78px;
+		box-sizing: border-box;
 		display: flex; align-items: stretch;
 		padding: 0;
 	}
@@ -1402,6 +1399,8 @@
 	.out-group.selected { background: rgba(255,180,84,0.10); box-shadow: inset 0 0 0 1px rgba(255,180,84,0.28); }
 	.out-group.selected .out-name { color: #ffb454; }
 	.out-group.hidden .out-name { opacity: 0.35; text-decoration: line-through; }
+	.out-group.locked .out-lock { color: #ffb454; }
+	.out-group.locked .out-name { opacity: 0.55; }
 	.out-group-icon {
 		width: 26px; height: 26px; border-radius: 4px;
 		background: rgba(255,255,255,0.04);
@@ -1467,6 +1466,8 @@
 	.out-row .out-color { width: 12px; height: 12px; border-radius: 3px; }
 	.out-row .out-name { font-size: 10px; }
 	.out-row .out-vis { width: 18px; height: 18px; font-size: 10px; }
+	.out-row .out-lock { width: 18px; height: 18px; }
+	.out-lock svg { width: 10px; height: 10px; }
 	.out-row .out-expand-toggle { width: 18px; height: 18px; font-size: 12px; }
 	/* Expand panel — image slot (square) sits left of the prompt textarea,
 	   aligned to the top so a taller prompt doesn't stretch the slot. */
@@ -1547,20 +1548,28 @@
 		padding: 0; border-radius: 0;
 		display: block; flex: 1; min-width: 0;
 		overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-		cursor: text;
+		/* Inherit the row's pointer cursor so hovering anywhere on the bar reads
+		   as "clickable to select". The rename tooltip is scoped to the inner
+		   .out-name-text span so it only shows when hovering the actual text. */
+		cursor: inherit;
 	}
-	span.out-name { cursor: default; }
+	.out-name-text {
+		display: inline;
+	}
 	/* When the rename input is active, it inherits .out-name styles so the swap
 	   is invisible — no rectangle highlight, no padding shift, just the text. */
 	.out-name-edit:focus { color: #fff; text-overflow: clip; }
 
-	.out-vis, .out-del, .out-group-ungroup {
+	.out-vis, .out-del, .out-lock, .out-group-ungroup {
 		width: 22px; height: 22px; border: none; background: transparent;
 		border-radius: 4px; cursor: pointer; color: rgba(255,255,255,0.4);
 		display: flex; align-items: center; justify-content: center;
 		font-size: 11px; line-height: 1; font-family: inherit;
 	}
-	.out-vis:hover { background: rgba(255,255,255,0.06); color: #e6e6ea; }
+	.out-vis:hover, .out-lock:hover { background: rgba(255,255,255,0.06); color: #e6e6ea; }
+	.out-row.locked .out-lock { color: #ffb454; }
+	.out-row.locked .out-name { opacity: 0.55; }
+	.out-row.locked .out-color { opacity: 0.55; }
 	.out-del:hover { background: rgba(255,255,255,0.06); color: #ff5a5a; }
 	/* × on a group card = ungroup. Same shape as .out-del but red-tinted on
 	   hover to make the destructive intent legible. */
@@ -1570,7 +1579,22 @@
 	.out-group-ungroup:hover { background: rgba(255,80,80,0.15); color: #ff8a8a; }
 
 	.slider-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
-	.slider-row label { flex: 0 0 auto; font-size: 11px; color: rgba(255,255,255,0.5); }
+	/* Fixed label column so every slider-row's drag-box starts at the same x.
+	   Longest label in use is "Intensity" (~52px at 11px), plus a small buffer
+	   so nothing wraps if a new label lands close to that length. */
+	.slider-row label { flex: 0 0 58px; font-size: 11px; color: rgba(255,255,255,0.5); }
+	/* Slider-row drag-boxes are tighter than the Transform ones — no inner
+	   label to accommodate, and they read cleaner as a compact value chip
+	   than a full-height row. */
+	.slider-row .drag-num { padding: 4px 9px; }
+	/* Pair wrapper — two slider-rows side by side (e.g. Near / Far). Each
+	   child row goes fluid so drag-boxes split the pair's width evenly.
+	   Labels drop the fixed 58px so short pair labels don't waste space. */
+	.slider-row-pair { display: flex; gap: 8px; margin-bottom: 5px; }
+	/* Restore proper hiding — flex above outranks [hidden]'s default display:none. */
+	.slider-row-pair[hidden] { display: none; }
+	.slider-row-pair .slider-row { flex: 1; margin-bottom: 0; min-width: 0; }
+	.slider-row-pair .slider-row label { flex: 0 0 auto; }
 	.slider-row input[type="range"] {
 		flex: 1; -webkit-appearance: none; appearance: none; height: 3px;
 		background: rgba(255,255,255,0.1); border-radius: 2px; outline: none;
@@ -1609,6 +1633,43 @@
 	.drag-num.keyed-flash { animation: drag-key-flash 0.7s ease-out; }
 	.drag-num .drag-label { color: rgba(255,255,255,0.4); font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; flex-shrink: 0; }
 	.drag-num .drag-val { text-align: right; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+	/* Workflow-cell drag-nums (STRENGTH, etc.) — label lives outside as
+	   "Strength : [box]", the drag surface is a tiny chip hugging just the
+	   value. Scoped to .wf-drag so Transform / camera drag-nums (which have
+	   the label baked inside) keep their existing layout. */
+	.wf-drag-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+	.wf-drag-outer-label {
+		font-size: 10px; color: rgba(255,255,255,0.55);
+		flex: 0 0 auto;
+	}
+	.drag-num.wf-drag {
+		flex: 0 0 auto;
+		/* Fixed width — auto would let the native <input>'s default 20-char size
+		   blow the chip out to hundreds of pixels the moment it enters edit mode. */
+		width: 60px; min-width: 60px;
+		padding: 4px 10px;
+		justify-content: center;
+		box-sizing: border-box;
+	}
+	.drag-num.wf-drag .drag-val { flex: 0 0 auto; text-align: center; color: rgba(255,255,255,0.95); }
+	/* Edit-mode input inherits the chip's fixed width instead of expanding to
+	   its own default 20-char intrinsic size. Text scrolls inside if longer. */
+	.drag-num.wf-drag input { width: 100%; min-width: 0; box-sizing: border-box; text-align: center; }
+	/* Seed chip is wider than a strength/scale chip so a full 10-digit seed
+	   fits without clipping (2^31 is 10 digits). Overrides the base fixed
+	   60px width so both drag and edit-mode use the larger box. */
+	.drag-num.wf-drag.wf-seed-drag { width: 96px; min-width: 96px; }
+	/* Seed chip in random mode — no drag affordance since the value is
+	   regenerated at run time. Dimmed so it reads as "not yours to edit". */
+	.drag-num.wf-drag.disabled { cursor: default; opacity: 0.55; }
+	.drag-num.wf-drag.disabled:hover { background: rgba(255,255,255,0.04); }
+	/* Mode button (🎲 / 🔒) — sized to match the chip visually. */
+	.wf-seed-mode {
+		width: 26px; height: 22px; padding: 0;
+		border: none; border-radius: 4px;
+		font-size: 11px; cursor: pointer;
+		flex: 0 0 auto;
+	}
 	.drag-num input {
 		background: none; border: none; color: inherit; font: inherit; outline: none;
 		width: 100%; text-align: right;
@@ -1673,30 +1734,37 @@
 	#result-overlay img, #result-overlay video {
 		width: 100%; height: 100%; object-fit: cover; display: block;
 	}
-	#result-overlay video { pointer-events: auto; }
+	/* Re-enable pointer events on the image + video so drag (Blockout /
+	   Render → chat + input slots) and native video controls work — the
+	   parent overlay stays pointer-events:none so clicks in Viewport mode
+	   still reach the canvas underneath. */
+	#result-overlay img, #result-overlay video { pointer-events: auto; }
 	/* Result toggle — the Viewport / Blockout / Render pill group. Sits to the
-	   right of Generate in the viewport toolbar. Compact styling: 8px padding,
-	   9px font. Each button is `hidden` until relevant, so the whole container
-	   reads as empty pre-generate. The × close button clears any active render. */
+	   right of Generate in the viewport toolbar. Buttons now match .vt-btn
+	   sizing (26px tall, 10px 600-weight) so it visually pairs with Move /
+	   Rotate / Scale to its left. Viewport + Blockout stay visible so users
+	   can always preview what will be fed to the models; Render + × only show
+	   once a real render exists. */
 	#result-toggle {
 		display: flex; align-items: center; gap: 0;
 		background: rgba(14,14,18,0.92); border: 1px solid rgba(255,255,255,0.08);
 		border-radius: 5px; overflow: hidden;
-		height: 22px; margin-left: 6px;
+		height: 26px; margin-left: 6px;
 	}
 	#result-toggle[hidden] { display: none; }
 	#result-toggle button {
-		background: transparent; border: none; color: rgba(255,255,255,0.55);
-		padding: 0 8px; height: 100%;
-		font: inherit; font-size: 9px;
-		letter-spacing: 0.05em; text-transform: uppercase; cursor: pointer;
+		background: transparent; border: none; color: rgba(255,255,255,0.4);
+		padding: 0 12px; height: 100%;
+		font: inherit; font-size: 10px; font-weight: 600; letter-spacing: 0;
+		cursor: pointer;
 		display: inline-flex; align-items: center; justify-content: center;
+		font-family: inherit;
 	}
 	#result-toggle button[hidden] { display: none; }
-	#result-toggle button:hover { color: #fff; }
+	#result-toggle button:hover { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.85); }
 	#result-toggle button.active { background: rgba(255,180,84,0.18); color: #ffb454; }
 	#result-toggle #result-close {
-		padding: 0 6px; font-size: 12px; letter-spacing: 0;
+		padding: 0 8px; font-size: 12px; font-weight: 600;
 		color: rgba(255,255,255,0.45);
 		border-left: 1px solid rgba(255,255,255,0.06);
 	}
@@ -1843,15 +1911,17 @@
 		line-height: 1.5;
 	}
 	@keyframes spin { to { transform: rotate(360deg); } }
-	.btn.save-flash {
-		background: rgba(56,217,119,0.36) !important;
-		color: #fff !important;
-		box-shadow: 0 0 10px rgba(56,217,119,0.6);
-		animation: saveFlash 0.7s ease-out;
+	/* Save flash — amber tint on the label that eases down to the neutral
+	   button color. Longer duration + linear curve so the decay reads as a
+	   smooth fade rather than the "pop" a fast ease-out produced. forwards
+	   holds the final state until the class is cleared, so the brief gap
+	   between animation-end and setTimeout doesn't flicker back to yellow. */
+	.save-flash {
+		animation: saveFlash 1s linear forwards;
 	}
 	@keyframes saveFlash {
-		0%   { transform: scale(1.08); }
-		100% { transform: scale(1); }
+		0%   { color: #ffb454; }
+		100% { color: rgba(255,255,255,0.7); }
 	}
 
 	/* ============ NEW: 3-column layout (mockup port) ============ */
@@ -2140,6 +2210,9 @@
 		font-size: 15px; line-height: 1; padding: 0;
 	}
 	.rp-bg-clear:hover { background: rgba(255,80,80,0.22); color: #ff8a8a; }
+	/* inline-flex above overrides [hidden]'s default display:none — restore it
+	   so the × only shows once an image / video is actually loaded. */
+	.rp-bg-clear[hidden] { display: none; }
 	.rp-bg-row.active-bg { background: rgba(255,180,84,0.08); color: #fff; }
 	.rp-bg-thumb {
 		width: 26px; height: 26px; flex: 0 0 26px; border-radius: 4px;
@@ -2181,11 +2254,27 @@
 	   fills the column (via #right-panel.no-agent). */
 	#rp-zone-top {
 		flex: 0 0 var(--rp-top-basis);
-		min-height: 80px;
+		/* Header (40) + optional context chip (~24) + input row (78).
+		   Sized for the worst case where the context chip is showing so it
+		   doesn't clip the input; when context is hidden there's just some
+		   extra breathing room above the input. */
+		min-height: 142px;
 		display: flex; flex-direction: column;
 		overflow: hidden;
-		border-top: 1px solid rgba(255,255,255,0.04);
+		/* Slightly lighter tone than the switcher zone (#131318) so the AI
+		   Agent surface visually separates from the Properties panel above. */
+		background: #191922;
+		border-top: 1px solid rgba(255,255,255,0.06);
 		order: 3;
+	}
+	/* Bottom-pinned band inside the assistant shell — CONTEXT chip stacked
+	   on top of the fixed 78px INPUT row. margin-top:auto pushes the whole
+	   band to the shell's bottom edge so the chat box stays aligned with
+	   the transport bar regardless of what the log does above. */
+	.assistant-bottom-band {
+		flex: 0 0 auto;
+		margin-top: auto;
+		display: flex; flex-direction: column;
 	}
 	#rp-split-handle { order: 2; }
 	#rp-zone-bottom { order: 1; }
@@ -2294,7 +2383,10 @@
 	}
 	#rp-zone-top-body > .rp-pane { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 	#rp-zone-bottom {
-		flex: 1 1 auto; min-height: 80px;
+		flex: 1 1 auto;
+		/* Same 40px min as the drag clamp — lets the switcher shrink to just
+		   the header row when the agent zone is dragged all the way up. */
+		min-height: 40px;
 		display: flex; flex-direction: column;
 		overflow: hidden;
 	}
@@ -2576,17 +2668,20 @@
 				<div class="assistant-log" id="assistant-log">
 					<div class="assistant-msg system" id="assistant-intro">Ask the agent to refine a prompt, structure a generation JSON, or call a Comfy MCP tool.</div>
 				</div>
-				<!-- Context chip — shows the currently active generator/workflow so the
-				     user doesn't need to name it in each message. Populated by
-				     refreshChatContextChip(); hidden when nothing is active. -->
-				<div class="assistant-context" id="assistant-context" hidden>
-					<span class="assistant-context-label">context</span>
-					<span class="assistant-context-target" id="assistant-context-target"></span>
-					<button type="button" class="assistant-context-clear" id="assistant-context-clear" title="Clear context">×</button>
-				</div>
-				<div class="assistant-input-row">
-					<span class="assistant-prompt-arrow" aria-hidden="true">&gt;</span>
-					<textarea class="assistant-input" id="assistant-input" rows="2" placeholder="Ask the AI agent… (Enter to send · Shift+Enter for new line · /clear resets)"></textarea>
+				<!-- Bottom-pinned band: CONTEXT chip stacked on top of the 78px chat
+				     input, always anchored to the pane bottom via margin-top:auto.
+				     Guarantees the input row stays inline with the transport bar
+				     regardless of what the log does above it. -->
+				<div class="assistant-bottom-band">
+					<div class="assistant-context" id="assistant-context" hidden>
+						<span class="assistant-context-label">context</span>
+						<span class="assistant-context-target" id="assistant-context-target"></span>
+						<button type="button" class="assistant-context-clear" id="assistant-context-clear" title="Clear context">×</button>
+					</div>
+					<div class="assistant-input-row">
+						<span class="assistant-prompt-arrow" aria-hidden="true">&gt;</span>
+						<textarea class="assistant-input" id="assistant-input" rows="2" placeholder="Ask the AI agent… (Enter to send · Shift+Enter for new line · /clear resets)"></textarea>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -2623,9 +2718,9 @@
 			     reads before the "generate again" action. Each pill is
 			     [hidden] until relevant, so the whole container reads as
 			     empty pre-generate. × clears the active render. -->
-			<div id="result-toggle" hidden>
-				<button data-result="viewport" class="active" hidden>Viewport</button>
-				<button data-result="blockout" hidden>Blockout</button>
+			<div id="result-toggle">
+				<button data-result="viewport" class="active">Viewport</button>
+				<button data-result="blockout">Blockout</button>
 				<button data-result="render" hidden>Render</button>
 				<button id="result-close" type="button" title="Close render — clear the overlay and go back to the live scene" hidden>×</button>
 			</div>
@@ -2637,6 +2732,7 @@
 		</div>
 		<div id="canvas-wrap">
 			<div id="canvas-bg-layer"></div>
+			<video id="canvas-bg-video" playsinline muted loop></video>
 			<canvas id="renderCanvas"></canvas>
 			<!-- Initializing curtain — blocks pointer events during scene hydration so a
 			     mid-boot orbit/click/drop doesn't get clobbered when deserializeScene
@@ -3050,17 +3146,49 @@
 							<input type="color" id="bg-color" value="#000000">
 							<span class="rp-bg-label">Color</span>
 						</label>
+					</div>
+					<div class="rp-bg-pair" style="margin-top:6px">
 						<div class="rp-bg-row rp-bg-img-btn" id="bg-image-btn" title="Image background — fills the entire viewport">
 							<span class="rp-bg-thumb" id="bg-image-thumb"></span>
 							<span class="rp-bg-label" id="bg-image-label">Image</span>
 							<button type="button" class="rp-bg-clear" id="bg-image-clear" title="Remove background" hidden>×</button>
 						</div>
+						<div class="rp-bg-row rp-bg-img-btn" id="bg-video-btn" title="Video background — driven by the timeline playhead">
+							<span class="rp-bg-thumb" id="bg-video-thumb"></span>
+							<span class="rp-bg-label" id="bg-video-label">Video</span>
+							<button type="button" class="rp-bg-clear" id="bg-video-clear" title="Remove background" hidden>×</button>
+						</div>
 						<input type="file" id="bg-image-file" accept="image/*" hidden>
+						<input type="file" id="bg-video-file" accept="video/*" hidden>
 					</div>
-					<div class="slider-row" id="bg-blur-row" style="margin-top:8px" hidden>
-						<label>Blur</label>
-						<input type="range" id="bg-blur" min="0" max="40" step="1" value="0">
-						<span class="slider-val" id="bg-blur-val">0</span>
+					<div class="slider-row-pair" id="bg-blur-opacity-pair" style="margin-top:8px" hidden>
+						<div class="slider-row" id="bg-blur-row">
+							<label>Blur</label>
+							<input type="range" id="bg-blur" min="0" max="40" step="1" value="0">
+							<span class="slider-val" id="bg-blur-val">0</span>
+						</div>
+						<div class="slider-row" id="bg-opacity-row">
+							<label>Opacity</label>
+							<input type="range" id="bg-opacity" min="0" max="100" step="1" value="100">
+							<span class="slider-val" id="bg-opacity-val">100</span>
+						</div>
+					</div>
+					<div class="slider-row-pair" id="bg-offset-pair" style="margin-top:4px" hidden>
+						<div class="slider-row">
+							<label>X</label>
+							<input type="range" id="bg-offset-x" min="-500" max="500" step="1" value="0">
+							<span class="slider-val" id="bg-offset-x-val">0</span>
+						</div>
+						<div class="slider-row">
+							<label>Y</label>
+							<input type="range" id="bg-offset-y" min="-500" max="500" step="1" value="0">
+							<span class="slider-val" id="bg-offset-y-val">0</span>
+						</div>
+					</div>
+					<div class="slider-row" id="bg-scale-row" style="margin-top:4px" hidden>
+						<label>Scale</label>
+						<input type="range" id="bg-scale" min="10" max="500" step="1" value="100">
+						<span class="slider-val" id="bg-scale-val">100</span>
 					</div>
 				</div>
 
@@ -3086,13 +3214,10 @@
 
 				<div class="section" id="fog-section">
 					<div class="section-head-row">
-						<span class="section-label">Fog</span>
-						<span class="head-end">
-							<label class="checkbox-row" title="Enable scene fog" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:rgba(255,255,255,0.6)">
-								<input type="checkbox" id="fog-enabled">
-								<span>Enabled</span>
-							</label>
-						</span>
+						<label class="section-label" title="Enable scene fog" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">
+							<span>Fog</span>
+							<input type="checkbox" id="fog-enabled">
+						</label>
 					</div>
 					<div class="rp-bg-pair">
 						<label class="rp-bg-row" id="fog-color-btn" title="Fog color">
@@ -3100,15 +3225,17 @@
 							<span class="rp-bg-label">Color</span>
 						</label>
 					</div>
-					<div class="slider-row" style="margin-top:8px">
-						<label>Near</label>
-						<input type="range" id="fog-near" min="0" max="100" step="0.1" value="2">
-						<span class="slider-val" id="fog-near-val">2.0</span>
-					</div>
-					<div class="slider-row">
-						<label>Far</label>
-						<input type="range" id="fog-far" min="1" max="500" step="1" value="60">
-						<span class="slider-val" id="fog-far-val">60</span>
+					<div class="slider-row-pair" style="margin-top:8px">
+						<div class="slider-row">
+							<label>Near</label>
+							<input type="range" id="fog-near" min="0" max="100" step="0.1" value="2">
+							<span class="slider-val" id="fog-near-val">2.0</span>
+						</div>
+						<div class="slider-row">
+							<label>Far</label>
+							<input type="range" id="fog-far" min="1" max="500" step="1" value="60">
+							<span class="slider-val" id="fog-far-val">60</span>
+						</div>
 					</div>
 					<div class="hint">Linear fog fades everything past Near toward the color at Far.</div>
 				</div>
@@ -3268,18 +3395,6 @@
 
 	</div><!-- /#main-row -->
 
-	<!-- Bottom bumper — short full-width row below the main viewport/panels.
-	     Acts as a visual bumper so the timeline/panels don't butt up against
-	     the OS taskbar edge, and holds room for future global-scope buttons
-	     (status, snap-mode, backup indicator, etc.). Fixed 24px height so it
-	     doesn't eat into the working area. -->
-	<div id="bottom-bumper">
-		<div class="bumper-slot bumper-slot-left">
-			<span class="bumper-brand"><strong>ComfyBlockout</strong><span class="bumper-brand-by">by</span>Spiritform</span>
-		</div>
-		<div class="bumper-slot bumper-slot-center"></div>
-		<div class="bumper-slot bumper-slot-right"></div>
-	</div>
 
 	<script type="importmap">
 	{
@@ -4425,6 +4540,18 @@ const objects = [];
 // hooks further down.
 let selected = null;
 const selectionSet = new Set();
+// Anchor object for shift-range-select in the outliner. Updated on every plain
+// or ctrl-click; shift-clicks read it to expand the selection through every
+// row between the anchor and the shift-clicked row in DOM order.
+let outlinerRangeAnchor = null;
+// Attachments dropped into the chat input — each entry is
+// { url, filename, kind, label }. The input surface just shows `[image]` /
+// `[video]` placeholders; the send path expands them into markdown before
+// posting to the agent, and refreshChatContextChip surfaces the labels above
+// the input row so it's visible what will be attached. Declared this early so
+// refreshChatContextChip's initial paint at boot (well before the assistant
+// wiring block) doesn't hit a temporal-dead-zone error.
+let chatAttachments = [];
 // Group-drag snapshot — captured in transform mouseDown when the set has >1
 // member, consumed in objectChange to apply the primary's delta to the rest.
 // Null outside a drag or during single-select drags.
@@ -5552,7 +5679,7 @@ function addParticleEmitter(initialConfig) {
 // playhead (see tickCloudsFx), matching how particles handle scrub/pause.
 const DEFAULT_CLOUDS_CONFIG = {
 	color: 0xffffff,
-	density: 0.5,   // 0..1, coverage threshold — higher = thicker cloud
+	density: 0.65,  // 0..1, coverage threshold — higher = thicker cloud
 	speed: 1.0,     // wind advection speed multiplier
 	scale: 1.0,     // noise frequency (higher = smaller puffs)
 };
@@ -5687,9 +5814,10 @@ function addCloudsFx(initialConfig) {
 	const mesh = buildCloudsFx(initialConfig || {});
 	mesh.name = `Clouds.${String(primCounters.clouds).padStart(3, "0")}`;
 	// Default placement: floating slab above origin, wider than tall so the
-	// noise reads as a cloud field rather than a cube.
-	mesh.position.set(0, 2, 0);
-	mesh.scale.set(4, 1, 4);
+	// noise reads as a cloud field rather than a cube. Big by default — reads
+	// as an actual sky volume rather than a puff you have to hunt for.
+	mesh.position.set(0, 5, 0);
+	mesh.scale.set(40, 10, 40);
 	mesh.userData.primKind = "clouds";
 	stashInitialTransform(mesh);
 	scene.add(mesh);
@@ -6150,15 +6278,30 @@ applyAssistantEnablement();
 	const handle = document.getElementById("rp-split-handle");
 	const savedBasis = (() => { try { return localStorage.getItem(RP_TOP_KEY); } catch { return null; } })();
 	if (panel && savedBasis) panel.style.setProperty("--rp-top-basis", savedBasis);
+	// Constants shared between the drag handle and the click-to-collapse
+	// handler — hoisted here so both closures can read them.
+	// Minimum agent zone height while drag-sizing. Header (40) + context
+	// chip (~24) + input row (78) = 142 — anything smaller would clip the
+	// input row (fixed 78px so it aligns with the transport bar). The
+	// agent panel can never be closed by the drag handle.
+	const AGENT_MIN_PX = 142;
+	// Once the agent zone is within this many pixels of its minimum, snap
+	// into the "collapsed" class so the chat log hides and dragging feels
+	// like a smooth handoff into the click-collapse layout.
+	const AGENT_COLLAPSE_SNAP_PX = 12;
+	// Switcher only needs to keep the top header row (PROPERTIES · <object>)
+	// legible — anything below is padding/section-label the user can happily
+	// scroll away when they want the agent zone maxed. 40px = exactly the
+	// #rp-header row, so at the minimum the body has 0px and no scrollbar
+	// or APPEARANCE section leaks through.
+	const SWITCHER_MIN_PX = 40;
+	// Default expanded height for the agent zone when the user click-expands
+	// after a previous drag/click-collapse left the basis near the minimum.
+	// Without this, expanding from a min-sized zone leaves the log with 0px
+	// of usable space above the context + input rows.
+	const AGENT_DEFAULT_EXPAND_PX = 360;
 	if (handle && panel) {
 		let dragging = false;
-		// Minimum agent zone height while drag-sizing — 90px is the exact
-		// stack of [header 40 + context chip 24 + input row 26], so dragging
-		// all the way down lands on the same visual state as click-to-
-		// collapse without needing the shortcut. Anything smaller would
-		// clip the input, which we always want reachable.
-		const AGENT_MIN_PX = 90;
-		const SWITCHER_MIN_PX = 80;
 		handle.addEventListener("mousedown", (e) => {
 			dragging = true;
 			handle.classList.add("dragging");
@@ -6179,10 +6322,16 @@ applyAssistantEnablement();
 			if (!dragging) return;
 			const rect = panel.getBoundingClientRect();
 			const y = e.clientY - rect.top;
-			// Clamp: switcher >=80px at top, agent >=180px at bottom. Agent
-			// size = panelHeight - handleY, so handleY <= panelHeight - 180.
 			const clamped = Math.max(SWITCHER_MIN_PX, Math.min(rect.height - AGENT_MIN_PX, y));
 			const agentPx = rect.height - clamped;
+			// Snap into the collapsed class near the min so drag-to-bottom and
+			// click-to-collapse produce an identical final state (chat log
+			// hidden, header + context + input visible).
+			const wantCollapsed = agentPx <= AGENT_MIN_PX + AGENT_COLLAPSE_SNAP_PX;
+			panel.classList.toggle("rp-agent-collapsed", wantCollapsed);
+			try {
+				localStorage.setItem(RP_AGENT_COLLAPSED_KEY, wantCollapsed ? "1" : "0");
+			} catch {}
 			const pct = ((agentPx / rect.height) * 100).toFixed(2) + "%";
 			panel.style.setProperty("--rp-top-basis", pct);
 		});
@@ -6222,10 +6371,28 @@ applyAssistantEnablement();
 		// when the user is just glancing at the MCP status.
 		if (e.target.closest("#assistant-status, #rp-zone-top-controls")) return;
 		if (!panel) return;
+		const wasCollapsed = panel.classList.contains("rp-agent-collapsed");
 		panel.classList.toggle("rp-agent-collapsed");
+		const nowCollapsed = panel.classList.contains("rp-agent-collapsed");
 		try {
-			localStorage.setItem(RP_AGENT_COLLAPSED_KEY, panel.classList.contains("rp-agent-collapsed") ? "1" : "0");
+			localStorage.setItem(RP_AGENT_COLLAPSED_KEY, nowCollapsed ? "1" : "0");
 		} catch {}
+		// If the user just expanded, make sure --rp-top-basis gives the log
+		// enough room. If a prior drag/collapse left the basis at the min,
+		// expanding would leave the log with 0px of usable space — restore a
+		// comfortable default so the panel actually grows on click.
+		if (wasCollapsed && !nowCollapsed) {
+			const rect = panel.getBoundingClientRect();
+			const rawBasis = panel.style.getPropertyValue("--rp-top-basis").trim();
+			const currentPct = parseFloat(rawBasis) || 0;
+			const currentPx = currentPct * rect.height / 100;
+			if (currentPx < AGENT_DEFAULT_EXPAND_PX) {
+				const targetPx = Math.min(AGENT_DEFAULT_EXPAND_PX, rect.height - SWITCHER_MIN_PX);
+				const pct = ((targetPx / rect.height) * 100).toFixed(2) + "%";
+				panel.style.setProperty("--rp-top-basis", pct);
+				try { localStorage.setItem(RP_TOP_KEY, pct); } catch {}
+			}
+		}
 	});
 
 	const btn = document.getElementById("th-assistant");
@@ -6456,11 +6623,13 @@ function select(obj, opts = {}) {
 	// Outline every set member — primary + additive members read the same.
 	for (const o of selectionSet) applySelectionTint(o);
 	if (selected) {
-		transform.attach(selected);
+		// Locked objects skip the gizmo — you can still open properties via
+		// outliner-click, but transform edits are gated behind unlocking first.
+		if (selected.userData.locked) transform.detach();
+		else transform.attach(selected);
 		if (anchorMode) tintGizmo(0xffb454);
 		orbit.enabled = true;
-		const label = selected.name || selected.userData.primKind || "Object";
-		forceRightPane("object", label);
+		forceRightPane("object", objectPaneLabel(selected));
 		refreshObjectInspector?.();
 	} else {
 		transform.detach();
@@ -6483,12 +6652,22 @@ function toggleVisibility(obj) {
 	if (typeof saveScene === "function") saveScene();
 }
 
+function toggleLock(obj) {
+	obj.userData.locked = !obj.userData.locked;
+	// If we just locked the currently-selected object, drop the gizmo so the
+	// lock reads as "you can't transform this" — outliner click still selects
+	// it (that's how you get back in to unlock).
+	if (obj.userData.locked && selected === obj) transform.detach();
+	refreshOutliner();
+	if (typeof saveScene === "function") saveScene();
+}
+
 // Extracted so refreshOutliner can call it twice — once for root-level
 // unassigned objects, once for each group's expanded members (with `nested`
 // so CSS shrinks the row and hides the color/image slots + prompt textarea).
 function buildOutlinerRow(obj, { nested = false } = {}) {
 	const row = document.createElement("div");
-	row.className = "out-row" + (nested ? " nested" : "") + (selectionSet.has(obj) ? " selected" : "") + (obj.visible === false ? " hidden" : "");
+	row.className = "out-row" + (nested ? " nested" : "") + (selectionSet.has(obj) ? " selected" : "") + (obj.visible === false ? " hidden" : "") + (obj.userData.locked ? " locked" : "");
 		const ps = obj.userData.particleSystem;
 		const hex = ps
 			? "#" + ps.config.color.toString(16).padStart(6, "0")
@@ -6503,8 +6682,13 @@ function buildOutlinerRow(obj, { nested = false } = {}) {
 		row.innerHTML = `
 			<div class="out-head">
 				<input type="color" class="out-color" value="${hex}" title="Change color">
-				<span class="out-name" title="Double-click to rename"></span>
+				<span class="out-name"><span class="out-name-text" title="Double-click to rename"></span></span>
 				<div class="out-head-end">
+					<button class="out-lock" title="${obj.userData.locked ? "Unlock" : "Lock (prevents viewport picking + transform)"}">
+						${obj.userData.locked
+							? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`
+							: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0"/></svg>`}
+					</button>
 					<button class="out-vis" title="Show/hide">${obj.visible === false ? "○" : "◉"}</button>
 					<button class="out-expand-toggle" title="Expand for prompting context">▾</button>
 				</div>
@@ -6520,6 +6704,10 @@ function buildOutlinerRow(obj, { nested = false } = {}) {
 
 		const swatch = row.querySelector(".out-color");
 		swatch.addEventListener("click", e => e.stopPropagation());
+		// Same undo strategy as the object-inspector color picker: snapshot once
+		// when the picker opens (dedup keeps the stack clean if nothing changed).
+		swatch.addEventListener("focusin", () => { try { snapshotForUndo(); } catch {} });
+		swatch.addEventListener("pointerdown", () => { try { snapshotForUndo(); } catch {} });
 		swatch.addEventListener("input", e => {
 			const v = e.target.value;
 			if (ps) {
@@ -6622,7 +6810,12 @@ function buildOutlinerRow(obj, { nested = false } = {}) {
 		});
 
 		const nameSpan = row.querySelector(".out-name");
-		nameSpan.textContent = obj.name;
+		const nameText = row.querySelector(".out-name-text");
+		nameText.textContent = obj.name;
+		// Anchor lookup for shift-range-select — buildOutlinerRow attaches this
+		// once, then the click handler reads it back to walk sibling rows in
+		// DOM order (matches how the outliner renders top-to-bottom).
+		row._obj = obj;
 		// pendingNameSelect defers select() when the click landed on the name
 		// span, giving the browser time to fire dblclick if a second click is
 		// coming. Without it, the first click's refreshOutliner() would rebuild
@@ -6650,7 +6843,7 @@ function buildOutlinerRow(obj, { nested = false } = {}) {
 					const v = input.value.trim();
 					if (v) {
 						obj.name = v;
-						if (selected === obj) forceRightPane("object", obj.name);
+						if (selected === obj) forceRightPane("object", objectPaneLabel(obj));
 						saveScene?.();
 					}
 				}
@@ -6681,24 +6874,68 @@ function buildOutlinerRow(obj, { nested = false } = {}) {
 		});
 
 	row.addEventListener("click", (e) => {
+		if (e.target.closest(".out-lock")) { toggleLock(obj); return; }
 		if (e.target.closest(".out-vis")) { toggleVisibility(obj); return; }
 		if (e.target.closest(".out-expand-toggle, .out-context")) return;
 		if (e.target.closest(".out-color, .out-img, .out-name-edit")) return;
+		// Modifier semantics: shift = range select from the last anchor, ctrl
+		// (or meta on macOS) = toggle single, plain = replace with just this one.
+		const isShift = e.shiftKey && !e.ctrlKey && !e.metaKey;
+		const isToggle = (e.ctrlKey || e.metaKey) && !e.shiftKey;
+		// Range-select bypasses the rename deferral — shift-click is an
+		// unambiguous "extend selection" gesture, not a rename intent.
+		if (isShift && outlinerRangeAnchor && outlinerRangeAnchor !== obj) {
+			applyOutlinerRangeSelect(outlinerRangeAnchor, obj);
+			return;
+		}
 		// Name-label clicks defer select() 220ms so a dblclick can land in
 		// rename mode instead. Other click targets fire select immediately.
-		const additive = e.shiftKey || e.ctrlKey || e.metaKey;
+		const commit = () => {
+			select(obj, { additive: isToggle });
+			// Plain-clicks reset the anchor; ctrl-toggles also update it so a
+			// following shift-click ranges from the last click, not something
+			// ancient. Shift-clicks (handled above) leave the anchor untouched.
+			outlinerRangeAnchor = obj;
+		};
 		if (e.target.closest(".out-name")) {
 			if (pendingNameSelect) return;
 			pendingNameSelect = setTimeout(() => {
 				pendingNameSelect = null;
-				select(obj, { additive });
+				commit();
 			}, 220);
 			return;
 		}
-		select(obj, { additive });
+		commit();
 	});
 
 	return row;
+}
+
+// Select every row between `anchor` and `endObj` inclusive, using the current
+// DOM order of the outliner (top → bottom, including rows nested inside expanded
+// groups). Anchor stays where it was so successive shift-clicks always range
+// from the same origin — matches Finder / VS Code / most file-tree UIs.
+function applyOutlinerRangeSelect(anchor, endObj) {
+	const rows = Array.from(outlinerEl.querySelectorAll(".out-row"));
+	const iA = rows.findIndex(r => r._obj === anchor);
+	const iC = rows.findIndex(r => r._obj === endObj);
+	if (iA < 0 || iC < 0) {
+		// Anchor scrolled out of view or got deleted — fall back to a single-select.
+		select(endObj);
+		outlinerRangeAnchor = endObj;
+		return;
+	}
+	const [lo, hi] = iA < iC ? [iA, iC] : [iC, iA];
+	// Rebuild the selection from scratch: single-select the first row in the
+	// range, then additively add the rest. select() handles gizmo attach + tint
+	// so we get the multi-select outlines for free.
+	let first = true;
+	for (let i = lo; i <= hi; i++) {
+		const o = rows[i]._obj;
+		if (!o) continue;
+		if (first) { select(o); first = false; }
+		else select(o, { additive: true });
+	}
 }
 
 function refreshOutliner() {
@@ -6736,19 +6973,26 @@ function refreshOutliner() {
 		// to select all" gesture, dims when the user has diverged.
 		const allSelected = members.every(m => selectionSet.has(m));
 		const allHidden = members.every(m => m.visible === false);
+		const allLocked = members.every(m => m.userData.locked);
 		const card = document.createElement("div");
 		card.className = "out-group"
 			+ (group.expanded ? " expanded" : "")
 			+ (allSelected ? " selected" : "")
-			+ (allHidden ? " hidden" : "");
+			+ (allHidden ? " hidden" : "")
+			+ (allLocked ? " locked" : "");
 		card.innerHTML = `
 			<div class="out-group-head" title="Click to ${group.expanded ? "collapse" : "expand"} · double-click name to rename">
 				<span class="out-group-icon" title="Group">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
 				</span>
-				<span class="out-name" title="Double-click to rename"></span>
+				<span class="out-name"><span class="out-name-text" title="Double-click to rename"></span></span>
 				<span class="out-group-count">${members.length}</span>
 				<div class="out-head-end">
+					<button class="out-lock" title="${allLocked ? "Unlock group" : "Lock group"}">
+						${allLocked
+							? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`
+							: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0"/></svg>`}
+					</button>
 					<button class="out-vis" title="Show/hide group">${allHidden ? "○" : "◉"}</button>
 					<button class="out-group-ungroup" title="Ungroup (Ctrl+Shift+G)">×</button>
 				</div>
@@ -6814,6 +7058,18 @@ function refreshOutliner() {
 			saveScene?.();
 		});
 
+		card.querySelector(".out-lock").addEventListener("click", e => {
+			e.stopPropagation();
+			// Same "all locked → unlock all, else lock all" heuristic the eye uses.
+			const targetLocked = !allLocked;
+			for (const m of members) {
+				m.userData.locked = targetLocked;
+				if (targetLocked && selected === m) transform.detach();
+			}
+			refreshOutliner();
+			saveScene?.();
+		});
+
 		// Single click anywhere on the group head (except the ×, eye, or an
 		// active name-rename input) toggles expand/collapse. Clicks on the
 		// name label ARE allowed to toggle — but the toggle is deferred 220ms
@@ -6821,7 +7077,7 @@ function refreshOutliner() {
 		// Shift/Ctrl-click selects every member additively (grab-the-group
 		// escape hatch).
 		card.querySelector(".out-group-head").addEventListener("click", e => {
-			if (e.target.closest(".out-vis, .out-group-ungroup, .out-name-edit")) return;
+			if (e.target.closest(".out-vis, .out-lock, .out-group-ungroup, .out-name-edit")) return;
 			const additive = e.shiftKey || e.ctrlKey || e.metaKey;
 			if (additive) {
 				let last = null;
@@ -6838,9 +7094,9 @@ function refreshOutliner() {
 				if (last) {
 					selected = last;
 					window.__selectedObj = last;
-					transform.attach(last);
-					const label = last.name || last.userData.primKind || "Object";
-					forceRightPane("object", label);
+					if (last.userData.locked) transform.detach();
+					else transform.attach(last);
+					forceRightPane("object", objectPaneLabel(last));
 					refreshObjectInspector?.();
 				} else if (selectionSet.size === 0) {
 					selected = null;
@@ -6982,7 +7238,7 @@ canvas.addEventListener("pointerup", e => {
 		}
 	}
 	const meshHits = raycaster.intersectObjects(
-		objects.filter(o => o.userData.primKind !== "splat" && o.visible !== false),
+		objects.filter(o => o.userData.primKind !== "splat" && o.visible !== false && !o.userData.locked),
 		true,
 	);
 	const meshHit = meshHits[0] || null;
@@ -6994,7 +7250,7 @@ canvas.addEventListener("pointerup", e => {
 	let sphereHit = null, sphereHitDist = Infinity;
 	const tmpVec = new THREE.Vector3();
 	for (const o of objects) {
-		if (o.visible === false || !o.userData.pickSphere) continue;
+		if (o.visible === false || !o.userData.pickSphere || o.userData.locked) continue;
 		if (o.userData.primKind === "splat" && !clickIsRendered) continue;
 		o.updateMatrixWorld();
 		const worldSphere = o.userData.pickSphere.clone().applyMatrix4(o.matrixWorld);
@@ -7042,6 +7298,7 @@ outlinerEl?.addEventListener("click", (e) => {
 	const t = e.target;
 	if (t === outlinerEl || (t instanceof HTMLElement && t.classList.contains("out-empty"))) {
 		select(null);
+		outlinerRangeAnchor = null;
 	}
 });
 
@@ -8334,6 +8591,14 @@ document.getElementById("vp-generate")?.addEventListener("click", async () => {
 	const btn = document.getElementById("vp-generate");
 	if (!btn) { console.warn("[vp-generate] button not found"); return; }
 	if (btn.classList.contains("busy")) { console.warn("[vp-generate] busy"); return; }
+	// Explicit "no active target" gate — previously getActiveGenCell fell back
+	// to genCells[0] (nano-banana), so hitting Generate with nothing selected
+	// silently launched a nano run. Users didn't ask for that; they want the
+	// button to tell them to pick a workflow instead.
+	if (!activeWorkflowCellId && !activeGenCellId) {
+		window.showAlert?.("No workflow selected", "Pick a workflow from the sidebar Workflows section before running Generate.");
+		return;
+	}
 	// Workflow cells (local ComfyUI modules) have their own separate active-id
 	// track. If one of THEM is currently selected in the sidebar (SDXL Depth
 	// ControlNet Local, etc.), the toolbar Generate button should fire THAT
@@ -8703,20 +8968,31 @@ function renderWorkflowCellProperties(cell) {
 			const rawSeed = cell.values[spec.name];
 			const val = (rawSeed === undefined || rawSeed === "") ? "" : String(rawSeed).replace(/"/g, "&quot;");
 			const isRandom = mode === "random";
+			// Seed uses the same wf-drag-row + drag-num chip as Strength so both
+			// rows visually align. In random mode the chip shows "random" and
+			// its drag is disabled (the value regenerates at run time); the
+			// mode button next to it flips between random 🎲 and locked 🔒.
+			const displayVal = isRandom ? "random" : (val || "0");
 			inputsHtml += `
-				<div style="margin-top:6px;display:flex;align-items:center;gap:6px">
-					<span style="font-size:10px;color:rgba(255,255,255,0.55);min-width:52px">${label}</span>
-					<input class="wf-input" data-input="${spec.name}" data-input-type="seed" type="number" value="${val}" placeholder="${isRandom ? "random" : "0"}" ${isRandom ? "disabled" : ""}
-						style="flex:1;box-sizing:border-box;background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.06);border-radius:4px;padding:4px 6px;color:${isRandom ? "rgba(255,255,255,0.35)" : "#e6e6ea"};font:inherit;font-size:11px;outline:none">
+				<div class="wf-drag-row">
+					<span class="wf-drag-outer-label">${label}</span>
+					<div class="drag-num wf-drag wf-seed-drag${isRandom ? " disabled" : ""}" data-input="${spec.name}" data-input-type="seed" title="${label}">
+						<span class="drag-val">${displayVal}</span>
+					</div>
 					<button class="wf-seed-mode" data-input="${spec.name}" type="button" title="${isRandom ? "Random — new seed each run. Click to lock." : "Fixed — same seed each run. Click to randomize."}"
-						style="width:26px;height:22px;padding:0;border:none;border-radius:4px;background:${isRandom ? "rgba(255,180,84,0.15)" : "rgba(255,255,255,0.06)"};color:${isRandom ? "#ffb454" : "rgba(255,255,255,0.55)"};font-size:11px;cursor:pointer">${isRandom ? "🎲" : "🔒"}</button>
+						style="background:${isRandom ? "rgba(255,180,84,0.15)" : "rgba(255,255,255,0.06)"};color:${isRandom ? "#ffb454" : "rgba(255,255,255,0.55)"}">${isRandom ? "🎲" : "🔒"}</button>
 				</div>
 			`;
 		} else if (spec.type === "number") {
+			// Label lives OUTSIDE the drag-box so the layout reads as
+			// "Strength : [0.51]" — the drag surface itself is a small chip
+			// hugging just the value, not a full-width row with the label baked in.
 			inputsHtml += `
-				<div class="drag-num wf-drag" data-input="${spec.name}" title="${label}" style="margin-top:6px;flex:none;width:100%">
-					<span class="drag-label">${label}</span>
-					<span class="drag-val">0</span>
+				<div class="wf-drag-row">
+					<span class="wf-drag-outer-label">${label}</span>
+					<div class="drag-num wf-drag" data-input="${spec.name}" title="${label}">
+						<span class="drag-val">0</span>
+					</div>
 				</div>
 			`;
 		} else if (spec.type === "dropdown") {
@@ -8878,12 +9154,26 @@ function renderWorkflowCellProperties(cell) {
 		const specName = dragEl.dataset.input;
 		const spec = (m.inputs || []).find(s => s.name === specName);
 		if (!spec) continue;
-		const step = typeof spec.step === "number" ? spec.step : 0.01;
-		const decimals = step >= 1 ? 0 : Math.max(0, Math.min(4, -Math.floor(Math.log10(step))));
-		const defaultVal = typeof spec.default === "number" ? spec.default : (parseFloat(spec.default) || 0);
-		const sens = (typeof spec.min === "number" && typeof spec.max === "number")
-			? (spec.max - spec.min) / 200
-			: step;
+		// Seed drag is skipped in random mode — the value is regenerated at run
+		// time, so there's nothing meaningful to scrub. The mode button next to
+		// it flips to "fixed" first, then this loop rebinds on the next render.
+		const isSeed = spec.type === "seed";
+		if (isSeed && dragEl.classList.contains("disabled")) continue;
+		// Integer step + 0-decimal display for seeds; other numeric inputs use
+		// their declared step (default 0.01 for floats). Seed sensitivity is
+		// larger since the range spans 0..2^31 — no way to drag through that.
+		const step = isSeed ? 1 : (typeof spec.step === "number" ? spec.step : 0.01);
+		const decimals = isSeed
+			? 0
+			: (step >= 1 ? 0 : Math.max(0, Math.min(4, -Math.floor(Math.log10(step)))));
+		const defaultVal = isSeed
+			? (Math.floor(Math.random() * 0x7fffffff))
+			: (typeof spec.default === "number" ? spec.default : (parseFloat(spec.default) || 0));
+		const sens = isSeed
+			? 200 // ~200 seed units per pixel — big number space, forgiving drag
+			: (typeof spec.min === "number" && typeof spec.max === "number"
+				? (spec.max - spec.min) / 200
+				: step);
 		setupDragField(dragEl, {
 			get: () => {
 				const raw = cell.values[specName];
@@ -8891,11 +9181,15 @@ function renderWorkflowCellProperties(cell) {
 				const n = parseFloat(raw);
 				return isFinite(n) ? n : defaultVal;
 			},
-			set: (v) => { cell.values[specName] = String(v); saveSceneDebounced?.(); },
+			set: (v) => {
+				const stored = isSeed ? String(Math.max(0, Math.floor(v))) : String(v);
+				cell.values[specName] = stored;
+				saveSceneDebounced?.();
+			},
 			sens: sens,
-			min: spec.min,
-			max: spec.max,
-			format: (v) => v.toFixed(decimals),
+			min: isSeed ? 0 : spec.min,
+			max: isSeed ? 0x7fffffff : spec.max,
+			format: (v) => isSeed ? String(Math.max(0, Math.floor(v))) : v.toFixed(decimals),
 		});
 	}
 	// Scene-image slots — click to upload, × to clear. Uploaded ref goes into
@@ -9089,12 +9383,31 @@ fetchWorkflowModules();
 // hit target now that the caret has been removed. Clicks on the head-end
 // buttons/status (Clear, + Add, etc.) fall through the .closest() guard so
 // they run their own handlers instead of folding the section.
+// Left-panel collapsible sections (Objects, Tools, Outliner, Workflows) —
+// their collapsed/expanded state persists across sessions via localStorage
+// keyed by data-section. Restored on load; written on every toggle so hitting
+// close/reopen lands the user on the exact layout they left with.
+const SECTION_COLLAPSED_KEY = "cb.panel.collapsedSections";
+const collapsedSections = (() => {
+	try { return new Set(JSON.parse(localStorage.getItem(SECTION_COLLAPSED_KEY) || "[]")); }
+	catch { return new Set(); }
+})();
+function saveCollapsedSections() {
+	try { localStorage.setItem(SECTION_COLLAPSED_KEY, JSON.stringify([...collapsedSections])); } catch {}
+}
 for (const section of document.querySelectorAll("#panel .section.collapsible")) {
 	const row = section.querySelector(".section-head-row");
 	if (!row) continue;
+	const key = section.dataset.section;
+	if (key && collapsedSections.has(key)) section.classList.add("collapsed");
 	row.addEventListener("click", (e) => {
 		if (e.target.closest("button, input, textarea, select")) return;
 		section.classList.toggle("collapsed");
+		if (key) {
+			if (section.classList.contains("collapsed")) collapsedSections.add(key);
+			else collapsedSections.delete(key);
+			saveCollapsedSections();
+		}
 	});
 }
 
@@ -9132,19 +9445,36 @@ const assistantStatus = document.getElementById("assistant-status");
 			let asset;
 			try { asset = JSON.parse(raw); } catch { return; }
 			if (!asset?.url) return;
-			// Append as markdown so the URL is preserved verbatim and the
-			// agent (Claude) sees a real reference alongside the prompt.
-			// Prepend a space so it doesn't glue to whatever the user typed.
-			const ref = `${asset.kind === "video" ? "" : "!"}[${asset.filename || asset.kind || "image"}](${asset.url})`;
+			// Stash the real URL in chatAttachments and insert a short [image]
+			// / [video] placeholder in the textarea. The context chip picks up
+			// a label ("Blockout Image" / "Image" / "Video"), and the send path
+			// expands placeholders back into markdown before the message hits
+			// the agent — cleaner input surface, same URL fidelity for Claude.
+			const isBlockout = /\/comfyblockout\/image\//.test(asset.url);
+			const kindLabel = asset.kind === "video" ? "Video" : "Image";
+			const label = isBlockout ? `Blockout ${kindLabel}` : kindLabel;
+			chatAttachments.push({
+				url: asset.url,
+				filename: asset.filename,
+				kind: asset.kind,
+				label,
+			});
+			const placeholder = asset.kind === "video" ? "[video]" : "[image]";
+			// Insert at cursor so it lands where the user last was typing;
+			// selection collapses to right after the placeholder.
+			const start = assistantInput.selectionStart ?? assistantInput.value.length;
+			const end = assistantInput.selectionEnd ?? assistantInput.value.length;
 			const cur = assistantInput.value || "";
-			assistantInput.value = cur + (cur && !cur.endsWith(" ") && !cur.endsWith("\n") ? " " : "") + ref + " ";
+			const before = cur.slice(0, start);
+			const after = cur.slice(end);
+			const gapBefore = before && !/[\s\n]$/.test(before) ? " " : "";
+			const gapAfter = after && !/^[\s\n]/.test(after) ? " " : "";
+			assistantInput.value = before + gapBefore + placeholder + gapAfter + after;
 			assistantInput.focus();
-			// Nudge the caret to the end so the next keystroke lands after
-			// the pasted ref.
-			assistantInput.selectionStart = assistantInput.selectionEnd = assistantInput.value.length;
-			// Re-run the autosize so the textarea grows to fit the new line
-			// if needed (handled elsewhere via its own input listener).
+			const caret = (before + gapBefore + placeholder + gapAfter).length;
+			assistantInput.selectionStart = assistantInput.selectionEnd = caret;
 			assistantInput.dispatchEvent(new Event("input", { bubbles: true }));
+			refreshChatContextChip();
 		});
 	}
 })();
@@ -9257,6 +9587,18 @@ function refreshChatContextChip() {
 		const name = selObj.name || selObj.userData?.primKind || "Object";
 		parts.push(selCount > 1 ? `${name} · +${selCount - 1} · object` : `${name} · object`);
 	}
+	// Attachments take over the chip when present — dropping an image reframes
+	// the whole conversation around that image, so the workflow/object context
+	// shouldn't compete for attention. Prior behavior appended attachments to
+	// existing parts, which made the chip read as a stack of unrelated things.
+	if (chatAttachments && chatAttachments.length) {
+		const first = chatAttachments[0].label;
+		target.textContent = chatAttachments.length === 1
+			? first
+			: `${first} · +${chatAttachments.length - 1}`;
+		chip.hidden = false;
+		return;
+	}
 	if (parts.length === 0) {
 		chip.hidden = true;
 		return;
@@ -9270,6 +9612,15 @@ document.getElementById("assistant-context-clear")?.addEventListener("click", ()
 	activeGenCellId = null;
 	refreshWorkflowCells?.();
 	refreshGenCells?.();
+	// Chat attachments are part of the context too — clear them alongside so
+	// the × truly wipes everything the chip was surfacing. Also strip the
+	// [image] / [video] placeholders from the input so the visible input
+	// matches the empty attachment state.
+	chatAttachments = [];
+	if (assistantInput) {
+		assistantInput.value = assistantInput.value.replace(/\s?\[(image|video)\]\s?/g, " ").replace(/\s+/g, " ").trim();
+		assistantInput.dispatchEvent(new Event("input", { bubbles: true }));
+	}
 	// Also drop object selection so the chip fully clears — otherwise the
 	// user would tap × expecting empty context and still see the object.
 	if (selected && selected !== renderCam) select(null);
@@ -9365,7 +9716,7 @@ const ASSISTANT_TOOLS = {
 		const v = String(new_name || "").trim();
 		if (!v) return "error: new_name is empty";
 		obj.name = v;
-		if (selected === obj) forceRightPane("object", obj.name);
+		if (selected === obj) forceRightPane("object", objectPaneLabel(obj));
 		refreshOutliner();
 		saveScene?.();
 		return `renamed to ${v}`;
@@ -9446,9 +9797,47 @@ const ASSISTANT_TOOLS = {
 			if (!target) return `error: workflow module ${model} has no text/prompt input`;
 			w.values[target.name] = String(prompt || "");
 			refreshWorkflowCells();
+			// Re-render the right-hand properties pane if it's showing this cell
+			// so the textarea value updates live instead of the user having to
+			// re-open the pane. Same rationale as set_workflow_inputs below.
+			const paneEl = document.getElementById("rp-pane-workflowcell");
+			if (paneEl && !paneEl.hidden && activeWorkflowCellId === w.id) {
+				renderWorkflowCellProperties(w);
+			}
+			maybeSaveDebounced();
 			return `updated ${model} '${target.name}' input`;
 		}
 		return `error: no generator cell for ${model}`;
+	},
+
+	// Batch variant — write multiple workflow inputs in one tool call. Solves
+	// the "one prompt field at a time" limitation the agent hit when it wanted
+	// to set positive + negative prompts (and any other spec.name-keyed input)
+	// together. `inputs` is a { input_name: value } map validated against the
+	// module manifest so unknown keys don't silently disappear.
+	set_workflow_inputs({ model, inputs }) {
+		if (!model) return "error: model is required";
+		if (!inputs || typeof inputs !== "object") return "error: inputs {name: value} object is required";
+		const w = workflowCells.find(c => c.moduleId === model);
+		if (!w) return `error: no workflow cell for ${model}`;
+		const m = workflowModules[w.moduleId];
+		if (!m) return `error: workflow module ${model} not loaded`;
+		const validNames = new Set((m.inputs || []).map(i => i.name));
+		const applied = [];
+		const skipped = [];
+		for (const [name, value] of Object.entries(inputs)) {
+			if (!validNames.has(name)) { skipped.push(name); continue; }
+			w.values[name] = value === null || value === undefined ? "" : String(value);
+			applied.push(name);
+		}
+		refreshWorkflowCells();
+		const paneEl = document.getElementById("rp-pane-workflowcell");
+		if (paneEl && !paneEl.hidden && activeWorkflowCellId === w.id) {
+			renderWorkflowCellProperties(w);
+		}
+		maybeSaveDebounced();
+		const summary = `updated ${model} inputs: ${applied.join(", ") || "(none)"}`;
+		return skipped.length ? `${summary} — skipped unknown: ${skipped.join(", ")}` : summary;
 	},
 
 	async trigger_generate({ model, prompt }) {
@@ -9789,15 +10178,30 @@ async function sendAssistant(message, opts = {}) {
 	} else {
 		pushAssistantMsg("user", text);
 	}
+	// Expand [image] / [video] placeholders in order into real markdown refs
+	// so Claude sees the URLs alongside the prompt. Local log keeps the
+	// shorthand — the expanded copy only exists on the wire.
+	let sendText = text;
+	if (chatAttachments.length && /\[(image|video)\]/.test(sendText)) {
+		let ix = 0;
+		sendText = sendText.replace(/\[(image|video)\]/g, () => {
+			const att = chatAttachments[ix++];
+			if (!att) return "";
+			const name = att.filename || att.label || att.kind;
+			return att.kind === "video" ? `[${name}](${att.url})` : `![${name}](${att.url})`;
+		});
+	}
+	chatAttachments = [];
 	assistantInput.value = "";
 	assistantBusy = true;
 	assistantInput.disabled = true;
 	assistantStatus.textContent = "MCP · thinking";
 	assistantStatus.className = "assistant-status busy";
+	refreshChatContextChip();
 
 	let payload = {
 		node_id: NODE_ID,
-		message: text,
+		message: sendText,
 		context: assistantSceneContext(),
 	};
 
@@ -10591,6 +10995,72 @@ function setupDragField(el, opts) {
 	refresh();
 }
 
+// Replaces a native <input type="range"> with a Blender-style drag-box surface.
+// The range input stays in the DOM (hidden) so every existing handler keeps
+// working — the surface just proxies pointer drags + click-to-edit into
+// range.value writes + synthetic input/change events. Programmatic writes to
+// range.value are intercepted so external callers (like scene-load) refresh
+// the surface without needing to know it exists.
+function enhanceRangeAsDrag(rangeInput, opts = {}) {
+	if (!rangeInput || rangeInput._dragEnhanced) return;
+	rangeInput._dragEnhanced = true;
+	const min = parseFloat(rangeInput.min);
+	const max = parseFloat(rangeInput.max);
+	const step = parseFloat(rangeInput.step) || 1;
+	const range = max - min;
+	const sens = opts.sens ?? (range / 250);
+	const decimals = opts.decimals ?? (step < 1 ? 2 : 0);
+	const suffix = opts.suffix || "";
+	const format = opts.format || (v => `${Number(v).toFixed(decimals)}${suffix}`);
+	// Hide the native slider without removing it — all its listeners and refs stay valid.
+	rangeInput.style.display = "none";
+	// Hide the sibling .slider-val span so we don't double-display the value.
+	const row = rangeInput.closest(".slider-row");
+	const valSpan = row?.querySelector(".slider-val");
+	if (valSpan) valSpan.style.display = "none";
+	// Build the drag surface. Uses the same .drag-num markup the Transform inputs use.
+	const surface = document.createElement("div");
+	surface.className = "drag-num";
+	surface.style.flex = "1";
+	surface.innerHTML = opts.label
+		? `<span class="drag-label">${opts.label}</span><span class="drag-val"></span>`
+		: `<span class="drag-val" style="flex:1;text-align:center"></span>`;
+	rangeInput.parentNode.insertBefore(surface, rangeInput.nextSibling);
+	function clamp(v) {
+		v = Math.max(min, Math.min(max, v));
+		if (step) v = Math.round(v / step) * step;
+		return v;
+	}
+	// Intercept the .value setter on this element instance so programmatic writes
+	// (e.g. deserializeScene, reset buttons) repaint the surface without needing
+	// to know it exists.
+	const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+	Object.defineProperty(rangeInput, "value", {
+		get() { return proto.get.call(this); },
+		set(v) { proto.set.call(this, v); surface._refresh?.(); },
+		configurable: true,
+	});
+	setupDragField(surface, {
+		get: () => parseFloat(rangeInput.value) || 0,
+		set: v => {
+			const clamped = clamp(v);
+			proto.set.call(rangeInput, String(clamped));
+			// Fire input so existing handlers pick up the change. change fires on drag end.
+			rangeInput.dispatchEvent(new Event("input", { bubbles: true }));
+		},
+		sens,
+		min,
+		max,
+		format,
+	});
+	// setupDragField calls saveSceneDebounced on drag end but doesn't fire change on
+	// the underlying range. Some listeners (persist/undo) only listen to change —
+	// mirror the drag-end into a change event so those hooks still run.
+	surface.addEventListener("pointerup", () => {
+		rangeInput.dispatchEvent(new Event("change", { bubbles: true }));
+	});
+}
+
 function setCamPosAxis(axis, v) {
 	suppressSliderSync = true;
 	try {
@@ -10621,6 +11091,34 @@ function updateCameraSliders() {
 	if (suppressSliderSync) return;
 	for (const el of dragFields) el._refresh?.();
 }
+
+// Migrate every native <input type="range"> to the drag-box surface used by the
+// Transform inputs. Each entry describes format + sensitivity; the enhance
+// function keeps the underlying range in the DOM so all existing input/change
+// handlers keep firing.
+[
+	{ id: "fov",              format: v => `${v.toFixed(0)}°`,      sens: 0.4 },
+	{ id: "bg-blur",          format: v => `${v.toFixed(0)}`,       sens: 0.16 },
+	{ id: "bg-opacity",       format: v => `${v.toFixed(0)}%`,      sens: 0.4 },
+	{ id: "bg-offset-x",      format: v => `${v.toFixed(0)}`,       sens: 4 },
+	{ id: "bg-offset-y",      format: v => `${v.toFixed(0)}`,       sens: 4 },
+	{ id: "bg-scale",         format: v => `${v.toFixed(0)}%`,      sens: 2 },
+	{ id: "env-intensity",    format: v => `${v.toFixed(2)}`,       sens: 0.012 },
+	{ id: "fog-near",         format: v => `${v.toFixed(1)}`,       sens: 0.4 },
+	{ id: "fog-far",          format: v => `${v.toFixed(0)}`,       sens: 2 },
+	{ id: "ao-intensity",     format: v => `${v.toFixed(1)}`,       sens: 0.08 },
+	{ id: "ao-radius",        format: v => `${v.toFixed(2)}`,       sens: 0.04 },
+	{ id: "ao-falloff",       format: v => `${v.toFixed(2)}`,       sens: 0.004 },
+	{ id: "ao-samples",       format: v => `${v.toFixed(0)}`,       sens: 0.24 },
+	{ id: "ao-denoise",       format: v => `${v.toFixed(0)}`,       sens: 0.06 },
+	{ id: "duration",         format: v => `${v.toFixed(1)}s`,      sens: 0.04 },
+	{ id: "fps",              format: v => `${v.toFixed(0)}`,       sens: 0.2 },
+	{ id: "mp-video-opacity", format: v => `${v.toFixed(0)}%`,      sens: 0.4 },
+	{ id: "mp-video-blur",    format: v => `${v.toFixed(0)}`,       sens: 0.16 },
+].forEach(cfg => {
+	const el = document.getElementById(cfg.id);
+	if (el) enhanceRangeAsDrag(el, cfg);
+});
 
 // ── Object inspector (right panel) ─────────────────────────────────
 const objColorInput = document.getElementById("obj-color");
@@ -10672,26 +11170,53 @@ function collectSidedMaterials(obj) {
 	return out;
 }
 
+// Header label for the Object pane. Multi-select swaps in a "SELECTION · N"
+// kicker so it's obvious that edits will fan out to the whole set instead of
+// just the primary object.
+function objectPaneLabel(obj) {
+	if (selectionSet.size > 1) return `SELECTION · ${selectionSet.size}`;
+	if (!obj) return "Object";
+	return obj.name || obj.userData?.primKind || "Object";
+}
+
 function setObjAxis(prop, axis, v) {
 	if (!selected) return;
-	selected[prop][axis] = v;
-	if (prop === "rotation") selected.rotation.set(selected.rotation.x, selected.rotation.y, selected.rotation.z);
+	// Multi-select drives every member by the same delta — primary lands at
+	// `v`, and everyone else shifts by `(v - primary.current)`. Additive on
+	// scale is fine for uniform group grow/shrink (multiplicative would be
+	// more "natural" but is a bigger UX call for a follow-up).
+	if (selectionSet.size > 1) {
+		const delta = v - selected[prop][axis];
+		for (const o of selectionSet) {
+			o[prop][axis] += delta;
+			if (prop === "rotation") o.rotation.set(o.rotation.x, o.rotation.y, o.rotation.z);
+		}
+	} else {
+		selected[prop][axis] = v;
+		if (prop === "rotation") selected.rotation.set(selected.rotation.x, selected.rotation.y, selected.rotation.z);
+	}
 	// Numeric drag fields bypass TransformControls, so my objectChange hooks
 	// don't catch them. Re-run the scatter rebuild here so scaling the
 	// container (via typed value OR field drag) keeps instance world-size
 	// uniform — otherwise a Y=2.57 container leaves the spheres stretched.
-	if (prop === "scale" && selected.userData?.primKind === "scatter") {
-		rebuildScatterInstances(selected);
+	// Iterate the full targets set so multi-select drags rebuild every
+	// moved container, not just the primary.
+	const targets = selectionSet.size > 1 ? Array.from(selectionSet) : [selected];
+	for (const o of targets) {
+		if (prop === "scale" && o.userData?.primKind === "scatter") {
+			rebuildScatterInstances(o);
+		}
 	}
 	// Source-scale bakes into instance matrices; surface transforms flow
 	// through localToWorld each rebuild. Both need a rebuild when their
 	// referenced object changes via numeric fields.
 	if (prop === "scale" || prop === "position" || prop === "rotation") {
+		const movedNames = new Set(targets.map(o => o.name));
 		for (const s of scatterSystems) {
 			const cfg = s.userData?.scatterFx?.config;
 			if (!cfg) continue;
-			const isSource = cfg.sourceName === selected.name && prop === "scale";
-			const isSurface = cfg.surfaceName === selected.name;
+			const isSource = movedNames.has(cfg.sourceName) && prop === "scale";
+			const isSurface = movedNames.has(cfg.surfaceName);
 			if (isSource || isSurface) rebuildScatterInstances(s);
 		}
 	}
@@ -10880,21 +11405,32 @@ objTextureBtn.addEventListener("click", () => {
 });
 
 
+// Snapshot the scene BEFORE the color picker opens so Ctrl+Z rewinds the
+// whole color-edit burst as one step. The color input fires "input" continuously
+// while the picker is being dragged — snapshotting on every input would flood
+// the stack, so we snapshot once on focus (dedup skips it if nothing changed
+// upstream) and let the burst update the material live.
+objColorInput.addEventListener("focusin", () => { try { snapshotForUndo(); } catch {} });
+objColorInput.addEventListener("pointerdown", () => { try { snapshotForUndo(); } catch {} });
 objColorInput.addEventListener("input", e => {
 	if (!selected) return;
-	// Splats route through the SplatEdit color pipeline (tint via MULTIPLY, or
-	// SET_RGB when Texture is off). Meshes use the standard material.color path.
-	if (selected.userData?.primKind === "splat") {
-		selected.userData._splatTintHex = e.target.value;
-		applySplatColorState(selected);
-		refreshOutliner();
-		return;
+	// Multi-select fans the color across every member so the swatch reads as
+	// "set colour of the whole selection" instead of just the primary.
+	const targets = selectionSet.size > 1 ? Array.from(selectionSet) : [selected];
+	const hex = e.target.value;
+	for (const obj of targets) {
+		// Splats route through the SplatEdit color pipeline (tint via MULTIPLY, or
+		// SET_RGB when Texture is off). Meshes use the standard material.color path.
+		if (obj.userData?.primKind === "splat") {
+			obj.userData._splatTintHex = hex;
+			applySplatColorState(obj);
+			continue;
+		}
+		// Broadcast across every color-bearing material so imports (whose colors
+		// live on child meshes) get tinted too, not just top-level primitives.
+		const mats = collectColorMaterials(obj);
+		for (const m of mats) m.color.setStyle(hex);
 	}
-	// Broadcast across every color-bearing material so imports (whose colors
-	// live on child meshes) get tinted too, not just top-level primitives.
-	const mats = collectColorMaterials(selected);
-	if (!mats.length) return;
-	for (const m of mats) m.color.setStyle(e.target.value);
 	refreshOutliner();
 });
 objColorInput.addEventListener("change", () => saveScene?.());
@@ -10902,9 +11438,13 @@ objColorInput.addEventListener("change", () => saveScene?.());
 objDoubleSided.addEventListener("change", () => {
 	if (!selected) return;
 	const side = objDoubleSided.checked ? THREE.DoubleSide : THREE.FrontSide;
-	for (const m of collectSidedMaterials(selected)) {
-		m.side = side;
-		m.needsUpdate = true;
+	// Multi-select fans the flag across every member — same intent as color.
+	const targets = selectionSet.size > 1 ? Array.from(selectionSet) : [selected];
+	for (const obj of targets) {
+		for (const m of collectSidedMaterials(obj)) {
+			m.side = side;
+			m.needsUpdate = true;
+		}
 	}
 	saveScene?.();
 });
@@ -11455,14 +11995,36 @@ const bgImageBtn = document.getElementById("bg-image-btn");
 const bgImageFile = document.getElementById("bg-image-file");
 const bgImageThumb = document.getElementById("bg-image-thumb");
 const bgImageLabel = document.getElementById("bg-image-label");
+const bgVideoBtn = document.getElementById("bg-video-btn");
+const bgVideoFile = document.getElementById("bg-video-file");
+const bgVideoThumb = document.getElementById("bg-video-thumb");
+const bgVideoLabel = document.getElementById("bg-video-label");
 const canvasBgLayer = document.getElementById("canvas-bg-layer");
+const canvasBgVideo = document.getElementById("canvas-bg-video");
 const bgBlurInput = document.getElementById("bg-blur");
 const bgBlurVal = document.getElementById("bg-blur-val");
 const bgBlurRow = document.getElementById("bg-blur-row");
+const bgOpacityInput = document.getElementById("bg-opacity");
+const bgOpacityVal = document.getElementById("bg-opacity-val");
+const bgOpacityRow = document.getElementById("bg-opacity-row");
+const bgBlurOpacityPair = document.getElementById("bg-blur-opacity-pair");
+const bgOffsetXInput = document.getElementById("bg-offset-x");
+const bgOffsetXVal = document.getElementById("bg-offset-x-val");
+const bgOffsetYInput = document.getElementById("bg-offset-y");
+const bgOffsetYVal = document.getElementById("bg-offset-y-val");
+const bgOffsetPair = document.getElementById("bg-offset-pair");
+const bgScaleInput = document.getElementById("bg-scale");
+const bgScaleVal = document.getElementById("bg-scale-val");
+const bgScaleRow = document.getElementById("bg-scale-row");
 
-let bgMode = "color"; // "color" | "image"
-let bgImage = null;   // { assetId, ext } | null
-let bgBlur = 0;       // 0–40 px, applied via CSS filter to canvasBgLayer
+let bgMode = "color";  // "color" | "image" | "video"
+let bgImage = null;    // { assetId, ext } | null
+let bgVideo = null;    // { assetId, ext } | null
+let bgBlur = 0;        // 0–40 px, applied via CSS filter to the active bg layer
+let bgOpacity = 100;   // 0–100 %, applied via CSS opacity to the active bg layer
+let bgOffsetX = 0;     // pixel offset, applied via CSS transform translate
+let bgOffsetY = 0;     // pixel offset, applied via CSS transform translate
+let bgScale = 100;     // % of natural cover size; 100 = default, 200 = 2× zoom
 
 const DEFAULT_BG_GRADIENT =
 	"radial-gradient(ellipse 80% 60% at 50% 35%, rgba(60,80,110,0.18), transparent 70%)," +
@@ -11475,6 +12037,12 @@ function applyBgColor(hex) {
 	canvasBgLayer.classList.remove("active");
 	canvasBgLayer.style.backgroundImage = "";
 	canvasBgLayer.style.filter = "";
+	canvasBgLayer.style.transform = "";
+	canvasBgVideo.classList.remove("active");
+	canvasBgVideo.pause?.();
+	canvasBgVideo.removeAttribute("src");
+	canvasBgVideo.style.filter = "";
+	canvasBgVideo.style.transform = "";
 }
 
 function applyBgImage(url) {
@@ -11483,35 +12051,114 @@ function applyBgImage(url) {
 	renderer.setClearColor(0x000000, 0);
 	canvasWrap.style.backgroundImage = "none";
 	canvasWrap.style.backgroundColor = "#000";
+	// Make sure the video layer isn't fighting for the same slot.
+	canvasBgVideo.classList.remove("active");
+	canvasBgVideo.pause?.();
+	canvasBgVideo.removeAttribute("src");
 	if (url) {
 		canvasBgLayer.classList.add("active");
 		canvasBgLayer.style.backgroundImage = `url("${url}")`;
 		canvasBgLayer.style.filter = bgBlur > 0 ? `blur(${bgBlur}px)` : "";
+		canvasBgLayer.style.opacity = String(bgOpacity / 100);
+		canvasBgLayer.style.transform = `translate(${bgOffsetX}px, ${bgOffsetY}px) scale(${bgScale / 100})`;
 	} else {
 		canvasBgLayer.classList.remove("active");
 		canvasBgLayer.style.backgroundImage = "";
 		canvasBgLayer.style.filter = "";
+		canvasBgLayer.style.opacity = "";
+		canvasBgLayer.style.transform = "";
 	}
 }
 
-function refreshBgBlurUI() {
-	// Blur only makes sense when an image is showing.
-	const show = bgMode === "image" && !!bgImage;
-	if (bgBlurRow) bgBlurRow.hidden = !show;
+function applyBgVideo(url) {
+	renderer.setClearColor(0x000000, 0);
+	canvasWrap.style.backgroundImage = "none";
+	canvasWrap.style.backgroundColor = "#000";
+	// Image layer off so the two backgrounds don't stack.
+	canvasBgLayer.classList.remove("active");
+	canvasBgLayer.style.backgroundImage = "";
+	canvasBgLayer.style.filter = "";
+	if (url) {
+		canvasBgVideo.classList.add("active");
+		if (canvasBgVideo.src !== url) {
+			canvasBgVideo.src = url;
+			canvasBgVideo.load();
+		}
+		canvasBgVideo.style.filter = bgBlur > 0 ? `blur(${bgBlur}px)` : "";
+		canvasBgVideo.style.opacity = String(bgOpacity / 100);
+		canvasBgVideo.style.transform = `translate(${bgOffsetX}px, ${bgOffsetY}px) scale(${bgScale / 100})`;
+		// Sync to the current playhead so opening a project (or swapping the file)
+		// doesn't leave the video frozen at frame 0 while the transport says 4s.
+		syncBgVideoToPlayhead();
+		// Match playback state to the transport — playing when previewing, otherwise
+		// paused so the frame reflects the manually-parked playhead.
+		if (isPlayingPreview) canvasBgVideo.play?.().catch(() => {});
+		else canvasBgVideo.pause?.();
+	} else {
+		canvasBgVideo.classList.remove("active");
+		canvasBgVideo.pause?.();
+		canvasBgVideo.removeAttribute("src");
+		canvasBgVideo.style.filter = "";
+		canvasBgVideo.style.opacity = "";
+		canvasBgVideo.style.transform = "";
+	}
+}
+
+// Playhead is 0..1 over the scene duration. We map it linearly across the video's
+// full duration so scrubbing the transport plays the whole clip end-to-end
+// regardless of scene length.
+function syncBgVideoToPlayhead() {
+	if (bgMode !== "video" || !bgVideo) return;
+	const dur = canvasBgVideo.duration;
+	if (!isFinite(dur) || dur <= 0) return;
+	const target = playhead * dur;
+	if (Math.abs(canvasBgVideo.currentTime - target) > 0.05) {
+		try { canvasBgVideo.currentTime = target; } catch {}
+	}
+}
+
+function refreshBgSliderUI() {
+	// All BG image/video controls only make sense when an asset is showing.
+	const show = (bgMode === "image" && !!bgImage) || (bgMode === "video" && !!bgVideo);
+	// Pair/row wrappers are the visibility gates — hiding the inner rows
+	// individually would leave one child of a pair taking the full width
+	// until the other returned. Toggling the wrapper keeps the layout intact.
+	if (bgBlurOpacityPair) bgBlurOpacityPair.hidden = !show;
+	if (bgOffsetPair) bgOffsetPair.hidden = !show;
+	if (bgScaleRow) bgScaleRow.hidden = !show;
 	if (bgBlurInput) bgBlurInput.value = String(bgBlur);
 	if (bgBlurVal) bgBlurVal.textContent = String(bgBlur);
-	if (canvasBgLayer && show) {
-		canvasBgLayer.style.filter = bgBlur > 0 ? `blur(${bgBlur}px)` : "";
+	if (bgOpacityInput) bgOpacityInput.value = String(bgOpacity);
+	if (bgOpacityVal) bgOpacityVal.textContent = String(bgOpacity);
+	if (bgOffsetXInput) bgOffsetXInput.value = String(bgOffsetX);
+	if (bgOffsetXVal) bgOffsetXVal.textContent = String(bgOffsetX);
+	if (bgOffsetYInput) bgOffsetYInput.value = String(bgOffsetY);
+	if (bgOffsetYVal) bgOffsetYVal.textContent = String(bgOffsetY);
+	if (bgScaleInput) bgScaleInput.value = String(bgScale);
+	if (bgScaleVal) bgScaleVal.textContent = String(bgScale);
+	// Apply live so tweaking a slider updates the visible layer without re-running
+	// the whole applyBgMode pipeline.
+	const target = bgMode === "video" ? canvasBgVideo : canvasBgLayer;
+	if (target && show) {
+		target.style.filter = bgBlur > 0 ? `blur(${bgBlur}px)` : "";
+		target.style.opacity = String(bgOpacity / 100);
+		// Transform = translate (position) + scale (zoom). transform-origin defaults
+		// to center, so scale zooms from the middle of the frame — pairs naturally
+		// with translate for framing the asset within the viewport.
+		const s = bgScale / 100;
+		target.style.transform = `translate(${bgOffsetX}px, ${bgOffsetY}px) scale(${s})`;
 	}
 }
 
-function bgImageUrl(img) {
-	if (!img) return null;
-	return `/comfyblockout/asset/${encodeURIComponent(NODE_ID)}/${encodeURIComponent(img.assetId)}.${img.ext}`;
+function bgAssetUrl(asset) {
+	if (!asset) return null;
+	return `/comfyblockout/asset/${encodeURIComponent(NODE_ID)}/${encodeURIComponent(asset.assetId)}.${asset.ext}`;
 }
+// Back-compat alias — a few callers still spell this bgImageUrl.
+const bgImageUrl = bgAssetUrl;
 
 function refreshBgImageUI() {
-	const url = bgImageUrl(bgImage);
+	const url = bgAssetUrl(bgImage);
 	const clearBtn = document.getElementById("bg-image-clear");
 	if (url) {
 		bgImageThumb.style.backgroundImage = `url("${url}")`;
@@ -11524,15 +12171,30 @@ function refreshBgImageUI() {
 		bgImageBtn.classList.remove("has-image");
 		if (clearBtn) clearBtn.hidden = true;
 	}
+	const vurl = bgAssetUrl(bgVideo);
+	const vclearBtn = document.getElementById("bg-video-clear");
+	if (vurl) {
+		bgVideoThumb.classList.add("has-image");
+		bgVideoBtn.classList.add("has-image");
+		if (vclearBtn) vclearBtn.hidden = false;
+	} else {
+		bgVideoThumb.classList.remove("has-image");
+		bgVideoBtn.classList.remove("has-image");
+		if (vclearBtn) vclearBtn.hidden = true;
+	}
 	bgImageLabel.textContent = "Image";
+	bgVideoLabel.textContent = "Video";
 	bgColorBtn.classList.toggle("active-bg", bgMode === "color");
 	bgImageBtn.classList.toggle("active-bg", bgMode === "image");
-	refreshBgBlurUI();
+	bgVideoBtn.classList.toggle("active-bg", bgMode === "video");
+	refreshBgSliderUI();
 }
 
 function applyBgMode() {
 	if (bgMode === "image" && bgImage) {
-		applyBgImage(bgImageUrl(bgImage));
+		applyBgImage(bgAssetUrl(bgImage));
+	} else if (bgMode === "video" && bgVideo) {
+		applyBgVideo(bgAssetUrl(bgVideo));
 	} else {
 		bgMode = "color";
 		applyBgColor(bgColorInput.value);
@@ -11577,6 +12239,10 @@ bgImageFile.addEventListener("change", async () => {
 		const buf = await f.arrayBuffer();
 		const { assetId, ext } = await uploadAsset(f.name, buf);
 		bgImage = { assetId, ext };
+		// Image + video are mutually exclusive — picking one replaces the other
+		// so the chip that isn't loaded reads as empty (no lingering × on the
+		// other chip, no phantom asset in state).
+		bgVideo = null;
 		bgMode = "image";
 		applyBgMode();
 		saveScene?.();
@@ -11585,12 +12251,71 @@ bgImageFile.addEventListener("change", async () => {
 		alert(`Background image upload failed: ${err.message || err}`);
 	}
 });
+bgVideoBtn?.addEventListener("click", () => bgVideoFile.click());
+document.getElementById("bg-video-clear")?.addEventListener("click", e => {
+	e.stopPropagation();
+	if (!bgVideo) return;
+	bgVideo = null;
+	bgMode = "color";
+	applyBgMode();
+	saveScene?.();
+});
+bgVideoFile?.addEventListener("change", async () => {
+	const f = bgVideoFile.files?.[0];
+	bgVideoFile.value = "";
+	if (!f) return;
+	try {
+		const buf = await f.arrayBuffer();
+		const { assetId, ext } = await uploadAsset(f.name, buf);
+		bgVideo = { assetId, ext };
+		// Mutually exclusive with image — see the sibling handler for the why.
+		bgImage = null;
+		bgMode = "video";
+		applyBgMode();
+		saveScene?.();
+	} catch (err) {
+		console.error("[bg-video] upload failed", err);
+		alert(`Background video upload failed: ${err.message || err}`);
+	}
+});
 bgBlurInput?.addEventListener("input", e => {
 	bgBlur = parseInt(e.target.value, 10) || 0;
 	if (bgBlurVal) bgBlurVal.textContent = String(bgBlur);
-	if (canvasBgLayer) canvasBgLayer.style.filter = bgBlur > 0 ? `blur(${bgBlur}px)` : "";
+	refreshBgSliderUI();
 });
 bgBlurInput?.addEventListener("change", () => saveScene?.());
+bgOpacityInput?.addEventListener("input", e => {
+	bgOpacity = parseInt(e.target.value, 10);
+	if (!isFinite(bgOpacity)) bgOpacity = 100;
+	bgOpacity = Math.max(0, Math.min(100, bgOpacity));
+	if (bgOpacityVal) bgOpacityVal.textContent = String(bgOpacity);
+	refreshBgSliderUI();
+});
+bgOpacityInput?.addEventListener("change", () => saveScene?.());
+bgOffsetXInput?.addEventListener("input", e => {
+	bgOffsetX = parseInt(e.target.value, 10) || 0;
+	if (bgOffsetXVal) bgOffsetXVal.textContent = String(bgOffsetX);
+	refreshBgSliderUI();
+});
+bgOffsetXInput?.addEventListener("change", () => saveScene?.());
+bgOffsetYInput?.addEventListener("input", e => {
+	bgOffsetY = parseInt(e.target.value, 10) || 0;
+	if (bgOffsetYVal) bgOffsetYVal.textContent = String(bgOffsetY);
+	refreshBgSliderUI();
+});
+bgOffsetYInput?.addEventListener("change", () => saveScene?.());
+bgScaleInput?.addEventListener("input", e => {
+	bgScale = parseInt(e.target.value, 10);
+	if (!isFinite(bgScale) || bgScale <= 0) bgScale = 100;
+	bgScale = Math.max(10, Math.min(500, bgScale));
+	if (bgScaleVal) bgScaleVal.textContent = String(bgScale);
+	refreshBgSliderUI();
+});
+bgScaleInput?.addEventListener("change", () => saveScene?.());
+
+// When the video reports it has enough data to play, snap it to the current
+// playhead so opening a project doesn't leave the video stuck on frame 0.
+canvasBgVideo?.addEventListener("loadeddata", syncBgVideoToPlayhead);
 
 
 function frameScene() {
@@ -11812,14 +12537,36 @@ function updateAspectFrame() {
 	// is kept only as an optional thin border sitting exactly on the canvas edges — toggled
 	// by the AR button. No more inset rectangle drifting from where the crop will be.
 	const asp = currentAspect();
-	if (!asp || !arVisible) { aspectFrame.style.display = "none"; return; }
 	const fit = fitDimensions();
 	const vs = viewportSize();
-	aspectFrame.style.display = "block";
-	aspectFrame.style.width = fit.w + "px";
-	aspectFrame.style.height = fit.h + "px";
-	aspectFrame.style.left = (vs.w - fit.w) / 2 + "px";
-	aspectFrame.style.top = (vs.h - fit.h) / 2 + "px";
+	if (asp && arVisible) {
+		aspectFrame.style.display = "block";
+		aspectFrame.style.width = fit.w + "px";
+		aspectFrame.style.height = fit.h + "px";
+		aspectFrame.style.left = (vs.w - fit.w) / 2 + "px";
+		aspectFrame.style.top = (vs.h - fit.h) / 2 + "px";
+	} else {
+		aspectFrame.style.display = "none";
+	}
+	// BG image + video track the aspect-fit rectangle exactly so live preview
+	// and the model-facing snapshot see the same crop. No slop — the previous
+	// -60px overhang cover-fit the source against a larger target, producing
+	// a slightly different crop live vs. snapshot. Falls back to full viewport
+	// size when no aspect is selected (fitDimensions returns viewport size).
+	const bgLeft = (vs.w - fit.w) / 2;
+	const bgTop = (vs.h - fit.h) / 2;
+	if (canvasBgLayer) {
+		canvasBgLayer.style.left = bgLeft + "px";
+		canvasBgLayer.style.top = bgTop + "px";
+		canvasBgLayer.style.width = fit.w + "px";
+		canvasBgLayer.style.height = fit.h + "px";
+	}
+	if (canvasBgVideo) {
+		canvasBgVideo.style.left = bgLeft + "px";
+		canvasBgVideo.style.top = bgTop + "px";
+		canvasBgVideo.style.width = fit.w + "px";
+		canvasBgVideo.style.height = fit.h + "px";
+	}
 }
 
 aspectSelect.addEventListener("change", () => {
@@ -11843,17 +12590,19 @@ const resultCloseBtn = document.getElementById("result-close");
 // this any time we flip individual pill visibility so the container matches.
 function syncResultToggleContainer() {
 	if (!resultToggle) return;
-	const anyPillVisible = !!(
-		(renderToggleBtn && !renderToggleBtn.hidden) ||
-		(blockoutToggleBtn && !blockoutToggleBtn.hidden) ||
-		(viewportToggleBtn && !viewportToggleBtn.hidden)
-	);
-	resultToggle.hidden = !anyPillVisible;
-	if (resultCloseBtn) resultCloseBtn.hidden = !anyPillVisible;
+	// Viewport + Blockout are always visible now — the pair reads as "what
+	// will be fed to the models" and users want to peek at the blockout
+	// snapshot without having to generate first. The container is therefore
+	// always shown; the close (×) button is only shown once a real render exists.
+	resultToggle.hidden = false;
+	if (resultCloseBtn) {
+		resultCloseBtn.hidden = !(renderToggleBtn && !renderToggleBtn.hidden);
+	}
 }
 
 window.revealBlockoutToggle = function () {
-	if (blockoutToggleBtn) blockoutToggleBtn.hidden = false;
+	// Blockout is always visible now — this is a legacy hook; kept as a no-op
+	// so existing callers don't need to change.
 	syncResultToggleContainer();
 };
 let resultMode = "viewport"; // "viewport" | "blockout" | "render" | "intermediate:<name>"
@@ -12041,19 +12790,53 @@ document.getElementById("result-save-overlay")?.addEventListener("click", () => 
 function wireResultDrag(el) {
 	if (!el) return;
 	el.addEventListener("dragstart", e => {
-		if (!lastResult || resultMode !== "render") { e.preventDefault(); return; }
-		try {
-			e.dataTransfer.setData("application/x-cb-asset", JSON.stringify({
+		// Render mode drags the generated output; Blockout mode drags the
+		// composited snapshot PNG we just uploaded to the server (same file
+		// the models see as input). Viewport mode has no ready image URL yet,
+		// so we don't advertise it as draggable.
+		let payload = null;
+		if (resultMode === "render" && lastResult) {
+			payload = {
 				url: lastResult.url,
 				filename: lastResult.filename,
 				kind: lastResult.kind === "video" ? "video" : "image",
-			}));
+			};
+		} else if (resultMode === "blockout") {
+			// Cache-bust the URL so a fresh drag lands on the latest snapshot even
+			// if the browser previously cached an older one.
+			payload = {
+				url: `/comfyblockout/image/${encodeURIComponent(NODE_ID)}?t=${Date.now()}`,
+				filename: `blockout_${NODE_ID}.png`,
+				kind: "image",
+			};
+		}
+		if (!payload) { e.preventDefault(); return; }
+		try {
+			// clearData() strips the browser's auto-added types (text/uri-list,
+			// text/html, Files) that come from dragging an <img>. Without this,
+			// the file-drop overlay triggers because `Files` shows up in
+			// dataTransfer.types even though the drag is internal.
+			try { e.dataTransfer.clearData(); } catch {}
+			e.dataTransfer.setData("application/x-cb-asset", JSON.stringify(payload));
 			e.dataTransfer.effectAllowed = "copy";
 			document.body.classList.add("dragging-asset");
+			// Custom drag ghost — small amber-framed chip matching the assets-pane
+			// tiles. Overrides the browser's default drag image (which is the
+			// full-size blockout, big and awkward) and blocks the file-drop
+			// overlay heuristic in one move.
+			const ghost = document.createElement("div");
+			ghost.className = "asset-drag-ghost";
+			ghost.innerHTML = payload.kind === "video"
+				? `<video src="${payload.url}" muted preload="metadata"></video>`
+				: `<img src="${payload.url}" alt="">`;
+			document.body.appendChild(ghost);
+			e.dataTransfer.setDragImage(ghost, 28, 28);
+			el._dragGhost = ghost;
 		} catch {}
 	});
 	el.addEventListener("dragend", () => {
 		document.body.classList.remove("dragging-asset");
+		if (el._dragGhost) { el._dragGhost.remove(); el._dragGhost = null; }
 	});
 }
 wireResultDrag(document.getElementById("result-overlay-img"));
@@ -12065,9 +12848,10 @@ wireResultDrag(document.getElementById("result-overlay-vid"));
 function resetResultUI() {
 	lastResult = null;
 	resultMode = "viewport";
+	// Viewport + Blockout stay pinned — resetting the render only hides Render
+	// itself and any intermediate pills. The pair remains as a "what will be
+	// fed to the model" preview surface at all times.
 	if (renderToggleBtn) renderToggleBtn.hidden = true;
-	if (blockoutToggleBtn) blockoutToggleBtn.hidden = true;
-	if (viewportToggleBtn) viewportToggleBtn.hidden = true;
 	clearIntermediateButtons();
 	syncResultToggleContainer();
 	applyResultMode?.();
@@ -12204,9 +12988,11 @@ window.addEventListener("keydown", (e) => {
 	else if (e.key === "e") setActiveMode("rotate");
 	else if (e.key === "r") setActiveMode("scale");
 	else if (e.key === "q") togglePivotMode();
-	else if (e.key === "s") {
+	else if (e.key === "s" && !(e.ctrlKey || e.metaKey)) {
 		// Mirrors the + button in the transport: key the selected object's pos/rot/scale,
 		// or the render camera when nothing (or renderCam itself) is selected.
+		// Modifier guard so Ctrl+S / Cmd+S falls through to the project-save
+		// shortcut instead of also stamping a stray keyframe.
 		if (selected && selected !== renderCam) addObjectKeyframe(selected);
 		else addKeyframe();
 	}
@@ -12245,12 +13031,27 @@ window.addEventListener("keydown", (e) => {
 	}
 	else if (e.key === "d" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); duplicateObject(selected); }
 	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+		// Defer to the browser's native copy when the user has an actual text
+		// selection — otherwise Ctrl+C on highlighted agent log text (or any
+		// selectable text outside a form control) can't reach the clipboard
+		// because we'd hijack it for the scene-object clipboard.
+		const sel = window.getSelection?.();
+		if (sel && sel.toString().length > 0) return;
 		e.preventDefault();
 		copySelectedToClipboard();
 	}
 	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "x") {
+		// Same rationale as Ctrl+C — don't cut the scene clipboard when the
+		// user's real intent is to cut text they've selected in a plain div.
+		const sel = window.getSelection?.();
+		if (sel && sel.toString().length > 0) return;
 		e.preventDefault();
-		if (copySelectedToClipboard()) deleteObject(selected);
+		if (copySelectedToClipboard()) {
+			// Snapshot the set first — deleteObject mutates the selection state, so
+			// iterating the live selectionSet would skip entries.
+			const victims = selectionSet.size ? Array.from(selectionSet) : (selected ? [selected] : []);
+			for (const o of victims) deleteObject(o);
+		}
 	}
 	else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "v") {
 		e.preventDefault();
@@ -12266,41 +13067,59 @@ window.addEventListener("keydown", (e) => {
 	}
 });
 
-// In-editor clipboard for objects. Stores a snapshot — not a live reference — so a
-// later cut/delete of the source can't invalidate a paste. Primitives round-trip via
-// PRIM_DEFS; imports aren't covered here (would need an asset-aware clone path).
+// In-editor clipboard for objects. Stores an array of snapshots — not live
+// references — so a later cut/delete of the source can't invalidate a paste.
+// Primitives round-trip via PRIM_DEFS; imports aren't covered here (would need
+// an asset-aware clone path).
 let objectClipboard = null;
-function copySelectedToClipboard() {
-	if (!selected) { updateStatus("nothing to copy"); return false; }
-	const kind = selected.userData?.primKind;
-	if (!kind || !(kind in PRIM_DEFS)) { updateStatus("can only copy blocks (imports not supported)"); return false; }
-	objectClipboard = {
+function snapshotPrimitiveFor(obj) {
+	const kind = obj?.userData?.primKind;
+	if (!kind || !(kind in PRIM_DEFS)) return null;
+	return {
 		kind,
-		position: selected.position.toArray(),
-		rotation: [selected.rotation.x, selected.rotation.y, selected.rotation.z],
-		scale: selected.scale.toArray(),
-		color: selected.material?.color?.getHex?.() ?? 0xffffff,
-		visible: selected.visible !== false,
+		position: obj.position.toArray(),
+		rotation: [obj.rotation.x, obj.rotation.y, obj.rotation.z],
+		scale: obj.scale.toArray(),
+		color: obj.material?.color?.getHex?.() ?? 0xffffff,
+		visible: obj.visible !== false,
 	};
-	updateStatus("copied");
+}
+function copySelectedToClipboard() {
+	// Prefer the full selection set so multi-select copies every member; fall
+	// back to `selected` when the set is somehow empty but a primary exists.
+	const sources = selectionSet.size
+		? Array.from(selectionSet)
+		: (selected ? [selected] : []);
+	if (!sources.length) { updateStatus("nothing to copy"); return false; }
+	const snaps = sources.map(snapshotPrimitiveFor).filter(Boolean);
+	if (!snaps.length) { updateStatus("can only copy blocks (imports not supported)"); return false; }
+	objectClipboard = snaps;
+	updateStatus(snaps.length === 1 ? "copied" : `copied ${snaps.length}`);
 	return true;
 }
 function pasteFromClipboard() {
-	if (!objectClipboard) { updateStatus("nothing in clipboard"); return; }
-	const mesh = addPrimitive(objectClipboard.kind);
-	if (!mesh) return;
-	// Paste in place — the pasted object sits exactly on top of the source. The user
-	// gets it pre-selected with the translate gizmo so dragging immediately separates it.
-	mesh.position.fromArray(objectClipboard.position);
-	mesh.rotation.set(objectClipboard.rotation[0], objectClipboard.rotation[1], objectClipboard.rotation[2]);
-	mesh.scale.fromArray(objectClipboard.scale);
-	mesh.material.color.setHex(objectClipboard.color);
-	mesh.visible = objectClipboard.visible;
-	select(mesh);
+	if (!objectClipboard || !objectClipboard.length) { updateStatus("nothing in clipboard"); return; }
+	// Paste in place — each copy sits on top of its source. The whole set becomes
+	// the active selection so the translate gizmo can immediately drag them all
+	// as a group (multi-select drag handling elsewhere moves the set together).
+	const created = [];
+	for (const snap of objectClipboard) {
+		const mesh = addPrimitive(snap.kind);
+		if (!mesh) continue;
+		mesh.position.fromArray(snap.position);
+		mesh.rotation.set(snap.rotation[0], snap.rotation[1], snap.rotation[2]);
+		mesh.scale.fromArray(snap.scale);
+		mesh.material.color.setHex(snap.color);
+		mesh.visible = snap.visible;
+		created.push(mesh);
+	}
+	if (!created.length) return;
+	select(created[0]);
+	for (let i = 1; i < created.length; i++) select(created[i], { additive: true });
 	setActiveMode("translate");
 	refreshOutliner();
 	saveScene();
-	updateStatus("pasted");
+	updateStatus(created.length === 1 ? "pasted" : `pasted ${created.length}`);
 }
 
 // Compute the largest aspect-fit rectangle inside the wrap. When an aspect ratio is
@@ -12348,11 +13167,15 @@ const dropOverlay = document.getElementById("drop-overlay");
 let dragDepth = 0;
 // Only show the "Drop GLB · FBX · …" overlay for actual OS file drags. Internal asset-tile
 // drags from the Assets pane set their own MIME (application/x-cb-asset) and target the
-// Outliner / module reference slots — they must NOT trigger the import flow.
+// Outliner / module reference slots — they must NOT trigger the import flow. Dragging an
+// <img> (like the Blockout / Render overlay) makes Chrome auto-add a `Files` entry even
+// though the drag is internal, so we also short-circuit when our custom MIME is present.
 function isFileDrag(e) {
 	const types = e.dataTransfer?.types;
 	if (!types) return false;
-	return Array.from(types).includes("Files");
+	const arr = Array.from(types);
+	if (arr.includes("application/x-cb-asset")) return false;
+	return arr.includes("Files");
 }
 window.addEventListener("dragenter", e => {
 	if (!isFileDrag(e)) return;
@@ -12961,6 +13784,10 @@ function setPlayhead(t) {
 	// No-op for objects without keys, so this is free for static scenes.
 	applyObjectsAt(playhead);
 	refreshPlayheadActiveOnKeys();
+	// Video BG follows the transport — mapped playhead 0..1 → video 0..duration.
+	// During live playback the <video> element is play()'d, so we only nudge
+	// currentTime on scrubs and paused steps to avoid fighting its own clock.
+	if (bgMode === "video" && bgVideo && !isPlayingPreview) syncBgVideoToPlayhead();
 	// Persist manual scrubs so closing the editor lands on the same frame later.
 	// Skipped during playback (saveScene runs on stop instead) and during scene
 	// restore. try/catch swallows the boot-time TDZ on saveSceneDebounced/recording
@@ -13476,6 +14303,11 @@ async function playPreview() {
 	if (isPlayingPreview) return;
 	const hasCameraTween = keyframes.length >= 2;
 	isPlayingPreview = true;
+	// Kick off BG video playback in sync with the preview transport.
+	if (bgMode === "video" && bgVideo) {
+		syncBgVideoToPlayhead();
+		canvasBgVideo.play?.().catch(() => {});
+	}
 	// Playback respects the current view: Scene view keeps you watching the overview
 	// (with the renderCam wireframe animating alongside object animation), Camera view
 	// looks through the shot. applyCameraState always mutates renderCam so keyframes
@@ -13530,12 +14362,14 @@ async function playPreview() {
 	isPlayingPreview = false;
 	tlPlay.classList.remove("active");
 	setMixersPlaying(false);
+	if (bgMode === "video" && bgVideo) canvasBgVideo.pause?.();
 	// Persist playhead so closing + reopening the editor lands on the pause frame.
 	saveSceneDebounced?.();
 }
 function stopPreview() {
 	isPlayingPreview = false;
 	setMixersPlaying(false);
+	if (bgMode === "video" && bgVideo) canvasBgVideo.pause?.();
 	saveSceneDebounced?.();
 }
 
@@ -13851,6 +14685,7 @@ function serializeScene() {
 			color: o.material?.color?.getHex?.() ?? 0xffffff,
 			doubleSided: o.material?.side === THREE.DoubleSide ? true : undefined,
 			visible: o.visible !== false,
+			locked: o.userData.locked || undefined,
 			notes: o.userData.notes || undefined,
 			refImage: o.userData.refImage || undefined,
 			keyframes: serializeObjectKeyframes(o),
@@ -13865,6 +14700,7 @@ function serializeScene() {
 			scale: o.scale.toArray(),
 			quaternion: [o.quaternion.x, o.quaternion.y, o.quaternion.z, o.quaternion.w],
 			visible: o.visible !== false,
+			locked: o.userData.locked || undefined,
 			notes: o.userData.notes || undefined,
 			refImage: o.userData.refImage || undefined,
 			textureHidden: o.userData._textureVisible === false || undefined,
@@ -13900,6 +14736,7 @@ function serializeScene() {
 			rotation: [o.rotation.x, o.rotation.y, o.rotation.z],
 			scale: o.scale.toArray(),
 			visible: o.visible !== false,
+			locked: o.userData.locked || undefined,
 			notes: o.userData.notes || undefined,
 			config: o.userData.particleSystem.config,
 			keyframes: serializeObjectKeyframes(o),
@@ -13910,6 +14747,7 @@ function serializeScene() {
 			rotation: [o.rotation.x, o.rotation.y, o.rotation.z],
 			scale: o.scale.toArray(),
 			visible: o.visible !== false,
+			locked: o.userData.locked || undefined,
 			notes: o.userData.notes || undefined,
 			config: o.userData.cloudsFx.config,
 			keyframes: serializeObjectKeyframes(o),
@@ -13920,6 +14758,7 @@ function serializeScene() {
 			rotation: [o.rotation.x, o.rotation.y, o.rotation.z],
 			scale: o.scale.toArray(),
 			visible: o.visible !== false,
+			locked: o.userData.locked || undefined,
 			notes: o.userData.notes || undefined,
 			config: o.userData.scatterFx.config,
 			keyframes: serializeObjectKeyframes(o),
@@ -13956,7 +14795,12 @@ function serializeScene() {
 			bg: bgColorInput.value,
 			bgMode,
 			bgImage,
+			bgVideo,
 			bgBlur,
+			bgOpacity,
+			bgOffsetX,
+			bgOffsetY,
+			bgScale,
 			ar: arVisible,
 		},
 		trim: { start: trimStart, end: trimEnd },
@@ -13998,6 +14842,7 @@ async function deserializeScene(state, opts = {}) {
 			mesh.material.needsUpdate = true;
 		}
 		if (p.visible === false) mesh.visible = false;
+		if (p.locked) mesh.userData.locked = true;
 		if (p.notes) mesh.userData.notes = p.notes;
 		if (p.refImage) mesh.userData.refImage = p.refImage;
 		if (Array.isArray(p.keyframes)) mesh.userData.keyframes = deserializeObjectKeyframes(p.keyframes);
@@ -14023,6 +14868,7 @@ async function deserializeScene(state, opts = {}) {
 			});
 			const obj = objects[objects.length - 1];
 			if (obj && im.visible === false) obj.visible = false;
+			if (obj && im.locked) obj.userData.locked = true;
 			if (obj && im.notes) obj.userData.notes = im.notes;
 			if (obj && im.refImage) obj.userData.refImage = im.refImage;
 			if (obj && Array.isArray(im.keyframes)) obj.userData.keyframes = deserializeObjectKeyframes(im.keyframes);
@@ -14094,6 +14940,7 @@ async function deserializeScene(state, opts = {}) {
 		if (pp.rotation) obj.rotation.set(pp.rotation[0], pp.rotation[1], pp.rotation[2]);
 		if (pp.scale) obj.scale.fromArray(pp.scale);
 		if (pp.visible === false) obj.visible = false;
+		if (pp.locked) obj.userData.locked = true;
 		if (pp.notes) obj.userData.notes = pp.notes;
 		if (pp.config?.image) applyParticleImage(obj, pp.config.image);
 		if (Array.isArray(pp.keyframes)) obj.userData.keyframes = deserializeObjectKeyframes(pp.keyframes);
@@ -14106,6 +14953,7 @@ async function deserializeScene(state, opts = {}) {
 		if (cc.rotation) obj.rotation.set(cc.rotation[0], cc.rotation[1], cc.rotation[2]);
 		if (cc.scale) obj.scale.fromArray(cc.scale);
 		if (cc.visible === false) obj.visible = false;
+		if (cc.locked) obj.userData.locked = true;
 		if (cc.notes) obj.userData.notes = cc.notes;
 		if (Array.isArray(cc.keyframes)) obj.userData.keyframes = deserializeObjectKeyframes(cc.keyframes);
 		syncCloudsUniforms(obj);
@@ -14120,6 +14968,7 @@ async function deserializeScene(state, opts = {}) {
 		if (sc.rotation) obj.rotation.set(sc.rotation[0], sc.rotation[1], sc.rotation[2]);
 		if (sc.scale) obj.scale.fromArray(sc.scale);
 		if (sc.visible === false) obj.visible = false;
+		if (sc.locked) obj.userData.locked = true;
 		if (sc.notes) obj.userData.notes = sc.notes;
 		if (Array.isArray(sc.keyframes)) obj.userData.keyframes = deserializeObjectKeyframes(sc.keyframes);
 		// Re-resolve now that the whole scene exists — first pass in addScatterFx
@@ -14198,8 +15047,19 @@ async function deserializeScene(state, opts = {}) {
 			bgColorInput.value = state.viewport.bg;
 		}
 		bgImage = (state.viewport.bgImage && state.viewport.bgImage.assetId) ? state.viewport.bgImage : null;
-		bgMode = state.viewport.bgMode === "image" ? "image" : "color";
+		bgVideo = (state.viewport.bgVideo && state.viewport.bgVideo.assetId) ? state.viewport.bgVideo : null;
+		bgMode = (state.viewport.bgMode === "image" || state.viewport.bgMode === "video") ? state.viewport.bgMode : "color";
+		// Old saves might carry both — enforce the "only one" constraint on load
+		// so an unused chip doesn't come up showing a × for a phantom asset.
+		if (bgMode === "image") bgVideo = null;
+		else if (bgMode === "video") bgImage = null;
 		bgBlur = Math.max(0, Math.min(40, parseInt(state.viewport.bgBlur, 10) || 0));
+		bgOpacity = Math.max(0, Math.min(100, parseInt(state.viewport.bgOpacity, 10)));
+		if (!isFinite(bgOpacity)) bgOpacity = 100;
+		bgOffsetX = Math.max(-500, Math.min(500, parseInt(state.viewport.bgOffsetX, 10) || 0));
+		bgOffsetY = Math.max(-500, Math.min(500, parseInt(state.viewport.bgOffsetY, 10) || 0));
+		bgScale = Math.max(10, Math.min(500, parseInt(state.viewport.bgScale, 10)));
+		if (!isFinite(bgScale)) bgScale = 100;
 		applyBgMode();
 		if (typeof state.viewport.ar === "boolean") {
 			arVisible = state.viewport.ar;
@@ -14952,7 +15812,9 @@ function flashSaveButton(btnId) {
 	btn.classList.remove("save-flash");
 	void btn.offsetWidth; // force reflow so the animation can restart on rapid saves
 	btn.classList.add("save-flash");
-	setTimeout(() => btn.classList.remove("save-flash"), 700);
+	// Timeout matches the CSS animation duration so the class is cleared right
+	// as the fade completes — no discrete "pop" back to the resting color.
+	setTimeout(() => btn.classList.remove("save-flash"), 1000);
 }
 
 async function doSaveAs() {
@@ -15090,6 +15952,64 @@ let snapshotTarget = null;
 let snapshotCanvas = null;
 let snapshotCtx = null;
 let snapshotPixels = null;
+// Persistent temp canvas + BG image element for the snapshot composite path.
+// snapshotSceneCanvas holds the flipped WebGL bytes so we can drawImage them
+// onto snapshotCanvas AFTER the BG (drawImage respects alpha; putImageData
+// wouldn't). snapshotBgImgEl caches the loaded background image so we don't
+// re-fetch on every snapshot.
+let snapshotSceneCanvas = null;
+let snapshotSceneCtx = null;
+let snapshotBgImgEl = null;
+let snapshotBgImgSrc = null;
+
+// Composite the current BG (image or video) into the snapshot canvas.
+// Mirrors the CSS pipeline used on the live viewport — object-fit:cover,
+// then user transform (translate + scale from center), then opacity + blur.
+// Skips if nothing is loaded yet; next snapshot will pick it up.
+function drawBgLayerToSnapshotCtx(ctx, w, h) {
+	if (bgMode === "color") return;
+	let source = null;
+	if (bgMode === "image" && bgImage) {
+		const src = bgAssetUrl(bgImage);
+		if (!src) return;
+		if (!snapshotBgImgEl || snapshotBgImgSrc !== src) {
+			snapshotBgImgEl = new Image();
+			snapshotBgImgEl.crossOrigin = "anonymous";
+			snapshotBgImgEl.src = src;
+			snapshotBgImgSrc = src;
+			return; // decoding — next snapshot will draw it
+		}
+		if (!snapshotBgImgEl.complete || !snapshotBgImgEl.naturalWidth) return;
+		source = snapshotBgImgEl;
+	} else if (bgMode === "video" && bgVideo && canvasBgVideo?.readyState >= 2) {
+		source = canvasBgVideo;
+	}
+	if (!source) return;
+	const sW = source.videoWidth || source.naturalWidth || 0;
+	const sH = source.videoHeight || source.naturalHeight || 0;
+	if (!sW || !sH) return;
+	// Cover fit: source fills (w, h) preserving aspect, cropping overflow.
+	const cover = Math.max(w / sW, h / sH);
+	const dW = sW * cover;
+	const dH = sH * cover;
+	// User transform — CSS transform values were authored against the live
+	// viewport pixel size, so scale the translate proportionally to the
+	// snapshot's own width to keep the framing visually identical.
+	const canvasEl = document.getElementById("renderCanvas");
+	const viewportW = canvasEl?.clientWidth || w;
+	const displayToSnapshot = w / viewportW;
+	const tX = bgOffsetX * displayToSnapshot;
+	const tY = bgOffsetY * displayToSnapshot;
+	const userScale = bgScale / 100;
+	ctx.save();
+	ctx.globalAlpha = Math.max(0, Math.min(1, bgOpacity / 100));
+	if (bgBlur > 0) ctx.filter = `blur(${Math.max(0, bgBlur * displayToSnapshot)}px)`;
+	// Translate to center, then apply user translate, then scale from center.
+	ctx.translate(w / 2 + tX, h / 2 + tY);
+	ctx.scale(userScale, userScale);
+	ctx.drawImage(source, -dW / 2, -dH / 2, dW, dH);
+	ctx.restore();
+}
 
 async function autoSnapshot() {
 	try {
@@ -15166,14 +16086,28 @@ async function autoSnapshot() {
 		}
 
 		renderer.readRenderTargetPixels(snapshotTarget, 0, 0, w, h, snapshotPixels);
-		// WebGL pixels arrive bottom-up; canvas expects top-down. Flip rows in place.
-		const imageData = snapshotCtx.createImageData(w, h);
+		// WebGL pixels arrive bottom-up; canvas expects top-down. Flip rows into
+		// a persistent scene-canvas so we can drawImage them (respecting alpha)
+		// on top of the composited BG.
+		if (!snapshotSceneCanvas || snapshotSceneCanvas.width !== w || snapshotSceneCanvas.height !== h) {
+			snapshotSceneCanvas = document.createElement("canvas");
+			snapshotSceneCanvas.width = w;
+			snapshotSceneCanvas.height = h;
+			snapshotSceneCtx = snapshotSceneCanvas.getContext("2d");
+		}
+		const imageData = snapshotSceneCtx.createImageData(w, h);
 		const stride = w * 4;
 		for (let y = 0; y < h; y++) {
 			const srcOff = (h - 1 - y) * stride;
 			imageData.data.set(snapshotPixels.subarray(srcOff, srcOff + stride), y * stride);
 		}
-		snapshotCtx.putImageData(imageData, 0, 0);
+		snapshotSceneCtx.putImageData(imageData, 0, 0);
+		// Clean slate on the output canvas, then BG underneath, then WebGL on top.
+		// Alpha in the WebGL render (transparent clear when bg mode is image/video)
+		// lets the BG show through wherever the scene didn't draw a pixel.
+		snapshotCtx.clearRect(0, 0, w, h);
+		drawBgLayerToSnapshotCtx(snapshotCtx, w, h);
+		snapshotCtx.drawImage(snapshotSceneCanvas, 0, 0);
 
 		const blob = await new Promise(res => snapshotCanvas.toBlob(res, "image/png"));
 		if (!blob) return;

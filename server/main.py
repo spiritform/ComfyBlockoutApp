@@ -2502,8 +2502,9 @@ EDITOR_TOOLS = [
             "(model: 'nano-banana' or 'seedance') AND on any agent-created WORKFLOW "
             "module (pass its module id, e.g. 'flux2_klein_t2i_local'). For workflow "
             "modules the tool writes to whichever input is named 'prompt' in the "
-            "manifest — if the module named its prompt input something else, tell "
-            "the user which input to fill manually."
+            "manifest. For setting multiple named inputs on a workflow (positive + "
+            "negative prompt, strength, etc.) prefer `set_workflow_inputs` — this "
+            "single-field variant is kept for the common 'just update the prompt' case."
         ),
         "input_schema": {
             "type": "object",
@@ -2512,6 +2513,30 @@ EDITOR_TOOLS = [
                 "prompt": {"type": "string"},
             },
             "required": ["model", "prompt"],
+        },
+    },
+    {
+        "name": "set_workflow_inputs",
+        "description": (
+            "Batch-set multiple named inputs on a WORKFLOW module in one call — "
+            "e.g. positive prompt + negative prompt + strength together. Pass an "
+            "'inputs' object keyed by the input names declared in the module's manifest "
+            "(check activeWorkflowInputs in the scene context to see what's available). "
+            "Values are coerced to strings. Unknown input names are ignored and reported "
+            "back so you can correct spelling. Use this instead of calling "
+            "set_generator_prompt repeatedly when multiple fields need to change."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "model": {"type": "string", "description": "WORKFLOW module id (matches activeWorkflowModuleId in scene context)"},
+                "inputs": {
+                    "type": "object",
+                    "description": "Map of {input_name: value}. Input names must match those declared in the module's manifest.",
+                    "additionalProperties": {"type": "string"},
+                },
+            },
+            "required": ["model", "inputs"],
         },
     },
     {
