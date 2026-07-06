@@ -131,6 +131,62 @@
 		transform: scaleX(-1);
 	}
 	#mediapipe-overlay[hidden] { display: none; }
+	/* SAM overlay — mirrors mediapipe-overlay positioning + z-order. The
+	   source snapshot lives in <img> underneath the mask canvas so clicks
+	   on the canvas land at the same pixel coords as the source image. */
+	#sam-overlay {
+		position: absolute;
+		/* Slightly-lifted panel color instead of pure black so a dark scene
+		   snapshot (empty env / no lighting) stays visually distinct from
+		   letterbox / no-source state — otherwise the whole overlay reads as
+		   "nothing loaded" even when the image is actually rendering black. */
+		background: #14141a;
+		overflow: hidden;
+		z-index: 6;
+	}
+	#sam-overlay img,
+	#sam-overlay canvas {
+		position: absolute; inset: 0;
+		width: 100%; height: 100%;
+		object-fit: contain;
+	}
+	#sam-overlay canvas { cursor: crosshair; }
+	#sam-overlay[hidden] { display: none; }
+	.sam-status {
+		position: absolute; top: 8px; left: 10px;
+		font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+		color: rgba(255,255,255,0.65);
+		background: rgba(0,0,0,0.55);
+		padding: 3px 8px; border-radius: 3px;
+		pointer-events: none;
+		z-index: 3;
+	}
+	.sam-toolbar {
+		position: absolute; bottom: 10px; left: 50%;
+		transform: translateX(-50%);
+		display: flex; gap: 8px; align-items: center;
+		background: rgba(0,0,0,0.6);
+		padding: 6px 10px; border-radius: 6px;
+		z-index: 3;
+	}
+	.sam-toolbar .sam-hint {
+		font-size: 10px; color: rgba(255,255,255,0.5);
+		margin-right: 4px;
+	}
+	.sam-toolbar button {
+		background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.85);
+		border: none; border-radius: 4px;
+		padding: 4px 10px; font-size: 10px; font-weight: 600;
+		letter-spacing: 0.04em; text-transform: uppercase;
+		cursor: pointer;
+	}
+	.sam-toolbar button:hover {
+		background: rgba(255,180,84,0.22);
+		color: #ffd28a;
+	}
+	.sam-toolbar #sam-save { background: rgba(255,180,84,0.18); color: #ffb454; }
+	.sam-toolbar #sam-save:hover { background: rgba(255,180,84,0.32); color: #ffd28a; }
+	.sam-toolbar #sam-save:disabled { opacity: 0.35; cursor: not-allowed; }
 	.mp-status {
 		position: absolute; top: 8px; left: 10px;
 		font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
@@ -1763,6 +1819,18 @@
 	   parent overlay stays pointer-events:none so clicks in Viewport mode
 	   still reach the canvas underneath. */
 	#result-overlay img, #result-overlay video { pointer-events: auto; }
+	/* Spinner overlay — reuses .load-spinner keyframe + border style, but
+	   absolutely-centered inside #result-overlay so it sits on top of the
+	   AR frame rectangle while the fresh snapshot is being rendered/uploaded.
+	   Hidden by default; #result-overlay.loading toggles it in AND hides the
+	   img so the broken-image icon never flashes. */
+	#result-overlay #result-overlay-spinner {
+		position: absolute; top: 50%; left: 50%;
+		transform: translate(-50%, -50%);
+		z-index: 3; pointer-events: none;
+	}
+	#result-overlay.loading #result-overlay-spinner { display: block; }
+	#result-overlay.loading img { visibility: hidden; }
 	/* Result toggle — the Viewport / Blockout / Render pill group. Sits to the
 	   right of Generate in the viewport toolbar. Buttons now match .vt-btn
 	   sizing (26px tall, 10px 600-weight) so it visually pairs with Move /
@@ -2617,6 +2685,7 @@
 				<button class="prim-btn" data-prim="cylinder" data-label="Cylinder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="6" rx="6" ry="2"/><path d="M6 6v12a6 2 0 0 0 12 0V6"/></svg></button>
 				<button class="prim-btn" data-prim="cone" data-label="Cone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="20" rx="7" ry="2"/><path d="M5 20L12 3l7 17"/></svg></button>
 				<button class="prim-btn" data-prim="plane" data-label="Plane"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 16l9-4 9 4-9 4-9-4z"/></svg></button>
+				<button class="prim-btn" data-prim="text" data-label="Text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 7V5h14v2"/><path d="M12 5v14"/><path d="M9 19h6"/></svg></button>
 				<button class="prim-btn" data-prim="custom" data-label="Import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 6v6M9 9l3-3 3 3" stroke="#ffb454"/></svg></button>
 				<button class="prim-btn" data-prim="particles" data-label="Particles"><svg viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="1.3" fill="currentColor"/><circle cx="12" cy="4" r="0.9" fill="currentColor"/><circle cx="18" cy="7" r="1.1" fill="currentColor"/><circle cx="5" cy="13" r="0.9" fill="currentColor"/><circle cx="11" cy="11" r="1.4" fill="currentColor"/><circle cx="17" cy="14" r="1" fill="currentColor"/><circle cx="8" cy="18" r="1.1" fill="currentColor"/><circle cx="15" cy="20" r="0.9" fill="currentColor"/><circle cx="20" cy="17" r="0.8" fill="currentColor"/></svg></button>
 			</div>
@@ -2631,10 +2700,10 @@
 				<!-- MediaPipe tool — opens a browser webcam surface with
 				     MediaPipe.js pose/hand/face detection running client-side. -->
 				<button class="prim-btn" data-tool="mediapipe" data-label="MediaPipe" title="Webcam + MediaPipe pose/hand/face — record a sequence, take stills, or use as viewport source"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="6.5" r="2"/><path d="M12 8.5v5"/><path d="M9 10.5l3 1 3-1"/><path d="M12 13.5l-3 4"/><path d="M12 13.5l3 4"/></svg></button>
-				<!-- Load Media — pick an image or video from disk, display
-				     it in the viewport at the AR rectangle. Same overlay
-				     positioning as the render + MediaPipe surfaces. -->
-				<button class="prim-btn" data-tool="loadmedia" data-label="Load Media" title="Load an image or video into the viewport as a reference source"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16"/><path d="M3 12h5"/><path d="M14 10l4 3-4 3z" fill="currentColor" stroke="none"/></svg></button>
+				<!-- SAM — Segment Anything (SlimSAM via transformers.js). Click on
+				     the current Blockout snapshot to build a mask; save the mask
+				     as an asset for use in inpainting workflows. -->
+				<button class="prim-btn" data-tool="sam" data-label="SAM" title="SAM — click-to-mask on the current Blockout snapshot. Save the mask as an asset for inpainting workflows."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path d="M9 12l2 2 4-4"/><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none"/></svg></button>
 				<button class="prim-btn" data-fx="scatter" data-label="Scatter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M3 18l9-4 9 4-9 4-9-4z"/><path d="M7 13l1.5-4 1.5 4"/><path d="M12.5 11l1.5-5 1.5 5"/><path d="M16.5 15l1.5-4 1.5 4"/></svg></button>
 				<button class="prim-btn" data-fx="smoke" data-label="Smoke" title="Smoke FX — coming soon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 20c0-2 3-2 3-4s-3-2-3-4 3-2 3-4"/><path d="M15 19c0-2 2-2 2-4s-2-2-2-4"/></svg></button>
 				<button class="prim-btn" data-tool="soon-1" data-label="Coming soon" title="Reserved slot — future tool" style="opacity:0.35"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg></button>
@@ -2697,10 +2766,10 @@
 				     Guarantees the input row stays inline with the transport bar
 				     regardless of what the log does above it. -->
 				<div class="assistant-bottom-band">
-					<div class="assistant-context" id="assistant-context" hidden>
+					<div class="assistant-context" id="assistant-context">
 						<span class="assistant-context-label">context</span>
 						<span class="assistant-context-target" id="assistant-context-target"></span>
-						<button type="button" class="assistant-context-clear" id="assistant-context-clear" title="Clear context">×</button>
+						<button type="button" class="assistant-context-clear" id="assistant-context-clear" title="Clear context" hidden>×</button>
 					</div>
 					<div class="assistant-input-row">
 						<span class="assistant-prompt-arrow" aria-hidden="true">&gt;</span>
@@ -2795,12 +2864,31 @@
 				<canvas id="mp-overlay"></canvas>
 				<div class="mp-status" id="mp-status">idle</div>
 			</div>
+			<!-- SAM overlay — Blockout snapshot + interactive mask canvas
+			     sized to the AR rectangle. Click to add positive points,
+			     Shift-click for negative. Save Mask uploads a PNG to Assets. -->
+			<div id="sam-overlay" hidden>
+				<img id="sam-source-img" alt="" draggable="false">
+				<canvas id="sam-canvas"></canvas>
+				<div class="sam-status" id="sam-status">loading model…</div>
+				<div class="sam-toolbar">
+					<span class="sam-hint">click = add point · shift-click = negative · enter = save · esc = close</span>
+					<button type="button" id="sam-clear" title="Clear all points">Clear</button>
+					<button type="button" id="sam-save" title="Save mask to Assets">Save Mask</button>
+					<button type="button" id="sam-close" title="Close SAM">×</button>
+				</div>
+			</div>
 			<!-- Generated result overlay — sits exactly on the AR rectangle, image
 			     (or first frame of video) shown when "After" is selected. Save
 			     button floats top-right so the toolbar can stay lean. -->
 			<div id="result-overlay" hidden>
 				<img id="result-overlay-img" alt="" draggable="true">
 				<video id="result-overlay-vid" loop muted playsinline draggable="true"></video>
+				<!-- Loading spinner — shown while the Blockout snapshot is being
+				     rendered + uploaded + preloaded. Bigger scenes take longer, and
+				     without a spinner the user would see a broken-image icon or
+				     the previous stale snapshot flashing until the fresh one lands. -->
+				<div id="result-overlay-spinner" class="load-spinner" hidden></div>
 				<button id="result-save-overlay" type="button" title="Download this render">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
 				</button>
@@ -2898,6 +2986,36 @@
 
 			<!-- ===== OBJECT TAB ===== -->
 			<div class="rp-pane" id="rp-pane-object" hidden>
+				<!-- Text primitive editor — only visible when selection is a Text
+				     mesh. Editing the string / size / depth rebuilds the geometry. -->
+				<div class="section" id="obj-text-section" style="display:none">
+					<div class="section-label">Text</div>
+					<textarea id="obj-text-value" rows="2" spellcheck="false"
+						style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.06);border-radius:4px;padding:6px 8px;color:#e6e6ea;caret-color:#fff;font:inherit;font-size:11px;line-height:1.4;resize:none;outline:none">Text</textarea>
+					<div class="sub-label" style="margin-top:10px">Font</div>
+					<div class="select-row">
+						<select id="obj-text-font">
+							<option value="helvetiker">Helvetiker</option>
+							<option value="helvetiker_bold">Helvetiker Bold</option>
+							<option value="optimer">Optimer</option>
+							<option value="optimer_bold">Optimer Bold</option>
+							<option value="gentilis">Gentilis</option>
+							<option value="droid_sans">Droid Sans</option>
+							<option value="droid_serif">Droid Serif</option>
+						</select>
+					</div>
+					<div class="sub-label" style="margin-top:10px">Geometry</div>
+					<div class="param-grid cols-2">
+						<div class="slider-row">
+							<input type="range" id="obj-text-size" min="0.1" max="4" step="0.05" value="0.6">
+							<span class="slider-val" id="obj-text-size-val">0.60</span>
+						</div>
+						<div class="slider-row">
+							<input type="range" id="obj-text-depth" min="0" max="1" step="0.01" value="0.15">
+							<span class="slider-val" id="obj-text-depth-val">0.15</span>
+						</div>
+					</div>
+				</div>
 				<div class="section" id="obj-appearance-section">
 					<div class="section-label">Appearance</div>
 					<div class="rp-bg-pair">
@@ -3409,6 +3527,32 @@
 					<div class="section-label">Capture</div>
 					<button class="mp-still-btn" id="mp-still" type="button">Take still</button>
 					<div class="hint" style="margin-top:6px">Composites the video + landmarks and drops it into Assets.</div>
+				</div>
+			</div>
+
+			<!-- ===== SAM TAB ===== -->
+			<div class="rp-pane" id="rp-pane-sam" hidden>
+				<div class="section">
+					<div class="section-label">Source</div>
+					<div class="mp-mode-tabs" id="sam-source-tabs">
+						<button data-sam-source="blockout" class="active">Blockout</button>
+						<button data-sam-source="image">Image</button>
+						<button data-sam-source="video">Video</button>
+					</div>
+					<button type="button" class="mp-still-btn" id="sam-load-file" hidden style="margin-top:8px">Choose file…</button>
+					<input type="file" id="sam-source-file" accept="image/*,video/*" hidden>
+					<div class="hint" id="sam-source-hint" style="margin-top:6px">Uses the current Blockout snapshot. Click to add positive points, Shift-click for negative.</div>
+				</div>
+				<div class="section">
+					<div class="section-label">Status</div>
+					<div class="hint" id="sam-pane-status" style="margin-top:2px">Idle</div>
+					<div class="hint" id="sam-pane-count" style="margin-top:4px">0 points</div>
+				</div>
+				<div class="section">
+					<div class="section-label">Mask</div>
+					<button class="mp-still-btn" id="sam-pane-save" type="button" disabled>Save mask</button>
+					<button class="mp-still-btn" id="sam-pane-clear" type="button" style="margin-top:6px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.7)">Clear points</button>
+					<div class="hint" style="margin-top:6px">White = masked, black = unmasked. Drops into Assets for use in inpainting workflows.</div>
 				</div>
 			</div>
 
@@ -4663,7 +4807,83 @@ const PRIM_DEFS = {
 	cylinder: () => new THREE.CylinderGeometry(0.5, 0.5, 1.2, 24),
 	cone:     () => new THREE.ConeGeometry(0.6, 1.4, 24),
 	plane:    () => new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), // lie flat on the grid
+	// Text primitives use TextGeometry (async — needs a font). This factory
+	// returns a lightweight placeholder that addPrimitive replaces after the
+	// font resolves, so addPrimitive can stay synchronous.
+	text:     () => new THREE.BoxGeometry(0.01, 0.01, 0.01),
 };
+
+// Curated font pack — typeface.json files bundled with three's examples
+// package. Each entry ships with the same CDN base as three itself, so no
+// extra download infrastructure needed. Keys are the values persisted in
+// textConfig.font so a scene reload picks the same face.
+const TEXT_FONTS = {
+	helvetiker:      { label: "Helvetiker",      url: "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/fonts/helvetiker_regular.typeface.json" },
+	helvetiker_bold: { label: "Helvetiker Bold", url: "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/fonts/helvetiker_bold.typeface.json" },
+	optimer:         { label: "Optimer",         url: "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/fonts/optimer_regular.typeface.json" },
+	optimer_bold:    { label: "Optimer Bold",    url: "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/fonts/optimer_bold.typeface.json" },
+	gentilis:        { label: "Gentilis",        url: "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/fonts/gentilis_regular.typeface.json" },
+	droid_sans:      { label: "Droid Sans",      url: "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/fonts/droid/droid_sans_regular.typeface.json" },
+	droid_serif:     { label: "Droid Serif",     url: "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/fonts/droid/droid_serif_regular.typeface.json" },
+};
+const DEFAULT_TEXT_FONT = "helvetiker";
+// Cache loaded fonts by key so repeated Text primitives / edits don't re-fetch.
+const _textFonts = {};
+const _textFontLoads = {};
+async function _loadTextFont(key = DEFAULT_TEXT_FONT) {
+	const cfg = TEXT_FONTS[key] || TEXT_FONTS[DEFAULT_TEXT_FONT];
+	const k = cfg === TEXT_FONTS[DEFAULT_TEXT_FONT] ? DEFAULT_TEXT_FONT : key;
+	if (_textFonts[k]) return _textFonts[k];
+	if (_textFontLoads[k]) return _textFontLoads[k];
+	_textFontLoads[k] = (async () => {
+		const { FontLoader } = await import("three/addons/loaders/FontLoader.js");
+		const loader = new FontLoader();
+		const font = await new Promise((res, rej) => loader.load(
+			cfg.url,
+			(f) => res(f),
+			undefined,
+			(e) => rej(e),
+		));
+		_textFonts[k] = font;
+		return font;
+	})();
+	return _textFontLoads[k];
+}
+
+// Rebuild a text mesh's geometry from userData.textConfig. Called when the
+// user edits the string / size / depth. Centers the geometry so the pivot
+// stays under the middle of the text (rotate/scale feel natural).
+async function rebuildTextGeometry(mesh) {
+	if (!mesh?.userData) return;
+	const cfg = mesh.userData.textConfig || {};
+	const text = cfg.text ?? "Text";
+	const size = cfg.size ?? 0.6;
+	const depth = cfg.depth ?? 0.15;
+	const fontKey = cfg.font || DEFAULT_TEXT_FONT;
+	const font = await _loadTextFont(fontKey);
+	const { TextGeometry } = await import("three/addons/geometries/TextGeometry.js");
+	const geom = new TextGeometry(text || " ", {
+		font,
+		size,
+		depth,
+		curveSegments: 6,
+		bevelEnabled: false,
+	});
+	geom.computeBoundingBox();
+	const bb = geom.boundingBox;
+	if (bb) {
+		// Center around origin for natural gizmo behavior — otherwise the
+		// pivot sits at the baseline-left and Scale+Rotate feel offset.
+		geom.translate(
+			-(bb.max.x + bb.min.x) / 2,
+			-(bb.max.y + bb.min.y) / 2,
+			-(bb.max.z + bb.min.z) / 2,
+		);
+	}
+	const old = mesh.geometry;
+	mesh.geometry = geom;
+	old?.dispose?.();
+}
 
 const primCounters = {};
 
@@ -5685,9 +5905,17 @@ function deleteObject(obj) {
 	}
 	const idx = objects.indexOf(obj);
 	if (idx >= 0) objects.splice(idx, 1);
+	// Drop the deleted object from the multi-selection set — otherwise the
+	// context chip's "+N more" count and refreshOutliner's amber highlights
+	// keep pointing at a phantom.
+	selectionSet?.delete(obj);
 	refreshOutliner();
 	updateStatus();
 	if (typeof saveScene === "function") saveScene();
+	// Selection could have changed (primary or additive), so the context chip
+	// needs a refresh — otherwise the AI Agent panel still shows the deleted
+	// object's name until the next click.
+	if (typeof refreshChatContextChip === "function") refreshChatContextChip();
 }
 
 // Curated palette of clearly nameable colors. Each new block picks one at random
@@ -6203,6 +6431,22 @@ function addPrimitive(kind) {
 	mesh.name = `${kind[0].toUpperCase()}${kind.slice(1)}.${String(primCounters[kind]).padStart(3,"0")}`;
 	mesh.position.set(0, 0, 0);
 	mesh.userData.primKind = kind;
+	// Text primitives seed a config and swap in real TextGeometry once the
+	// font resolves. The initial placeholder BoxGeometry is disposed inside
+	// rebuildTextGeometry.
+	if (kind === "text") {
+		mesh.userData.textConfig = { text: "Text", size: 0.6, depth: 0.15 };
+		rebuildTextGeometry(mesh).then(() => {
+			stashInitialTransform(mesh);
+			// select() already applied the selection tint to the placeholder
+			// BoxGeometry — refresh so the outline traces the real letters.
+			if (selected === mesh && selectionSet.has(mesh)) {
+				clearSelectionTint();
+				for (const o of selectionSet) applySelectionTint(o);
+			}
+			if (typeof saveScene === "function") saveScene();
+		}).catch(e => console.error("[text] geometry build failed:", e));
+	}
 	stashInitialTransform(mesh);
 	scene.add(mesh);
 	objects.push(mesh);
@@ -6240,6 +6484,7 @@ function forceRightPane(which, label) {
 	const genPane = document.getElementById("rp-pane-gencell");
 	const wfPane  = document.getElementById("rp-pane-workflowcell");
 	const mpPane  = document.getElementById("rp-pane-mediapipe");
+	const samPane = document.getElementById("rp-pane-sam");
 	const titleEl = document.getElementById("rp-title");
 	const kickerEl = document.getElementById("rp-kicker");
 	const sepEl = document.getElementById("rp-sep");
@@ -6250,6 +6495,7 @@ function forceRightPane(which, label) {
 	if (genPane) genPane.hidden = which !== "gencell";
 	if (wfPane)  wfPane.hidden  = which !== "workflowcell";
 	if (mpPane)  mpPane.hidden  = which !== "mediapipe";
+	if (samPane) samPane.hidden = which !== "sam";
 	// Assets owns the kicker label with no sub-title. Object / Scene / Camera /
 	// GenCell / WorkflowCell use "Properties : <label>". "none" hides the whole
 	// header for a blank switcher zone.
@@ -6263,7 +6509,7 @@ function forceRightPane(which, label) {
 	if (sepEl) sepEl.style.display = (isFullPane || isBlank) ? "none" : "";
 	if (titleEl) {
 		titleEl.style.display = (isFullPane || isBlank) ? "none" : "";
-		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : which === "gencell" ? "Generator" : which === "workflowcell" ? "Workflow" : which === "mediapipe" ? "MediaPipe" : "Object");
+		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : which === "gencell" ? "Generator" : which === "workflowcell" ? "Workflow" : which === "mediapipe" ? "MediaPipe" : which === "sam" ? "SAM" : "Object");
 	}
 	// Keep top-header + viewport-toolbar buttons in sync with whichever full-pane
 	// view is active. Assistant button now toggles agent-zone collapse (wired
@@ -6286,10 +6532,10 @@ function forceRightPane(which, label) {
 	const headerEndEl = document.getElementById("rp-header-end");
 	if (headerEndEl) headerEndEl.hidden = true;
 	// Remember the last "home" pane so a page reload / deselect restores it
-	// instead of blanking. Object / GenCell / WorkflowCell are selection-driven
-	// (they only exist because something is picked), so they don't count as a
-	// home. Neither does "none" — that IS the blank state we're trying to avoid.
-	if (which === "assets" || which === "scene" || which === "camera" || which === "mediapipe") {
+	// instead of blanking. Only *user-navigable* panes count — object / gencell
+	// / workflowcell are selection-driven, mediapipe is tool-controlled, none
+	// is the blank state. Assets / Scene / Camera are the actual homes.
+	if (which === "assets" || which === "scene" || which === "camera") {
 		LAST_SWITCHER_PANE = which;
 		try { localStorage.setItem(LAST_SWITCHER_PANE_KEY, which); } catch {}
 	}
@@ -6526,7 +6772,10 @@ function clearSelectionTint() {
 	for (const { mesh } of _rimOverlays) {
 		mesh.parent?.remove(mesh);
 		mesh.material?.dispose?.();
-		// Geometry is shared with the host mesh — do NOT dispose here.
+		// Box3Helper owns its own line geometry (built from the passed Box3),
+		// so it's safe to dispose. The previous EdgesGeometry approach shared
+		// geometry with the host mesh — that's no longer the case here.
+		mesh.geometry?.dispose?.();
 	}
 	_rimOverlays = [];
 }
@@ -6534,113 +6783,59 @@ function clearSelectionTint() {
 function applySelectionTint(obj) {
 	if (!obj || obj === renderCam) return;
 	if (obj.userData?.primKind === "splat") return;
-	// Clouds are a volumetric shader on a big cube. The normal-expanded hull
-	// approach paints the whole cube silhouette solid amber, which reads as
-	// "orange box" not "selected cloud". Switch to a wireframe (12-edge box)
-	// outline for clouds so you get an unmistakable bounding-box selection
-	// without hiding the fog effect underneath.
-	if (obj.userData?.primKind === "clouds") {
+	// Universal selection cage — a Box3Helper built from the object's LOCAL
+	// bounding box and parented to the object so it inherits the transform.
+	// Unlike BoxHelper (which does world-space AABB and stays axis-aligned to
+	// the world as the object rotates), this cage rotates + scales with the
+	// mesh — the box stays tight to the geometry through any transform.
+	// Twelve line segments, zero shaders, works on every geometry kind.
+	const localBox = new THREE.Box3();
+	if (obj.isMesh && obj.geometry) {
+		obj.geometry.computeBoundingBox();
+		if (obj.geometry.boundingBox) localBox.copy(obj.geometry.boundingBox);
+	} else {
+		// Group / import — union every descendant mesh's bbox transformed
+		// into the root's local space so the cage snugs the whole subtree.
+		const worldToLocal = new THREE.Matrix4().copy(obj.matrixWorld).invert();
+		const corner = new THREE.Vector3();
+		obj.updateWorldMatrix(false, true);
 		obj.traverse(c => {
 			if (!c.isMesh || !c.geometry) return;
-			const edges = new THREE.EdgesGeometry(c.geometry);
-			const mat = new THREE.LineBasicMaterial({
-				color: SELECTION_TINT,
-				transparent: true,
-				opacity: 0.9,
-				depthTest: true,
-				depthWrite: false,
-			});
-			const wire = new THREE.LineSegments(edges, mat);
-			wire.name = "__cb_selection_rim";
-			wire.renderOrder = 2001;
-			wire.matrixAutoUpdate = false;
-			wire.matrixWorldAutoUpdate = false;
-			wire.onBeforeRender = () => {
-				wire.matrix.copy(c.matrixWorld);
-				wire.matrixWorld.copy(c.matrixWorld);
-			};
-			scene.add(wire);
-			_rimOverlays.push({ host: c, mesh: wire });
+			c.geometry.computeBoundingBox();
+			const bb = c.geometry.boundingBox;
+			if (!bb) return;
+			for (let ix = 0; ix < 2; ix++) {
+				for (let iy = 0; iy < 2; iy++) {
+					for (let iz = 0; iz < 2; iz++) {
+						corner.set(
+							ix ? bb.max.x : bb.min.x,
+							iy ? bb.max.y : bb.min.y,
+							iz ? bb.max.z : bb.min.z,
+						);
+						corner.applyMatrix4(c.matrixWorld).applyMatrix4(worldToLocal);
+						localBox.expandByPoint(corner);
+					}
+				}
+			}
 		});
-		return;
 	}
-	obj.traverse(c => {
-		if (!c.isMesh || !c.geometry) return;
-		// SkinnedMesh outlines would need per-frame bone-driven vertex expansion
-		// on the CPU; skip and rely on the gizmo + outliner to communicate.
-		if (c.isSkinnedMesh) return;
-		// The vertex shader needs normals — geometries built without them (rare,
-		// mostly custom Points/Lines) can't drive the outline, so bail.
-		if (!c.geometry.attributes?.normal) return;
-
-		// Outline hull — expanded back-face pass, LessEqualDepth. Back-face +
-		// normal-expanded means the hull's back faces project to the object's
-		// screen area PLUS a ~6px rim. Depth test does the interior-mask job
-		// natively: back-face hull vertex depth > object's own front-face
-		// depth in the buffer, so LessEqual fails at interior and it never
-		// paints there. At rim pixels: passes against empty background or
-		// objects farther than the hull; occluded where something is closer.
-		// Clean stroke, no fill, and hides where crossed by other geometry.
-		const outMat = new THREE.ShaderMaterial({
-			uniforms: {
-				outlineColor: { value: new THREE.Color(SELECTION_TINT) },
-				outlineWidth: { value: SELECTION_OUTLINE_WIDTH },
-			},
-			vertexShader: SELECTION_OUTLINE_VS,
-			fragmentShader: `
-				uniform vec3 outlineColor;
-				void main() { gl_FragColor = vec4(outlineColor, 1.0); }
-			`,
-			side: THREE.BackSide,
-			depthWrite: false,
-			depthTest: true,
-			depthFunc: THREE.LessEqualDepth,
-		});
-		const hull = new THREE.Mesh(c.geometry, outMat);
-		hull.name = "__cb_selection_rim";
-		hull.renderOrder = 2001;
-		hull.matrixAutoUpdate = false;
-		hull.matrixWorldAutoUpdate = false;
-		hull.onBeforeRender = () => {
-			hull.matrix.copy(c.matrixWorld);
-			hull.matrixWorld.copy(c.matrixWorld);
-		};
-		scene.add(hull);
-		_rimOverlays.push({ host: c, mesh: hull });
-
-		// X-ray ghost — paints a dim silhouette of the selected object on the
-		// SURFACE of any object it's intersecting/behind. Uses the RAW
-		// (unexpanded) geometry with depthFunc: Greater so it only fires where
-		// scene depth is CLOSER than the object's own depth = where an
-		// occluder is in front of the object at that pixel.
-		//   • Where the object is directly visible → object wrote its own
-		//     depth → Greater against equal depth fails → skip. The selected
-		//     object itself never gets x-ray'd.
-		//   • Where an occluder is in front → occluder wrote its front-face
-		//     depth (closer) → object_depth > occluder_depth → passes → dim
-		//     amber draws on the occluder's surface at those pixels. Reveals
-		//     where the selection is punching through other geometry.
-		const xrayMat = new THREE.MeshBasicMaterial({
-			color: SELECTION_TINT,
-			transparent: true,
-			opacity: 0.35,
-			depthWrite: false,
-			depthTest: true,
-			depthFunc: THREE.GreaterDepth,
-			side: THREE.FrontSide,
-		});
-		const xrayGhost = new THREE.Mesh(c.geometry, xrayMat);
-		xrayGhost.name = "__cb_selection_xray";
-		xrayGhost.renderOrder = 2002;
-		xrayGhost.matrixAutoUpdate = false;
-		xrayGhost.matrixWorldAutoUpdate = false;
-		xrayGhost.onBeforeRender = () => {
-			xrayGhost.matrix.copy(c.matrixWorld);
-			xrayGhost.matrixWorld.copy(c.matrixWorld);
-		};
-		scene.add(xrayGhost);
-		_rimOverlays.push({ host: c, mesh: xrayGhost });
-	});
+	if (localBox.isEmpty()) return;
+	const helper = new THREE.Box3Helper(localBox, SELECTION_TINT);
+	helper.name = "__cb_selection_rim";
+	helper.material.transparent = true;
+	helper.material.opacity = 0.3;
+	helper.material.depthTest = true;
+	helper.material.depthWrite = false;
+	helper.renderOrder = 2001;
+	// Opt out of raycasting — the recursive picker `intersectObjects(..., true)`
+	// walks into children and Three's Line raycast has a ~1-unit threshold, so
+	// without this the cage's lines steal every click and pin selection to
+	// whatever's already selected.
+	helper.raycast = () => {};
+	// Attach as child of `obj` — the helper inherits every subsequent
+	// transform, so move/rotate/scale drags automatically drag the cage too.
+	obj.add(helper);
+	_rimOverlays.push({ host: obj, mesh: helper });
 }
 
 function updateSelectionOutline() {
@@ -6677,6 +6872,11 @@ function select(obj, opts = {}) {
 		// enabled, otherwise blank). Camera + Scene stay strictly button-driven.
 		forceRightPane(defaultRightPane());
 		refreshOutliner();
+		// Deselecting must also strip the object from the AI agent's context
+		// chip — otherwise the chip stays populated with a phantom target after
+		// the user clicked away, and any tool call that trusts the context ends
+		// up acting on nothing (or worse, on stale selection state).
+		if (typeof refreshChatContextChip === "function") refreshChatContextChip();
 		return;
 	}
 	if (additive) {
@@ -7461,9 +7661,483 @@ function runTool(kind) {
 		}
 		return;
 	}
+	if (kind === "sam") {
+		// Toggle — clicking the button while the overlay is up closes it.
+		const overlay = document.getElementById("sam-overlay");
+		if (overlay && !overlay.hidden) closeSamTool();
+		else openSamTool();
+		return;
+	}
 	if (kind && kind.startsWith("soon-")) return;
 	updateStatus(`${kind[0].toUpperCase() + kind.slice(1)} tool — coming soon`);
 }
+
+// ── SAM tool ──────────────────────────────────────────────────────
+// Segment Anything (SlimSAM via @xenova/transformers). Runs entirely
+// client-side — first open triggers a ~55MB model download, subsequent
+// opens are cache-warm. Source = current Blockout snapshot; user clicks
+// to place positive/negative points; each click runs the mask decoder
+// (embeddings are cached per-image so decoding is fast). Save Mask
+// uploads the binary mask PNG into Assets.
+const _sam = {
+	loaded: false, loading: null,
+	T: null, model: null, processor: null,
+	imageEmbeds: null, imageUrl: null,
+	originalSizes: null, reshapedInputSizes: null,
+	points: [],           // [{ x, y, label }] — x/y in source-image pixels
+	activeMask: null,     // { data, width, height } — last-decoded mask
+	decoding: false, pending: false,
+};
+// jsdelivr's `/+esm` suffix returns a browser-ready ESM entry point (bundles
+// deps + exports the top-level API). Plain URL would rely on the package's
+// "main"/"module" field which isn't guaranteed to be dynamic-import-friendly.
+const SAM_CDN = "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/+esm";
+const SAM_MODEL_ID = "Xenova/slimsam-77-uniform";
+
+async function _loadSam() {
+	if (_sam.loaded) return true;
+	if (_sam.loading) return _sam.loading;
+	_sam.loading = (async () => {
+		try {
+			_updateSamPaneStatus("loading library…");
+			const T = await import(/* @vite-ignore */ SAM_CDN);
+			_sam.T = T;
+			T.env.allowLocalModels = false;
+			_updateSamPaneStatus("downloading model…");
+			_sam.processor = await T.AutoProcessor.from_pretrained(SAM_MODEL_ID);
+			_sam.model = await T.AutoModel.from_pretrained(SAM_MODEL_ID, { quantized: true });
+			_sam.loaded = true;
+			_updateSamPaneStatus("model ready — click on the image");
+			return true;
+		} catch (e) {
+			console.error("[sam] load failed:", e);
+			_updateSamPaneStatus(`load failed · ${String(e.message || e).slice(0, 80)}`);
+			return false;
+		}
+	})();
+	return _sam.loading;
+}
+
+async function _encodeSamImage(url) {
+	if (!_sam.loaded) return false;
+	if (_sam.imageUrl === url && _sam.imageEmbeds) return true;
+	try {
+		_updateSamPaneStatus("encoding image…");
+		const T = _sam.T;
+		const image = await T.RawImage.fromURL(url);
+		const inputs = await _sam.processor(image);
+		_sam.imageEmbeds = await _sam.model.get_image_embeddings(inputs);
+		_sam.originalSizes = inputs.original_sizes;
+		_sam.reshapedInputSizes = inputs.reshaped_input_sizes;
+		_sam.imageUrl = url;
+		_updateSamPaneStatus("ready — click on the image");
+		return true;
+	} catch (e) {
+		console.error("[sam] encode failed:", e);
+		_updateSamPaneStatus(`encode failed · ${String(e.message || e).slice(0, 80)}`);
+		return false;
+	}
+}
+
+async function _decodeSamMask() {
+	if (!_sam.loaded || !_sam.imageEmbeds) return;
+	// Coalesce rapid clicks — if a decode is running, remember to fire another
+	// once it finishes.
+	if (_sam.decoding) { _sam.pending = true; return; }
+	if (_sam.points.length === 0) {
+		_sam.activeMask = null;
+		_paintSamOverlay();
+		_updateSamPaneCount();
+		return;
+	}
+	_sam.decoding = true;
+	_updateSamPaneCount();
+	try {
+		_updateSamPaneStatus(`decoding · ${_sam.points.length} point${_sam.points.length > 1 ? "s" : ""}`);
+		const T = _sam.T;
+		// SAM expects click points in the RESHAPED input space the processor
+		// scaled the image to (typically 1024×1024-ish), not raw source-image
+		// pixels. Scale each user click accordingly — otherwise the decoder
+		// throws "IndexError: index 1 is out of bounds for dimension with
+		// size 1" because the coords land far outside the tensor grid.
+		const [origH, origW] = _sam.originalSizes[0];
+		const [reshH, reshW] = _sam.reshapedInputSizes[0];
+		const sx = reshW / origW;
+		const sy = reshH / origH;
+		const flatPts = [];
+		const flatLbls = [];
+		for (const p of _sam.points) {
+			flatPts.push(p.x * sx, p.y * sy);
+			flatLbls.push(BigInt(p.label));
+		}
+		const input_points = new T.Tensor("float32", flatPts, [1, 1, _sam.points.length, 2]);
+		const input_labels = new T.Tensor("int64", flatLbls, [1, 1, _sam.points.length]);
+		const outputs = await _sam.model({
+			...(_sam.imageEmbeds || {}),
+			input_points,
+			input_labels,
+		});
+		const masks = await _sam.processor.post_process_masks(
+			outputs.pred_masks,
+			_sam.originalSizes,
+			_sam.reshapedInputSizes,
+		);
+		// masks[0] is a Tensor of shape [numMasks, H, W]. SlimSAM predicts 3
+		// candidate masks per prompt — pick the highest-IoU one. Use .slice
+		// (owned copy) not .subarray (view) so nothing about the source
+		// tensor's lifecycle can invalidate what we paint from.
+		const maskTensor = masks[0];
+		const dims = maskTensor.dims;
+		// dims can be [numMasks, H, W] OR [1, numMasks, H, W] depending on how
+		// transformers.js flattened the batch dim — handle both.
+		let numMasks, H, W;
+		if (dims.length === 4) { [ , numMasks, H, W] = dims; }
+		else { [numMasks, H, W] = dims; }
+		const scores = outputs.iou_scores.data;
+		let bestIdx = 0;
+		for (let i = 1; i < scores.length; i++) if (scores[i] > scores[bestIdx]) bestIdx = i;
+		const stride = H * W;
+		const src = maskTensor.data;
+		const bestData = new Uint8Array(stride);
+		let sum = 0;
+		for (let i = 0; i < stride; i++) {
+			// Handle bool / uint8 / float dtypes: anything truthy = mask on.
+			const v = src[bestIdx * stride + i];
+			const on = v === true || v > 0.5 || v === 1;
+			bestData[i] = on ? 1 : 0;
+			if (on) sum++;
+		}
+		console.log(`[sam] mask ${W}×${H}, coverage ${(100 * sum / stride).toFixed(1)}%, iou ${scores[bestIdx].toFixed(3)}`);
+		_sam.activeMask = { data: bestData, width: W, height: H };
+		_paintSamOverlay();
+		_updateSamPaneStatus(`ready · iou ${scores[bestIdx].toFixed(2)}`);
+		_updateSamPaneCount();
+	} catch (e) {
+		console.error("[sam] decode failed:", e);
+		_updateSamPaneStatus(`decode failed · ${String(e.message || e).slice(0, 80)}`);
+	} finally {
+		_sam.decoding = false;
+		if (_sam.pending) {
+			_sam.pending = false;
+			_decodeSamMask();
+		}
+	}
+}
+
+function _paintSamOverlay() {
+	const canvas = document.getElementById("sam-canvas");
+	const img = document.getElementById("sam-source-img");
+	if (!canvas || !img || !img.naturalWidth) return;
+	// Backing canvas matches source image pixels so mask indexing is 1:1.
+	// CSS object-fit: contain scales it to the display area.
+	const W = img.naturalWidth;
+	const H = img.naturalHeight;
+	if (canvas.width !== W) canvas.width = W;
+	if (canvas.height !== H) canvas.height = H;
+	const ctx = canvas.getContext("2d");
+	ctx.clearRect(0, 0, W, H);
+	// Amber-tinted mask overlay
+	if (_sam.activeMask) {
+		const m = _sam.activeMask;
+		const imgData = ctx.createImageData(m.width, m.height);
+		for (let i = 0; i < m.data.length; i++) {
+			const on = m.data[i] > 0;
+			const off = i * 4;
+			imgData.data[off]   = 255;
+			imgData.data[off+1] = 180;
+			imgData.data[off+2] = 84;
+			imgData.data[off+3] = on ? 128 : 0;
+		}
+		// If mask size differs from canvas (shouldn't happen with post_process),
+		// paint via a temp canvas + drawImage.
+		if (m.width === W && m.height === H) {
+			ctx.putImageData(imgData, 0, 0);
+		} else {
+			const tmp = document.createElement("canvas");
+			tmp.width = m.width;
+			tmp.height = m.height;
+			tmp.getContext("2d").putImageData(imgData, 0, 0);
+			ctx.drawImage(tmp, 0, 0, W, H);
+		}
+	}
+	// Point markers — green for positive, red for negative. Radius scales
+	// with the source image so points stay visible at any display size.
+	const r = Math.max(6, Math.round(Math.min(W, H) * 0.008));
+	for (const p of _sam.points) {
+		ctx.beginPath();
+		ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+		ctx.fillStyle = p.label ? "rgba(80, 220, 120, 0.95)" : "rgba(255, 90, 90, 0.95)";
+		ctx.fill();
+		ctx.strokeStyle = "rgba(0,0,0,0.5)";
+		ctx.lineWidth = 1.5;
+		ctx.stroke();
+	}
+}
+
+function _samCanvasCoords(evt) {
+	// object-fit: contain letterboxes the source image inside the canvas
+	// display rect. Reverse-map client coords → source-image pixels.
+	const canvas = document.getElementById("sam-canvas");
+	const img = document.getElementById("sam-source-img");
+	if (!canvas || !img?.naturalWidth) return null;
+	const rect = canvas.getBoundingClientRect();
+	const imgAR = img.naturalWidth / img.naturalHeight;
+	const dispAR = rect.width / rect.height;
+	let contentW, contentH, offsetX, offsetY;
+	if (imgAR > dispAR) {
+		// Image wider than display — fits width, letterbox top/bottom
+		contentW = rect.width;
+		contentH = rect.width / imgAR;
+		offsetX = 0;
+		offsetY = (rect.height - contentH) / 2;
+	} else {
+		// Image taller — fits height, pillarbox left/right
+		contentH = rect.height;
+		contentW = rect.height * imgAR;
+		offsetX = (rect.width - contentW) / 2;
+		offsetY = 0;
+	}
+	const relX = evt.clientX - rect.left - offsetX;
+	const relY = evt.clientY - rect.top - offsetY;
+	if (relX < 0 || relY < 0 || relX > contentW || relY > contentH) return null;
+	return {
+		x: (relX / contentW) * img.naturalWidth,
+		y: (relY / contentH) * img.naturalHeight,
+	};
+}
+
+function _updateSamPaneStatus(text) {
+	const s = document.getElementById("sam-pane-status");
+	if (s) s.textContent = text;
+	const overlayStatus = document.getElementById("sam-status");
+	if (overlayStatus) overlayStatus.textContent = text;
+}
+
+function _updateSamPaneCount() {
+	const c = document.getElementById("sam-pane-count");
+	if (c) c.textContent = `${_sam.points.length} point${_sam.points.length === 1 ? "" : "s"}`;
+	// Both save buttons (overlay + pane) enable/disable together.
+	const enable = !!_sam.activeMask;
+	const sBtn1 = document.getElementById("sam-save");
+	const sBtn2 = document.getElementById("sam-pane-save");
+	if (sBtn1) sBtn1.disabled = !enable;
+	if (sBtn2) sBtn2.disabled = !enable;
+}
+
+async function _samSourceFromUrl(url) {
+	const srcImg = document.getElementById("sam-source-img");
+	if (!srcImg) return;
+	// Reset points/mask when the source changes — a mask from one image is
+	// meaningless on another.
+	_sam.points = [];
+	_sam.activeMask = null;
+	_updateSamPaneCount();
+	// Preload so the paint sees naturalWidth/Height right after the src set.
+	await new Promise((resolve) => {
+		const pre = new Image();
+		pre.onload = pre.onerror = resolve;
+		pre.src = url;
+	});
+	srcImg.src = url;
+	await new Promise(r => { if (srcImg.complete) r(); else srcImg.onload = r; });
+	_paintSamOverlay();
+	const ok = await _loadSam();
+	if (!ok) return;
+	await _encodeSamImage(url);
+}
+
+async function openSamTool() {
+	const overlay = document.getElementById("sam-overlay");
+	if (!overlay) return;
+	// If another tool overlay is up (MediaPipe), close it first — two overlays
+	// on the same AR rectangle would stack visually.
+	if (_mp?.running || _mp?.stream) closeMediaPipeTool();
+	overlay.hidden = false;
+	document.querySelector('.prim-btn[data-tool="sam"]')?.classList.add("active");
+	updateResultOverlayPos?.();
+	// Open the SAM properties pane so the user has source + status +
+	// save/clear controls in one place. MediaPipe/other pane stops showing.
+	forceRightPane?.("sam", "SAM");
+	// Kick off the (heavy) model download in the background so it's warm by
+	// the time the encoder needs it.
+	_loadSam();
+	// Auto-capture the current Blockout snapshot as the default source — with
+	// the model warming in parallel, the user sees an image immediately and
+	// can start clicking as soon as the encoder finishes. Switching to Image
+	// or Video via the source tabs replaces this on demand.
+	_updateSamPaneCount();
+	_updateSamPaneStatus("capturing scene…");
+	try { await autoSnapshot(); } catch {}
+	const url = `/comfyblockout/image/${encodeURIComponent(NODE_ID)}?t=${Date.now()}`;
+	await _samSourceFromUrl(url);
+}
+
+function closeSamTool() {
+	const overlay = document.getElementById("sam-overlay");
+	if (!overlay) return;
+	overlay.hidden = true;
+	document.querySelector('.prim-btn[data-tool="sam"]')?.classList.remove("active");
+	// Return to the user's last home pane (Assets by default) — SAM's pane
+	// stops showing so it doesn't linger like MediaPipe's used to.
+	if (typeof forceRightPane === "function" && typeof defaultRightPane === "function") {
+		forceRightPane(defaultRightPane());
+	}
+	// Keep the loaded model + last embeddings — reopening the tool on the
+	// same snapshot should be instant. Points are per-session and reset on
+	// next open (openSamTool clears them).
+}
+
+// Click / keyboard wiring — deferred to DOM-ready since the overlay isn't
+// interacted with until the user opens the tool.
+(function wireSam() {
+	const canvas = document.getElementById("sam-canvas");
+	const clearBtn = document.getElementById("sam-clear");
+	const saveBtn = document.getElementById("sam-save");
+	const closeBtn = document.getElementById("sam-close");
+	if (!canvas || !clearBtn || !saveBtn || !closeBtn) return;
+	canvas.addEventListener("pointerdown", (evt) => {
+		if (evt.button !== 0) return;
+		const pt = _samCanvasCoords(evt);
+		if (!pt) return;
+		_sam.points.push({ x: pt.x, y: pt.y, label: evt.shiftKey ? 0 : 1 });
+		_paintSamOverlay();
+		_decodeSamMask();
+	});
+	const doClear = () => {
+		_sam.points = [];
+		_sam.activeMask = null;
+		_paintSamOverlay();
+		_updateSamPaneCount();
+		_updateSamPaneStatus("ready — click on the image");
+	};
+	clearBtn.addEventListener("click", doClear);
+	document.getElementById("sam-pane-clear")?.addEventListener("click", doClear);
+	closeBtn.addEventListener("click", () => closeSamTool());
+
+	// Source tabs (Blockout / Image / Video) + file picker.
+	const srcTabs = document.getElementById("sam-source-tabs");
+	const srcFile = document.getElementById("sam-source-file");
+	const srcLoadBtn = document.getElementById("sam-load-file");
+	const srcHint = document.getElementById("sam-source-hint");
+	let _samSourceMode = "blockout";
+	srcTabs?.addEventListener("click", async (evt) => {
+		const btn = evt.target.closest("button[data-sam-source]");
+		if (!btn) return;
+		const mode = btn.dataset.samSource;
+		_samSourceMode = mode;
+		for (const b of srcTabs.querySelectorAll("button")) b.classList.toggle("active", b === btn);
+		if (mode === "blockout") {
+			// Re-clicking Blockout (even when already active) recaptures the scene
+			// so users can refresh the source after moving objects around.
+			if (srcLoadBtn) srcLoadBtn.hidden = true;
+			if (srcHint) srcHint.textContent = "Uses the current Blockout snapshot. Click to add positive points, Shift-click for negative.";
+			_updateSamPaneStatus("capturing scene…");
+			try { await autoSnapshot(); } catch {}
+			const url = `/comfyblockout/image/${encodeURIComponent(NODE_ID)}?t=${Date.now()}`;
+			await _samSourceFromUrl(url);
+		} else if (mode === "image") {
+			if (srcLoadBtn) { srcLoadBtn.hidden = false; srcLoadBtn.textContent = "Choose image…"; }
+			if (srcHint) srcHint.textContent = "Load an image file to mask.";
+			if (srcFile) { srcFile.accept = "image/*"; }
+			// Clicking Image tab pops the file picker immediately — no extra click needed.
+			srcFile?.click();
+		} else if (mode === "video") {
+			if (srcLoadBtn) { srcLoadBtn.hidden = false; srcLoadBtn.textContent = "Choose video…"; }
+			if (srcHint) srcHint.textContent = "Load a video — SAM will mask its current frame.";
+			if (srcFile) { srcFile.accept = "video/*"; }
+			srcFile?.click();
+		}
+	});
+	srcLoadBtn?.addEventListener("click", () => srcFile?.click());
+	srcFile?.addEventListener("change", async (evt) => {
+		const file = evt.target.files?.[0];
+		if (!file) return;
+		const objectUrl = URL.createObjectURL(file);
+		if (file.type.startsWith("video/")) {
+			// Extract the first frame as a data URL for SAM to work on. For MVP
+			// this locks to frame 0 — future iteration can add a scrubber.
+			_updateSamPaneStatus("extracting frame…");
+			try {
+				const v = document.createElement("video");
+				v.src = objectUrl;
+				v.muted = true;
+				v.playsInline = true;
+				await new Promise(r => { v.onloadeddata = r; v.load(); });
+				v.currentTime = 0;
+				await new Promise(r => { v.onseeked = r; });
+				const cv = document.createElement("canvas");
+				cv.width = v.videoWidth;
+				cv.height = v.videoHeight;
+				cv.getContext("2d").drawImage(v, 0, 0);
+				URL.revokeObjectURL(objectUrl);
+				await _samSourceFromUrl(cv.toDataURL("image/png"));
+			} catch (e) {
+				console.error("[sam] video frame extract failed:", e);
+				_updateSamPaneStatus(`video failed · ${String(e.message || e).slice(0, 80)}`);
+			}
+		} else {
+			await _samSourceFromUrl(objectUrl);
+		}
+		evt.target.value = "";
+	});
+	// Pane-side Save button mirrors the overlay one.
+	document.getElementById("sam-pane-save")?.addEventListener("click", () => saveBtn.click());
+	saveBtn.addEventListener("click", async () => {
+		if (!_sam.activeMask) return;
+		const status = document.getElementById("sam-status");
+		saveBtn.disabled = true;
+		if (status) status.textContent = "saving mask…";
+		try {
+			// Composite mask into a fresh RGBA canvas at source-image resolution,
+			// white for foreground, black for background (standard mask format for
+			// inpainting workflows).
+			const m = _sam.activeMask;
+			const out = document.createElement("canvas");
+			out.width = m.width;
+			out.height = m.height;
+			const ctx = out.getContext("2d");
+			const imgData = ctx.createImageData(m.width, m.height);
+			for (let i = 0; i < m.data.length; i++) {
+				const on = m.data[i] > 0 ? 255 : 0;
+				const off = i * 4;
+				imgData.data[off]   = on;
+				imgData.data[off+1] = on;
+				imgData.data[off+2] = on;
+				imgData.data[off+3] = 255;
+			}
+			ctx.putImageData(imgData, 0, 0);
+			const blob = await new Promise(r => out.toBlob(r, "image/png"));
+			if (!blob) throw new Error("mask blob null");
+			// Upload as a generic asset so it lands in the Assets pane and can
+			// be dropped into workflow image slots like any other image. The
+			// endpoint expects node_id + asset_id + ext alongside the file blob.
+			const assetId = newAssetId();
+			const fd = new FormData();
+			fd.append("node_id", NODE_ID);
+			fd.append("asset_id", assetId);
+			fd.append("ext", "png");
+			fd.append("file", blob, `sam_mask_${assetId}.png`);
+			const r = await fetch("/comfyblockout/save_asset", { method: "POST", body: fd });
+			if (!r.ok) throw new Error(await r.text());
+			const j = await r.json();
+			if (!j.success) throw new Error(j.error || "upload failed");
+			if (status) status.textContent = `saved · ${assetId}`;
+			saveBtn.disabled = false;
+			// Nudge the Assets pane so the new mask shows up without a manual refresh.
+			window.refreshAssets?.();
+		} catch (e) {
+			console.error("[sam] save failed:", e);
+			if (status) status.textContent = `save failed · ${String(e.message || e).slice(0, 80)}`;
+			saveBtn.disabled = false;
+		}
+	});
+	window.addEventListener("keydown", (evt) => {
+		const overlay = document.getElementById("sam-overlay");
+		if (!overlay || overlay.hidden) return;
+		if (evt.key === "Escape") { closeSamTool(); evt.preventDefault(); }
+		else if (evt.key === "Enter") { saveBtn.click(); evt.preventDefault(); }
+	});
+})();
 
 // Load Media tool — displays an image or looping video in the AR
 // rectangle as a viewport reference source. Toggle off by clicking the
@@ -9660,36 +10334,35 @@ function assistantSceneContext() {
 function refreshChatContextChip() {
 	const chip = document.getElementById("assistant-context");
 	const target = document.getElementById("assistant-context-target");
+	const clearBtn = document.getElementById("assistant-context-clear");
 	if (!chip || !target) return;
-	// Selected object joins the context so the agent can refer to it by name.
-	// Multi-selection (selectionSet.size > 1) shows a count so the agent knows
-	// it's a group.
+	// Chip is always visible — an empty "CONTEXT :" reads as "nothing yet"
+	// which is more communicative than a chip that pops in/out. Only the ×
+	// clear button hides when there's nothing to clear.
+	chip.hidden = false;
 	const selObj = (selected && selected !== renderCam) ? selected : null;
 	const selCount = selectionSet?.size || 0;
-	// Attachments take over the chip when present — dropping an image reframes
-	// the whole conversation around that image.
+	// Attachments take precedence — dropping an image reframes the conversation
+	// around it, so the chip surfaces the attachment label.
 	if (chatAttachments && chatAttachments.length) {
 		const first = chatAttachments[0].label;
 		target.textContent = chatAttachments.length === 1
 			? first
 			: `${first} · +${chatAttachments.length - 1}`;
-		chip.hidden = false;
+		if (clearBtn) clearBtn.hidden = false;
 		return;
 	}
-	// Chip only surfaces user-initiated context: an explicitly selected object
-	// or a dropped attachment. An active workflow/gen cell alone is not enough
-	// — those are always-on defaults, not "what the user just picked", so
-	// letting them show would leave the chip permanently populated even when
-	// nothing is selected. Keep it blank in that case.
-	if (!selObj) {
-		chip.hidden = true;
+	if (selObj) {
+		const name = selObj.name || selObj.userData?.primKind || "Object";
+		target.textContent = selCount > 1
+			? `${name} · +${selCount - 1} · object`
+			: `${name} · object`;
+		if (clearBtn) clearBtn.hidden = false;
 		return;
 	}
-	const name = selObj.name || selObj.userData?.primKind || "Object";
-	target.textContent = selCount > 1
-		? `${name} · +${selCount - 1} · object`
-		: `${name} · object`;
-	chip.hidden = false;
+	// Empty state — just the "CONTEXT :" label, no target text, no × button.
+	target.textContent = "";
+	if (clearBtn) clearBtn.hidden = true;
 }
 
 document.getElementById("assistant-context-clear")?.addEventListener("click", () => {
@@ -11213,6 +11886,8 @@ function updateCameraSliders() {
 	{ id: "bg-offset-y",      label: "Y",       format: v => `${v.toFixed(0)}`,       sens: 4 },
 	{ id: "bg-scale",         label: "Scale",   format: v => `${v.toFixed(0)}%`,      sens: 2 },
 	{ id: "env-intensity",    label: "Intensity", format: v => `${v.toFixed(2)}`,   sens: 0.012 },
+	{ id: "obj-text-size",    label: "Size",  format: v => `${v.toFixed(2)}`,   sens: 0.016 },
+	{ id: "obj-text-depth",   label: "Depth", format: v => `${v.toFixed(2)}`,   sens: 0.004 },
 	{ id: "fog-near",         format: v => `${v.toFixed(1)}`,       sens: 0.4 },
 	{ id: "fog-far",          format: v => `${v.toFixed(0)}`,       sens: 2 },
 	{ id: "ao-intensity",     format: v => `${v.toFixed(1)}`,       sens: 0.08 },
@@ -11228,6 +11903,62 @@ function updateCameraSliders() {
 	const el = document.getElementById(cfg.id);
 	if (el) enhanceRangeAsDrag(el, cfg);
 });
+
+// Text primitive editor — wire the string + size + depth inputs to rebuild
+// the selected text mesh's geometry live. Debounced so rapid typing doesn't
+// spam TextGeometry rebuilds (each one parses the whole font).
+(function wireTextEditor() {
+	let rebuildTimer = null;
+	const scheduleRebuild = () => {
+		if (rebuildTimer) clearTimeout(rebuildTimer);
+		rebuildTimer = setTimeout(() => {
+			rebuildTimer = null;
+			if (!selected || selected.userData?.primKind !== "text") return;
+			const target = selected;
+			rebuildTextGeometry(target).then(() => {
+				// The selection tint's EdgesGeometry snapshot was taken from
+				// the OLD text geometry — clear + re-apply so the wireframe
+				// hugs the new letters instead of leaving stale amber ghosts
+				// of the previous string floating on top.
+				if (selected === target && selectionSet.has(target)) {
+					clearSelectionTint();
+					for (const o of selectionSet) applySelectionTint(o);
+				}
+				saveSceneDebounced?.();
+			}).catch(e => console.error("[text] live rebuild failed:", e));
+		}, 120);
+	};
+	document.getElementById("obj-text-value")?.addEventListener("input", (e) => {
+		if (!selected || selected.userData?.primKind !== "text") return;
+		const cfg = selected.userData.textConfig || (selected.userData.textConfig = { text: "Text", size: 0.6, depth: 0.15 });
+		cfg.text = e.target.value;
+		scheduleRebuild();
+	});
+	for (const [id, key] of [["obj-text-size", "size"], ["obj-text-depth", "depth"]]) {
+		document.getElementById(id)?.addEventListener("input", (e) => {
+			if (!selected || selected.userData?.primKind !== "text") return;
+			const cfg = selected.userData.textConfig || (selected.userData.textConfig = { text: "Text", size: 0.6, depth: 0.15 });
+			cfg[key] = parseFloat(e.target.value) || 0;
+			scheduleRebuild();
+		});
+	}
+	document.getElementById("obj-text-font")?.addEventListener("change", (e) => {
+		if (!selected || selected.userData?.primKind !== "text") return;
+		const cfg = selected.userData.textConfig || (selected.userData.textConfig = { text: "Text", size: 0.6, depth: 0.15 });
+		cfg.font = e.target.value;
+		// Font swap is user-driven and infrequent, so rebuild immediately
+		// instead of routing through the typing-debounce timer.
+		if (rebuildTimer) { clearTimeout(rebuildTimer); rebuildTimer = null; }
+		const target = selected;
+		rebuildTextGeometry(target).then(() => {
+			if (selected === target && selectionSet.has(target)) {
+				clearSelectionTint();
+				for (const o of selectionSet) applySelectionTint(o);
+			}
+			saveSceneDebounced?.();
+		}).catch(err => console.error("[text] font swap rebuild failed:", err));
+	});
+})();
 
 // ── Object inspector (right panel) ─────────────────────────────────
 const objColorInput = document.getElementById("obj-color");
@@ -11347,6 +12078,25 @@ function objImageUrl(img) { return refImageThumbUrl(img); }
 function refreshObjectInspector() {
 	if (!selected) return;
 	for (const el of dragFields) el._refresh?.();
+	// Text primitives — show a dedicated Text section with the editable
+	// string + size + depth. Refresh reads from userData.textConfig so the
+	// controls stay in sync when the selection changes.
+	const textSection = document.getElementById("obj-text-section");
+	if (textSection) {
+		const isText = selected.userData?.primKind === "text";
+		textSection.style.display = isText ? "" : "none";
+		if (isText) {
+			const cfg = selected.userData.textConfig || (selected.userData.textConfig = { text: "Text", size: 0.6, depth: 0.15 });
+			const tArea = document.getElementById("obj-text-value");
+			if (tArea && document.activeElement !== tArea) tArea.value = cfg.text ?? "";
+			const sInput = document.getElementById("obj-text-size");
+			if (sInput) sInput.value = String(cfg.size ?? 0.6);
+			const dInput = document.getElementById("obj-text-depth");
+			if (dInput) dInput.value = String(cfg.depth ?? 0.15);
+			const fSelect = document.getElementById("obj-text-font");
+			if (fSelect) fSelect.value = cfg.font || DEFAULT_TEXT_FONT;
+		}
+	}
 	// Walk the tree — FBX/GLB imports are Groups whose child meshes carry the
 	// materials, not the root. First color material wins for the picker preview.
 	const colorMats = collectColorMaterials(selected);
@@ -12739,6 +13489,14 @@ function updateResultOverlayPos() {
 		mpOverlay.style.left = left;
 		mpOverlay.style.top = top;
 	}
+	// SAM overlay — same AR rectangle treatment.
+	const samOverlay = document.getElementById("sam-overlay");
+	if (samOverlay && !samOverlay.hidden) {
+		samOverlay.style.width = width;
+		samOverlay.style.height = height;
+		samOverlay.style.left = left;
+		samOverlay.style.top = top;
+	}
 	// Load Media overlay — same treatment.
 	const medOverlay = document.getElementById("media-overlay");
 	if (medOverlay && !medOverlay.hidden) {
@@ -12755,19 +13513,34 @@ function refreshToggleActive() {
 	}
 }
 
-function showBlockoutSnapshot() {
-	// Cache-bust each switch so a freshly-saved snapshot beats the browser cache.
-	const url = `/comfyblockout/image/${encodeURIComponent(NODE_ID)}?t=${Date.now()}`;
+async function showBlockoutSnapshot() {
 	resultOverlay.hidden = false;
 	resultOverlayVid.removeAttribute("src");
 	resultOverlayVid.style.display = "none";
 	resultOverlayImg.style.display = "";
-	resultOverlayImg.src = url;
-	// object-fit: contain instead of cover so the user sees the actual AR
-	// (no cropping) and can verify the snapshot matches the live viewport.
 	resultOverlayImg.style.objectFit = "contain";
 	resultOverlayImg.style.background = "#000";
+	// Clear the previous src FIRST so no stale image lingers, and flip the
+	// overlay into .loading mode — that hides the img (avoiding the broken-
+	// image icon while src is empty) and reveals the spinner.
+	resultOverlayImg.removeAttribute("src");
+	resultOverlay.classList.add("loading");
 	updateResultOverlayPos();
+	// Render → upload → preload → swap. Awaiting each step guarantees the
+	// spinner stays up until the fresh image is actually decoded and ready
+	// to paint. Bigger scenes → longer autoSnapshot, so the spinner scales
+	// naturally with scene complexity.
+	try { await autoSnapshot(); } catch {}
+	const url = `/comfyblockout/image/${encodeURIComponent(NODE_ID)}?t=${Date.now()}`;
+	await new Promise((resolve) => {
+		const pre = new Image();
+		pre.onload = pre.onerror = resolve;
+		pre.src = url;
+	});
+	// Only swap the src once the browser has already decoded the new image —
+	// then drop .loading so the img fades in in place of the spinner.
+	resultOverlayImg.src = url;
+	resultOverlay.classList.remove("loading");
 }
 
 function showRenderResult() {
@@ -14795,6 +15568,10 @@ function serializeScene() {
 			locked: o.userData.locked || undefined,
 			notes: o.userData.notes || undefined,
 			refImage: o.userData.refImage || undefined,
+			// Text primitives need their string + size + depth preserved so a
+			// reload rebuilds the same-shaped geometry (the mesh's actual
+			// geometry buffer is derived, not authoritative).
+			textConfig: o.userData.primKind === "text" ? o.userData.textConfig : undefined,
 			keyframes: serializeObjectKeyframes(o),
 		})),
 		imports: objects.filter(o => o.userData.assetId).map(o => ({
@@ -14952,6 +15729,13 @@ async function deserializeScene(state, opts = {}) {
 		if (p.locked) mesh.userData.locked = true;
 		if (p.notes) mesh.userData.notes = p.notes;
 		if (p.refImage) mesh.userData.refImage = p.refImage;
+		// Text primitives need their saved textConfig restored + a rebuild —
+		// addPrimitive("text") seeded a "Text" default, override with the
+		// serialized string / size / depth and re-run the async geometry build.
+		if (p.kind === "text" && p.textConfig) {
+			mesh.userData.textConfig = { ...p.textConfig };
+			rebuildTextGeometry(mesh).catch(e => console.error("[text] restore geometry failed:", e));
+		}
 		if (Array.isArray(p.keyframes)) mesh.userData.keyframes = deserializeObjectKeyframes(p.keyframes);
 	}
 

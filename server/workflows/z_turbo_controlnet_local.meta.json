@@ -1,0 +1,122 @@
+{
+  "id": "z_turbo_controlnet_local",
+  "label": "Z-Turbo \u00b7 ControlNet \u00b7 Local",
+  "kind": "image",
+  "output_ext": "png",
+  "runner": "local",
+  "inputs": [
+    {
+      "name": "image",
+      "type": "scene-image",
+      "label": "Viewport / Source Image",
+      "patch": {
+        "node_id": 10,
+        "widget_index": 0,
+        "widget_name": "image"
+      }
+    },
+    {
+      "name": "prompt",
+      "type": "textarea",
+      "label": "Positive Prompt",
+      "placeholder": "a cozy living room, warm lighting, photorealistic, highly detailed",
+      "required": true,
+      "patch": {
+        "node_id": 45,
+        "widget_index": 0,
+        "widget_name": "text"
+      }
+    },
+    {
+      "name": "preprocessor",
+      "type": "dropdown",
+      "label": "Preprocessor",
+      "default": "DepthAnythingV2Preprocessor",
+      "options": [
+        "none",
+        "AnimeFace_SemSegPreprocessor",
+        "AnyLineArtPreprocessor_aux",
+        "BinaryPreprocessor",
+        "CannyEdgePreprocessor",
+        "ColorPreprocessor",
+        "DensePosePreprocessor",
+        "DepthAnythingPreprocessor",
+        "Zoe_DepthAnythingPreprocessor",
+        "DepthAnythingV2Preprocessor",
+        "DSINE-NormalMapPreprocessor",
+        "DWPreprocessor",
+        "AnimalPosePreprocessor",
+        "HEDPreprocessor",
+        "FakeScribblePreprocessor",
+        "LeReS-DepthMapPreprocessor",
+        "LineArtPreprocessor",
+        "AnimeLineArtPreprocessor",
+        "LineartStandardPreprocessor",
+        "Manga2Anime_LineArt_Preprocessor",
+        "MediaPipe-FaceMeshPreprocessor",
+        "MeshGraphormer-DepthMapPreprocessor",
+        "Metric3D-DepthMapPreprocessor",
+        "Metric3D-NormalMapPreprocessor",
+        "MiDaS-NormalMapPreprocessor",
+        "MiDaS-DepthMapPreprocessor",
+        "M-LSDPreprocessor",
+        "BAE-NormalMapPreprocessor",
+        "OneFormer-COCO-SemSegPreprocessor",
+        "OneFormer-ADE20K-SemSegPreprocessor",
+        "OpenposePreprocessor",
+        "PiDiNetPreprocessor",
+        "PyraCannyPreprocessor",
+        "ImageLuminanceDetector",
+        "ScribblePreprocessor",
+        "Scribble_PiDiNet_Preprocessor",
+        "TEEDPreprocessor",
+        "TilePreprocessor",
+        "Zoe-DepthMapPreprocessor",
+        "SAMPreprocessor",
+        "ShufflePreprocessor",
+        "ImageIntensityDetector",
+        "Scribble_XDoG_Preprocessor",
+        "TTPlanet_TileGF_Preprocessor",
+        "TTPlanet_TileSimple_Preprocessor"
+      ],
+      "patch": {
+        "node_id": 9,
+        "widget_index": 0,
+        "widget_name": "preprocessor"
+      }
+    },
+    {
+      "name": "controlnet_strength",
+      "type": "number",
+      "label": "ControlNet Strength",
+      "default": 1,
+      "min": 0,
+      "max": 1,
+      "step": 0.05,
+      "patch": {
+        "node_id": 60,
+        "widget_index": 0,
+        "widget_name": "strength"
+      }
+    },
+    {
+      "name": "seed",
+      "type": "seed",
+      "label": "Seed",
+      "patch": {
+        "node_id": 44,
+        "widget_index": 0,
+        "widget_name": "seed"
+      }
+    }
+  ],
+  "intermediates": [
+    {
+      "name": "preprocessor_preview",
+      "label": "Preprocessor",
+      "source_node_id": 9,
+      "source_slot": 0,
+      "filename_prefix": "z_turbo_cn_preprocessor"
+    }
+  ]
+}
