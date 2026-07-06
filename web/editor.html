@@ -863,8 +863,12 @@
 		padding: 8px;
 		display: flex; flex-direction: column; gap: 8px;
 		/* Thin dark scrollbar — Firefox gets `scrollbar-width` + colors,
-		   Chromium honors the ::-webkit-scrollbar rules below. */
+		   Chromium honors the ::-webkit-scrollbar rules below. Reserving a
+		   stable gutter means the content area doesn't jump horizontally
+		   (and the context bar below doesn't visually bump) when the
+		   scrollbar appears/disappears mid-drag on the split handle. */
 		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.08) transparent;
+		scrollbar-gutter: stable;
 	}
 	.assistant-log::-webkit-scrollbar { width: 4px; }
 	.assistant-log::-webkit-scrollbar-track { background: transparent; }
@@ -873,9 +877,15 @@
 	.assistant-log::-webkit-scrollbar-button { display: none; }
 	/* When the assistant is docked to the right pane it takes the full column —
 	   its own log grows/shrinks to fill instead of using the fixed 240px height. */
-	#rp-pane-assistant {
+	/* The bottom band anchors to #right-panel (positioned above) — NOT the
+	   pane — so leave position on this element static so absolute lookups
+	   climb past it to the right-panel. Boosted selector overrides the
+	   `.rp-pane { min-height: 0 }` above so the collapsed state still leaves
+	   room for the pinned bottom band inside the zone. */
+	#rp-zone-top-body > #rp-pane-assistant {
 		display: flex; flex-direction: column;
 		height: 100%;
+		min-height: 110px;
 	}
 	#rp-pane-assistant[hidden] { display: none; }
 	#rp-pane-assistant #assistant-section {
@@ -888,6 +898,32 @@
 	#rp-pane-assistant .assistant-shell { flex: 1; min-height: 0; }
 	#rp-pane-assistant .assistant-log {
 		flex: 1; height: auto; min-height: 0; resize: none;
+		/* Reserve space for the absolute-pinned bottom band so scroll content
+		   stops at the context bar's top instead of running under it. */
+		padding-bottom: 110px;
+		/* Chat convention: messages hug the bottom of the visible area (new
+		   messages push older ones up). Short logs get their empty space
+		   ABOVE the messages, right below the header — which is where the
+		   user expects "no chat yet" negative space, not between the last
+		   message and the input row. */
+		justify-content: flex-end;
+	}
+	/* Bottom band pinned to the RIGHT PANEL's bottom edge (not the pane's).
+	   Right panel is always full-height and its bottom == transport bar's
+	   bottom by layout, so this guarantees the input row's bottom always
+	   equals the transport bar's bottom regardless of any drag or flex
+	   sizing inside the panel. Solid background hides log content in the
+	   reserved padding-bottom zone. */
+	#right-panel {
+		/* Anchor for the absolute-positioned bottom band below. */
+		position: relative;
+	}
+	#right-panel .assistant-bottom-band {
+		position: absolute;
+		left: 0; right: 0; bottom: 0;
+		margin-top: 0;
+		background: #191922;
+		z-index: 5;
 	}
 	/* Kill rp-body's own scroll while the assistant pane owns the height — the
 	   chat log has its own overflow-y, we don't want two scrollbars stacking.
@@ -898,15 +934,15 @@
 	   sit directly on the panel background instead of inside a bordered shell. */
 	#rp-pane-assistant .assistant-shell { border: none; border-radius: 0; }
 	#rp-pane-assistant .assistant-shell:focus-within { border-color: transparent; }
-	/* Log area is darker than the pane bg so the header (above) and input row
-	   (below) read as their own bands sitting on top of the conversation.
+	/* Log area shares the pane bg (#191922) — no darker tint. The header
+	   above gets a slight lift so it still reads as its own band without
+	   the log being visually deeper than the surrounding chrome.
 	   Left padding matches #rp-zone-top-header (20px) so message text lines
 	   up with the "AI AGENT" kicker above. */
-	#rp-pane-assistant .assistant-log { background: rgba(0,0,0,0.28); padding: 12px 20px; }
+	#rp-pane-assistant .assistant-log { background: transparent; padding: 12px 20px; }
 	#rp-pane-assistant .assistant-msg.system { background: transparent; padding: 0 0 4px; }
 	#rp-pane-assistant .assistant-input-row {
 		background: transparent;
-		border-top: 1px solid rgba(255,255,255,0.05);
 		/* Fixed 78px — matches the timeline row height so the chat input's
 		   bottom AND top edges line up 1:1 with the transport bar to its
 		   left. The CONTEXT chip sits ABOVE this box (floating in the log
@@ -1022,8 +1058,12 @@
 		display: flex; align-items: center; gap: 6px;
 		padding: 5px 12px;
 		background: rgba(255,180,84,0.08);
-		border-top: 1px solid rgba(255,180,84,0.15);
 		font-size: 10px;
+		/* Explicit 32px so context (32) + input row (78) = 110 exactly —
+		   matches #rp-pane-assistant min-height + .assistant-log
+		   padding-bottom, so there's no gap between the header and the
+		   context bar in the collapsed / min-drag state. */
+		height: 32px; box-sizing: border-box;
 	}
 	.assistant-context[hidden] { display: none; }
 	.assistant-context-label {
@@ -1044,7 +1084,6 @@
 	.assistant-input-row {
 		position: relative;
 		background: rgba(255,255,255,0.03);
-		border-top: 1px solid rgba(255,255,255,0.05);
 	}
 	.assistant-prompt-arrow {
 		position: absolute; left: 10px; top: 7px;
@@ -2332,7 +2371,14 @@
 		padding: 0 20px;
 		display: flex; align-items: center; gap: 6px;
 		white-space: nowrap;
-		cursor: pointer; user-select: none;
+		/* ns-resize signals "drag me up/down" — clicking still toggles
+		   collapse (drag vs click is disambiguated by mousemove threshold),
+		   so the cursor hints at the more common gesture on this bar. */
+		cursor: ns-resize; user-select: none;
+		/* Slightly brighter than the pane body so the header reads as its
+		   own band even though the log below shares the pane bg now. */
+		background: #22222c;
+		border-bottom: 1px solid rgba(255,255,255,0.05);
 	}
 	.rp-zone-caret {
 		font-size: 10px; color: rgba(255,255,255,0.35);
@@ -2439,10 +2485,14 @@
 	#rp-split-handle {
 		flex: 0 0 5px;
 		cursor: row-resize;
-		background: rgba(255,255,255,0.12);
+		/* Amber-tinted at rest too — doubles as a visual divider between the
+		   AI Agent zone and the property switcher below, so the two panels
+		   read as clearly separate surfaces even when the mouse isn't near
+		   the handle. Hover/drag bumps saturation for feedback. */
+		background: rgba(255,180,84,0.35);
 		transition: background 0.12s;
 	}
-	#rp-split-handle:hover, #rp-split-handle.dragging { background: rgba(255,180,84,0.5); }
+	#rp-split-handle:hover, #rp-split-handle.dragging { background: rgba(255,180,84,0.6); }
 	#rp-header {
 		flex: 0 0 40px;
 		padding: 0 20px;
@@ -2654,7 +2704,10 @@
 				<!-- MediaPipe tool — opens a browser webcam surface with
 				     MediaPipe.js pose/hand/face detection running client-side. -->
 				<button class="prim-btn" data-tool="mediapipe" data-label="MediaPipe" title="Webcam + MediaPipe pose/hand/face — record a sequence, take stills, or use as viewport source"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="6.5" r="2"/><path d="M12 8.5v5"/><path d="M9 10.5l3 1 3-1"/><path d="M12 13.5l-3 4"/><path d="M12 13.5l3 4"/></svg></button>
-				<button class="prim-btn" data-tool="soon-sam" data-label="Coming soon" title="Reserved slot — future tool" style="opacity:0.35"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg></button>
+				<!-- Boolean — CSG ops (union / subtract / intersect) on the
+				     multi-selection. Uses three-bvh-csg lazy-loaded on first
+				     open. Result replaces the source objects in place. -->
+				<button class="prim-btn" data-tool="bool" data-label="Boolean" title="Boolean — union / subtract / intersect two or more selected objects into a single mesh."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></svg></button>
 				<button class="prim-btn" data-fx="scatter" data-label="Scatter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M3 18l9-4 9 4-9 4-9-4z"/><path d="M7 13l1.5-4 1.5 4"/><path d="M12.5 11l1.5-5 1.5 5"/><path d="M16.5 15l1.5-4 1.5 4"/></svg></button>
 				<button class="prim-btn" data-fx="smoke" data-label="Smoke" title="Smoke FX — coming soon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 20c0-2 3-2 3-4s-3-2-3-4 3-2 3-4"/><path d="M15 19c0-2 2-2 2-4s-2-2-2-4"/></svg></button>
 				<button class="prim-btn" data-tool="soon-1" data-label="Coming soon" title="Reserved slot — future tool" style="opacity:0.35"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg></button>
@@ -3467,6 +3520,40 @@
 				</div>
 			</div>
 
+			<!-- ===== BOOLEAN TAB ===== -->
+			<div class="rp-pane" id="rp-pane-bool" hidden>
+				<div class="section">
+					<div class="section-label">Selection</div>
+					<div class="hint" id="bool-selection-hint" style="margin-top:2px">Select 2 or more objects</div>
+				</div>
+				<div class="section">
+					<div class="section-label">Operation</div>
+					<button class="mp-still-btn" type="button" data-bool-op="union" style="margin-bottom:6px">Union</button>
+					<button class="mp-still-btn" type="button" data-bool-op="subtract" style="margin-bottom:6px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.8)">Subtract</button>
+					<button class="mp-still-btn" type="button" data-bool-op="intersect" style="background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.8)">Intersect</button>
+					<div class="hint" style="margin-top:8px">Union merges. Subtract carves everything else out of the first-selected. Intersect keeps only the overlap.</div>
+					<div class="hint" id="bool-status" style="margin-top:6px;color:rgba(255,255,255,0.5)"></div>
+				</div>
+				<!-- Result section — only shows when a boolean-result mesh is
+				     the current selection. A/B tabs pick the current base;
+				     Apply bakes the result into a standalone object and
+				     removes the wireframe sources; Cancel dissolves the
+				     boolean and restores each source's original state. -->
+				<div class="section" id="bool-result-section" style="display:none">
+					<div class="section-label">Result</div>
+					<div class="hint" id="bool-result-info" style="margin-top:2px"></div>
+					<div class="sub-label" style="margin-top:10px">Base</div>
+					<div class="mp-mode-tabs" id="bool-base-tabs" style="margin-top:2px">
+						<button type="button" data-bool-base="0">Object A</button>
+						<button type="button" data-bool-base="1">Object B</button>
+					</div>
+					<div class="hint" style="margin-top:6px">Which source acts as the base. Flip if Subtract carved the wrong side.</div>
+					<button class="mp-still-btn" type="button" id="bool-apply-btn" style="margin-top:12px">Apply</button>
+					<div class="hint" style="margin-top:4px">Bake the result as a standalone object and remove the source wireframes. No more live edits after this.</div>
+					<button class="mp-still-btn" type="button" id="bool-cancel-btn" style="margin-top:12px;background:rgba(255,80,80,0.14);color:#ff8a8a">Cancel Boolean</button>
+					<div class="hint" style="margin-top:4px">Dissolves the boolean and restores the source objects.</div>
+				</div>
+			</div>
 
 			<!-- ===== ASSETS TAB ===== -->
 			<div class="rp-pane" id="rp-pane-assets" hidden>
@@ -4407,6 +4494,29 @@ transform.addEventListener("dragging-changed", (e) => {
 		renderCamDragDist = null;
 		scaleDragStart = null;
 		saveSceneDebounced();
+		// Final re-eval on drag END too, so the last frame's transform lands
+		// (in case an RAF was pending but got skipped by the drag terminating).
+		if (typeof _boolReEvalDraggedCutters === "function") _boolReEvalDraggedCutters();
+	}
+});
+// Realtime boolean re-eval during gizmo drag — objectChange fires every
+// frame the transform mutates. Schedules an RAF-throttled CSG pass so the
+// hole / merge follows the cutter live.
+let _boolDbgFireCount = 0;
+transform.addEventListener("objectChange", () => {
+	if (typeof _scheduleBoolReEvalRealtime !== "function") return;
+	// Only bother when at least one selected object is a boolean source.
+	const inSel = selected?.userData?.boolCutter
+		|| (selectionSet && Array.from(selectionSet).some(o => o?.userData?.boolCutter));
+	if (inSel) {
+		if (_boolDbgFireCount++ % 30 === 0) {
+			console.log("[bool] objectChange on cutter — scheduling re-eval", {
+				selected: selected?.name,
+				boolCutter: selected?.userData?.boolCutter,
+				results: selected?.userData?.boolResults,
+			});
+		}
+		_scheduleBoolReEvalRealtime();
 	}
 });
 const transformHelper = transform.getHelper ? transform.getHelper() : transform;
@@ -5828,6 +5938,7 @@ function deleteObject(obj) {
 	// needs a refresh — otherwise the AI Agent panel still shows the deleted
 	// object's name until the next click.
 	if (typeof refreshChatContextChip === "function") refreshChatContextChip();
+	if (typeof _refreshBoolPane === "function") _refreshBoolPane();
 }
 
 // Curated palette of clearly nameable colors. Each new block picks one at random
@@ -6387,6 +6498,17 @@ function forceRightPane(which, label) {
 	// The agent is always visible in the top zone (unless disabled in
 	// Settings, in which case #right-panel.no-agent hides that whole zone).
 	if (which === "assistant") return;
+	// Sticky Boolean mode — while the tool is toggled on, selection-driven
+	// pane switches (object / gencell / workflowcell / none) get redirected
+	// back to the Boolean pane so the user can keep clicking objects to
+	// build a selection without losing access to Union/Subtract/Intersect.
+	// Explicit "home" panes (assets/scene/camera) still switch away.
+	if (typeof _bool !== "undefined" && _bool?.active) {
+		if (which === "object" || which === "gencell" || which === "workflowcell" || which === "none") {
+			which = "bool";
+			label = "Boolean";
+		}
+	}
 	// Direct DOM swap, bypassing the captured rpPanes NodeList — guarantees the panes
 	// reflect current selection even if the IIFE-scoped helper somehow gets out of sync.
 	const objPane = document.getElementById("rp-pane-object");
@@ -6396,6 +6518,7 @@ function forceRightPane(which, label) {
 	const genPane = document.getElementById("rp-pane-gencell");
 	const wfPane  = document.getElementById("rp-pane-workflowcell");
 	const mpPane  = document.getElementById("rp-pane-mediapipe");
+	const boolPane = document.getElementById("rp-pane-bool");
 	const titleEl = document.getElementById("rp-title");
 	const kickerEl = document.getElementById("rp-kicker");
 	const sepEl = document.getElementById("rp-sep");
@@ -6406,6 +6529,7 @@ function forceRightPane(which, label) {
 	if (genPane) genPane.hidden = which !== "gencell";
 	if (wfPane)  wfPane.hidden  = which !== "workflowcell";
 	if (mpPane)  mpPane.hidden  = which !== "mediapipe";
+	if (boolPane) boolPane.hidden = which !== "bool";
 	// Assets owns the kicker label with no sub-title. Object / Scene / Camera /
 	// GenCell / WorkflowCell use "Properties : <label>". "none" hides the whole
 	// header for a blank switcher zone.
@@ -6419,7 +6543,7 @@ function forceRightPane(which, label) {
 	if (sepEl) sepEl.style.display = (isFullPane || isBlank) ? "none" : "";
 	if (titleEl) {
 		titleEl.style.display = (isFullPane || isBlank) ? "none" : "";
-		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : which === "gencell" ? "Generator" : which === "workflowcell" ? "Workflow" : which === "mediapipe" ? "MediaPipe" : "Object");
+		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : which === "gencell" ? "Generator" : which === "workflowcell" ? "Workflow" : which === "mediapipe" ? "MediaPipe" : which === "bool" ? "Boolean" : "Object");
 	}
 	// Keep top-header + viewport-toolbar buttons in sync with whichever full-pane
 	// view is active. Assistant button now toggles agent-zone collapse (wired
@@ -6515,13 +6639,13 @@ applyAssistantEnablement();
 	if (panel && savedBasis) panel.style.setProperty("--rp-top-basis", savedBasis);
 	// Constants shared between the drag handle and the click-to-collapse
 	// handler — hoisted here so both closures can read them.
-	// Minimum agent zone height while drag-sizing. Header (40) + context
-	// chip (now ~32px — always visible after the "empty state" rewrite, so
-	// padding + label always render) + input row (78) = 150 — anything
-	// smaller pushes the context chip up under the header or clips its
-	// bottom against the input row. The agent panel can never be closed
-	// by the drag handle.
-	const AGENT_MIN_PX = 150;
+	// Minimum agent zone height while drag-sizing. Accounts for:
+	//   zone border-top (1) + header (40) + header border-bottom (1) +
+	//   context chip (~32) + input row (78) = 152.
+	// Anything smaller clips the bottom of the input row so it no longer
+	// visually equals the transport bar's height next to it. The agent
+	// panel can never be closed by the drag handle.
+	const AGENT_MIN_PX = 152;
 	// Once the agent zone is within this many pixels of its minimum, snap
 	// into the "collapsed" class so the chat log hides and dragging feels
 	// like a smooth handoff into the click-collapse layout.
@@ -6539,23 +6663,43 @@ applyAssistantEnablement();
 	const AGENT_DEFAULT_EXPAND_PX = 360;
 	if (handle && panel) {
 		let dragging = false;
-		handle.addEventListener("mousedown", (e) => {
+		// Shared handlers so both the thin 5px handle AND the AI Agent header
+		// bar (larger target, easier to grab) route through the same drag
+		// logic. The header also handles click-to-collapse; a "did the pointer
+		// move more than DRAG_THRESHOLD_PX" check distinguishes drag from click.
+		const DRAG_THRESHOLD_PX = 3;
+		let pendingDown = null; // { y, source } while below threshold
+		const startDrag = (source) => {
 			dragging = true;
 			handle.classList.add("dragging");
 			document.body.style.cursor = "row-resize";
-			// Suppress iframe / canvas pointer events during drag so the
-			// handle keeps mousemove even when the pointer crosses over them.
 			document.body.style.userSelect = "none";
-			// If collapsed, popping out of collapse the moment they start
-			// dragging is more intuitive than "drag does nothing until you
-			// un-collapse first".
 			if (panel.classList.contains("rp-agent-collapsed")) {
 				panel.classList.remove("rp-agent-collapsed");
 				try { localStorage.setItem(RP_AGENT_COLLAPSED_KEY, "0"); } catch {}
 			}
+		};
+		handle.addEventListener("mousedown", (e) => {
+			startDrag("handle");
 			e.preventDefault();
 		});
+		// Also let the AI Agent header bar act as a drag handle. Pressing on it
+		// arms the drag; if the pointer moves past the threshold before mouseup,
+		// we upgrade to drag mode (and suppress the collapse-click handler).
+		document.getElementById("rp-zone-top-header")?.addEventListener("mousedown", (e) => {
+			// Ignore mousedown that starts on interactive header controls
+			// (MCP pill, etc.) so those keep their own behavior.
+			if (e.target.closest("button, input, .assistant-status")) return;
+			pendingDown = { y: e.clientY };
+		});
 		window.addEventListener("mousemove", (e) => {
+			if (pendingDown && !dragging) {
+				if (Math.abs(e.clientY - pendingDown.y) >= DRAG_THRESHOLD_PX) {
+					startDrag("header");
+				} else {
+					return;
+				}
+			}
 			if (!dragging) return;
 			const rect = panel.getBoundingClientRect();
 			const y = e.clientY - rect.top;
@@ -6573,17 +6717,25 @@ applyAssistantEnablement();
 			panel.style.setProperty("--rp-top-basis", pct);
 		});
 		window.addEventListener("mouseup", () => {
+			pendingDown = null;
 			if (!dragging) return;
 			dragging = false;
 			handle.classList.remove("dragging");
 			document.body.style.cursor = "";
 			document.body.style.userSelect = "";
+			// Swallow the imminent click event so header drag doesn't ALSO
+			// trigger collapse-toggle. capture-phase listener on header + a
+			// one-shot flag.
+			_suppressHeaderClickOnce = true;
 			try {
 				const current = panel.style.getPropertyValue("--rp-top-basis").trim();
 				if (current) localStorage.setItem(RP_TOP_KEY, current);
 			} catch {}
 		});
 	}
+	// Set + read by the drag/click handlers so a mouseup-that-ended-a-drag
+	// doesn't fall through to the collapse-toggle click.
+	let _suppressHeaderClickOnce = false;
 
 	// Reflect assistant-enabled setting: when off, hide the whole top zone
 	// (and its handle) so the switcher takes the full column. Rerun whenever
@@ -6604,6 +6756,13 @@ applyAssistantEnablement();
 	const savedCollapsed = (() => { try { return localStorage.getItem(RP_AGENT_COLLAPSED_KEY) === "1"; } catch { return false; } })();
 	if (panel && savedCollapsed) panel.classList.add("rp-agent-collapsed");
 	document.getElementById("rp-zone-top-header")?.addEventListener("click", (e) => {
+		// If this "click" is the tail end of a drag on the header (mouseup
+		// after moving past the drag threshold), skip the collapse-toggle —
+		// otherwise every resize also flips the collapse state.
+		if (_suppressHeaderClickOnce) {
+			_suppressHeaderClickOnce = false;
+			return;
+		}
 		// Ignore clicks on the status pill so it doesn't trigger collapse
 		// when the user is just glancing at the MCP status.
 		if (e.target.closest("#assistant-status, #rp-zone-top-controls")) return;
@@ -6789,6 +6948,7 @@ function select(obj, opts = {}) {
 		// the user clicked away, and any tool call that trusts the context ends
 		// up acting on nothing (or worse, on stale selection state).
 		if (typeof refreshChatContextChip === "function") refreshChatContextChip();
+	if (typeof _refreshBoolPane === "function") _refreshBoolPane();
 		return;
 	}
 	if (additive) {
@@ -6832,6 +6992,7 @@ function select(obj, opts = {}) {
 	// Selected object joins the AI agent's context chip so the agent can
 	// address it by name without the user having to type it.
 	if (typeof refreshChatContextChip === "function") refreshChatContextChip();
+	if (typeof _refreshBoolPane === "function") _refreshBoolPane();
 }
 
 function toggleVisibility(obj) {
@@ -7573,9 +7734,488 @@ function runTool(kind) {
 		}
 		return;
 	}
+	if (kind === "bool") {
+		openBooleanTool();
+		return;
+	}
 	if (kind && kind.startsWith("soon-")) return;
 	updateStatus(`${kind[0].toUpperCase() + kind.slice(1)} tool — coming soon`);
 }
+
+// ── Boolean tool ──────────────────────────────────────────────────
+// Lazy-loaded CSG via three-bvh-csg. Uses the current multi-selection —
+// primary object is the base for Subtract; every other selected mesh is
+// combined into it via the chosen op. Result replaces the source meshes
+// in place; undo restores them as one snapshot. Live re-eval: cutters
+// tagged with userData.boolCutter re-run the CSG whenever a gizmo drag
+// ends (transform dragging-changed → false).
+const _bool = { loaded: false, loading: null, CSG: null, active: false };
+async function _loadBooleanLib() {
+	if (_bool.loaded) return true;
+	if (_bool.loading) return _bool.loading;
+	_bool.loading = (async () => {
+		try {
+			// esm.sh with external=three so the CSG lib shares our three instance
+			// (avoids double-copy + "Class extends undefined" runtime errors).
+			const mod = await import("https://esm.sh/three-bvh-csg@0.0.17?external=three");
+			_bool.CSG = mod;
+			_bool.loaded = true;
+			return true;
+		} catch (e) {
+			console.error("[bool] lib load failed:", e);
+			return false;
+		}
+	})();
+	return _bool.loading;
+}
+
+function _refreshBoolPane() {
+	const hint = document.getElementById("bool-selection-hint");
+	if (!hint) return;
+	const set = Array.from(selectionSet || []).filter(o => o && o !== renderCam);
+	if (set.length < 2) {
+		hint.textContent = `Select 2 or more objects (currently ${set.length})`;
+		hint.style.color = "rgba(255,180,84,0.7)";
+	} else {
+		const names = set.map(o => o.name || "?").join(" · ");
+		hint.textContent = `${set.length} selected — ${names}`;
+		hint.style.color = "rgba(255,255,255,0.55)";
+	}
+	// Result section — only meaningful when the current selection IS a
+	// boolean-result mesh. Shows its base/cutter names + a Switch button.
+	const resultSection = document.getElementById("bool-result-section");
+	const resultInfo = document.getElementById("bool-result-info");
+	const cfg = selected?.userData?.boolean;
+	if (resultSection && resultInfo) {
+		if (cfg) {
+			resultSection.style.display = "";
+			const cutList = cfg.cutterNames.join(" · ");
+			resultInfo.innerHTML = `<strong>${cfg.op}</strong> · base: <strong>${selected.name}</strong> · cutter: <strong style="color:#66ccff">${cutList}</strong>`;
+			// A/B tabs: A = primary (which IS the selected result mesh),
+			// B = first cutter. Clicking B swaps roles by re-running the
+			// boolean with the previous cutter as the new primary.
+			const tabs = document.getElementById("bool-base-tabs");
+			if (tabs) {
+				const [btnA, btnB] = tabs.querySelectorAll("button");
+				if (btnA) {
+					btnA.textContent = selected.name;
+					btnA.classList.add("active");
+				}
+				if (btnB) {
+					btnB.textContent = cfg.cutterNames[0] || "Object B";
+					btnB.classList.remove("active");
+					btnB.disabled = !cfg.cutterNames.length;
+				}
+			}
+		} else {
+			resultSection.style.display = "none";
+		}
+	}
+}
+
+function openBooleanTool() {
+	_bool.active = !_bool.active;
+	document.querySelector('.prim-btn[data-tool="bool"]')?.classList.toggle("active", _bool.active);
+	if (_bool.active) {
+		forceRightPane?.("bool", "Boolean");
+		_refreshBoolPane();
+		_loadBooleanLib();
+	} else if (typeof forceRightPane === "function" && typeof defaultRightPane === "function") {
+		forceRightPane(defaultRightPane());
+	}
+}
+
+// Re-run CSG for a modifier-style boolean. The primary mesh HOLDS the
+// boolean state (userData.boolean + userData._boolOriginalGeom) and its
+// geometry displays the result. Re-eval uses:
+//   - the primary's CACHED original geometry (unchanged since boolean was
+//     applied) + primary's CURRENT world transform → world-space base
+//   - each cutter's live geometry + current world transform → world-space
+//     cutter brush
+//   - CSG in world space, result converted back to primary-local so the
+//     primary's transform continues to apply naturally
+async function reEvalBoolean(primary) {
+	const cfg = primary?.userData?.boolean;
+	const origGeom = primary?.userData?._boolOriginalGeom;
+	if (!cfg || !origGeom) return;
+	const ok = await _loadBooleanLib();
+	if (!ok) return;
+	const CSG = _bool.CSG;
+	const OP_MAP = {
+		subtract: CSG.SUBTRACTION,
+		intersect: CSG.INTERSECTION,
+	};
+	const op = OP_MAP[cfg.op];
+	if (op === undefined) return;
+	const cutters = cfg.cutterNames
+		.map(n => objects.find(o => o.name === n))
+		.filter(Boolean);
+	if (!cutters.length) return;
+	primary.updateWorldMatrix(true, false);
+	try {
+		// Build the base brush from the cached original geometry, applied
+		// through the primary's CURRENT world matrix. This is what makes
+		// dragging the primary re-cut against the cutter — the base's world
+		// footprint changes each frame but its source geometry is stable.
+		const worldBaseGeom = origGeom.clone();
+		worldBaseGeom.applyMatrix4(primary.matrixWorld);
+		if (!worldBaseGeom.attributes.normal) worldBaseGeom.computeVertexNormals();
+		if (!worldBaseGeom.attributes.uv) {
+			const count = worldBaseGeom.attributes.position.count;
+			worldBaseGeom.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(count * 2), 2));
+		}
+		if (worldBaseGeom.index) {
+			const nonIdx = worldBaseGeom.toNonIndexed();
+			worldBaseGeom.dispose();
+			var baseGeom = nonIdx;
+		} else {
+			var baseGeom = worldBaseGeom;
+		}
+		const evaluator = new CSG.Evaluator();
+		evaluator.useGroups = false;
+		let result = new CSG.Brush(baseGeom);
+		for (const c of cutters) {
+			const b = await _bakeMeshWorld(c);
+			if (!b) continue;
+			result = evaluator.evaluate(result, b, op);
+			b.geometry?.dispose?.();
+		}
+		// Convert result back to primary's local space so primary's transform
+		// applies naturally on render.
+		const worldToLocal = new THREE.Matrix4().copy(primary.matrixWorld).invert();
+		const localGeom = result.geometry.clone();
+		localGeom.applyMatrix4(worldToLocal);
+		primary.geometry?.dispose?.();
+		primary.geometry = localGeom;
+	} catch (e) {
+		console.error("[bool] re-eval failed:", e);
+	}
+}
+
+// Walk the selection, collect every boolean-result mesh that any of the
+// currently-selected sources feeds, dedupe, and re-run its CSG. Shared by
+// both the realtime RAF loop (during drag) and the drag-end fallback.
+async function _boolReEvalDraggedCutters() {
+	const targets = new Set();
+	const scan = (o) => {
+		if (!o?.userData?.boolCutter) return;
+		for (const name of (o.userData.boolResults || [])) {
+			const r = objects.find(x => x.name === name && x.userData?.boolean);
+			if (r) targets.add(r);
+		}
+	};
+	if (selected) scan(selected);
+	if (selectionSet) for (const o of selectionSet) scan(o);
+	if (targets.size === 0 && (selected?.userData?.boolCutter || Array.from(selectionSet || []).some(o => o?.userData?.boolCutter))) {
+		console.warn("[bool] cutter dragged but no target result found — boolResults refs may be stale", {
+			selected: selected?.name,
+			selectionNames: Array.from(selectionSet || []).map(o => o?.name),
+			results: selected?.userData?.boolResults,
+		});
+	}
+	for (const r of targets) await reEvalBoolean(r);
+}
+
+// Realtime CSG on gizmo drag — TransformControls fires objectChange every
+// frame the selected transform mutates. We queue a single re-eval per RAF
+// so consecutive mousemove events collapse into one CSG pass and the
+// heavier ops don't run 60+ times/second. Only fires while a boolean-
+// source is actually being dragged.
+let _boolReEvalPending = false;
+function _scheduleBoolReEvalRealtime() {
+	if (_boolReEvalPending) return;
+	_boolReEvalPending = true;
+	requestAnimationFrame(async () => {
+		_boolReEvalPending = false;
+		try { await _boolReEvalDraggedCutters(); } catch {}
+	});
+}
+
+// Collapse a Group (import) or plain Mesh into a single flattened Mesh in
+// world space so CSG can consume it. Returns a NEW throwaway mesh at the
+// origin — the caller is responsible for disposing it.
+async function _bakeMeshWorld(obj) {
+	const geoms = [];
+	obj.updateWorldMatrix(true, true);
+	obj.traverse(c => {
+		if (!c.isMesh || !c.geometry) return;
+		let g = c.geometry.clone();
+		g.applyMatrix4(c.matrixWorld);
+		// Strip everything but position/normal/uv — three-bvh-csg walks
+		// attributes per-brush and mismatched sets across brushes crash it.
+		const keep = new Set(["position", "normal", "uv"]);
+		for (const key of Object.keys(g.attributes)) {
+			if (!keep.has(key)) g.deleteAttribute(key);
+		}
+		if (!g.attributes.normal) g.computeVertexNormals();
+		if (!g.attributes.uv) {
+			const count = g.attributes.position.count;
+			g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(count * 2), 2));
+		}
+		// three-bvh-csg needs a non-indexed geometry for its interpolation
+		// walk — indexed input crashes with "Cannot read properties of
+		// undefined (reading 'array')" when it looks up the missing attribute
+		// on a per-vertex-index basis.
+		if (g.index) g = g.toNonIndexed();
+		geoms.push(g);
+	});
+	if (!geoms.length) return null;
+	if (geoms.length === 1) return new _bool.CSG.Brush(geoms[0]);
+	const { BufferGeometryUtils } = await import("three/addons/utils/BufferGeometryUtils.js");
+	const merged = BufferGeometryUtils.mergeGeometries(geoms, false);
+	return new _bool.CSG.Brush(merged);
+}
+
+async function _mergeAndBrush(geoms) {
+	const { BufferGeometryUtils } = await import("three/addons/utils/BufferGeometryUtils.js");
+	const merged = BufferGeometryUtils.mergeGeometries(geoms, false);
+	return new _bool.CSG.Brush(merged);
+}
+
+async function runBooleanOp(opName) {
+	const status = document.getElementById("bool-status");
+	const set = Array.from(selectionSet || []).filter(o => o && o !== renderCam);
+	if (set.length < 2) {
+		if (status) status.textContent = "need 2+ objects";
+		return;
+	}
+	const ok = await _loadBooleanLib();
+	if (!ok) { if (status) status.textContent = "library load failed"; return; }
+	if (status) status.textContent = `${opName}ing…`;
+
+	// Primary = the first selected (typically the `selected` object). For
+	// Subtract this is the base being carved. For Union / Intersect the
+	// order matters less but we keep it consistent.
+	const primary = selected && set.includes(selected) ? selected : set[0];
+	const others = set.filter(o => o !== primary);
+	snapshotForUndo?.();
+
+	try {
+		const CSG = _bool.CSG;
+		const OP_MAP = {
+			union: CSG.ADDITION,
+			subtract: CSG.SUBTRACTION,
+			intersect: CSG.INTERSECTION,
+		};
+		const op = OP_MAP[opName];
+		if (op === undefined) throw new Error(`unknown op ${opName}`);
+
+		// Stash the pre-boolean material + geometry on each source so Cancel
+		// (and Switch) can restore. Stored on the object itself so it isn't
+		// orphaned if the outliner deletes the mesh directly.
+		const stashOriginal = (o) => {
+			if (o.userData._boolOriginal) return;
+			o.userData._boolOriginal = {
+				material: o.material,
+				visible: o.visible,
+			};
+		};
+
+		if (opName === "union") {
+			// Union is destructive — every source is merged into a fresh mesh
+			// and the sources are consumed. No live-modifier semantics needed.
+			let baseBrush = await _bakeMeshWorld(primary);
+			if (!baseBrush) throw new Error("primary has no geometry");
+			const evaluator = new CSG.Evaluator();
+			evaluator.useGroups = false;
+			let resultBrush = baseBrush;
+			for (const o of others) {
+				const b = await _bakeMeshWorld(o);
+				if (!b) continue;
+				resultBrush = evaluator.evaluate(resultBrush, b, op);
+				b.geometry?.dispose?.();
+			}
+			const primaryMat = primary.material?.color ? primary.material : null;
+			const finalMat = new THREE.MeshStandardMaterial({
+				color: primaryMat?.color ? primaryMat.color.clone() : new THREE.Color(0xffffff),
+				roughness: primaryMat?.roughness ?? 0.7,
+				metalness: primaryMat?.metalness ?? 0,
+			});
+			const finalMesh = new THREE.Mesh(resultBrush.geometry, finalMat);
+			finalMesh.name = nextName("bool");
+			stashInitialTransform(finalMesh);
+			scene.add(finalMesh);
+			objects.push(finalMesh);
+			for (const o of set) deleteObject(o);
+			select(finalMesh);
+		} else {
+			// Subtract / Intersect — LIVE modifier pattern. The primary keeps
+			// its identity + transform; its geometry is REPLACED with the
+			// CSG result (converted to primary-local space so its transform
+			// still works). The primary's ORIGINAL local geometry is cached
+			// on the object so re-eval can recompute from source at any
+			// point. Cutters stay in the scene as cyan wireframes; moving
+			// either the primary OR a cutter re-runs CSG.
+			stashOriginal(primary);
+			// Cache the pre-CSG geometry on the primary — needed for both
+			// live re-eval and Cancel restore. Cloned so downstream mutations
+			// don't creep in.
+			primary.userData._boolOriginalGeom = primary.geometry.clone();
+			const cutterMat = new THREE.MeshBasicMaterial({
+				color: 0x66ccff, wireframe: true, transparent: true,
+				opacity: 0.55, depthWrite: false,
+			});
+			for (const o of others) {
+				stashOriginal(o);
+				if (o.isMesh) o.material = cutterMat;
+				o.userData.boolCutter = true;
+				o.userData.boolResults = (o.userData.boolResults || []).concat(primary.name);
+			}
+			primary.userData.boolean = {
+				op: opName,
+				cutterNames: others.map(o => o.name),
+			};
+			// Self-reference so dragging the primary itself triggers re-eval
+			// via the same objectChange path the cutters use.
+			primary.userData.boolCutter = true;
+			primary.userData.boolResults = (primary.userData.boolResults || []).concat(primary.name);
+			// Run the first CSG pass to establish the initial hole / overlap.
+			await reEvalBoolean(primary);
+			select(primary);
+		}
+		refreshOutliner();
+		saveScene?.();
+		if (status) status.textContent = `done — ${finalMesh.name}`;
+	} catch (e) {
+		console.error("[bool] eval failed:", e);
+		if (status) status.textContent = `failed · ${String(e.message || e).slice(0, 80)}`;
+	}
+}
+
+// Wire pane buttons + keep the selection hint fresh whenever selection
+// changes (via a MutationObserver on outliner isn't reliable; simpler to
+// refresh in select()). For MVP: refresh on any click into the pane.
+// Cancel restores the primary's original geometry + material, restores each
+// cutter's original material, and drops all boolean state. Nothing to delete
+// since the primary IS the result mesh — no separate CSG mesh in the scene.
+function cancelBoolean(primary) {
+	const cfg = primary?.userData?.boolean;
+	if (!cfg) return;
+	snapshotForUndo?.();
+	// Restore primary's geometry from the cached original + its original
+	// material (stashed at boolean time).
+	const orig = primary.userData._boolOriginal;
+	if (primary.userData._boolOriginalGeom) {
+		primary.geometry?.dispose?.();
+		primary.geometry = primary.userData._boolOriginalGeom;
+		delete primary.userData._boolOriginalGeom;
+	}
+	if (orig?.material) {
+		primary.material?.dispose?.();
+		primary.material = orig.material;
+	}
+	// Restore each cutter to its pre-boolean look + strip boolean tags.
+	for (const name of cfg.cutterNames) {
+		const src = objects.find(o => o.name === name);
+		if (!src) continue;
+		const srcOrig = src.userData._boolOriginal;
+		if (srcOrig?.material) {
+			src.material?.dispose?.();
+			src.material = srcOrig.material;
+		}
+		if (srcOrig) src.visible = srcOrig.visible !== false;
+		delete src.userData._boolOriginal;
+		if (Array.isArray(src.userData.boolResults)) {
+			src.userData.boolResults = src.userData.boolResults.filter(n => n !== primary.name);
+			if (!src.userData.boolResults.length) {
+				delete src.userData.boolResults;
+				delete src.userData.boolCutter;
+			}
+		}
+	}
+	delete primary.userData._boolOriginal;
+	delete primary.userData.boolean;
+	if (Array.isArray(primary.userData.boolResults)) {
+		primary.userData.boolResults = primary.userData.boolResults.filter(n => n !== primary.name);
+		if (!primary.userData.boolResults.length) {
+			delete primary.userData.boolResults;
+			delete primary.userData.boolCutter;
+		}
+	}
+	saveScene?.();
+	_refreshBoolPane();
+}
+
+// Apply commits the current CSG geometry on the primary as a permanent bake
+// and consumes the cutters. Primary keeps its transform + baked geometry;
+// cutters are deleted; all boolean state cleared so nothing tries to re-eval.
+function applyBoolean(primary) {
+	const cfg = primary?.userData?.boolean;
+	if (!cfg) return;
+	snapshotForUndo?.();
+	const cutterNames = cfg.cutterNames.slice();
+	// Clear boolean tags FIRST so cutter deletion doesn't trigger anything
+	// referencing this primary.
+	delete primary.userData.boolean;
+	delete primary.userData._boolOriginalGeom;
+	delete primary.userData._boolOriginal;
+	if (Array.isArray(primary.userData.boolResults)) {
+		primary.userData.boolResults = primary.userData.boolResults.filter(n => n !== primary.name);
+		if (!primary.userData.boolResults.length) {
+			delete primary.userData.boolResults;
+			delete primary.userData.boolCutter;
+		}
+	}
+	for (const name of cutterNames) {
+		const src = objects.find(o => o.name === name);
+		if (src) {
+			// Strip tags before deleteObject so any re-eval hook can't fire
+			// mid-delete.
+			delete src.userData._boolOriginal;
+			delete src.userData.boolCutter;
+			delete src.userData.boolResults;
+			deleteObject(src);
+		}
+	}
+	select(primary);
+	saveScene?.();
+	_refreshBoolPane();
+}
+
+// Switch = swap which source is the "base" (holds the result geometry).
+// Since the primary IS the result in the modifier model, we cancel the
+// current boolean (restoring the old primary's original state), then
+// re-run the same op with the previous first cutter promoted to primary.
+async function switchBooleanBase(primary) {
+	const cfg = primary?.userData?.boolean;
+	if (!cfg || !cfg.cutterNames.length) return;
+	const op = cfg.op;
+	const firstCutterName = cfg.cutterNames[0];
+	const restCutterNames = cfg.cutterNames.slice(1);
+	const firstCutter = objects.find(o => o.name === firstCutterName);
+	if (!firstCutter) return;
+	snapshotForUndo?.();
+	// Restore old primary + strip boolean state on all sources without
+	// running the extra undo snapshot Cancel does.
+	cancelBoolean(primary);
+	// Rebuild the selection: new primary first, then old primary + rest.
+	const restObjs = restCutterNames.map(n => objects.find(o => o.name === n)).filter(Boolean);
+	selectionSet.clear();
+	selectionSet.add(firstCutter);
+	selectionSet.add(primary);
+	for (const o of restObjs) selectionSet.add(o);
+	selected = firstCutter;
+	window.__selectedObj = firstCutter;
+	// Re-run the same op — runBooleanOp treats `selected` as primary.
+	await runBooleanOp(op);
+}
+
+(function wireBool() {
+	const pane = document.getElementById("rp-pane-bool");
+	if (!pane) return;
+	pane.addEventListener("click", (e) => {
+		const opBtn = e.target.closest("button[data-bool-op]");
+		if (opBtn) { runBooleanOp(opBtn.dataset.boolOp); return; }
+		const baseTab = e.target.closest("button[data-bool-base]");
+		if (baseTab) {
+			if (baseTab.dataset.boolBase === "1") switchBooleanBase(selected);
+			return;
+		}
+		if (e.target.closest("#bool-apply-btn")) { applyBoolean(selected); return; }
+		if (e.target.closest("#bool-cancel-btn")) { cancelBoolean(selected); return; }
+		_refreshBoolPane();
+	});
+})();
 
 
 // Load Media tool — displays an image or looping video in the AR
@@ -8067,6 +8707,7 @@ function setActiveGenCell(id) {
 		refreshGenCells();
 		refreshViewportGenerateBtn();
 		if (typeof refreshChatContextChip === "function") refreshChatContextChip();
+	if (typeof _refreshBoolPane === "function") _refreshBoolPane();
 	}
 	// Sync the right-hand properties pane. Only rebuild the pane DOM when the
 	// active id actually changed OR the pane isn't currently showing gencell
