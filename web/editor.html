@@ -898,7 +898,11 @@
 	   sit directly on the panel background instead of inside a bordered shell. */
 	#rp-pane-assistant .assistant-shell { border: none; border-radius: 0; }
 	#rp-pane-assistant .assistant-shell:focus-within { border-color: transparent; }
-	#rp-pane-assistant .assistant-log { background: transparent; padding: 12px 16px; }
+	/* Log area is darker than the pane bg so the header (above) and input row
+	   (below) read as their own bands sitting on top of the conversation.
+	   Left padding matches #rp-zone-top-header (20px) so message text lines
+	   up with the "AI AGENT" kicker above. */
+	#rp-pane-assistant .assistant-log { background: rgba(0,0,0,0.28); padding: 12px 20px; }
 	#rp-pane-assistant .assistant-msg.system { background: transparent; padding: 0 0 4px; }
 	#rp-pane-assistant .assistant-input-row {
 		background: transparent;
@@ -912,7 +916,10 @@
 		display: flex; align-items: stretch;
 		padding: 0;
 	}
-	#rp-pane-assistant .assistant-input-row:focus-within { background: rgba(255,255,255,0.03); }
+	/* Focus tint lives on the bottom band (context chip + 78px input row) — NOT
+	   the whole shell, otherwise the log area would light up too and destroy
+	   the intentional log/input separation. */
+	#rp-pane-assistant .assistant-bottom-band:focus-within { background: rgba(255,255,255,0.03); }
 	/* Docked pane: input padding + arrow position tuned together so the arrow's
 	   crossbar sits ~2px above the first line of typed text. */
 	#rp-pane-assistant .assistant-input { height: 100%; padding: 17px 12px 12px 28px; }
@@ -928,15 +935,20 @@
 	}
 	.assistant-md pre, .assistant-md table { max-width: 100%; }
 	.assistant-md pre { white-space: pre-wrap; word-break: break-word; }
+	/* Chat rows read as flat text on the log background — no bubble/box per
+	   message. The amber "you · " prefix already flags user turns, so a
+	   translucent-pill background on top of the darker log was redundant
+	   nesting ("box inside a box"). Keep vertical padding for breathing
+	   room but drop the horizontal padding + border-radius + fill. */
 	.assistant-msg {
 		font-size: 11px; line-height: 1.5;
-		padding: 6px 8px; border-radius: 4px;
+		padding: 4px 0;
 		white-space: pre-wrap; word-wrap: break-word;
 	}
-	.assistant-msg.system  { color: rgba(255,255,255,0.35); font-style: italic; padding: 4px 0; }
-	.assistant-msg.user    { background: rgba(255,180,84,0.08); color: rgba(255,255,255,0.9); }
+	.assistant-msg.system  { color: rgba(255,255,255,0.35); font-style: italic; }
+	.assistant-msg.user    { color: rgba(255,255,255,0.9); }
 	.assistant-msg.user::before    { content: "you · "; color: #ffb454; font-weight: 600; }
-	.assistant-msg.bot     { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.85); }
+	.assistant-msg.bot     { color: rgba(255,255,255,0.85); }
 	.assistant-msg.bot::before     { content: "agent · "; color: rgba(255,255,255,0.4); font-weight: 600; }
 	/* Rendered-markdown body inside bot messages */
 	.assistant-md { display: block; }
@@ -1001,7 +1013,7 @@
 	.assistant-md th {
 		background: rgba(255,255,255,0.04); color: #ffd28a; font-weight: 600;
 	}
-	.assistant-msg.error   { background: rgba(255,80,80,0.08); color: #ff8a8a; }
+	.assistant-msg.error   { color: #ff8a8a; }
 
 	/* Context chip — thin row between the log and the input, only visible when
 	   a generator or workflow module is active. Compact so it doesn't fight the
@@ -1165,6 +1177,10 @@
 		display: inline-flex; align-items: center; justify-content: center;
 		transition: background 0.12s, color 0.12s;
 	}
+	/* SVG glyphs (× / ▶) sit inside the 26px button — 12px keeps them visually
+	   proportionate and lets flex-center handle alignment precisely, unlike the
+	   font-metric-driven positioning of the old unicode text glyphs. */
+	.gen-run-btn svg, .gen-del-btn svg { width: 12px; height: 12px; display: block; }
 	.gen-run-btn {
 		background: rgba(255,180,84,0.14); color: rgba(255,180,84,0.85);
 		font-size: 11px; line-height: 1;
@@ -1591,6 +1607,14 @@
 	   child row goes fluid so drag-boxes split the pair's width evenly.
 	   Labels drop the fixed 58px so short pair labels don't waste space. */
 	.slider-row-pair { display: flex; gap: 8px; margin-bottom: 5px; }
+	/* Uniform grid for param pills. Every cell is the same width so the pills
+	   line up edge-to-edge regardless of label length (labels live INSIDE the
+	   drag pill via opts.label + drag-label). cols-N picks the column count. */
+	.param-grid { display: grid; gap: 6px; margin-bottom: 5px; }
+	.param-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+	.param-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+	.param-grid[hidden] { display: none; }
+	.param-grid .slider-row { margin-bottom: 0; min-width: 0; }
 	/* Restore proper hiding — flex above outranks [hidden]'s default display:none. */
 	.slider-row-pair[hidden] { display: none; }
 	.slider-row-pair .slider-row { flex: 1; margin-bottom: 0; min-width: 0; }
@@ -2706,6 +2730,7 @@
 				</button>
 			</div>
 			<div class="vt-group">
+				<button class="vt-btn" id="mode-space" title="Transform space — click to toggle Local (gizmo rides object frame) / World (gizmo stays axis-aligned).">Local</button>
 				<button class="vt-btn" id="mode-translate" data-mode="translate">Move<span class="vt-key">W</span></button>
 				<button class="vt-btn" id="mode-rotate" data-mode="rotate">Rotate<span class="vt-key">E</span></button>
 				<button class="vt-btn" id="mode-scale" data-mode="scale">Scale<span class="vt-key">R</span></button>
@@ -2837,7 +2862,6 @@
 		     switcher (the original single-panel layout, now scoped to a zone). -->
 		<div id="rp-zone-top">
 			<div id="rp-zone-top-header" title="Click to collapse / expand">
-				<span class="rp-zone-caret" aria-hidden="true">▾</span>
 				<span class="rp-kicker">AI Agent</span>
 				<span class="rp-header-end" id="rp-zone-top-controls"></span>
 			</div>
@@ -3161,34 +3185,38 @@
 						<input type="file" id="bg-image-file" accept="image/*" hidden>
 						<input type="file" id="bg-video-file" accept="video/*" hidden>
 					</div>
-					<div class="slider-row-pair" id="bg-blur-opacity-pair" style="margin-top:8px" hidden>
-						<div class="slider-row" id="bg-blur-row">
-							<label>Blur</label>
-							<input type="range" id="bg-blur" min="0" max="40" step="1" value="0">
-							<span class="slider-val" id="bg-blur-val">0</span>
+					<!-- Adjust/Transform controls are grouped under mini-headers so
+					     the section reads as [pickers][transform][display] instead
+					     of a wall of half-width sliders in inconsistent columns.
+					     The whole cluster stays hidden until an Image or Video is
+					     active (nothing to adjust otherwise). -->
+					<div id="bg-adjust-cluster" hidden>
+						<div class="sub-label" style="margin-top:10px">Transform</div>
+						<div class="param-grid cols-3" id="bg-transform-grid">
+							<div class="slider-row">
+								<input type="range" id="bg-offset-x" min="-500" max="500" step="1" value="0">
+								<span class="slider-val" id="bg-offset-x-val">0</span>
+							</div>
+							<div class="slider-row">
+								<input type="range" id="bg-offset-y" min="-500" max="500" step="1" value="0">
+								<span class="slider-val" id="bg-offset-y-val">0</span>
+							</div>
+							<div class="slider-row">
+								<input type="range" id="bg-scale" min="10" max="500" step="1" value="100">
+								<span class="slider-val" id="bg-scale-val">100</span>
+							</div>
 						</div>
-						<div class="slider-row" id="bg-opacity-row">
-							<label>Opacity</label>
-							<input type="range" id="bg-opacity" min="0" max="100" step="1" value="100">
-							<span class="slider-val" id="bg-opacity-val">100</span>
+						<div class="sub-label" style="margin-top:10px">Display</div>
+						<div class="param-grid cols-2" id="bg-display-grid">
+							<div class="slider-row" id="bg-blur-row">
+								<input type="range" id="bg-blur" min="0" max="40" step="1" value="0">
+								<span class="slider-val" id="bg-blur-val">0</span>
+							</div>
+							<div class="slider-row" id="bg-opacity-row">
+								<input type="range" id="bg-opacity" min="0" max="100" step="1" value="100">
+								<span class="slider-val" id="bg-opacity-val">100</span>
+							</div>
 						</div>
-					</div>
-					<div class="slider-row-pair" id="bg-offset-pair" style="margin-top:4px" hidden>
-						<div class="slider-row">
-							<label>X</label>
-							<input type="range" id="bg-offset-x" min="-500" max="500" step="1" value="0">
-							<span class="slider-val" id="bg-offset-x-val">0</span>
-						</div>
-						<div class="slider-row">
-							<label>Y</label>
-							<input type="range" id="bg-offset-y" min="-500" max="500" step="1" value="0">
-							<span class="slider-val" id="bg-offset-y-val">0</span>
-						</div>
-					</div>
-					<div class="slider-row" id="bg-scale-row" style="margin-top:4px" hidden>
-						<label>Scale</label>
-						<input type="range" id="bg-scale" min="10" max="500" step="1" value="100">
-						<span class="slider-val" id="bg-scale-val">100</span>
 					</div>
 				</div>
 
@@ -3205,10 +3233,16 @@
 							<option value="none">None</option>
 						</select>
 					</div>
-					<div class="slider-row">
-						<label>Intensity</label>
-						<input type="range" id="env-intensity" min="0" max="3" step="0.05" value="0.2">
-						<span class="slider-val" id="env-intensity-val">0.20</span>
+					<!-- Single-property slider — dropped into a 2-col grid with only
+					     the left cell filled so the pill takes half the column
+					     width, matching the Background grids. Half-width reads
+					     as "one value" instead of the full-bar look that visually
+					     implies "there's more here to compare against". -->
+					<div class="param-grid cols-2">
+						<div class="slider-row">
+							<input type="range" id="env-intensity" min="0" max="3" step="0.05" value="0.2">
+							<span class="slider-val" id="env-intensity-val">0.20</span>
+						</div>
 					</div>
 				</div>
 
@@ -4300,8 +4334,15 @@ orbit.mouseButtons = {
 orbit.screenSpacePanning = true;
 
 const transform = new TransformControls(camera, renderer.domElement);
-// Local space — gizmo rides the object's frame for all three modes.
-transform.setSpace("local");
+// Gizmo space (local vs world) is user-toggleable via the viewport toolbar's
+// Local/World button. Persisted under cb.gizmoSpace so the choice survives
+// reload — same convention as the other viewport UI state. Default = local.
+const GIZMO_SPACE_KEY = "cb.gizmoSpace";
+let gizmoSpace = (() => {
+	try { return localStorage.getItem(GIZMO_SPACE_KEY) === "world" ? "world" : "local"; }
+	catch { return "local"; }
+})();
+transform.setSpace(gizmoSpace);
 transform.addEventListener("dragging-changed", (e) => {
 	// Re-enable orbit after a gizmo drag ENDS — but only when renderCam isn't the
 	// selection, since selecting renderCam pins the viewport for shot-adjustment.
@@ -4974,10 +5015,35 @@ async function ensureSpark() {
 	return mod;
 }
 
+// Names function as identity in a few places (outliner collections track members
+// by name, the AI tool endpoints resolve targets by name, saveScene/loadScene
+// round-trip everything by name), so duplicate names cause hard-to-diagnose
+// bugs (wrong group loses a member on grouping, tool call hits the wrong
+// object, etc.). ensureUniqueName suffix-bumps a proposed name until it
+// doesn't collide with any other object in the scene.
+function ensureUniqueName(candidate, excludeObj) {
+	if (!candidate) return candidate;
+	const clash = () => objects.some(o => o !== excludeObj && o.name === candidate);
+	if (!clash()) return candidate;
+	// Split trailing .NNN suffix so "Cube.004" becomes base="Cube", i=4 and we
+	// resume incrementing from there — avoids Cube.004.001.001-style buildup.
+	const m = candidate.match(/^(.*?)(?:\.(\d{3}))?$/);
+	const base = m?.[1] || candidate;
+	let i = m?.[2] ? parseInt(m[2], 10) : 0;
+	while (true) {
+		i++;
+		candidate = `${base}.${String(i).padStart(3, "0")}`;
+		if (!clash()) return candidate;
+	}
+}
+
 function nextName(baseKind) {
 	primCounters[baseKind] = (primCounters[baseKind] || 0) + 1;
 	const cap = baseKind[0].toUpperCase() + baseKind.slice(1);
-	return `${cap}.${String(primCounters[baseKind]).padStart(3,"0")}`;
+	// Cross-check against live objects — the counter alone can collide with a
+	// manually-renamed object (user renames Cube.007 while counter is at 5, then
+	// two new cubes land on 6 and 7 which was reserved).
+	return ensureUniqueName(`${cap}.${String(primCounters[baseKind]).padStart(3,"0")}`);
 }
 
 function registerImported(obj, kind, filename) {
@@ -6219,12 +6285,25 @@ function forceRightPane(which, label) {
 	// IIFE. Nothing to toggle here per switcher-pane change.
 	const headerEndEl = document.getElementById("rp-header-end");
 	if (headerEndEl) headerEndEl.hidden = true;
+	// Remember the last "home" pane so a page reload / deselect restores it
+	// instead of blanking. Object / GenCell / WorkflowCell are selection-driven
+	// (they only exist because something is picked), so they don't count as a
+	// home. Neither does "none" — that IS the blank state we're trying to avoid.
+	if (which === "assets" || which === "scene" || which === "camera" || which === "mediapipe") {
+		LAST_SWITCHER_PANE = which;
+		try { localStorage.setItem(LAST_SWITCHER_PANE_KEY, which); } catch {}
+	}
 }
 
-// Default switcher pane resolution — always "none" now that the Assistant has
-// its own permanent top zone. The switcher below shows nothing until the user
-// selects something (an object, an asset, a scene/camera button).
-function defaultRightPane() { return "none"; }
+// Last "home" pane, persisted across sessions so reopening the app restores
+// whichever switcher pane the user was on (Assets, Scene, Camera, MediaPipe).
+// First-run default is "assets" so the switcher never opens blank.
+const LAST_SWITCHER_PANE_KEY = "cb.rightPanel.lastPane";
+let LAST_SWITCHER_PANE = (() => {
+	try { return localStorage.getItem(LAST_SWITCHER_PANE_KEY) || "assets"; }
+	catch { return "assets"; }
+})();
+function defaultRightPane() { return LAST_SWITCHER_PANE || "assets"; }
 window.defaultRightPane = defaultRightPane;
 
 // AI Agent enablement — opt-in via Settings, persisted in localStorage. Off by
@@ -6842,7 +6921,7 @@ function buildOutlinerRow(obj, { nested = false } = {}) {
 				if (save) {
 					const v = input.value.trim();
 					if (v) {
-						obj.name = v;
+						obj.name = ensureUniqueName(v, obj);
 						if (selected === obj) forceRightPane("object", objectPaneLabel(obj));
 						saveScene?.();
 					}
@@ -6950,24 +7029,38 @@ function refreshOutliner() {
 		outlinerEl.appendChild(empty);
 		return;
 	}
-	// Every object that's a member of some collection — those render inside
-	// their group card, not at root level. Everything else renders as a
-	// normal root .out-row above the group cards.
-	const groupedNames = new Set();
-	for (const g of sceneCollections) for (const n of g.memberNames) groupedNames.add(n);
-	for (const obj of objects) {
-		if (groupedNames.has(obj.name)) continue;
-		outlinerEl.appendChild(buildOutlinerRow(obj));
+	// Resolve group members by object REFERENCE (not just name) so duplicate
+	// names can't map two different objects to the same slot — or cause the
+	// duplicate to be filtered out of the ungrouped list twice. Each unclaimed
+	// object with a matching name goes into the first collection that wants
+	// it; the second Cube.004 (say) stays available for a later collection or
+	// as a root-level row.
+	const objToGroup = new Map();
+	const groupMembers = new Map();
+	const claimed = new Set();
+	for (const g of sceneCollections) {
+		const members = [];
+		for (const n of g.memberNames) {
+			const obj = objects.find(o => o.name === n && !claimed.has(o));
+			if (obj) { members.push(obj); claimed.add(obj); objToGroup.set(obj, g); }
+		}
+		if (members.length > 0) groupMembers.set(g, members);
 	}
-	// Group cards. Each collection renders as [folder icon | name | count
-	// | eye | chevron]; expanded shows the member .out-row.nested rows in an
-	// indented container. Members resolve from the live `objects` array by
-	// name — any stale name (deleted between saves) is silently skipped.
-	for (const group of sceneCollections) {
-		const members = group.memberNames
-			.map(n => objects.find(o => o.name === n))
-			.filter(Boolean);
-		if (members.length === 0) continue;
+
+	// Walk objects in scene order. When we hit the first member of a group,
+	// render the whole group card at that position — this keeps groups
+	// visually next to their contents instead of always sinking below the
+	// ungrouped rows.
+	const renderedGroups = new Set();
+	for (const rootObj of objects) {
+		const group = objToGroup.get(rootObj);
+		if (!group) {
+			outlinerEl.appendChild(buildOutlinerRow(rootObj));
+			continue;
+		}
+		if (renderedGroups.has(group)) continue;
+		renderedGroups.add(group);
+		const members = groupMembers.get(group);
 		// A group is "selected" (highlighted amber) when every one of its
 		// members is currently in the selectionSet — reflects the "click header
 		// to select all" gesture, dims when the user has diverged.
@@ -8207,8 +8300,8 @@ function _appendGenRows(container) {
 				<div class="gen-icon">${m.iconSvg}</div>
 				<span class="gen-name">${m.name}</span>
 				<div class="gen-head-end">
-					<button class="gen-del-btn" title="Remove ${m.name} from the list" type="button">×</button>
-					<button class="gen-run-btn" title="Run ${m.name}" type="button">▶</button>
+					<button class="gen-del-btn" title="Remove ${m.name} from the list" type="button" aria-label="Remove"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+					<button class="gen-run-btn" title="Run ${m.name}" type="button" aria-label="Run"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.5v9l7-4.5z"/></svg></button>
 				</div>
 			</div>
 		`;
@@ -8845,8 +8938,8 @@ function _appendWorkflowRows(container) {
 				<div class="gen-icon">${kindIcon}</div>
 				<span class="gen-name">${m.label}</span>
 				<div class="gen-head-end">
-					<button class="gen-del-btn" title="Remove from list" type="button">×</button>
-					<button class="gen-run-btn" title="Run ${m.label}" type="button">▶</button>
+					<button class="gen-del-btn" title="Remove from list" type="button" aria-label="Remove"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+					<button class="gen-run-btn" title="Run ${m.label}" type="button" aria-label="Run"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.5v9l7-4.5z"/></svg></button>
 				</div>
 			</div>
 		`;
@@ -9568,29 +9661,13 @@ function refreshChatContextChip() {
 	const chip = document.getElementById("assistant-context");
 	const target = document.getElementById("assistant-context-target");
 	if (!chip || !target) return;
-	const activeGen = genCells.find(c => c.id === activeGenCellId);
-	const activeWorkflow = workflowCells.find(c => c.id === activeWorkflowCellId);
-	const activeWorkflowMod = activeWorkflow ? workflowModules[activeWorkflow.moduleId] : null;
-	// Selected object joins the context too — the agent can then refer to it
-	// by name in tool calls without the user having to type it. Multi-selection
-	// (selectionSet.size > 1) shows a count so the agent knows it's a group.
+	// Selected object joins the context so the agent can refer to it by name.
+	// Multi-selection (selectionSet.size > 1) shows a count so the agent knows
+	// it's a group.
 	const selObj = (selected && selected !== renderCam) ? selected : null;
 	const selCount = selectionSet?.size || 0;
-	const parts = [];
-	if (activeWorkflowMod) {
-		parts.push(`${activeWorkflowMod.label} · workflow · local`);
-	} else if (activeGen) {
-		const label = GEN_MODELS[activeGen.model]?.name || activeGen.model;
-		parts.push(`${label} · workflow · api`);
-	}
-	if (selObj) {
-		const name = selObj.name || selObj.userData?.primKind || "Object";
-		parts.push(selCount > 1 ? `${name} · +${selCount - 1} · object` : `${name} · object`);
-	}
 	// Attachments take over the chip when present — dropping an image reframes
-	// the whole conversation around that image, so the workflow/object context
-	// shouldn't compete for attention. Prior behavior appended attachments to
-	// existing parts, which made the chip read as a stack of unrelated things.
+	// the whole conversation around that image.
 	if (chatAttachments && chatAttachments.length) {
 		const first = chatAttachments[0].label;
 		target.textContent = chatAttachments.length === 1
@@ -9599,11 +9676,19 @@ function refreshChatContextChip() {
 		chip.hidden = false;
 		return;
 	}
-	if (parts.length === 0) {
+	// Chip only surfaces user-initiated context: an explicitly selected object
+	// or a dropped attachment. An active workflow/gen cell alone is not enough
+	// — those are always-on defaults, not "what the user just picked", so
+	// letting them show would leave the chip permanently populated even when
+	// nothing is selected. Keep it blank in that case.
+	if (!selObj) {
 		chip.hidden = true;
 		return;
 	}
-	target.textContent = parts.join("  ·  ");
+	const name = selObj.name || selObj.userData?.primKind || "Object";
+	target.textContent = selCount > 1
+		? `${name} · +${selCount - 1} · object`
+		: `${name} · object`;
 	chip.hidden = false;
 }
 
@@ -9715,11 +9800,11 @@ const ASSISTANT_TOOLS = {
 		if (!obj) return `error: no object named '${name}'`;
 		const v = String(new_name || "").trim();
 		if (!v) return "error: new_name is empty";
-		obj.name = v;
+		obj.name = ensureUniqueName(v, obj);
 		if (selected === obj) forceRightPane("object", objectPaneLabel(obj));
 		refreshOutliner();
 		saveScene?.();
-		return `renamed to ${v}`;
+		return `renamed to ${obj.name}`;
 	},
 
 	set_object_color({ name, color }) {
@@ -10501,13 +10586,29 @@ const modeButtons = document.querySelectorAll("[data-mode]");
 function setActiveMode(mode) {
 	anchorMode = false;
 	transform.setMode(mode);
-	transform.setSpace("local");
+	// Respect the user's Local/World choice from the toolbar toggle instead of
+	// hard-resetting to local every time the mode changes.
+	transform.setSpace(gizmoSpace);
 	transform.setSize(1.0);
 	modeButtons.forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
 	document.getElementById("mode-anchor").classList.remove("active");
 	tintGizmo(null);
 	pivotMarker.visible = false;
 }
+
+// Local/World toggle — cycles gizmoSpace between "local" and "world",
+// updates the transform, refreshes the button label, and persists.
+function applyGizmoSpace() {
+	transform.setSpace(gizmoSpace);
+	const btn = document.getElementById("mode-space");
+	if (btn) btn.textContent = gizmoSpace === "world" ? "World" : "Local";
+	try { localStorage.setItem(GIZMO_SPACE_KEY, gizmoSpace); } catch {}
+}
+applyGizmoSpace();
+document.getElementById("mode-space")?.addEventListener("click", () => {
+	gizmoSpace = gizmoSpace === "local" ? "world" : "local";
+	applyGizmoSpace();
+});
 modeButtons.forEach(b => b.addEventListener("click", () => setActiveMode(b.dataset.mode)));
 setActiveMode("translate");
 
@@ -11018,6 +11119,14 @@ function enhanceRangeAsDrag(rangeInput, opts = {}) {
 	const row = rangeInput.closest(".slider-row");
 	const valSpan = row?.querySelector(".slider-val");
 	if (valSpan) valSpan.style.display = "none";
+	// If the caller embeds a label inside the pill (opts.label), the outer <label>
+	// text on the row becomes redundant — hide it so the pill is the whole widget
+	// and grid layouts can align pills edge-to-edge without a variable label
+	// column stealing width.
+	if (opts.label) {
+		const outerLabel = row?.querySelector(":scope > label");
+		if (outerLabel) outerLabel.style.display = "none";
+	}
 	// Build the drag surface. Uses the same .drag-num markup the Transform inputs use.
 	const surface = document.createElement("div");
 	surface.className = "drag-num";
@@ -11098,12 +11207,12 @@ function updateCameraSliders() {
 // handlers keep firing.
 [
 	{ id: "fov",              format: v => `${v.toFixed(0)}°`,      sens: 0.4 },
-	{ id: "bg-blur",          format: v => `${v.toFixed(0)}`,       sens: 0.16 },
-	{ id: "bg-opacity",       format: v => `${v.toFixed(0)}%`,      sens: 0.4 },
-	{ id: "bg-offset-x",      format: v => `${v.toFixed(0)}`,       sens: 4 },
-	{ id: "bg-offset-y",      format: v => `${v.toFixed(0)}`,       sens: 4 },
-	{ id: "bg-scale",         format: v => `${v.toFixed(0)}%`,      sens: 2 },
-	{ id: "env-intensity",    format: v => `${v.toFixed(2)}`,       sens: 0.012 },
+	{ id: "bg-blur",          label: "Blur",    format: v => `${v.toFixed(0)}`,       sens: 0.16 },
+	{ id: "bg-opacity",       label: "Opacity", format: v => `${v.toFixed(0)}%`,      sens: 0.4 },
+	{ id: "bg-offset-x",      label: "X",       format: v => `${v.toFixed(0)}`,       sens: 4 },
+	{ id: "bg-offset-y",      label: "Y",       format: v => `${v.toFixed(0)}`,       sens: 4 },
+	{ id: "bg-scale",         label: "Scale",   format: v => `${v.toFixed(0)}%`,      sens: 2 },
+	{ id: "env-intensity",    label: "Intensity", format: v => `${v.toFixed(2)}`,   sens: 0.012 },
 	{ id: "fog-near",         format: v => `${v.toFixed(1)}`,       sens: 0.4 },
 	{ id: "fog-far",          format: v => `${v.toFixed(0)}`,       sens: 2 },
 	{ id: "ao-intensity",     format: v => `${v.toFixed(1)}`,       sens: 0.08 },
@@ -12007,15 +12116,15 @@ const bgBlurRow = document.getElementById("bg-blur-row");
 const bgOpacityInput = document.getElementById("bg-opacity");
 const bgOpacityVal = document.getElementById("bg-opacity-val");
 const bgOpacityRow = document.getElementById("bg-opacity-row");
-const bgBlurOpacityPair = document.getElementById("bg-blur-opacity-pair");
 const bgOffsetXInput = document.getElementById("bg-offset-x");
 const bgOffsetXVal = document.getElementById("bg-offset-x-val");
 const bgOffsetYInput = document.getElementById("bg-offset-y");
 const bgOffsetYVal = document.getElementById("bg-offset-y-val");
-const bgOffsetPair = document.getElementById("bg-offset-pair");
 const bgScaleInput = document.getElementById("bg-scale");
 const bgScaleVal = document.getElementById("bg-scale-val");
-const bgScaleRow = document.getElementById("bg-scale-row");
+// Single cluster wrapper — Transform sub-header + X/Y/Scale grid, Display
+// sub-header + Blur/Opacity grid. Hidden until an image/video is active.
+const bgAdjustCluster = document.getElementById("bg-adjust-cluster");
 
 let bgMode = "color";  // "color" | "image" | "video"
 let bgImage = null;    // { assetId, ext } | null
@@ -12120,12 +12229,10 @@ function syncBgVideoToPlayhead() {
 function refreshBgSliderUI() {
 	// All BG image/video controls only make sense when an asset is showing.
 	const show = (bgMode === "image" && !!bgImage) || (bgMode === "video" && !!bgVideo);
-	// Pair/row wrappers are the visibility gates — hiding the inner rows
-	// individually would leave one child of a pair taking the full width
-	// until the other returned. Toggling the wrapper keeps the layout intact.
-	if (bgBlurOpacityPair) bgBlurOpacityPair.hidden = !show;
-	if (bgOffsetPair) bgOffsetPair.hidden = !show;
-	if (bgScaleRow) bgScaleRow.hidden = !show;
+	// Cluster wrapper is the visibility gate — hiding one child at a time
+	// would leave orphaned sub-headers or half-filled grids. Toggling the
+	// whole cluster keeps sub-labels + grids consistent.
+	if (bgAdjustCluster) bgAdjustCluster.hidden = !show;
 	if (bgBlurInput) bgBlurInput.value = String(bgBlur);
 	if (bgBlurVal) bgBlurVal.textContent = String(bgBlur);
 	if (bgOpacityInput) bgOpacityInput.value = String(bgOpacity);
@@ -15099,6 +15206,19 @@ async function deserializeScene(state, opts = {}) {
 	// (without this they'd stay hidden on load until the user added a camera key).
 	renderKeyframeMarkers();
 
+	// Dedupe object names — older scenes could have collided (e.g. two Cube.004
+	// after a duplicate + manual rename). Duplicate names break outliner group
+	// membership and AI-tool name lookups, so we normalize post-load. First
+	// occurrence keeps its name; every subsequent object with the same name is
+	// suffix-bumped via ensureUniqueName.
+	{
+		const seen = new Set();
+		for (const o of objects) {
+			if (!o.name) continue;
+			if (seen.has(o.name)) o.name = ensureUniqueName(o.name, o);
+			seen.add(o.name);
+		}
+	}
 	// Outliner collections — restore any groups from the saved scene. Prune
 	// members that no longer exist as an object (import/asset failures during
 	// load can leave stragglers), and empty groups get dropped entirely.
