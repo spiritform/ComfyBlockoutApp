@@ -901,7 +901,8 @@
 	#rp-zone-top-body > #rp-pane-assistant {
 		display: flex; flex-direction: column;
 		height: 100%;
-		min-height: 110px;
+		/* Kept in sync with .assistant-context (22) + .assistant-input-row (78) = 100. */
+		min-height: 100px;
 	}
 	#rp-pane-assistant[hidden] { display: none; }
 	#rp-pane-assistant #assistant-section {
@@ -974,8 +975,11 @@
 	#rp-pane-assistant .assistant-bottom-band:focus-within { background: rgba(255,255,255,0.03); }
 	/* Docked pane: input padding + arrow position tuned together so the arrow's
 	   crossbar sits ~2px above the first line of typed text. */
-	#rp-pane-assistant .assistant-input { height: 100%; padding: 17px 12px 12px 28px; }
-	#rp-pane-assistant .assistant-prompt-arrow { top: 15px; }
+	#rp-pane-assistant .assistant-input { height: 100%; padding: 17px 12px 12px 32px; }
+	/* Left rail alignment — arrow nudged 2px inside the 20px rail so its
+	   optical left edge aligns with the text-label starts above (glyph
+	   left-bearing accounts for the visual offset). */
+	#rp-pane-assistant .assistant-prompt-arrow { top: 15px; left: 18px; }
 	/* section-head-row is empty (label/reset/status/caret all hidden or hoisted) —
 	   suppress it entirely so it doesn't reserve a slice of vertical space. */
 	#rp-pane-assistant .section-head-row { display: none; }
@@ -1072,28 +1076,33 @@
 	   input row for vertical space. */
 	.assistant-context {
 		display: flex; align-items: center; gap: 6px;
-		padding: 5px 12px;
-		background: rgba(255,180,84,0.08);
+		/* 20px left matches #rp-zone-top-header (AI AGENT kicker) + the
+		   .assistant-log's padding + the input arrow position below so
+		   labels + text stack flush on the same left rail. */
+		padding: 3px 20px;
+		/* Same #2a2a32 as the timeline scrub track — reads as a neutral
+		   utility band, ties visually to the transport bar below. */
+		background: #2a2a32;
 		font-size: 10px;
-		/* Explicit 32px so context (32) + input row (78) = 110 exactly —
-		   matches #rp-pane-assistant min-height + .assistant-log
-		   padding-bottom, so there's no gap between the header and the
-		   context bar in the collapsed / min-drag state. */
-		height: 32px; box-sizing: border-box;
+		/* Shorter (22px) than the previous 32 so more of the pane is chat
+		   log. Kept in sync with the pane min-height below (100 = 22 + 78). */
+		height: 22px; box-sizing: border-box;
 	}
 	.assistant-context[hidden] { display: none; }
 	.assistant-context-label {
-		color: rgba(255,255,255,0.4);
+		color: rgba(255,255,255,0.55);
 		text-transform: uppercase; letter-spacing: 0.08em; font-size: 9px;
 	}
 	.assistant-context-target {
-		color: #ffb454; font-weight: 500;
+		/* Same grey as the label — reads as a continuous phrase (CONTEXT :
+		   Cube.001 · object) instead of a value-highlighted key/value. */
+		color: rgba(255,255,255,0.55);
 		overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 		flex: 1; min-width: 0;
 	}
 	.assistant-context-clear {
 		background: transparent; border: none; cursor: pointer;
-		color: rgba(255,255,255,0.4); font-size: 14px;
+		color: rgba(255,255,255,0.45); font-size: 14px;
 		padding: 0 4px; line-height: 1;
 	}
 	.assistant-context-clear:hover { color: #ff8a8a; }
@@ -1811,7 +1820,11 @@
 	}
 	#result-overlay[hidden] { display: none; }
 	#result-overlay img, #result-overlay video {
-		width: 100%; height: 100%; object-fit: cover; display: block;
+		/* Contain so a portrait clip in a landscape aspect frame gets
+		   pillar-bars instead of being blown up to the wider dimension
+		   and cropped to just a middle stripe. Background:#000 fills the
+		   letterbox area cleanly. */
+		width: 100%; height: 100%; object-fit: contain; background: #000; display: block;
 	}
 	/* Re-enable pointer events on the image + video so drag (Blockout /
 	   Render → chat + input slots) and native video controls work — the
@@ -1885,6 +1898,21 @@
 	#result-save-overlay:hover { background: rgba(0,0,0,0.75); color: #fff; }
 	#result-save-overlay svg { width: 15px; height: 15px; display: block; }
 	#result-save-overlay.visible { display: inline-flex; }
+	/* Clear button on the Blockout overlay — mirrors the save button's
+	   corner-pill styling but sits offset to its left so both can be
+	   visible simultaneously in some overlay states. */
+	#result-clear-overlay {
+		position: absolute; top: 10px; right: 44px; z-index: 9;
+		width: 28px; height: 28px; padding: 0;
+		border: none; border-radius: 4px; cursor: pointer;
+		background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
+		color: rgba(255,255,255,0.85);
+		font: 700 18px/1 ui-sans-serif, system-ui;
+		display: none; align-items: center; justify-content: center;
+		pointer-events: auto;
+	}
+	#result-clear-overlay:hover { background: rgba(255,80,80,0.4); color: #fff; }
+	#result-clear-overlay.visible { display: inline-flex; }
 	#aspect-frame {
 		position: absolute; z-index: 5; pointer-events: none;
 		border: 1px solid rgba(255,255,255,0.12);
@@ -2487,7 +2515,6 @@
 		/* Slightly brighter than the pane body so the header reads as its
 		   own band even though the log below shares the pane bg now. */
 		background: #22222c;
-		border-bottom: 1px solid rgba(255,255,255,0.05);
 	}
 	.rp-zone-caret {
 		font-size: 10px; color: rgba(255,255,255,0.35);
@@ -2881,7 +2908,7 @@
 				     regardless of what the log does above it. -->
 				<div class="assistant-bottom-band">
 					<div class="assistant-context" id="assistant-context">
-						<span class="assistant-context-label">context</span>
+						<span class="assistant-context-label">context :</span>
 						<span class="assistant-context-target" id="assistant-context-target"></span>
 						<button type="button" class="assistant-context-clear" id="assistant-context-clear" title="Clear context" hidden>×</button>
 					</div>
@@ -2992,6 +3019,10 @@
 				<button id="result-save-overlay" type="button" title="Download this render">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
 				</button>
+				<!-- Clear button — only visible when Blockout is showing a recorded
+				     video. Drops the entry from _video_store server-side and reverts
+				     the Blockout tab to the still snapshot fallback. -->
+				<button id="result-clear-overlay" type="button" title="Clear source video">×</button>
 			</div>
 			<div id="status">idle · 0 objects</div>
 			<div id="info-block" style="display:none;position:absolute;top:6px;left:6px;background:rgba(20,20,24,0.85);border-radius:6px;z-index:11;flex-direction:column;align-items:flex-start">
@@ -6819,7 +6850,7 @@ applyAssistantEnablement();
 	// Anything smaller clips the bottom of the input row so it no longer
 	// visually equals the transport bar's height next to it. The agent
 	// panel can never be closed by the drag handle.
-	const AGENT_MIN_PX = 152;
+	const AGENT_MIN_PX = 142;
 	// Once the agent zone is within this many pixels of its minimum, snap
 	// into the "collapsed" class so the chat log hides and dragging feels
 	// like a smooth handoff into the click-collapse layout.
@@ -14806,13 +14837,16 @@ function refreshToggleActive() {
 
 async function showBlockoutSnapshot() {
 	resultOverlay.hidden = false;
-	// If a recording is staged for this node, Blockout should show THAT
-	// (it's what the model will see when a video workflow runs). No
-	// recording? Fall back to the auto-composited still snapshot — the
-	// image-workflow equivalent of "what the model will see".
+	// If a video util is currently active AND a recording is staged, Blockout
+	// shows THAT (it's what the model will see when the util runs). Otherwise
+	// Blockout defaults to the auto-composited still snapshot — image-workflow
+	// mode. Gating on _activeUtilId stops a leftover recording from a previous
+	// session (server startup scans DATA_DIR and repopulates _video_store) from
+	// hijacking the Blockout tab for non-video work.
 	const t = Date.now();
 	const nid = encodeURIComponent(NODE_ID);
 	try {
+		if (!_activeUtilId) throw new Error("no active util — skip video path");
 		const r = await fetch(`/comfyblockout/video_url?node_id=${nid}&t=${t}`);
 		const j = r.ok ? await r.json() : null;
 		if (j?.url) {
@@ -14958,6 +14992,15 @@ function applyResultMode() {
 	// viewport (those are ephemeral previews, not something you'd download).
 	const saveOv = document.getElementById("result-save-overlay");
 	if (saveOv) saveOv.classList.toggle("visible", resultMode === "render" && !!lastResult);
+	// Clear button is Blockout-only — visible when Blockout is currently
+	// showing a recorded video (resultOverlayVid has a src AND we're in
+	// blockout mode). Click drops the entry from _video_store server-side.
+	const clearOv = document.getElementById("result-clear-overlay");
+	if (clearOv) {
+		const showing = resultMode === "blockout" && resultOverlayVid
+			&& resultOverlayVid.style.display !== "none" && !!resultOverlayVid.src;
+		clearOv.classList.toggle("visible", showing);
+	}
 }
 
 // Wipe any dynamically-added preview pills (DEPTH, CANNY, etc.) — called
@@ -15012,6 +15055,13 @@ window.showResultInViewport = function (kind, url, filename, intermediates) {
 
 // Save the current render to the user's local disk. Button lives on the
 // result overlay (top-right of the AR box) — replaces the old toolbar Save.
+// Blockout X — drops the recording from _video_store server-side, then
+// re-runs showBlockoutSnapshot which now falls back to the still snapshot.
+document.getElementById("result-clear-overlay")?.addEventListener("click", async () => {
+	try { await fetch(`/comfyblockout/video/${encodeURIComponent(NODE_ID)}`, { method: "DELETE" }); } catch {}
+	await showBlockoutSnapshot();
+	applyResultMode?.();
+});
 document.getElementById("result-save-overlay")?.addEventListener("click", () => {
 	if (!lastResult) return;
 	const a = document.createElement("a");
