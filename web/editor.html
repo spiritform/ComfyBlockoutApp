@@ -1877,6 +1877,26 @@
 	#result-toggle button[hidden] { display: none; }
 	#result-toggle button:hover { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.85); }
 	#result-toggle button.active { background: rgba(255,180,84,0.18); color: #ffb454; }
+	/* Shared segmented pill toggle — same visual shape as #result-toggle
+	   (viewport switcher). Used anywhere a 2-choice inline toggle needs
+	   to visually match the top-bar switcher pattern. */
+	.pill-toggle {
+		display: inline-flex; width: 100%; align-items: stretch; gap: 0;
+		background: rgba(14,14,18,0.92);
+		border: 1px solid rgba(255,255,255,0.08);
+		border-radius: 5px; overflow: hidden;
+		height: 26px;
+	}
+	.pill-toggle button {
+		flex: 1;
+		background: transparent; border: none; color: rgba(255,255,255,0.4);
+		padding: 0 12px; height: 100%;
+		font: inherit; font-size: 10px; font-weight: 600; letter-spacing: 0;
+		cursor: pointer;
+		display: inline-flex; align-items: center; justify-content: center;
+	}
+	.pill-toggle button:hover { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.85); }
+	.pill-toggle button.active { background: rgba(255,180,84,0.18); color: #ffb454; }
 	#result-toggle #result-close {
 		padding: 0 8px; font-size: 12px; font-weight: 600;
 		color: rgba(255,255,255,0.45);
@@ -2812,7 +2832,7 @@
 
 	<div id="panel">
 
-		<input type="file" id="import-file" accept=".glb,.gltf,.fbx,.obj,.ply,.splat,.ksplat,.spz" hidden multiple>
+		<input type="file" id="import-file" accept=".glb,.gltf,.fbx,.obj,.ply,.splat,.ksplat,.spz,image/*,video/*" hidden multiple>
 
 		<div class="section collapsible" data-section="objects">
 			<div class="section-head-row">
@@ -2821,12 +2841,11 @@
 			<div class="prim-grid">
 				<button class="prim-btn" data-prim="cube" data-label="Cube"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12L4 7.5M12 12l8-4.5M12 12v9"/></svg></button>
 				<button class="prim-btn" data-prim="sphere" data-label="Sphere"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8"/><ellipse cx="12" cy="12" rx="8" ry="3"/></svg></button>
-				<button class="prim-btn" data-prim="capsule" data-label="Capsule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="8" y="4" width="8" height="16" rx="4"/></svg></button>
 				<button class="prim-btn" data-prim="cylinder" data-label="Cylinder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="6" rx="6" ry="2"/><path d="M6 6v12a6 2 0 0 0 12 0V6"/></svg></button>
 				<button class="prim-btn" data-prim="cone" data-label="Cone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="20" rx="7" ry="2"/><path d="M5 20L12 3l7 17"/></svg></button>
 				<button class="prim-btn" data-prim="plane" data-label="Plane"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 16l9-4 9 4-9 4-9-4z"/></svg></button>
 				<button class="prim-btn" data-prim="text" data-label="Text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 7V5h14v2"/><path d="M12 5v14"/><path d="M9 19h6"/></svg></button>
-				<button class="prim-btn" data-prim="custom" data-label="Import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 6v6M9 9l3-3 3 3" stroke="#ffb454"/></svg></button>
+				<button class="prim-btn" data-prim="custom" data-label="Import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M8 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4"/></svg></button>
 				<button class="prim-btn" data-prim="particles" data-label="Particles"><svg viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="1.3" fill="currentColor"/><circle cx="12" cy="4" r="0.9" fill="currentColor"/><circle cx="18" cy="7" r="1.1" fill="currentColor"/><circle cx="5" cy="13" r="0.9" fill="currentColor"/><circle cx="11" cy="11" r="1.4" fill="currentColor"/><circle cx="17" cy="14" r="1" fill="currentColor"/><circle cx="8" cy="18" r="1.1" fill="currentColor"/><circle cx="15" cy="20" r="0.9" fill="currentColor"/><circle cx="20" cy="17" r="0.8" fill="currentColor"/></svg></button>
 			</div>
 		</div>
@@ -2839,13 +2858,23 @@
 				<button class="prim-btn" data-fx="clouds" data-label="Clouds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M7 17h11a3.5 3.5 0 0 0 .5-6.9A5.5 5.5 0 0 0 8 8.5 4 4 0 0 0 7 17z"/></svg></button>
 				<!-- MediaPipe tool — opens a browser webcam surface with
 				     MediaPipe.js pose/hand/face detection running client-side. -->
-				<button class="prim-btn" data-tool="mediapipe" data-label="MediaPipe" title="Webcam + MediaPipe pose/hand/face — record a sequence, take stills, or use as viewport source"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="6.5" r="2"/><path d="M12 8.5v5"/><path d="M9 10.5l3 1 3-1"/><path d="M12 13.5l-3 4"/><path d="M12 13.5l3 4"/></svg></button>
+				<button class="prim-btn" data-tool="mediapipe" data-label="MediaPipe" title="Webcam + MediaPipe pose/hand/face — record a sequence, take stills, or use as viewport source"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="8"/><circle cx="12" cy="10" r="3"/><path d="M7 22h10"/><path d="M12 22v-4"/></svg></button>
 				<!-- Boolean — CSG ops (union / subtract / intersect) on the
 				     multi-selection. Uses three-bvh-csg lazy-loaded on first
 				     open. Result replaces the source objects in place. -->
-				<button class="prim-btn" data-tool="bool" data-label="Boolean" title="Boolean — union / subtract / intersect two or more selected objects into a single mesh."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></svg></button>
-				<button class="prim-btn" data-fx="scatter" data-label="Scatter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M3 18l9-4 9 4-9 4-9-4z"/><path d="M7 13l1.5-4 1.5 4"/><path d="M12.5 11l1.5-5 1.5 5"/><path d="M16.5 15l1.5-4 1.5 4"/></svg></button>
-				<button class="prim-btn" data-fx="smoke" data-label="Smoke" title="Smoke FX — coming soon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 20c0-2 3-2 3-4s-3-2-3-4 3-2 3-4"/><path d="M15 19c0-2 2-2 2-4s-2-2-2-4"/></svg></button>
+				<button class="prim-btn" data-tool="bool" data-label="Boolean" title="Boolean — union / subtract / intersect two or more selected objects into a single mesh."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 22a2 2 0 0 1-2-2"/><path d="M16 22h-2"/><path d="M16 4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3a1 1 0 0 0 1-1v-5a2 2 0 0 1 2-2h5a1 1 0 0 0 1-1z"/><path d="M20 8a2 2 0 0 1 2 2"/><path d="M22 14v2"/><path d="M22 20a2 2 0 0 1-2 2"/></svg></button>
+				<button class="prim-btn" data-fx="scatter" data-label="Scatter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="18.5" cy="5.5" r=".5" fill="currentColor"/><circle cx="11.5" cy="11.5" r=".5" fill="currentColor"/><circle cx="7.5" cy="16.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="14.5" r=".5" fill="currentColor"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/></svg></button>
+				<!-- Lotus Pose util — hardcoded so the button paints at boot
+				     (avoids the "soon-*" placeholder → real button pop-in
+				     you get when refreshUtilTools races the /api/modules
+				     fetch). refreshUtilTools sees this existing DOM node
+				     and just updates the label/title from the manifest
+				     without redrawing. -->
+				<button class="prim-btn" data-tool="util:util_lotuspose" data-label="Lotus Pose" title="Lotus Pose — extract pose skeleton video from a source clip"><svg viewBox="4 3 16 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6"/><path d="m6 8 6 2 6-2"/><path d="M12 10v4"/></svg></button>
+				<!-- Point Cloud util — one-shot image → PLY via Triposplat pipeline.
+				     Result loads as THREE.Points in the scene (sharp discrete
+				     dots vs. Triposplat's default gaussian-splat rendering). -->
+				<button class="prim-btn" data-tool="util:util_pointcloud" data-label="Point Cloud" title="Point Cloud — generate a 3D point cloud from a source image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="1" fill="currentColor"/><circle cx="10" cy="4" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/><circle cx="19" cy="7" r="1" fill="currentColor"/><circle cx="4" cy="11" r="1" fill="currentColor"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="14" cy="11" r="1" fill="currentColor"/><circle cx="20" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="16" r="1" fill="currentColor"/><circle cx="11" cy="17" r="1" fill="currentColor"/><circle cx="16" cy="16" r="1" fill="currentColor"/><circle cx="19" cy="18" r="1" fill="currentColor"/></svg></button>
 				<button class="prim-btn" data-tool="soon-1" data-label="Coming soon" title="Reserved slot — future tool" style="opacity:0.35"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg></button>
 				<button class="prim-btn" data-tool="soon-2" data-label="Coming soon" title="Reserved slot — future tool" style="opacity:0.35"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg></button>
 				<button class="prim-btn" data-tool="soon-3" data-label="Coming soon" title="Reserved slot — future tool" style="opacity:0.35"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg></button>
@@ -3117,8 +3146,52 @@
 
 			<!-- ===== OBJECT TAB ===== -->
 			<div class="rp-pane" id="rp-pane-object" hidden>
+				<!-- Point Cloud placeholder controls — visible only when the
+				     selection is a pcPlaceholder (the plane-shaped image holder
+				     dropped by the Point Cloud tool BEFORE the workflow has run).
+				     Upload picks a source image; Generate runs the workflow and
+				     swaps this object for a THREE.Points. Post-gen, the
+				     obj-points-section below takes over. -->
+					<div class="section" id="obj-pc-source-section" style="display:none">
+					<div class="section-label">Source Image</div>
+					<div id="obj-pc-thumb" style="width:100%;aspect-ratio:1;background:rgba(0,0,0,0.28) center/cover no-repeat;border:1px solid rgba(255,255,255,0.06);border-radius:4px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,180,84,0.75);font-size:10px;letter-spacing:0.04em;text-align:center;padding:8px;box-sizing:border-box">NO SOURCE — UPLOAD ONE</div>
+					<input type="file" id="obj-pc-upload-file" accept="image/*" hidden>
+					<div style="display:flex;gap:6px">
+						<button type="button" id="obj-pc-upload-btn" class="mp-still-btn" style="flex:1;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85)">Upload</button>
+						<button type="button" id="obj-pc-generate-btn" class="mp-still-btn" style="flex:1">Generate</button>
+					</div>
+					<div class="hint" id="obj-pc-status" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5)">Idle</div>
+					<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Upload a still image or leave empty to use the current Blockout snapshot. Object mode isolates the subject; Scene mode keeps the full frame.</div>
+				</div>
+				<!-- TripoSplat representation toggle — appears on TripoSplat
+				     results (splat OR resampled points with the pcResult flag
+				     + cached _srcPlyUrl). Live switches between spark.js splat
+				     rendering and a density-sampled point cloud, both driven
+				     off the same cached PLY. Density slider only takes effect
+				     in Point Cloud mode. -->
+				<div class="section" id="obj-tps-convert-section" style="display:none">
+					<div class="section-label">Mode</div>
+					<div class="pill-toggle" style="margin-top:4px">
+						<button type="button" id="obj-tps-mode-splat" class="active">Gaussian Splat</button>
+						<button type="button" id="obj-tps-mode-points">Point Cloud</button>
+					</div>
+					<div id="obj-tps-density-row" style="display:none">
+						<div class="sub-label" style="margin-top:10px">Density</div>
+						<div class="slider-row">
+							<input type="range" id="obj-tps-density" min="0.05" max="1" step="0.05" value="0.5">
+							<span class="slider-val" id="obj-tps-density-val">0.50</span>
+						</div>
+					</div>
+					<div class="hint" id="obj-tps-convert-status" style="margin-top:6px;font-size:10px;color:rgba(255,255,255,0.5)"></div>
+				</div>
 				<!-- Text primitive editor — only visible when selection is a Text
 				     mesh. Editing the string / size / depth rebuilds the geometry. -->
+				<!-- Points-object controls (Point Cloud output). Visible only
+				     when the selection is a THREE.Points instance (primKind
+				     "points" tagged on spawn). Point size + vertex-colors
+				     toggle drive the PointsMaterial directly; texture toggle
+				     shows/hides the source-image plane parked behind the points
+				     as a compositing reference. -->
 				<div class="section" id="obj-text-section" style="display:none">
 					<div class="section-label">Text</div>
 					<textarea id="obj-text-value" rows="2" spellcheck="false"
@@ -3163,6 +3236,20 @@
 						<input type="checkbox" id="obj-doublesided">
 						<span>Double-sided</span>
 					</label>
+				</div>
+				<!-- Points controls (Point Cloud output). Visible only when the
+				     selection is a THREE.Points instance (primKind = "points").
+				     Sits BELOW the Appearance section so the generic Color +
+				     Texture toggle reads first, and the Points-specific Size
+				     knob comes after — matches the "specificity flows down"
+				     ordering used elsewhere in the pane. -->
+				<div class="section" id="obj-points-section" style="display:none">
+					<div class="section-label">Points</div>
+					<div class="sub-label" style="margin-top:6px">Size</div>
+					<div class="slider-row">
+						<input type="range" id="obj-points-size" min="0.001" max="0.2" step="0.001" value="0.001">
+						<span class="slider-val" id="obj-points-size-val">0.001</span>
+					</div>
 				</div>
 
 				<div class="section" id="obj-particles-emitter" hidden>
@@ -3366,7 +3453,7 @@
 				     and per-object prompting notes. The refImage stashed here is
 				     forwarded as an input reference by Nano Banana + any other
 				     model that consumes per-object refs, so this isn't cosmetic. -->
-				<div class="section">
+				<div class="section" id="obj-input-section">
 					<div class="section-label">Input</div>
 					<div class="gen-slot" id="obj-image-btn" title="Image reference for prompting — forwarded as input reference when generating with Nano Banana etc.">
 						<div class="gen-slot-thumb" id="obj-image-thumb"><svg class="gen-slot-upload" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2"/><path d="M8 9V2.5"/><path d="m5 5 3-3 3 3"/></svg></div>
@@ -3919,9 +4006,15 @@
 			}
 			if (filtered.length > FIRST) requestAnimationFrame(paintNext);
 		}
-		async function refreshAssets() {
+		// refreshAssets(opts) — opts.limit caps how many assets to request from
+		// the server. Boot-time callers pass a small limit so the app finishes
+		// painting before N video posters start decoding. User-triggered opens
+		// (clicking the Assets header button, refreshing after generate) use
+		// the default (200) so the full list is available.
+		async function refreshAssets(opts) {
+			const limit = (opts && Number.isFinite(opts.limit)) ? opts.limit : 200;
 			try {
-				const r = await fetch("/api/assets/list");
+				const r = await fetch(`/api/assets/list?limit=${limit}`);
 				const j = await r.json();
 				assetsItems = j.assets || [];
 			} catch (e) {
@@ -5838,6 +5931,11 @@ async function loadSplat(arrayBuffer, filename, opts = {}) {
 				splatMesh.userData.pickSphere = computeSplatPickSphere(splatMesh);
 				updateStatus(`splat loaded · ${filename}`);
 				hideLoading();
+				// Optional post-decode hook so callers (e.g. the Sharp Splat
+				// swap) can auto-center + rescale once the bounding box is
+				// actually populated — pre-decode bbox is (0,0,0) which
+				// makes the framing math no-op.
+				try { opts.onLoaded?.(splatMesh); } catch (e) { console.warn("[splat] onLoaded hook threw:", e); }
 			},
 		});
 		// OpenCV → OpenGL: 180° rotation around X (gaussian-splat captures are Y-down by convention)
@@ -6683,6 +6781,81 @@ function addPrimitive(kind) {
 	return mesh;
 }
 
+// Spawn a plane primitive with an image or video mapped as its diffuse
+// texture. Plane geometry auto-resizes to the media's native aspect so the
+// mapping doesn't stretch. Called from the assets-to-viewport drop handler
+// and (eventually) the Point Cloud util-tool click.
+async function spawnMediaPlane(url, filename, mediaKind /* "image" | "video" */) {
+	snapshotForUndo();
+	primCounters.plane = (primCounters.plane || 0) + 1;
+	// Placeholder geometry — replaced once we know the media's aspect.
+	const geom = new THREE.PlaneGeometry(2, 2);
+	const mat = new THREE.MeshBasicMaterial({
+		color: 0xffffff, side: THREE.DoubleSide,
+		// Slightly transparent so a partially-loaded texture doesn't hide
+		// meshes behind it while we're still populating.
+		transparent: true, opacity: 1,
+	});
+	const mesh = new THREE.Mesh(geom, mat);
+	mesh.name = `Plane.${String(primCounters.plane).padStart(3, "0")}`;
+	mesh.position.set(0, 1, 0);
+	mesh.userData.primKind = "plane";
+	// Tag the object with its media source so scene save/load can rehydrate
+	// the texture. mediaKind stays alongside the URL so the loader knows
+	// whether to build a texture from an <img> or a <video>.
+	mesh.userData.mediaSource = { url, filename, kind: mediaKind };
+	// Resize helper — sets plane geometry to `aspect × 1` (unit height, width
+	// scaled by aspect). Keeps the plane's face oriented +Z so the texture
+	// reads correctly when the plane is spawned at rest.
+	const applyAspect = (w, h) => {
+		if (!w || !h) return;
+		const aspect = w / h;
+		// Height=2 to match the placeholder, so the swap doesn't visually
+		// pop between placeholder and final.
+		const geomNew = new THREE.PlaneGeometry(2 * aspect, 2);
+		mesh.geometry.dispose();
+		mesh.geometry = geomNew;
+		if (selected === mesh) {
+			clearSelectionTint();
+			applySelectionTint(mesh);
+		}
+	};
+	if (mediaKind === "image") {
+		new THREE.TextureLoader().load(url, (tex) => {
+			tex.colorSpace = THREE.SRGBColorSpace;
+			mat.map = tex;
+			mat.needsUpdate = true;
+			applyAspect(tex.image?.naturalWidth || tex.image?.width, tex.image?.naturalHeight || tex.image?.height);
+			if (typeof saveScene === "function") saveScene();
+		}, undefined, (err) => {
+			console.warn("[mediaPlane] image load failed:", err);
+		});
+	} else if (mediaKind === "video") {
+		const vid = document.createElement("video");
+		vid.src = url; vid.muted = true; vid.loop = true; vid.playsInline = true;
+		vid.crossOrigin = "anonymous"; vid.preload = "auto";
+		vid.addEventListener("loadedmetadata", () => {
+			applyAspect(vid.videoWidth, vid.videoHeight);
+			if (typeof saveScene === "function") saveScene();
+		}, { once: true });
+		vid.play?.().catch(() => {});
+		const tex = new THREE.VideoTexture(vid);
+		tex.colorSpace = THREE.SRGBColorSpace;
+		mat.map = tex;
+		mat.needsUpdate = true;
+		// Stash the <video> element so we can clean it up on delete.
+		mesh.userData.mediaVideoEl = vid;
+	}
+	stashInitialTransform(mesh);
+	scene.add(mesh);
+	objects.push(mesh);
+	select(mesh);
+	refreshOutliner();
+	updateStatus();
+	if (typeof saveScene === "function") saveScene();
+	return mesh;
+}
+
 function duplicateObject(obj) {
 	if (!obj) return;
 	snapshotForUndo();
@@ -6777,6 +6950,20 @@ function forceRightPane(which, label) {
 	if (which === "assets" || which === "scene" || which === "camera") {
 		LAST_SWITCHER_PANE = which;
 		try { localStorage.setItem(LAST_SWITCHER_PANE_KEY, which); } catch {}
+	}
+	// Assets pane needs its list populated when it becomes visible — the
+	// pane's own openAssets() handler wires this for user-driven opens, but
+	// boot-time forceRightPane("assets") from deserializeScene skips it and
+	// the pane was showing the empty-state until the user manually switched
+	// away and back. Fire once here so the pane populates on first paint,
+	// AND defer via requestIdleCallback (or setTimeout fallback) so the main
+	// app's first render isn't racing N asset thumbnails for decode budget.
+	// Boot-time limit=10 is enough for the above-fold view; scroll / user
+	// action can trigger a full refetch later.
+	if (which === "assets") {
+		const kick = () => { try { window.refreshAssets?.({ limit: 10 }); } catch {} };
+		if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 1500 });
+		else setTimeout(kick, 250);
 	}
 }
 
@@ -9944,12 +10131,18 @@ async function fetchWorkflowModules() {
 		if (!r.ok) return;
 		const data = await r.json();
 		for (const m of (data.modules || [])) {
-			if (m.source !== "workflow") continue;
+			// Utility modules land in the Tools grid regardless of source —
+			// workflow-manifest utils AND hand-written Python utils (e.g.
+			// local_sharp which shells out to Apple's SHARP CLI) both surface
+			// the same way. Non-util Python modules stay Python-invocable but
+			// don't appear in the Workflows list (that section is reserved for
+			// user-imported ComfyUI graphs).
 			if (m.util) {
 				utilModules[m.id] = m;
-			} else {
-				workflowModules[m.id] = m;
+				continue;
 			}
+			if (m.source !== "workflow") continue;
+			workflowModules[m.id] = m;
 		}
 	} catch (e) {
 		console.warn("[workflow] module list fetch failed:", e);
@@ -9992,16 +10185,25 @@ function refreshUtilTools() {
 		}
 		btn.dataset.label = m.label || m.id;
 		btn.title = `${m.label || m.id} — util workflow, output lands in Assets`;
-		btn.innerHTML = m.icon || DEFAULT_UTIL_ICON;
+		// Only overwrite the icon if the button was JUST created OR the
+		// manifest supplies one — static-HTML buttons carry their own
+		// hand-tuned SVG that shouldn't be replaced by the generic wrench
+		// fallback just because the manifest didn't declare an icon.
+		if (isNew || m.icon) btn.innerHTML = m.icon || DEFAULT_UTIL_ICON;
 		if (isNew) {
 			// Replace the first available "soon-*" placeholder if one exists,
 			// otherwise append to the end of the grid.
 			const slot = grid.querySelector('button[data-tool^="soon-"]');
 			if (slot) slot.replaceWith(btn);
 			else grid.appendChild(btn);
+		}
+		// Click + hover-label wiring runs even for pre-existing static buttons
+		// so the hardcoded Lotus Pose tile in the HTML picks up its handlers
+		// on first refreshUtilTools call. Guard via a data flag so a static
+		// button doesn't get its listener attached twice.
+		if (!btn.dataset._utilWired) {
+			btn.dataset._utilWired = "1";
 			btn.addEventListener("click", () => runUtilTool(m.id));
-			// Hover-label wiring (matches the other tool buttons — section-label
-			// swaps to "TOOLS : <name>" while the button is hovered).
 			const section = btn.closest(".section");
 			const labelEl = section?.querySelector(".section-label");
 			if (labelEl) {
@@ -10037,8 +10239,370 @@ function runUtilTool(moduleId) {
 	_activeUtilId = moduleId;
 	_utilSourceIsUpload = false;
 	document.querySelector(`button[data-tool="util:${moduleId}"]`)?.classList.add("active");
+	// Point Cloud is spatial — spawn (or focus) a tagged placeholder plane
+	// in the scene as the "canvas" for this run. Upload flows will drop the
+	// picked image onto it as a texture, and a successful Generate swaps the
+	// plane for a THREE.Points at the same transform. Other utils stay
+	// pane-only for now.
+	if (moduleId === "triposplat-local") {
+		// TripoSplat is a one-shot Image → Splat tool: spawn (or reselect) a
+		// tagged placeholder plane, let the OBJECT properties inspector render
+		// its source-image + generate controls, and on generate swap the plane
+		// for a spark.js SplatMesh at the placeholder's transform.
+		let plane = objects.find(o => o.userData?.pcSource === true && !o.userData?.pcSourcePlane && o.visible !== false);
+		if (!plane) {
+			plane = spawnEmptyPcPlane();
+		} else {
+			select(plane);
+		}
+		refreshObjectInspector?.();
+		return;
+	}
 	forceRightPane?.("util", m.label || moduleId);
 	renderUtilToolPane();
+}
+
+// Point-cloud placeholder: 2×2 amber-tinted plane STANDING UPRIGHT (face
+// toward +Z, camera-facing) at world origin +1y. Different from the normal
+// Plane primitive (PRIM_DEFS.plane) which lies flat on the grid — for a
+// point-cloud source, you want a picture frame, not a floor tile. Tagged
+// with userData.pcSource so the upload handler and run-success path can
+// find it later.
+function spawnEmptyPcPlane() {
+	snapshotForUndo();
+	primCounters.plane = (primCounters.plane || 0) + 1;
+	// PlaneGeometry defaults to XY plane, normal +Z — that's already
+	// upright, no rotation needed. Position +1y so the bottom edge sits
+	// on the grid rather than half-buried.
+	const geom = new THREE.PlaneGeometry(2, 2);
+	const mat = new THREE.MeshBasicMaterial({
+		color: 0xffb454, side: THREE.DoubleSide,
+		transparent: true, opacity: 0.18,
+	});
+	const mesh = new THREE.Mesh(geom, mat);
+	mesh.name = `PC.${String(primCounters.plane).padStart(3, "0")}`;
+	mesh.position.set(0, 1, 0);
+	// pcPlaceholder — visually a plane (holds the source image texture) but
+	// SEMANTICALLY a point-cloud object waiting to be generated. Distinct
+	// primKind so the object inspector shows point-cloud controls (source
+	// image + Generate) instead of generic plane properties.
+	mesh.userData.primKind = "pcPlaceholder";
+	mesh.userData.pcSource = true;
+	stashInitialTransform(mesh);
+	scene.add(mesh);
+	objects.push(mesh);
+	select(mesh);
+	refreshOutliner();
+	updateStatus();
+	if (typeof saveScene === "function") saveScene();
+	return mesh;
+}
+
+// TripoSplat representation toggle — symmetric swap between spark.js
+// SplatMesh and THREE.Points, both driven off the cached PLY (`_srcPlyUrl`
+// on the object's userData). Same-transform swap so pill clicks feel
+// instant, and repeated density changes on the Points side re-sample from
+// the same cached bytes. No server round-trip.
+
+function _tpsSetStatus(text, kind) {
+	const el = document.getElementById("obj-tps-convert-status");
+	if (!el) return;
+	el.textContent = text;
+	el.style.color = kind === "error" ? "#ff8a8a"
+		: kind === "busy" ? "rgba(255,180,84,0.9)"
+		: kind === "ok" ? "rgba(102,204,255,0.9)"
+		: "rgba(255,255,255,0.5)";
+}
+
+function _tpsDisposeObject(obj) {
+	// Mirrors deleteObject's splat/points cleanup so the swap re-uses the same
+	// battle-tested dispose path — spark.js SplatMeshes need the userData
+	// splatMesh handle disposed (not just scene.remove), and belt-and-braces
+	// obj.parent?.remove() covers the edge case where obj isn't a direct
+	// child of scene (has happened with the Boolean bake).
+	if (!obj) return;
+	if (obj.userData?.primKind === "splat") {
+		scene.remove(obj);
+		obj.parent?.remove?.(obj);
+		try { obj.userData.splatMesh?.dispose?.(); } catch {}
+	} else {
+		scene.remove(obj);
+		obj.parent?.remove?.(obj);
+		try {
+			obj.traverse?.(c => {
+				c.geometry?.dispose?.();
+				if (c.material) {
+					if (Array.isArray(c.material)) c.material.forEach(m => m.dispose?.());
+					else c.material.dispose?.();
+				}
+			});
+		} catch {}
+	}
+	obj.visible = false; // final safety net in case something still holds it
+	const idx = objects.indexOf(obj);
+	if (idx >= 0) objects.splice(idx, 1);
+	// Selection state can lag if the object we're removing was the selected
+	// primary — swap functions call select(newObj) right after, but drop it
+	// from the multi-selection set here so refreshOutliner doesn't paint
+	// amber highlights on a phantom.
+	if (typeof selectionSet !== "undefined") selectionSet?.delete(obj);
+	if (selected === obj) selected = null;
+}
+
+// Swap `source` (splat OR points) into a THREE.Points at `density`. Fetches
+// the cached PLY, decodes SH DC → RGB, random-samples verts by density,
+// bakes the y-up X flip, positions at the source's world transform.
+async function _tpsSwapToPoints(source, density) {
+	if (!source || !source.userData?._srcPlyUrl) return null;
+	_tpsSetStatus("fetching cached splat…", "busy");
+	const plyUrl = source.userData._srcPlyUrl;
+	const r = await fetch(plyUrl);
+	const buf = await r.arrayBuffer();
+	const { PLYLoader } = await import("https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/PLYLoader.js");
+	const loader = new PLYLoader();
+	if (typeof loader.setCustomPropertyNameMapping === "function") {
+		loader.setCustomPropertyNameMapping({ sh_dc: ["f_dc_0", "f_dc_1", "f_dc_2"] });
+	}
+	const geom = loader.parse(buf);
+	const attrs = geom.attributes;
+	if (!attrs.position) throw new Error("PLY has no position attribute");
+
+	let srcColorAttr = attrs.color || null;
+	const SH_C0 = 0.28209479177387814;
+	if (!srcColorAttr && attrs.sh_dc && attrs.sh_dc.itemSize >= 3) {
+		const n = attrs.sh_dc.count;
+		const src = attrs.sh_dc.array;
+		const stride = attrs.sh_dc.itemSize;
+		const rgb = new Float32Array(n * 3);
+		for (let i = 0; i < n; i++) {
+			rgb[i * 3]     = Math.max(0, Math.min(1, 0.5 + SH_C0 * src[i * stride]));
+			rgb[i * 3 + 1] = Math.max(0, Math.min(1, 0.5 + SH_C0 * src[i * stride + 1]));
+			rgb[i * 3 + 2] = Math.max(0, Math.min(1, 0.5 + SH_C0 * src[i * stride + 2]));
+		}
+		srcColorAttr = new THREE.BufferAttribute(rgb, 3);
+	}
+	if (!srcColorAttr && attrs.f_dc_0 && attrs.f_dc_1 && attrs.f_dc_2) {
+		const n = attrs.f_dc_0.count;
+		const rgb = new Float32Array(n * 3);
+		const r0 = attrs.f_dc_0.array, r1 = attrs.f_dc_1.array, r2 = attrs.f_dc_2.array;
+		for (let i = 0; i < n; i++) {
+			rgb[i * 3]     = Math.max(0, Math.min(1, 0.5 + SH_C0 * r0[i]));
+			rgb[i * 3 + 1] = Math.max(0, Math.min(1, 0.5 + SH_C0 * r1[i]));
+			rgb[i * 3 + 2] = Math.max(0, Math.min(1, 0.5 + SH_C0 * r2[i]));
+		}
+		srcColorAttr = new THREE.BufferAttribute(rgb, 3);
+	}
+
+	const total = attrs.position.count;
+	const d = Math.max(0, Math.min(1, density));
+	const kept = [];
+	if (d >= 1) {
+		for (let i = 0; i < total; i++) kept.push(i);
+	} else {
+		for (let i = 0; i < total; i++) if (Math.random() < d) kept.push(i);
+	}
+	if (kept.length === 0) throw new Error("density too low — no points sampled");
+	_tpsSetStatus(`sampled ${kept.length.toLocaleString()} of ${total.toLocaleString()} (${(100 * kept.length / total).toFixed(1)}%)`, "busy");
+
+	const posSrc = attrs.position.array;
+	const posOut = new Float32Array(kept.length * 3);
+	for (let k = 0; k < kept.length; k++) {
+		const i = kept[k] * 3;
+		posOut[k * 3]     = posSrc[i];
+		posOut[k * 3 + 1] = posSrc[i + 1];
+		posOut[k * 3 + 2] = posSrc[i + 2];
+	}
+	const pointsGeom = new THREE.BufferGeometry();
+	pointsGeom.setAttribute("position", new THREE.BufferAttribute(posOut, 3));
+	if (srcColorAttr) {
+		const colSrc = srcColorAttr.array;
+		const colOut = new Float32Array(kept.length * 3);
+		for (let k = 0; k < kept.length; k++) {
+			const i = kept[k] * 3;
+			colOut[k * 3]     = colSrc[i];
+			colOut[k * 3 + 1] = colSrc[i + 1];
+			colOut[k * 3 + 2] = colSrc[i + 2];
+		}
+		pointsGeom.setAttribute("color", new THREE.BufferAttribute(colOut, 3));
+	}
+	// y-up flip baked into geometry so identity rotation = right-side up.
+	pointsGeom.rotateX(Math.PI);
+	pointsGeom.computeBoundingBox();
+	pointsGeom.computeBoundingSphere();
+
+	const pointsMat = new THREE.PointsMaterial({
+		size: 0.001,
+		sizeAttenuation: true,
+		vertexColors: !!srcColorAttr,
+		color: srcColorAttr ? 0xffffff : 0xffb454,
+	});
+	const points = new THREE.Points(pointsGeom, pointsMat);
+	points.position.copy(source.position);
+	points.scale.copy(source.scale);
+	points.rotation.set(0, 0, 0);
+	points.name = source.name?.replace(/^(Splat|Points)\./, "Points.") || "Points";
+	points.userData.primKind = "points";
+	points.userData.pcResult = true;
+	points.userData._srcPlyUrl = plyUrl;
+	points.userData._srcPlyFilename = source.userData._srcPlyFilename;
+	points.userData.pcPlaneRef = source.userData.pcPlaneRef;
+	points.userData._pcDensity = d;
+	stashInitialTransform(points);
+	scene.add(points);
+	objects.push(points);
+	_tpsDisposeObject(source);
+	select(points);
+	refreshOutliner();
+	if (typeof saveScene === "function") saveScene();
+	_tpsSetStatus(`points · ${kept.length.toLocaleString()} kept`, "ok");
+	return points;
+}
+
+// Swap `source` (splat OR points) into a spark.js SplatMesh — inverse of
+// _tpsSwapToPoints. Auto-frames to the source's world position + scale, so
+// toggling back and forth stays visually anchored.
+async function _tpsSwapToSplat(source) {
+	if (!source || !source.userData?._srcPlyUrl) return null;
+	_tpsSetStatus("fetching cached splat…", "busy");
+	const plyUrl = source.userData._srcPlyUrl;
+	const filename = source.userData._srcPlyFilename || plyUrl.split("/").pop() || "splat.ply";
+	const r = await fetch(plyUrl);
+	const buf = await r.arrayBuffer();
+	const targetPos = source.position.clone();
+	const targetScale = source.scale.x;
+	const splat = await loadSplat(buf, filename, {
+		savedName: source.name?.replace(/^(Splat|Points)\./, "Splat.") || "Splat",
+		onLoaded: (mesh) => {
+			try {
+				const bbox = mesh.getBoundingBox
+					? mesh.getBoundingBox(true)
+					: new THREE.Box3().setFromObject(mesh);
+				const rawCenter = bbox.getCenter(new THREE.Vector3());
+				mesh.scale.setScalar(targetScale);
+				const rotatedCenter = rawCenter.clone().applyQuaternion(mesh.quaternion).multiplyScalar(targetScale);
+				mesh.position.copy(targetPos).sub(rotatedCenter);
+				if (typeof saveScene === "function") saveScene();
+			} catch (e) { console.warn("[triposplat] splat auto-frame failed:", e); }
+		},
+	});
+	if (!splat) throw new Error("loadSplat returned null");
+	splat.userData.pcResult = true;
+	splat.userData._srcPlyUrl = plyUrl;
+	splat.userData._srcPlyFilename = filename;
+	splat.userData.pcPlaneRef = source.userData.pcPlaneRef;
+	_tpsDisposeObject(source);
+	select(splat);
+	refreshOutliner();
+	if (typeof saveScene === "function") saveScene();
+	_tpsSetStatus("splat", "ok");
+	return splat;
+}
+
+async function _tpsSetMode(source, mode, density) {
+	try {
+		if (mode === "splat") await _tpsSwapToSplat(source);
+		else await _tpsSwapToPoints(source, density);
+	} catch (e) {
+		console.error("[triposplat] mode swap failed:", e);
+		_tpsSetStatus(`swap failed · ${String(e.message || e).slice(0, 140)}`, "error");
+	}
+}
+
+// Wire the TripoSplat toggle + density slider once on load. Pill clicks fire
+// _tpsSetMode; releasing the density slider (change event) while a Points
+// object is selected re-samples from the cached PLY.
+(function wireTpsConvertControls() {
+	const hook = () => {
+		const slider = document.getElementById("obj-tps-density");
+		const valEl = document.getElementById("obj-tps-density-val");
+		slider?.addEventListener("input", () => {
+			if (valEl) valEl.textContent = parseFloat(slider.value).toFixed(2);
+		});
+		slider?.addEventListener("change", async () => {
+			// Live re-sample only if the current selection is a TripoSplat
+			// Points result — releasing the slider on a splat is a no-op
+			// (density has no meaning until you switch to Points).
+			if (!selected || selected.userData?.primKind !== "points" || !selected.userData?._srcPlyUrl) return;
+			const density = parseFloat(slider.value);
+			await _tpsSetMode(selected, "points", density);
+		});
+		const modeSplat = document.getElementById("obj-tps-mode-splat");
+		const modePoints = document.getElementById("obj-tps-mode-points");
+		modeSplat?.addEventListener("click", async () => {
+			if (!selected || !selected.userData?._srcPlyUrl) return;
+			if (selected.userData?.primKind === "splat") return; // already
+			await _tpsSetMode(selected, "splat");
+		});
+		modePoints?.addEventListener("click", async () => {
+			if (!selected || !selected.userData?._srcPlyUrl) return;
+			if (selected.userData?.primKind === "points") return; // already
+			const density = parseFloat(slider?.value || "0.5");
+			await _tpsSetMode(selected, "points", density);
+		});
+	};
+	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hook, { once: true });
+	else hook();
+})();
+
+// Point Cloud tool — Splat render mode. Feeds TripoSplat's PLY through the
+// existing spark.js loadSplat helper (which handles all standard 3DGS PLYs
+// including TripoSplat's format — same code path as drag-and-drop splat
+// imports). The placeholder plane's transform is baked via loadSplat's
+// onLoaded hook: bounding-box-center + scale-normalize to the placeholder's
+// 2-unit footprint, then translate to plane.position. Existing splat
+// Appearance controls (Color tint + Texture toggle) engage automatically
+// via primKind = "splat" from registerImported.
+async function _replacePcPlaneWithSplat(plyUrl) {
+	const plane = objects.find(o => o.userData?.pcSource === true && !o.userData?.pcSourcePlane && o.visible !== false);
+	if (!plane) return;
+	try {
+		const r = await fetch(plyUrl);
+		const buf = await r.arrayBuffer();
+		const filename = plyUrl.split("/").pop() || "splat.ply";
+		const TARGET_SIZE = 2; // match the 2×2 placeholder plane's footprint
+		const splat = await loadSplat(buf, filename, {
+			savedName: plane.name.replace(/^PC\./, "Splat."),
+			onLoaded: (mesh) => {
+				try {
+					const bbox = mesh.getBoundingBox
+						? mesh.getBoundingBox(true)
+						: new THREE.Box3().setFromObject(mesh);
+					const rawCenter = bbox.getCenter(new THREE.Vector3());
+					const rawSize = bbox.getSize(new THREE.Vector3());
+					const maxDim = Math.max(rawSize.x, rawSize.y, rawSize.z);
+					const baseScale = (maxDim > 0 && isFinite(maxDim)) ? (TARGET_SIZE / maxDim) : 1;
+					mesh.scale.set(baseScale, baseScale, baseScale);
+					// rawCenter is the splat's local-space centre; rotate it
+					// via the mesh's current quaternion (loadSplat's y-up
+					// flip) and scale-normalize before subtracting from the
+					// target position so the centering lands on the right
+					// axis regardless of the splat's raw coordinate system.
+					const rotatedCenter = rawCenter.clone().applyQuaternion(mesh.quaternion).multiplyScalar(baseScale);
+					mesh.position.copy(plane.position).sub(rotatedCenter);
+					if (typeof saveScene === "function") saveScene();
+				} catch (e) {
+					console.warn("[pointcloud/splat] auto-frame failed:", e);
+				}
+			},
+		});
+		if (!splat) throw new Error("loadSplat returned null");
+		plane.visible = false;
+		plane.userData.pcSourcePlane = true; // reuse the pc-side flag so the
+		// placeholder-lookup guards for future re-opens filter it out.
+		splat.userData.pcResult = true;
+		splat.userData.pcPlaneRef = plane;
+		// Cache the source PLY URL on the splat so the Point-Cloud conversion
+		// section can re-fetch + resample it at a user-picked density without
+		// re-running the workflow. Filename kept alongside for display.
+		splat.userData._srcPlyUrl = plyUrl;
+		splat.userData._srcPlyFilename = filename;
+		select(splat);
+		refreshOutliner();
+		if (typeof saveScene === "function") saveScene();
+	} catch (e) {
+		console.error("[pointcloud/splat] PLY → SplatMesh swap failed:", e);
+		updateStatus?.(`splat swap failed · ${e.message || e}`);
+	}
 }
 
 // Populate #rp-pane-util based on the active util module's manifest. Handles
@@ -10111,7 +10675,7 @@ function renderUtilToolPane() {
 						${paramRows}
 						<div style="display:flex;gap:6px;margin-top:10px">
 							<button type="button" class="mp-still-btn" id="util-upload-btn" style="flex:1;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.8)">Upload video</button>
-							<input type="file" id="util-upload-file" accept="video/*" hidden>
+							<input type="file" id="util-upload-file" accept="image/*,video/*" hidden>
 							<button type="button" class="mp-still-btn" id="util-run-btn" style="flex:1">Generate</button>
 						</div>
 						<div class="hint" id="util-status" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5)">Idle</div>
@@ -10119,8 +10683,65 @@ function renderUtilToolPane() {
 					</div>
 				</div>
 			`);
+		} else if (spec.type === "scene-image") {
+			// Image-input parallel to scene-video — source preview is the
+			// last Blockout snapshot (or a user upload). Generate runs the
+			// workflow directly (no auto-record step; still image is already
+			// available via autoSnapshot's on-Blockout-open trigger).
+			const paramRows = numberInputs.map(n => {
+				const def = n.default ?? 0;
+				const label = n.label || n.name;
+				const OPTIONS = Array.isArray(n.options) && n.options.length ? n.options : [
+					{ value: 0, label: "Source" },
+					{ value: 512, label: "512" },
+					{ value: 768, label: "768" },
+					{ value: 1024, label: "1024" },
+				];
+				const defOpt = OPTIONS.find(o => o.value === def) || OPTIONS[0];
+				const optRows = OPTIONS.map(o => `
+					<div class="util-dd-opt" data-value="${o.value}" style="padding:6px 10px;font-size:11px;color:rgba(255,255,255,0.85);cursor:pointer">${o.label}</div>
+				`).join("");
+				return `
+					<div style="display:flex;align-items:center;gap:6px;margin-top:8px" data-util-input="${n.name}">
+						<span style="flex:1;font-size:10px;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:0.06em">${label}</span>
+						<div class="util-dd" style="position:relative;min-width:110px">
+							<button type="button" class="util-num-input util-dd-btn" data-name="${n.name}" data-value="${defOpt.value}" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:6px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85);border:1px solid rgba(255,255,255,0.08);border-radius:3px;padding:4px 8px;font-size:11px;cursor:pointer;font:inherit">
+								<span class="util-dd-label">${defOpt.label}</span>
+								<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.6"><polyline points="6 9 12 15 18 9"/></svg>
+							</button>
+							<div class="util-dd-menu" hidden style="position:absolute;top:calc(100% + 4px);left:0;right:0;background:#1a1a22;border:1px solid rgba(255,255,255,0.1);border-radius:4px;box-shadow:0 6px 20px rgba(0,0,0,0.5);z-index:1000;max-height:220px;overflow:auto">
+								${optRows}
+							</div>
+						</div>
+					</div>
+				`;
+			}).join("");
+			sections.push(`
+				<div class="section">
+					<div class="section-label">${spec.label || spec.name}</div>
+					<div style="margin-top:6px;padding:8px 10px;border:1px solid rgba(255,255,255,0.06);border-radius:4px;background:rgba(0,0,0,0.15)">
+						<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+							<span style="width:6px;height:6px;border-radius:50%;background:#66ccff;flex:0 0 auto"></span>
+							<div style="font-size:10px;color:rgba(255,255,255,0.85);font-weight:600;letter-spacing:0.05em;text-transform:uppercase">Image Input</div>
+						</div>
+						<div id="util-rec-preview-slot" style="width:100%;min-height:120px;border-radius:3px;background:#000;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.35);font-size:10px">Loading preview…</div>
+						${paramRows}
+						<div style="display:flex;gap:6px;margin-top:10px">
+							<button type="button" class="mp-still-btn" id="util-upload-btn" style="flex:1;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.8)">Upload image</button>
+							<input type="file" id="util-upload-file" accept="image/*" hidden>
+							<button type="button" class="mp-still-btn" id="util-run-btn" style="flex:1">Generate</button>
+						</div>
+						<div class="hint" id="util-status" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5)">Idle</div>
+						<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Upload replaces the preview. Generate uses whatever image is currently staged (viewport snapshot or upload) — result lands in Assets.</div>
+					</div>
+				</div>
+			`);
 		}
 	}
+	// Which mode the pane is currently in (video vs image). Drives the
+	// preview probe order, the upload handler, and the run flow.
+	const activeInput = (m.inputs || []).find(s => s.type === "scene-video" || s.type === "scene-image");
+	pane._utilInputKind = activeInput?.type === "scene-image" ? "image" : "video";
 	pane.innerHTML = sections.join("");
 
 	// Wire the custom dropdowns for any number inputs the pane rendered.
@@ -10178,11 +10799,44 @@ function renderUtilToolPane() {
 		if (!f) return;
 		_setUtilStatus(`uploading ${f.name}…`, "busy");
 		try {
-			const j = await uploadVideo(f);
+			// Route by file kind so one input handles both image AND video
+			// uploads — server drops the file into _image_store or
+			// _video_store accordingly, and the preview probe finds whichever
+			// landed. Falls back to uploadVideo for unknown MIMEs.
+			let isImage = (f.type || "").startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(f.name);
+			let uploadFile = f;
+			// If the util expects a still image (scene-image) but the user
+			// uploaded a video, grab the first decoded frame and upload
+			// THAT instead. Enables point-cloud-from-video without needing
+			// a multi-view pipeline server-side.
+			const needsImage = pane?._utilInputKind === "image";
+			if (needsImage && !isImage) {
+				_setUtilStatus(`extracting first frame from ${f.name}…`, "busy");
+				const blob = await _extractFirstVideoFrame(f);
+				if (blob) {
+					uploadFile = new File([blob], (f.name.replace(/\.[^.]+$/, "") + "_frame.png"), { type: "image/png" });
+					isImage = true;
+				}
+			}
+			const j = isImage ? await uploadImage(uploadFile) : await uploadVideo(uploadFile);
 			if (!j?.success) throw new Error(j?.error || "upload failed");
 			_utilSourceIsUpload = true;
-			_setUtilStatus("upload saved — preview updated", "ok");
+			// Cache the uploaded image as a client-side Blob URL so the
+			// preview shows the ACTUAL upload, not whatever autoSnapshot
+			// left in _image_store from an earlier Blockout tab visit.
+			if (isImage) {
+				if (_utilUploadedImageUrl) { try { URL.revokeObjectURL(_utilUploadedImageUrl); } catch {} }
+				_utilUploadedImageUrl = URL.createObjectURL(uploadFile);
+			}
+			_setUtilStatus(`${isImage ? "image" : "video"} saved — preview updated`, "ok");
 			_updateUtilPreviewSlot();
+			// Point Cloud tactile flow: paint the fresh upload onto the
+			// tagged plane so the user sees "my source lives here" in the
+			// viewport, not just in the properties pane.
+			if (_activeUtilId === "util_pointcloud" && isImage) {
+				const pcPlane = objects.find(o => o.userData?.pcSource === true);
+				if (pcPlane) _applyImageBlobToPcPlane(pcPlane, uploadFile);
+			}
 		} catch (err) {
 			console.error("[util] upload failed:", err);
 			_setUtilStatus(`upload failed · ${String(err.message || err).slice(0, 120)}`, "error");
@@ -10238,6 +10892,13 @@ function renderUtilToolPane() {
 			const j = await r.json();
 			_setUtilStatus(`done · ${j.filename || "saved to Assets"}`, "ok");
 			window.refreshAssets?.();
+			// Point Cloud tactile flow — swap the placeholder plane for a
+			// THREE.Points object rendered from the PLY output. Uses the
+			// asset URL so it re-fetches the finalized file, not the temp
+			// path returned inline.
+			if (_activeUtilId === "util_pointcloud" && j.filename) {
+				await _replacePcPlaneWithPoints(`/data/${j.filename}`);
+			}
 		} catch (err) {
 			console.error(`[util:${_activeUtilId}] run failed:`, err);
 			_setUtilStatus(`failed · ${String(err.message || err).slice(0, 120)}`, "error");
@@ -10260,7 +10921,8 @@ function _updateUtilPreviewSlot() {
 	const t = Date.now();
 	const nid = encodeURIComponent(NODE_ID);
 	const videoUrl = `/comfyblockout/video/${nid}?t=${t}`;
-	const imageUrl = `/comfyblockout/image/${nid}?t=${t}`;
+	// Client-cached upload wins over the server alias — see _utilUploadedImageUrl.
+	const imageUrl = _utilUploadedImageUrl || `/comfyblockout/image/${nid}?t=${t}`;
 	const clearSlotStyles = () => {
 		slot.style.minHeight = "auto";
 		slot.style.background = "#000";
@@ -10326,7 +10988,30 @@ function _updateUtilPreviewSlot() {
 	};
 	const showImage = () => {
 		clearSlotStyles();
-		slot.innerHTML = `<img src="${imageUrl}" alt="" style="width:100%;max-height:180px;object-fit:contain;border-radius:3px;background:#000;display:block">`;
+		// Same corner X pattern as the video branch — click clears the
+		// image server-side and drops the preview back to the "no source"
+		// nudge. Also strips the placeholder plane's texture back to the
+		// amber empty state for the point-cloud tool.
+		slot.innerHTML = `
+			<div style="position:relative">
+				<img src="${imageUrl}" alt="" style="width:100%;max-height:180px;object-fit:contain;border-radius:3px;background:#000;display:block">
+				<button type="button" id="util-rec-clear-btn" title="Clear source image" style="position:absolute;top:6px;right:6px;width:22px;height:22px;padding:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.15);border-radius:50%;color:rgba(255,255,255,0.85);cursor:pointer;font:600 14px/1 ui-sans-serif,system-ui,sans-serif">×</button>
+			</div>
+		`;
+		document.getElementById("util-rec-clear-btn")?.addEventListener("click", async (e) => {
+			e.stopPropagation();
+			try {
+				await fetch(`/comfyblockout/image/${nid}`, { method: "DELETE" }).catch(() => {});
+			} catch {}
+			_utilSourceIsUpload = false;
+			if (_utilUploadedImageUrl) {
+				try { URL.revokeObjectURL(_utilUploadedImageUrl); } catch {}
+				_utilUploadedImageUrl = null;
+			}
+			const pcPlane = objects.find(o => o.userData?.pcSource === true);
+			if (pcPlane) _resetPcPlaneToEmpty(pcPlane);
+			showNone();
+		});
 	};
 	const showNone = () => {
 		slot.style.minHeight = "80px";
@@ -10336,16 +11021,28 @@ function _updateUtilPreviewSlot() {
 	};
 	// Probe existence via the JSON endpoint — FastAPI's @app.get routes
 	// return 405 for HEAD by default, which the old probe misread as
-	// "no source". /video_url returns {url: string|null} unambiguously.
-	// Retries a few times in case the server-side ffmpeg transcode hasn't
-	// finalized the mp4 by the time upload's HTTP response has returned.
+	// "no source". Endpoints return {url: string|null} unambiguously.
+	// Retries a few times to guard against server-side ffmpeg finalization
+	// races (recording upload) or image write finalization.
+	// Probe ORDER is driven by the pane's declared input kind — a util
+	// declaring scene-image probes /image_url first (so a leftover video in
+	// _video_store from a previous session doesn't hijack the Image Input
+	// slot). scene-video probes video first (the Lotus Pose flow).
+	const pane = document.getElementById("rp-pane-util");
+	const inputKind = pane?._utilInputKind || "video";
+	const first = inputKind === "image"
+		? { url: `/comfyblockout/image_url?node_id=${nid}`, show: showImage }
+		: { url: `/comfyblockout/video_url?node_id=${nid}`, show: showVideo };
+	const second = inputKind === "image"
+		? { url: `/comfyblockout/video_url?node_id=${nid}`, show: showVideo }
+		: { url: `/comfyblockout/image_url?node_id=${nid}`, show: showImage };
 	const probe = (attempt = 0) => {
-		fetch(`/comfyblockout/video_url?node_id=${nid}&t=${t + attempt}`).then(r => r.ok ? r.json() : { url: null })
+		fetch(`${first.url}&t=${t + attempt}`).then(r => r.ok ? r.json() : { url: null })
 			.then(j => {
-				if (j?.url) return showVideo();
-				return fetch(`/comfyblockout/image_url?node_id=${nid}&t=${t + attempt}`).then(r2 => r2.ok ? r2.json() : { url: null })
+				if (j?.url) return first.show();
+				return fetch(`${second.url}&t=${t + attempt}`).then(r2 => r2.ok ? r2.json() : { url: null })
 					.then(j2 => {
-						if (j2?.url) return showImage();
+						if (j2?.url) return second.show();
 						if (attempt < 4) setTimeout(() => probe(attempt + 1), 250);
 						else showNone();
 					});
@@ -10353,6 +11050,337 @@ function _updateUtilPreviewSlot() {
 			.catch(() => { if (attempt < 4) setTimeout(() => probe(attempt + 1), 250); else showNone(); });
 	};
 	probe();
+}
+
+// Reset the tagged PC plane back to its amber empty-state material and
+// square geometry. Used by the X-clear button on the util pane's image
+// preview so the viewport visually mirrors "no source".
+function _resetPcPlaneToEmpty(plane) {
+	if (!plane) return;
+	plane.geometry.dispose();
+	plane.geometry = new THREE.PlaneGeometry(2, 2);
+	plane.material.dispose();
+	plane.material = new THREE.MeshBasicMaterial({
+		color: 0xffb454, side: THREE.DoubleSide,
+		transparent: true, opacity: 0.18,
+	});
+	if (selected === plane) {
+		clearSelectionTint();
+		applySelectionTint(plane);
+	}
+	if (typeof saveScene === "function") saveScene();
+}
+
+// Also add a server DELETE endpoint for scene-image cleanup — the client's
+// X button posts here so /image_url stops returning the stale entry.
+// (Server endpoint added in server/main.py alongside the video DELETE.)
+
+// Refresh the object-inspector's Source Image thumb + status to match the
+// current pcPlaceholder state — either a stashed upload URL, the plane's
+// live texture, or the "no source" fallback. Called from refreshObjectInspector
+// on selection and from the upload/generate helpers after they mutate state.
+function _refreshPcPlaceholderThumb(plane) {
+	const thumb = document.getElementById("obj-pc-thumb");
+	if (!thumb) return;
+	// Priority: the fresh upload URL (client-side blob) wins over the
+	// plane texture (which may still be the amber empty-state placeholder).
+	const map = plane?.material?.map;
+	const src = _utilUploadedImageUrl || map?.image?.src || null;
+	if (src) {
+		thumb.style.backgroundImage = `url("${src}")`;
+		thumb.textContent = "";
+	} else {
+		thumb.style.backgroundImage = "";
+		thumb.textContent = "NO SOURCE — UPLOAD ONE";
+	}
+}
+
+// Shared upload handler — used by BOTH the object-inspector's Source Image
+// section AND (legacy) the util pane. Pushes the file to /comfyblockout/save_image
+// so /api/run/util_pointcloud picks it up as the scene-image input, tags the
+// upload-source flag, paints the plane's texture, and refreshes the thumb.
+async function _pcHandleUpload(file) {
+	if (!file) return;
+	_setPcStatus?.(`uploading ${file.name}…`, "busy");
+	try {
+		let uploadFile = file;
+		let isImage = (file.type || "").startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
+		// A dropped video still works — extract the first frame so the still
+		// pipeline (Triposplat) has an image to consume.
+		if (!isImage) {
+			_setPcStatus?.(`extracting first frame from ${file.name}…`, "busy");
+			const blob = await _extractFirstVideoFrame(file);
+			if (blob) {
+				uploadFile = new File([blob], (file.name.replace(/\.[^.]+$/, "") + "_frame.png"), { type: "image/png" });
+				isImage = true;
+			}
+		}
+		const j = await uploadImage(uploadFile);
+		if (!j?.success) throw new Error(j?.error || "upload failed");
+		_utilSourceIsUpload = true;
+		if (_utilUploadedImageUrl) { try { URL.revokeObjectURL(_utilUploadedImageUrl); } catch {} }
+		_utilUploadedImageUrl = URL.createObjectURL(uploadFile);
+		_setPcStatus?.(`image saved — ready to generate`, "ok");
+		const pcPlane = objects.find(o => o.userData?.pcSource === true && !o.userData?.pcSourcePlane && o.visible !== false);
+		if (pcPlane) _applyImageBlobToPcPlane(pcPlane, uploadFile);
+		_refreshPcPlaceholderThumb(pcPlane);
+	} catch (err) {
+		console.error("[pointcloud] upload failed:", err);
+		_setPcStatus?.(`upload failed · ${String(err.message || err).slice(0, 120)}`, "error");
+	}
+}
+
+// Shared Generate handler — POSTs /api/run/util_pointcloud, then swaps the
+// placeholder for a THREE.Points via _replacePcPlaneWithPoints. Ensures the
+// pointcloud util is the active one (the object-inspector button can fire
+// without the user having visited the util pane first).
+async function _pcGenerate() {
+	if (_utilRunPhase && _utilRunPhase !== "idle") return; // guard double-clicks
+	_activeUtilId = "triposplat-local";
+	try {
+		_setPcRunButton?.("running");
+		_setPcStatus?.("running TripoSplat…", "busy");
+		const r = await fetch(`/api/run/triposplat-local`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ node_id: NODE_ID, inputs: {} }),
+		});
+		if (!r.ok) {
+			const err = await r.text();
+			throw new Error(err || `HTTP ${r.status}`);
+		}
+		const j = await r.json();
+		_setPcStatus?.(`done · ${j.filename || "saved to Assets"}`, "ok");
+		window.refreshAssets?.();
+		// One-shot: TripoSplat outputs a gaussian splat PLY, always render it
+		// as a spark.js SplatMesh at the placeholder's transform.
+		if (j.filename) await _replacePcPlaneWithSplat(`/data/${j.filename}`);
+	} catch (err) {
+		console.error("[triposplat] generate failed:", err);
+		_setPcStatus?.(`failed · ${String(err.message || err).slice(0, 120)}`, "error");
+	} finally {
+		_setPcRunButton?.("idle");
+	}
+}
+
+// Status + run-button setters that update the OBJECT-inspector Source Image
+// section (obj-pc-status / obj-pc-generate-btn). Separate from _setUtilStatus
+// which drives the legacy util pane's #util-status / #util-run-btn — both fire
+// so either pane stays consistent during a run.
+function _setPcStatus(text, kind) {
+	_setUtilStatus?.(text, kind);
+	const el = document.getElementById("obj-pc-status");
+	if (!el) return;
+	el.textContent = text;
+	const color = kind === "error" ? "#ff8a8a"
+		: kind === "busy" ? "rgba(255,180,84,0.9)"
+		: kind === "ok" ? "rgba(102,204,255,0.9)"
+		: "rgba(255,255,255,0.5)";
+	el.style.color = color;
+}
+
+function _setPcRunButton(phase) {
+	_setUtilRunButton?.(phase);
+	_utilRunPhase = phase;
+	const btn = document.getElementById("obj-pc-generate-btn");
+	const upBtn = document.getElementById("obj-pc-upload-btn");
+	if (!btn) return;
+	const busy = phase !== "idle";
+	btn.disabled = busy;
+	if (upBtn) upBtn.disabled = busy;
+	const label = phase === "recording" ? "Recording…"
+		: phase === "running" ? "Running…"
+		: "Generate";
+	btn.innerHTML = busy
+		? `<span style="display:inline-flex;align-items:center;gap:6px;justify-content:center">${_UTIL_SPINNER_SVG}<span>${label}</span></span>`
+		: "Generate";
+}
+
+// Wire the object-inspector's Source Image buttons once, on load. The buttons
+// live in a permanent DOM slot inside #rp-pane-object, so a single wiring
+// pass is enough — no rebuild each selection.
+(function wirePcObjectInspectorButtons() {
+	const hook = () => {
+		document.getElementById("obj-pc-upload-btn")?.addEventListener("click", () => {
+			document.getElementById("obj-pc-upload-file")?.click();
+		});
+		document.getElementById("obj-pc-upload-file")?.addEventListener("change", async (e) => {
+			const f = e.target.files?.[0];
+			e.target.value = "";
+			await _pcHandleUpload(f);
+		});
+		document.getElementById("obj-pc-generate-btn")?.addEventListener("click", async () => {
+			await _pcGenerate();
+		});
+	};
+	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hook, { once: true });
+	else hook();
+})();
+
+// Apply an image Blob/File to the Point Cloud placeholder plane's material
+// and resize the plane geometry to the image's native aspect. Placeholder
+// tint (amber overlay) drops away as the picture takes over.
+function _applyImageBlobToPcPlane(plane, blob) {
+	if (!plane || !blob) return;
+	const url = URL.createObjectURL(blob);
+	new THREE.TextureLoader().load(url, (tex) => {
+		tex.colorSpace = THREE.SRGBColorSpace;
+		const w = tex.image?.naturalWidth || tex.image?.width;
+		const h = tex.image?.naturalHeight || tex.image?.height;
+		if (w && h) {
+			const aspect = w / h;
+			// Keep the plane's short side at 2 units so scale feels
+			// consistent regardless of image aspect.
+			const H = 2, W = aspect >= 1 ? 2 * aspect : 2;
+			const Hh = aspect >= 1 ? 2 : 2 / aspect;
+			plane.geometry.dispose();
+			plane.geometry = new THREE.PlaneGeometry(W, Hh);
+		}
+		// Swap the amber placeholder material for a lit image material.
+		plane.material.dispose();
+		plane.material = new THREE.MeshBasicMaterial({
+			map: tex, color: 0xffffff, side: THREE.DoubleSide,
+		});
+		if (selected === plane) {
+			clearSelectionTint();
+			applySelectionTint(plane);
+		}
+		if (typeof saveScene === "function") saveScene();
+		URL.revokeObjectURL(url);
+	}, undefined, () => URL.revokeObjectURL(url));
+}
+
+// Given a PLY asset URL, fetch + parse + build a THREE.Points object, then
+// replace the tagged pcSource plane at the same world transform. Uses the
+// existing PLYLoader (already available via loadPlyMesh's import path).
+async function _replacePcPlaneWithPoints(plyUrl) {
+	const pcPlane = objects.find(o => o.userData?.pcSource === true && !o.userData?.pcSourcePlane && o.visible !== false);
+	if (!pcPlane) return;
+	try {
+		const r = await fetch(plyUrl);
+		const buf = await r.arrayBuffer();
+		// PLYLoader is already lazy-imported by loadPlyMesh — reuse the same
+		// module URL so both paths cache-hit.
+		const { PLYLoader } = await import("https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/PLYLoader.js");
+		const loader = new PLYLoader();
+		// Gaussian-splat PLYs (what Triposplat emits) store per-splat colour in
+		// SH DC coefficients f_dc_0/1/2. PLYLoader ignores unknown vertex props
+		// unless we opt in via setCustomPropertyNameMapping — otherwise the geom
+		// comes back position-only and Points render in the uniform amber tint.
+		// Mapping groups all three coefficients into a single `sh_dc` attribute
+		// (Vector3-shaped) so the SH → RGB decode below is a single loop.
+		if (typeof loader.setCustomPropertyNameMapping === "function") {
+			loader.setCustomPropertyNameMapping({
+				sh_dc: ["f_dc_0", "f_dc_1", "f_dc_2"],
+			});
+		}
+		const geom = loader.parse(buf);
+		const attrs = geom.attributes;
+		const pointsGeom = new THREE.BufferGeometry();
+		if (attrs.position) pointsGeom.setAttribute("position", attrs.position);
+		// Color extraction — three sources depending on the PLY dialect:
+		//   1. Standard RGB verts (red/green/blue → PLYLoader creates `color`).
+		//   2. Gaussian-splat SH DC coefficients (via the sh_dc mapping above,
+		//      or the older per-attr shape). Decode via `0.5 + SH_C0 * f_dc`
+		//      where SH_C0 = 1/(2*sqrt(pi)) ≈ 0.28209479. Yields per-point RGB.
+		//   3. Fallback — no color info, points render in the uniform tint.
+		let colorAttr = attrs.color || null;
+		const SH_C0 = 0.28209479177387814;
+		if (!colorAttr && attrs.sh_dc && attrs.sh_dc.itemSize >= 3) {
+			const n = attrs.sh_dc.count;
+			const src = attrs.sh_dc.array;
+			const stride = attrs.sh_dc.itemSize;
+			const rgb = new Float32Array(n * 3);
+			for (let i = 0; i < n; i++) {
+				rgb[i * 3]     = Math.max(0, Math.min(1, 0.5 + SH_C0 * src[i * stride]));
+				rgb[i * 3 + 1] = Math.max(0, Math.min(1, 0.5 + SH_C0 * src[i * stride + 1]));
+				rgb[i * 3 + 2] = Math.max(0, Math.min(1, 0.5 + SH_C0 * src[i * stride + 2]));
+			}
+			colorAttr = new THREE.BufferAttribute(rgb, 3);
+		}
+		if (!colorAttr && attrs.f_dc_0 && attrs.f_dc_1 && attrs.f_dc_2) {
+			const n = attrs.f_dc_0.count;
+			const rgb = new Float32Array(n * 3);
+			const r0 = attrs.f_dc_0.array, r1 = attrs.f_dc_1.array, r2 = attrs.f_dc_2.array;
+			for (let i = 0; i < n; i++) {
+				rgb[i * 3]     = Math.max(0, Math.min(1, 0.5 + SH_C0 * r0[i]));
+				rgb[i * 3 + 1] = Math.max(0, Math.min(1, 0.5 + SH_C0 * r1[i]));
+				rgb[i * 3 + 2] = Math.max(0, Math.min(1, 0.5 + SH_C0 * r2[i]));
+			}
+			colorAttr = new THREE.BufferAttribute(rgb, 3);
+		}
+		if (colorAttr) pointsGeom.setAttribute("color", colorAttr);
+		if (!colorAttr) {
+			console.warn("[pointcloud] PLY had no colour attributes — points will render in the uniform tint. Attributes present:", Object.keys(attrs));
+		}
+		// TripoSplat (and gaussian splats generally) use the OpenCV-ish
+		// y-down/z-forward convention; three.js is y-up. Bake a 180° flip
+		// around X into the geometry so the point cloud lands right-side up
+		// at identity rotation — user transforms on the Points object stay
+		// intuitive (up is up) instead of starting from a mysterious 180°.
+		pointsGeom.rotateX(Math.PI);
+		pointsGeom.computeBoundingBox();
+		pointsGeom.computeBoundingSphere();
+		const pointsMat = new THREE.PointsMaterial({
+			size: 0.001,
+			sizeAttenuation: true,
+			vertexColors: !!colorAttr,
+			color: colorAttr ? 0xffffff : 0xffb454,
+		});
+		const points = new THREE.Points(pointsGeom, pointsMat);
+		points.position.copy(pcPlane.position);
+		points.rotation.copy(pcPlane.rotation);
+		points.scale.copy(pcPlane.scale);
+		points.name = pcPlane.name.replace(/^PC\./, "Points.");
+		points.userData.primKind = "points";
+		points.userData.pcResult = true;
+		stashInitialTransform(points);
+		scene.add(points);
+		objects.push(points);
+		// Keep the source plane in the scene so the "Show source texture"
+		// toggle in the Points properties has something to reveal. Hide by
+		// default; the toggle sets .visible. Move it off the outliner's
+		// pickable list so it doesn't clutter the objects list — the Points
+		// object owns it via userData.pcPlaneRef.
+		pcPlane.visible = false;
+		pcPlane.userData.pcSourcePlane = true; // still tagged; deletion path handles this
+		points.userData.pcPlaneRef = pcPlane;
+		select(points);
+		refreshOutliner();
+		if (typeof saveScene === "function") saveScene();
+	} catch (e) {
+		console.warn("[pointcloud] PLY → Points swap failed:", e);
+		updateStatus?.(`points swap failed · ${e.message || e}`);
+	}
+}
+
+// Extract the first decoded frame of a video File as a PNG Blob — used
+// when a scene-image util receives a video upload (single-image pipelines
+// like Triposplat can then run on a still, without needing a multi-view
+// server-side path). Off-DOM <video> so it doesn't compete with the live
+// BG video; small canvas draw + toBlob.
+async function _extractFirstVideoFrame(file) {
+	const url = URL.createObjectURL(file);
+	try {
+		const vid = document.createElement("video");
+		vid.src = url; vid.muted = true; vid.playsInline = true; vid.preload = "auto";
+		await new Promise((resolve, reject) => {
+			vid.addEventListener("loadeddata", resolve, { once: true });
+			vid.addEventListener("error", () => reject(new Error("video decode failed")), { once: true });
+			setTimeout(() => reject(new Error("video decode timeout")), 8000);
+		});
+		// Seek a hair into the clip so we don't hit a black lead-in frame,
+		// then wait for `seeked` before drawing.
+		vid.currentTime = Math.min(0.1, (vid.duration || 1) * 0.02);
+		await new Promise(resolve => vid.addEventListener("seeked", resolve, { once: true }));
+		const cvs = document.createElement("canvas");
+		cvs.width = vid.videoWidth || 512;
+		cvs.height = vid.videoHeight || 512;
+		cvs.getContext("2d").drawImage(vid, 0, 0, cvs.width, cvs.height);
+		return await new Promise(resolve => cvs.toBlob(resolve, "image/png"));
+	} finally {
+		URL.revokeObjectURL(url);
+	}
 }
 
 // Reduce a W×H pair to its simplest ratio label. Non-integer aspects
@@ -10404,6 +11432,12 @@ function _setUtilRunButton(phase) {
 // via the util pane. Subsequent Run clicks then skip the auto-record step.
 // Reset on tool open so a fresh session starts clean.
 let _utilSourceIsUpload = false;
+// Blob URL for the util pane's explicit upload — preview reads from this
+// instead of the shared /comfyblockout/image/{node_id} alias, which gets
+// overwritten by autoSnapshot every time the user opens the Blockout tab.
+// Cleared by the X-clear button on the image preview so the pane can
+// re-probe the server alias fresh (or fall through to "no source").
+let _utilUploadedImageUrl = null;
 
 function _setUtilStatus(text, kind) {
 	const el = document.getElementById("util-status");
@@ -12834,6 +13868,17 @@ function updateCameraSliders() {
 			scheduleRebuild();
 		});
 	}
+	// Points-object controls — size slider + color-mode toggles. Applied
+	// live to the PointsMaterial and persisted via saveSceneDebounced.
+	document.getElementById("obj-points-size")?.addEventListener("input", (e) => {
+		if (!selected || !selected.isPoints) return;
+		const v = parseFloat(e.target.value) || 0.02;
+		selected.material.size = v;
+		selected.material.needsUpdate = true;
+		const vEl = document.getElementById("obj-points-size-val");
+		if (vEl) vEl.textContent = v.toFixed(3);
+		saveSceneDebounced?.();
+	});
 	document.getElementById("obj-text-font")?.addEventListener("change", (e) => {
 		if (!selected || selected.userData?.primKind !== "text") return;
 		const cfg = selected.userData.textConfig || (selected.userData.textConfig = { text: "Text", size: 0.6, depth: 0.15 });
@@ -12970,6 +14015,62 @@ function objImageUrl(img) { return refImageThumbUrl(img); }
 function refreshObjectInspector() {
 	if (!selected) return;
 	for (const el of dragFields) el._refresh?.();
+	// Point Cloud placeholder (pre-Generate) — the object IS-A point cloud
+	// waiting for its source image; the plane-shaped mesh is just the display
+	// surface. Show source-image controls, hide the generic Appearance /
+	// Transform sections since the user is picking an image + hitting Generate,
+	// not tweaking a plane. Post-Generate, this swaps to a Points object and
+	// the branch below handles that state.
+	const isPcPlaceholder = selected.userData?.primKind === "pcPlaceholder";
+	const pcSection = document.getElementById("obj-pc-source-section");
+	if (pcSection) {
+		pcSection.style.display = isPcPlaceholder ? "" : "none";
+		if (isPcPlaceholder) _refreshPcPlaceholderThumb(selected);
+	}
+	// TripoSplat Mode section — visible on TripoSplat results, whether the
+	// object is currently rendered as a splat or a resampled point cloud.
+	// The section IS the Splat ↔ Points toggle so it stays alive across both
+	// representations. Sync pill active state from primKind, and the density
+	// slider from userData._pcDensity (if any).
+	const tpsConvertSection = document.getElementById("obj-tps-convert-section");
+	const isTpsResult = selected.userData?.pcResult === true
+		&& !!selected.userData?._srcPlyUrl
+		&& (selected.userData?.primKind === "splat" || selected.userData?.primKind === "points");
+	if (tpsConvertSection) {
+		tpsConvertSection.style.display = isTpsResult ? "" : "none";
+		if (isTpsResult) {
+			const isSplat = selected.userData?.primKind === "splat";
+			document.getElementById("obj-tps-mode-splat")?.classList.toggle("active", isSplat);
+			document.getElementById("obj-tps-mode-points")?.classList.toggle("active", !isSplat);
+			// Density row is only meaningful in Point Cloud mode — hide it on
+			// splats so the section reads as a clean two-button toggle.
+			const dRow = document.getElementById("obj-tps-density-row");
+			if (dRow) dRow.style.display = isSplat ? "none" : "";
+			const dSlider = document.getElementById("obj-tps-density");
+			const dVal = document.getElementById("obj-tps-density-val");
+			// If the selected Points has a stored density, prefer it over the
+			// slider's current value so re-selecting a low-density cloud shows
+			// its own knob position rather than whatever was set last.
+			const stored = selected.userData?._pcDensity;
+			if (dSlider && typeof stored === "number") dSlider.value = String(stored);
+			if (dSlider && dVal) dVal.textContent = parseFloat(dSlider.value).toFixed(2);
+		}
+	}
+	// Points object (Point Cloud output) — show the Size + color-mode
+	// section, hide otherwise. Object color picker (Appearance) doubles
+	// as the uniform color when uniform mode is active.
+	const pointsSection = document.getElementById("obj-points-section");
+	const isPoints = selected.userData?.primKind === "points" && selected.isPoints;
+	if (pointsSection) {
+		pointsSection.style.display = isPoints ? "" : "none";
+		if (isPoints) {
+			const mat = selected.material;
+			const sInput = document.getElementById("obj-points-size");
+			const sVal = document.getElementById("obj-points-size-val");
+			if (sInput) sInput.value = String(mat.size ?? 0.001);
+			if (sVal) sVal.textContent = (mat.size ?? 0.001).toFixed(3);
+		}
+	}
 	// Text primitives — show a dedicated Text section with the editable
 	// string + size + depth. Refresh reads from userData.textConfig so the
 	// controls stay in sync when the selection changes.
@@ -12999,12 +14100,27 @@ function refreshObjectInspector() {
 	} else {
 		objColorInput.value = colorMats.length > 0 ? "#" + colorMats[0].color.getHexString() : "#ffffff";
 	}
-	objAppearance.style.display = "";
-	objColorBtn.style.display = hasColor ? "" : "none";
+	// pcPlaceholder hides the whole generic Appearance / Transform / INPUT
+	// stack — the object's real UI is the source-image controls above, and a
+	// pre-Generate placeholder has no user-tweakable color / texture / material.
+	// Also hide the RESET / notes / image-ref rows that live below by tagging
+	// them off — the "in progress" object shouldn't look like a normal mesh.
+	// Both PC and Splat placeholders hide the generic Appearance / Transform /
+	// Input sections — they render their own dedicated sections above and the
+	// generic controls aren't meaningful pre-Generate.
+	const isPlaceholder = isPcPlaceholder;
+	objAppearance.style.display = isPlaceholder ? "none" : "";
+	objColorBtn.style.display = hasColor && !isPlaceholder ? "" : "none";
+	const transformSection = document.getElementById("obj-transform-section");
+	if (transformSection) transformSection.style.display = isPlaceholder ? "none" : "";
+	const inputSection = document.getElementById("obj-input-section");
+	if (inputSection) inputSection.style.display = isPlaceholder ? "none" : "";
 
 	// Double-sided toggle — visible when the selection has real polygonal
-	// meshes (splats and Points don't have a meaningful `side` to flip).
-	const sidedMats = (isSplatObj || selected.userData?.primKind === "particles" || selected.userData?.primKind === "clouds")
+	// meshes. Excluded for splats, particles, clouds, and Points (their `side`
+	// property exists but has no visible effect — a Points cloud has no
+	// polygons to flip).
+	const sidedMats = (isSplatObj || isPoints || selected.userData?.primKind === "particles" || selected.userData?.primKind === "clouds")
 		? []
 		: collectSidedMaterials(selected);
 	if (sidedMats.length) {
@@ -13040,18 +14156,30 @@ function refreshObjectInspector() {
 
 	// Texture-hide toggle. For imports (FBX/GLB/OBJ) we stash-and-null the diffuse
 	// maps so the color underneath shows through. For splats we push a SplatEdit
-	// on the SplatMesh that overrides every splat's RGB — same "Texture on/off"
-	// button, different underlying mechanism.
+	// on the SplatMesh that overrides every splat's RGB. For Points objects the
+	// "texture" IS the per-point vertex colors — toggling it flips
+	// material.vertexColors so the uniform tint takes over — same "Texture
+	// on/off" button, different underlying mechanism per object type.
 	const isSplat = selected.userData?.primKind === "splat";
 	const texMats = collectTexturedMaterials(selected);
 	const hasStashed = Array.isArray(selected.userData._stashedMaps) && selected.userData._stashedMaps.length > 0;
 	const hasSplatEdit = !!selected.userData?._splatColorEdit;
 	if (selected.userData._textureVisible === undefined) {
-		selected.userData._textureVisible = !(hasStashed || hasSplatEdit);
+		// Points default to their material's own vertexColors state so a
+		// freshly-loaded coloured PLY reads as "texture on".
+		if (isPoints) selected.userData._textureVisible = !!selected.material?.vertexColors;
+		else selected.userData._textureVisible = !(hasStashed || hasSplatEdit);
 	}
 	const texVisible = selected.userData._textureVisible !== false;
+	// Points expose the Texture button whenever they have per-point colour to
+	// toggle away from — i.e. a `color` attribute on the geometry OR a stashed
+	// original attribute we can restore later.
+	const pointsHasVertexCol = isPoints && (
+		!!selected.geometry?.getAttribute?.("color") ||
+		!!selected.userData?._stashedPointsColor
+	);
 	const hasAnyTex = texMats.length > 0 || hasStashed;
-	objTextureBtn.hidden = isSplat ? false : (!isImport || !hasAnyTex);
+	objTextureBtn.hidden = isSplat ? false : isPoints ? !pointsHasVertexCol : (!isImport || !hasAnyTex);
 	if (!objTextureBtn.hidden) {
 		objTextureBtn.classList.toggle("has-image", texVisible);
 		objTextureLabel.textContent = "Texture";
@@ -13081,6 +14209,17 @@ function setObjectTextureVisible(obj, visible) {
 	// it to restore. See setSplatTextureVisible().
 	if (obj.userData?.primKind === "splat") {
 		setSplatTextureVisible(obj, visible);
+		return;
+	}
+	// Points objects — the "texture" is per-point vertex colours on the
+	// geometry. Flip material.vertexColors; when off, the uniform tint
+	// (material.color, synced from the Appearance swatch) takes over.
+	if (obj.userData?.primKind === "points") {
+		const mat = obj.material;
+		if (!mat) return;
+		mat.vertexColors = !!visible;
+		mat.needsUpdate = true;
+		obj.userData._textureVisible = !!visible;
 		return;
 	}
 	if (visible) {
@@ -15489,6 +16628,71 @@ window.addEventListener("drop", async e => {
 	const files = Array.from(e.dataTransfer.files || []);
 	for (const f of files) await loadFile(f);
 });
+
+// Drag-and-drop from the Assets panel onto the viewport — internal drags
+// carry `application/x-cb-asset` payload (see Assets tile dragstart). 3D
+// assets (GLB / PLY / FBX / SPLAT / …) get fetched, decoded, and dropped
+// into the scene as fresh imports. Image/video assets are staged for the
+// image-video-plane primitive follow-up (currently ignored so the cursor
+// still shows the no-drop badge for those kinds).
+(function wireAssetToViewportDrop() {
+	const target = canvasWrap || canvas;
+	if (!target) return;
+	const acceptable = (e) => Array.from(e.dataTransfer?.types || []).includes("application/x-cb-asset");
+	target.addEventListener("dragover", (e) => {
+		if (!acceptable(e)) return;
+		e.preventDefault();
+		e.stopPropagation();
+		e.dataTransfer.dropEffect = "copy";
+	});
+	target.addEventListener("drop", async (e) => {
+		if (!acceptable(e)) return;
+		e.preventDefault();
+		e.stopPropagation();
+		let payload;
+		try { payload = JSON.parse(e.dataTransfer.getData("application/x-cb-asset")); }
+		catch { return; }
+		if (!payload?.url) return;
+		const kind = payload.kind || "";
+		if (kind === "3d" || /\.(glb|gltf|fbx|obj|ply|splat|ksplat|spz)$/i.test(payload.filename || "")) {
+			try {
+				updateStatus?.(`loading ${payload.filename}…`);
+				const r = await fetch(payload.url);
+				const buf = await r.arrayBuffer();
+				snapshotForUndo();
+				const obj = await loadFromBytes(buf, payload.filename || "asset.glb");
+				if (obj) {
+					try {
+						// Re-register the asset id so scene save persists a
+						// reference — the file already lives in the assets
+						// folder, we just tag the object with its id.
+						obj.userData.assetId = payload.url.replace(/^.*\//, "").replace(/\.[^.]+$/, "");
+						saveScene?.();
+					} catch {}
+					updateStatus?.(`imported ${payload.filename}`);
+				}
+			} catch (err) {
+				console.warn("[cb] asset-to-viewport drop failed:", err);
+				updateStatus?.(`drop failed · ${err.message || err}`);
+			}
+			return;
+		}
+		// Image / video drops → spawn a plane with the media mapped as a
+		// diffuse texture (spawnMediaPlane resizes the plane to the media's
+		// native aspect ratio).
+		if (kind === "image" || /\.(png|jpe?g|webp|gif)$/i.test(payload.filename || "")) {
+			try { await spawnMediaPlane(payload.url, payload.filename || "image.png", "image"); }
+			catch (err) { console.warn("[cb] image drop failed:", err); }
+			return;
+		}
+		if (kind === "video" || /\.(mp4|webm|mov)$/i.test(payload.filename || "")) {
+			try { await spawnMediaPlane(payload.url, payload.filename || "video.mp4", "video"); }
+			catch (err) { console.warn("[cb] video drop failed:", err); }
+			return;
+		}
+		updateStatus?.(`drop unsupported for kind: ${kind}`);
+	});
+})();
 
 const importBtn = document.getElementById("import-btn");
 const importInput = document.getElementById("import-file");

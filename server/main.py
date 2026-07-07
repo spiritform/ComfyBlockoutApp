@@ -541,6 +541,15 @@ async def delete_video(node_id: str):
     return {"cleared": True}
 
 
+@app.delete("/comfyblockout/image/{node_id}")
+async def delete_image(node_id: str):
+    """Same as delete_video but for the still-image alias — util pane's X
+    button on image inputs calls this so a stale scene-image doesn't hang
+    around after the user clears the preview."""
+    _image_store.pop(node_id, None)
+    return {"cleared": True}
+
+
 @app.get("/comfyblockout/image_url")
 async def image_url(node_id: str = ""):
     info = _image_store.get(node_id.strip())
@@ -3300,7 +3309,7 @@ async def cancel_local_comfy():
 # pulls this for the Assets modal so the user can drag previously-generated
 # results back into the editor.
 @app.get("/api/assets/list")
-async def assets_list():
+async def assets_list(limit: int = 200):
     items = []
     # Two-pass so we can pair 3D outputs with their `<stem>.thumb.<ext>`
     # companion image before returning. Skip .thumb.* files from the listing
@@ -3352,7 +3361,9 @@ async def assets_list():
                 pass
         items.append(entry)
     items.sort(key=lambda x: x["mtime"], reverse=True)
-    return {"assets": items[:200]}
+    total = len(items)
+    n = max(1, min(500, int(limit)))
+    return {"assets": items[:n], "total": total}
 
 
 @app.delete("/api/assets/{filename}")
