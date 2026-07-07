@@ -530,6 +530,17 @@ async def serve_video(node_id: str):
     return FileResponse(path, media_type=ctype)
 
 
+@app.delete("/comfyblockout/video/{node_id}")
+async def delete_video(node_id: str):
+    """Drop the last-recorded viewport clip from the store — used by the
+    util pane's X button so the preview slot resets to "no source" instead
+    of showing an unrelated earlier recording. The file on disk stays put
+    (assets folder keeps the timestamped copy for the Assets modal); this
+    only clears the primary node_<id>.mp4 alias the workflow runner reads."""
+    _video_store.pop(node_id, None)
+    return {"cleared": True}
+
+
 @app.get("/comfyblockout/image_url")
 async def image_url(node_id: str = ""):
     info = _image_store.get(node_id.strip())
@@ -999,6 +1010,8 @@ def _module_dict(m) -> dict:
         "inputs": m.inputs,
         "output_ext": m.output_ext,
         "source": getattr(m, "source", "python"),
+        "util": bool(getattr(m, "util", False)),
+        "icon": getattr(m, "icon", "") or "",
     }
 
 
@@ -1749,6 +1762,14 @@ async def workflows_register(request: Request):
     }
     if intermediates:
         manifest["intermediates"] = intermediates
+    # Utility flag + optional icon — set from the register payload so the
+    # AI-agent create_workflow_module flow can register a workflow directly
+    # as a Tools-grid button (bypassing the WORKFLOWS section).
+    if body.get("util"):
+        manifest["util"] = True
+    icon = body.get("icon")
+    if isinstance(icon, str) and icon.strip():
+        manifest["icon"] = icon.strip()
 
     wf_path.write_text(json.dumps(workflow, indent=2), encoding="utf-8")
     meta_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
@@ -1844,7 +1865,7 @@ _MANIFEST_TOOL = {
                     "type": "object",
                     "properties": {
                         "name": {"type": "string", "description": "kwarg name, snake_case"},
-                        "type": {"type": "string", "enum": ["textarea", "text", "scene-image", "number", "seed", "dropdown"]},
+                        "type": {"type": "string", "enum": ["textarea", "text", "scene-image", "scene-video", "number", "seed", "dropdown"]},
                         "required": {"type": "boolean"},
                         "placeholder": {"type": "string"},
                         "label": {"type": "string"},
@@ -2015,10 +2036,25 @@ async def run_module(module_id: str, request: Request):
                 raise HTTPException(400, "no scene image saved — snapshot in the editor first")
             inputs["image_path"] = Path(info["path"])
         elif spec.get("type") == "scene-video":
+            # Preference order: transport-recorded clip FIRST (its duration
+            # matches the scene trim range exactly, so feeding it to a video
+            # workflow processes exactly what the user animated). Falls back
+            # to the Scene Properties BG video if no recording exists — useful
+            # for utils that operate on external reference footage.
             info = _video_store.get(node_id)
-            if not info or not Path(info["path"]).exists():
-                raise HTTPException(400, "no scene video recorded — record in the editor first")
-            inputs["video_path"] = Path(info["path"])
+            if info and Path(info["path"]).exists():
+                inputs["video_path"] = Path(info["path"])
+                continue
+            scene = _scene_store.get(node_id) or {}
+            bg_video = ((scene.get("viewport") or {}).get("bgVideo")) or {}
+            asset_id = bg_video.get("assetId")
+            asset_ext = (bg_video.get("ext") or "").lower().lstrip(".")
+            if asset_id and asset_ext and _SAFE_ASSET_ID.match(asset_id) and _SAFE_EXT.match(asset_ext):
+                asset_path = _asset_dir(node_id) / f"{asset_id}.{asset_ext}"
+                if asset_path.exists():
+                    inputs["video_path"] = asset_path
+                    continue
+            raise HTTPException(400, "no scene video — record from the transport (● button on the timeline) or load a Background video in Scene Properties")
 
     # Optional image_url override — the frontend's gen-cell source-image slot passes
     # this when the user picked/dragged a specific image instead of using the auto
@@ -2648,12 +2684,18 @@ EDITOR_TOOLS = [
                             },
                             "type": {
                                 "type": "string",
-                                "enum": ["textarea", "text", "scene-image", "number", "seed", "dropdown"],
+                                "enum": ["textarea", "text", "scene-image", "scene-video", "number", "seed", "dropdown"],
                                 "description": (
                                     "UI control type. 'textarea' = multi-line prompt, 'text' = "
                                     "single-line, 'scene-image' = uses the editor's viewport "
                                     "snapshot (or a picked source image) — the runner uploads it "
                                     "and patches the LoadImage node with the returned filename, "
+                                    "'scene-video' = uses the video the user set as the Scene "
+                                    "Properties → Background → Video (falls back to a recorded "
+                                    "clip) — the runner uploads the file to ComfyUI's input dir "
+                                    "and patches the LoadVideo / VHS_LoadVideo node's `video` "
+                                    "widget with the resulting filename. No UI drop slot; the "
+                                    "user configures the video in Scene Properties. "
                                     "'number' = numeric field (supports optional `default`, `min`, "
                                     "`max`, `step`), 'seed' = numeric field with a 🎲/🔒 random-vs-"
                                     "fixed toggle. Patch 'seed' onto KSampler.seed (or an int "
@@ -2702,6 +2744,27 @@ EDITOR_TOOLS = [
                         },
                         "required": ["name", "type", "patch"],
                     },
+                },
+                "util": {
+                    "type": "boolean",
+                    "description": (
+                        "True → register as a UTILITY (button in the Tools grid, "
+                        "output feeds Assets for downstream workflows to consume) "
+                        "instead of a generator (cell in the WORKFLOWS section, "
+                        "output is a final render). Use for workflows whose "
+                        "purpose is media transformation (pose extraction from a "
+                        "video, background removal, edge/depth preview, etc). "
+                        "Filename prefix convention: `util_<name>.json`."
+                    ),
+                },
+                "icon": {
+                    "type": "string",
+                    "description": (
+                        "Optional inline SVG markup for the Tools button when "
+                        "util=True (e.g. `<svg viewBox='0 0 24 24' ...>...</svg>`). "
+                        "Small, 24x24, stroke-based to match the other tool "
+                        "icons. Falls back to a generic utility glyph."
+                    ),
                 },
             },
             "required": ["id", "label", "kind", "output_ext", "workflow", "inputs"],

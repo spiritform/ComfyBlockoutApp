@@ -226,6 +226,8 @@ def _manifest_to_module_def(workflow_path: Path, manifest: dict) -> ModuleDef:
         output_ext=exts[0] if exts else "png",
         run=_make_run(workflow_path, manifest),
         source="workflow",
+        util=bool(manifest.get("util", False)),
+        icon=manifest.get("icon", "") or "",
     )
 
 

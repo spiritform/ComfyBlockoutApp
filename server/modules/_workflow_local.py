@@ -230,56 +230,75 @@ def apply_manifest_inputs(workflow: dict, manifest: dict, kwargs: dict) -> None:
     mappings should upgrade the manifest to declare `widget_name` explicitly.
     """
     for spec in manifest.get("inputs", []):
-        patch = spec.get("patch") or {}
-        node_id = str(patch.get("node_id"))
-        widget_name = patch.get("widget_name")  # local-format hint, optional
-        input_type = spec.get("type", "text")
+        # A manifest input can now target MULTIPLE nodes via a list of patches
+        # — useful when one UI knob should mirror across widgets (e.g. an
+        # ImageResizeKJv2 "total_pixels" mode needs the same value in both
+        # `width` and `height`). Legacy single-dict form still works.
+        patches = spec.get("patch") or {}
+        patch_list = patches if isinstance(patches, list) else [patches]
+        for patch in patch_list:
+            _apply_single_patch(workflow, spec, patch, kwargs)
 
-        node = workflow.get(node_id)
-        if not isinstance(node, dict):
-            raise RuntimeError(f"manifest patch: node {node_id} not present in workflow")
-        inputs = node.setdefault("inputs", {})
 
-        # Resolve which input key to write to. Prefer explicit widget_name; else
-        # fall back to educated guesses per input type based on class_type.
-        if not widget_name:
-            class_type = node.get("class_type", "")
-            widget_name = _guess_widget_name(class_type, input_type)
-        if not widget_name:
-            raise RuntimeError(
-                f"couldn't resolve widget name on node {node_id} ({node.get('class_type')}). "
-                f"Add `widget_name` to the manifest patch."
-            )
+def _apply_single_patch(workflow: dict, spec: dict, patch: dict, kwargs: dict) -> None:
+    node_id = str(patch.get("node_id"))
+    widget_name = patch.get("widget_name")  # local-format hint, optional
+    input_type = spec.get("type", "text")
+    node = workflow.get(node_id)
+    if not isinstance(node, dict):
+        raise RuntimeError(f"manifest patch: node {node_id} not present in workflow")
+    inputs = node.setdefault("inputs", {})
 
-        if input_type == "scene-image":
-            image_path = kwargs.get("image_path")
-            if not image_path:
-                if spec.get("required", True):
-                    raise ValueError(f"{spec['name']} is required")
-                continue
-            # image_path is used as-is here; the caller uploaded it to local
-            # ComfyUI first and passed the resulting filename via kwargs.
-            inputs[widget_name] = str(image_path)
-        else:
-            value = kwargs.get(spec["name"])
-            if value is None or (isinstance(value, str) and not value.strip()):
-                if spec.get("required"):
-                    raise ValueError(f"{spec['name']} is required")
-                continue
-            # Coerce numeric widget types — the frontend serializes them as
-            # strings ("42", "0.8") but ComfyUI schema-checks KSampler.seed as
-            # int and ControlNetApply.strength as float. Falls back to the raw
-            # value on parse errors so a bad manifest doesn't silently drop it.
-            if input_type in ("seed", "number") and isinstance(value, str):
-                s = value.strip()
+    # Resolve which input key to write to. Prefer explicit widget_name; else
+    # fall back to educated guesses per input type based on class_type.
+    if not widget_name:
+        class_type = node.get("class_type", "")
+        widget_name = _guess_widget_name(class_type, input_type)
+    if not widget_name:
+        raise RuntimeError(
+            f"couldn't resolve widget name on node {node_id} ({node.get('class_type')}). "
+            f"Add `widget_name` to the manifest patch."
+        )
+
+    if input_type == "scene-image":
+        image_path = kwargs.get("image_path")
+        if not image_path:
+            if spec.get("required", True):
+                raise ValueError(f"{spec['name']} is required")
+            return
+        # image_path is used as-is here; the caller uploaded it to local
+        # ComfyUI first and passed the resulting filename via kwargs.
+        inputs[widget_name] = str(image_path)
+    elif input_type == "scene-video":
+        video_path = kwargs.get("video_path")
+        if not video_path:
+            if spec.get("required", True):
+                raise ValueError(f"{spec['name']} is required")
+            return
+        # video_path is the Comfy-side filename after upload (see the
+        # upload pass in run_workflow — same pattern as scene-image).
+        inputs[widget_name] = str(video_path)
+    else:
+        value = kwargs.get(spec["name"])
+        if value is None or (isinstance(value, str) and not value.strip()):
+            if spec.get("required"):
+                raise ValueError(f"{spec['name']} is required")
+            return
+        # Coerce numeric widget types — the frontend serializes them as
+        # strings ("42", "0.8") but ComfyUI schema-checks KSampler.seed as
+        # int and ControlNetApply.strength as float. Falls back to the raw
+        # value on parse errors so a bad manifest doesn't silently drop it.
+        if input_type in ("seed", "number") and isinstance(value, str):
+            s = value.strip()
+            try:
+                value = int(s) if input_type == "seed" else float(s)
+            except ValueError:
                 try:
-                    value = int(s) if input_type == "seed" else float(s)
+                    value = float(s)
                 except ValueError:
-                    try:
-                        value = float(s)
-                    except ValueError:
-                        pass
-            inputs[widget_name] = value
+                    pass
+        inputs[widget_name] = value
+        print(f"[workflow-patch] node {node_id}.{widget_name} <- {value!r} ({input_type})")
 
 
 def _guess_widget_name(class_type: str, input_type: str) -> str | None:
@@ -290,6 +309,9 @@ def _guess_widget_name(class_type: str, input_type: str) -> str | None:
     if input_type == "scene-image":
         # LoadImage's widget is `image`.
         return "image"
+    if input_type == "scene-video":
+        # VHS_LoadVideo / LoadVideo both use `video` for the filename widget.
+        return "video"
     if input_type in ("textarea", "text"):
         if ct == "CLIPTextEncode":
             return "text"
@@ -316,6 +338,24 @@ async def upload_image_to_local(client: httpx.AsyncClient, image_path: Path) -> 
         files = {"image": (image_path.name, f, "application/octet-stream")}
         data = {"overwrite": "true"}
         r = await client.post(f"{COMFY_URL}/upload/image", files=files, data=data, timeout=60.0)
+    r.raise_for_status()
+    j = r.json()
+    name = j.get("name") or j.get("filename")
+    if not name:
+        raise RuntimeError(f"upload response missing name: {j}")
+    return name
+
+
+async def upload_video_to_local(client: httpx.AsyncClient, video_path: Path) -> str:
+    """Push a local video into ComfyUI's input/ dir. ComfyUI's /upload/image
+    endpoint accepts arbitrary file types (it just stores whatever bytes you
+    send under the given name) — VHS_LoadVideo/LoadVideo widgets pick from
+    the same input directory, so re-using this endpoint is the standard
+    Comfy pattern for video uploads too. Returns the server-side filename."""
+    with video_path.open("rb") as f:
+        files = {"image": (video_path.name, f, "application/octet-stream")}
+        data = {"overwrite": "true", "type": "input"}
+        r = await client.post(f"{COMFY_URL}/upload/image", files=files, data=data, timeout=300.0)
     r.raise_for_status()
     j = r.json()
     name = j.get("name") or j.get("filename")
@@ -420,9 +460,9 @@ async def run_local_workflow(workflow_path: Path, manifest: dict, kwargs: dict, 
         if not alive:
             raise RuntimeError(f"Local ComfyUI not reachable at {COMFY_URL} — is it running? ({err})")
 
-        # scene-image inputs get uploaded first, and the manifest patch gets
-        # rewritten with the server-side filename. We mutate kwargs so
-        # apply_manifest_inputs writes the uploaded name. We also read the
+        # scene-image / scene-video inputs get uploaded first, and the manifest
+        # patch gets rewritten with the server-side filename. We mutate kwargs
+        # so apply_manifest_inputs writes the uploaded name. We also read the
         # source PNG's dimensions BEFORE the path is replaced so we can drive
         # the latent size from it below.
         src_dims: tuple[int, int] | None = None
@@ -444,6 +484,11 @@ async def run_local_workflow(workflow_path: Path, manifest: dict, kwargs: dict, 
                         blockout_asset_path = None
                     uploaded_name = await upload_image_to_local(client, Path(image_path))
                     kwargs["image_path"] = uploaded_name
+            elif spec.get("type") == "scene-video":
+                video_path = kwargs.get("video_path")
+                if video_path:
+                    uploaded_name = await upload_video_to_local(client, Path(video_path))
+                    kwargs["video_path"] = uploaded_name
 
         apply_manifest_inputs(workflow, manifest, kwargs)
 

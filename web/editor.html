@@ -372,14 +372,22 @@
 	#canvas-bg-layer {
 		position: absolute;
 		z-index: 0; pointer-events: none;
-		background-size: cover; background-position: center; background-repeat: no-repeat;
+		/* Fit the image inside the aspect frame preserving its own aspect —
+		   avoids cropping a portrait shot in a landscape frame. */
+		background-size: contain; background-position: center; background-repeat: no-repeat;
+		background-color: #000;
 		display: none;
 	}
 	#canvas-bg-layer.active { display: block; }
 	#canvas-bg-video {
 		position: absolute;
 		z-index: 0; pointer-events: none;
-		object-fit: cover; display: none;
+		/* Fit the video inside the aspect frame preserving its own aspect —
+		   a portrait clip in a landscape frame gets side-bars instead of
+		   getting cropped to just the middle stripe of the frame. */
+		object-fit: contain;
+		background: #000;
+		display: none;
 	}
 	#canvas-bg-video.active { display: block; }
 
@@ -785,6 +793,14 @@
 	.mini-btn:hover { background: rgba(255,80,80,0.15); color: #ff8a8a; }
 	.mini-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 	.mini-btn:disabled:hover { background: transparent; color: rgba(255,255,255,0.4); }
+	/* Square icon variant — an inline-flex box sized for a 14px SVG glyph
+	   instead of text. Used by the outliner's Hide/Show all toggle. */
+	.mini-btn.outliner-eye-btn {
+		padding: 0; width: 22px; height: 22px;
+		display: inline-flex; align-items: center; justify-content: center;
+	}
+	.mini-btn.outliner-eye-btn:hover { background: rgba(255,255,255,0.1); color: #e6e6ea; }
+	.mini-btn.outliner-eye-btn svg { width: 14px; height: 14px; }
 	/* "+ Add" variant of mini-btn — same chip shape as Clear but orange tint
 	   on hover to signal an additive action instead of a destructive one. */
 	.mini-btn.add:hover { background: rgba(255,180,84,0.14); color: #ffb454; }
@@ -2273,6 +2289,99 @@
 	.rp-bg-row input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
 	.rp-bg-pair { display: flex; gap: 6px; }
 	.rp-bg-pair .rp-bg-row { flex: 1; min-width: 0; justify-content: flex-start; }
+	/* Stacked BG cells (Color / Image / Video) — visual sibling to
+	   .gen-cell in the Generate section so the expand+active pattern is
+	   consistent. Each cell has a head row + optional expanded body. */
+	.bg-cells { display: flex; flex-direction: column; gap: 4px; }
+	.bg-cell {
+		background: rgba(255,255,255,0.04);
+		border: 1px solid transparent;
+		border-radius: 5px;
+		overflow: hidden;
+		transition: background 120ms ease, border-color 120ms ease;
+	}
+	.bg-cell.active {
+		background: rgba(255,180,84,0.08);
+		border-color: rgba(255,180,84,0.35);
+	}
+	.bg-cell-head {
+		display: grid; grid-template-columns: 28px 1fr auto;
+		align-items: center; gap: 10px;
+		padding: 8px 10px; cursor: pointer; user-select: none;
+	}
+	.bg-cell-thumb {
+		position: relative;
+		width: 28px; height: 28px;
+		border-radius: 4px; background: #14141a;
+		background-size: cover; background-position: center;
+		border: 1px solid rgba(255,255,255,0.08);
+		flex: 0 0 auto;
+	}
+	/* Upload-swap affordance — appears on hover over the thumb when the
+	   cell already has a loaded asset. Click to re-open the file picker
+	   without needing to clear first. */
+	.bg-cell.has-content .bg-cell-thumb { cursor: pointer; }
+	.bg-cell.has-content .bg-cell-thumb::after {
+		content: "";
+		position: absolute; inset: 0;
+		background: rgba(0,0,0,0.55);
+		background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/><polyline points='17 8 12 3 7 8'/><line x1='12' y1='3' x2='12' y2='15'/></svg>");
+		background-size: 14px; background-repeat: no-repeat; background-position: center;
+		border-radius: 3px;
+		opacity: 0; transition: opacity 120ms ease;
+		pointer-events: none;
+	}
+	.bg-cell.has-content .bg-cell-thumb:hover::after { opacity: 1; }
+	.bg-cell-label {
+		font-size: 12px; color: rgba(255,255,255,0.85); font-weight: 500;
+	}
+	.bg-cell.active .bg-cell-label { color: #ffd28a; }
+	.bg-cell-clear {
+		background: transparent; border: none; cursor: pointer;
+		color: rgba(255,255,255,0.45); font: 700 16px/1 ui-sans-serif, system-ui;
+		padding: 4px 8px; border-radius: 3px;
+	}
+	.bg-cell-clear:hover { background: rgba(255,80,80,0.15); color: #ff8a8a; }
+	.bg-cell-body {
+		display: none;
+		padding: 0 10px 10px 10px;
+		flex-direction: column; gap: 8px;
+		border-top: 1px solid rgba(255,255,255,0.04);
+	}
+	.bg-cell.active .bg-cell-body { display: flex; }
+	.bg-cell-picker {
+		width: 100%; padding: 8px 12px;
+		background: rgba(255,255,255,0.06);
+		border: 1px dashed rgba(255,255,255,0.14);
+		border-radius: 4px; cursor: pointer;
+		color: rgba(255,255,255,0.7);
+		font: inherit; font-size: 11px;
+	}
+	.bg-cell-picker:hover { background: rgba(255,180,84,0.1); border-color: rgba(255,180,84,0.4); color: #ffd28a; }
+	.bg-cell.has-content .bg-cell-picker { display: none; }
+	/* Full-width hue × lightness color spectrum for the Color cell body.
+	   Two stacked gradients — the horizontal rainbow provides hue, the
+	   vertical white→transparent→black overlay slides lightness from top
+	   (white) through middle (full-sat) to bottom (black). Drag the
+	   crosshair inside to pick. */
+	.cp-spectrum {
+		position: relative; width: 100%; aspect-ratio: 4 / 3;
+		border-radius: 4px; cursor: crosshair; overflow: hidden;
+		background:
+			linear-gradient(180deg, #fff 0%, transparent 50%, #000 100%),
+			linear-gradient(90deg, hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%), hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%), hsl(360,100%,50%));
+		user-select: none; touch-action: none;
+	}
+	.cp-spectrum-cursor {
+		position: absolute; width: 14px; height: 14px;
+		border: 2px solid #fff; border-radius: 50%;
+		box-shadow: 0 0 0 1px rgba(0,0,0,0.6);
+		margin-left: -7px; margin-top: -7px;
+		pointer-events: none;
+	}
+	.cp-hex-row {
+		display: flex; align-items: center; gap: 8px; margin-top: 8px;
+	}
 	.rp-bg-img-btn {
 		border: none; font: inherit; color: rgba(255,255,255,0.75);
 		text-align: left;
@@ -2721,6 +2830,7 @@
 			<div class="section-head-row">
 				<span class="section-label">Outliner</span>
 				<span class="head-end">
+					<button class="mini-btn outliner-eye-btn" id="outliner-hide-all" title="Hide/show every object at once — handy before a recording when you want to isolate what the camera sees" hidden></button>
 					<button class="mini-btn" id="clear-btn" title="Clear all objects" hidden>Clear</button>
 				</span>
 			</div>
@@ -3273,25 +3383,61 @@
 			<div class="rp-pane" id="rp-pane-scene" hidden>
 				<div class="section">
 					<div class="section-label">Background</div>
-					<div class="rp-bg-pair">
-						<label class="rp-bg-row" id="bg-color-btn" title="Solid color background">
-							<input type="color" id="bg-color" value="#000000">
-							<span class="rp-bg-label">Color</span>
-						</label>
-					</div>
-					<div class="rp-bg-pair" style="margin-top:6px">
-						<div class="rp-bg-row rp-bg-img-btn" id="bg-image-btn" title="Image background — fills the entire viewport">
-							<span class="rp-bg-thumb" id="bg-image-thumb"></span>
-							<span class="rp-bg-label" id="bg-image-label">Image</span>
-							<button type="button" class="rp-bg-clear" id="bg-image-clear" title="Remove background" hidden>×</button>
+					<!-- Three stacked expandable BG cells (Color / Image / Video),
+					     each shown as a full-width row. Clicking a head activates
+					     that mode AND expands the cell inline to reveal its
+					     properties. Only one cell is active + expanded at a time.
+					     Layout intentionally mirrors gen-cells so the pattern is
+					     recognizable. -->
+					<div class="bg-cells" id="bg-cells">
+						<div class="bg-cell" data-bgmode="color">
+							<div class="bg-cell-head">
+								<span class="bg-cell-thumb" id="bg-color-swatch" style="background:#000000"></span>
+								<span class="bg-cell-label">Color</span>
+							</div>
+							<div class="bg-cell-body">
+								<!-- Full-width hue × lightness spectrum. X = hue (0-360),
+								     Y = lightness (top=white, bottom=black; middle band =
+								     full-sat color). Drag the crosshair to pick. Native
+								     <input type="color"> below stays as state-of-truth so
+								     the rest of the app (which reads bg-color.value) is
+								     unchanged. -->
+								<div class="cp-spectrum" id="cp-spectrum">
+									<div class="cp-spectrum-cursor" id="cp-spectrum-cursor"></div>
+								</div>
+								<div class="cp-hex-row">
+									<label style="font-size:10px;color:rgba(255,255,255,0.55);letter-spacing:0.06em">HEX</label>
+									<input type="text" id="cp-hex" value="#000000" maxlength="7" spellcheck="false" style="flex:1;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.9);border:1px solid rgba(255,255,255,0.08);border-radius:3px;padding:4px 8px;font-size:11px;font-family:ui-monospace,monospace;text-transform:uppercase">
+								</div>
+							</div>
+							<!-- Hidden native color input keeps existing code that reads
+							     `bg-color.value` working without changes. -->
+							<label id="bg-color-btn" style="position:absolute;left:-9999px;top:-9999px">
+								<input type="color" id="bg-color" value="#000000">
+							</label>
 						</div>
-						<div class="rp-bg-row rp-bg-img-btn" id="bg-video-btn" title="Video background — driven by the timeline playhead">
-							<span class="rp-bg-thumb" id="bg-video-thumb"></span>
-							<span class="rp-bg-label" id="bg-video-label">Video</span>
-							<button type="button" class="rp-bg-clear" id="bg-video-clear" title="Remove background" hidden>×</button>
+						<div class="bg-cell" data-bgmode="image">
+							<div class="bg-cell-head">
+								<span class="bg-cell-thumb" id="bg-image-thumb"></span>
+								<span class="bg-cell-label" id="bg-image-label">Image</span>
+								<button type="button" class="bg-cell-clear" id="bg-image-clear" data-role="clear" hidden>×</button>
+							</div>
+							<div class="bg-cell-body">
+								<button type="button" id="bg-image-btn" class="bg-cell-picker">Choose image…</button>
+								<input type="file" id="bg-image-file" accept="image/*" hidden>
+								</div>
 						</div>
-						<input type="file" id="bg-image-file" accept="image/*" hidden>
-						<input type="file" id="bg-video-file" accept="video/*" hidden>
+						<div class="bg-cell" data-bgmode="video">
+							<div class="bg-cell-head">
+								<span class="bg-cell-thumb" id="bg-video-thumb"></span>
+								<span class="bg-cell-label" id="bg-video-label">Video</span>
+								<button type="button" class="bg-cell-clear" id="bg-video-clear" data-role="clear" hidden>×</button>
+							</div>
+							<div class="bg-cell-body">
+								<button type="button" id="bg-video-btn" class="bg-cell-picker">Choose video…</button>
+								<input type="file" id="bg-video-file" accept="video/*" hidden>
+								</div>
+						</div>
 					</div>
 					<!-- Adjust/Transform controls are grouped under mini-headers so
 					     the section reads as [pickers][transform][display] instead
@@ -3323,6 +3469,21 @@
 							<div class="slider-row" id="bg-opacity-row">
 								<input type="range" id="bg-opacity" min="0" max="100" step="1" value="100">
 								<span class="slider-val" id="bg-opacity-val">100</span>
+							</div>
+						</div>
+						<!-- Video trim (IN/OUT) — only visible when bgMode="video".
+						     Visual dual-handle scrubber pins the transport playhead
+						     range to a sub-window of the loaded clip so recording
+						     captures just those seconds. Handles snap to seconds. -->
+						<div id="bg-video-trim-block" hidden>
+							<div class="sub-label" style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
+								<span>Trim</span>
+								<span id="bg-video-trim-readout" style="font-size:10px;color:rgba(255,255,255,0.45);font-weight:normal;letter-spacing:0.04em">0.0s → 0.0s</span>
+							</div>
+							<div id="bg-video-trim-track" style="position:relative;height:32px;margin-top:6px;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.06);border-radius:4px;user-select:none;touch-action:none">
+								<div id="bg-video-trim-fill" style="position:absolute;top:0;bottom:0;background:linear-gradient(180deg, rgba(255,180,84,0.22) 0%, rgba(255,180,84,0.14) 100%);border-left:1px solid rgba(255,180,84,0.55);border-right:1px solid rgba(255,180,84,0.55);pointer-events:none"></div>
+								<div id="bg-video-trim-in" style="position:absolute;top:0;bottom:0;width:8px;margin-left:-4px;background:rgba(255,180,84,0.85);border-radius:2px;cursor:ew-resize;box-shadow:0 0 8px rgba(255,180,84,0.35)"></div>
+								<div id="bg-video-trim-out" style="position:absolute;top:0;bottom:0;width:8px;margin-left:-4px;background:rgba(255,180,84,0.85);border-radius:2px;cursor:ew-resize;box-shadow:0 0 8px rgba(255,180,84,0.35)"></div>
 							</div>
 						</div>
 					</div>
@@ -3519,6 +3680,11 @@
 					<div class="hint" style="margin-top:6px">Composites the video + landmarks and drops it into Assets.</div>
 				</div>
 			</div>
+
+			<!-- ===== UTIL TOOL TAB ===== -->
+			<!-- Content populated dynamically by openUtilTool based on which util
+			     module the user activated (Lotus Pose, future preprocessors etc). -->
+			<div class="rp-pane" id="rp-pane-util" hidden></div>
 
 			<!-- ===== BOOLEAN TAB ===== -->
 			<div class="rp-pane" id="rp-pane-bool" hidden>
@@ -3764,7 +3930,13 @@
 			// works.
 			let media;
 			if (asset.kind === "video") {
-				media = `<video src="${asset.url}" muted preload="none" data-pending="1"></video>`;
+				// Media fragment `#t=0.5` tells the browser to render the frame
+				// at ~0.5s as the poster instead of the very first frame — many
+				// clips (including our recordings) open on a black lead-in, so
+				// without this the tile shows solid black. Preload="metadata"
+				// (kicked in by the IntersectionObserver) is enough for the
+				// browser to decode + show that seeked poster frame.
+				media = `<video src="${asset.url}#t=0.5" muted preload="none" data-pending="1"></video>`;
 			} else if (asset.kind === "3d") {
 				const ext = (asset.ext || asset.filename.split(".").pop() || "").toUpperCase();
 				if (asset.thumbUrl) {
@@ -6519,6 +6691,7 @@ function forceRightPane(which, label) {
 	const wfPane  = document.getElementById("rp-pane-workflowcell");
 	const mpPane  = document.getElementById("rp-pane-mediapipe");
 	const boolPane = document.getElementById("rp-pane-bool");
+	const utilPane = document.getElementById("rp-pane-util");
 	const titleEl = document.getElementById("rp-title");
 	const kickerEl = document.getElementById("rp-kicker");
 	const sepEl = document.getElementById("rp-sep");
@@ -6530,6 +6703,7 @@ function forceRightPane(which, label) {
 	if (wfPane)  wfPane.hidden  = which !== "workflowcell";
 	if (mpPane)  mpPane.hidden  = which !== "mediapipe";
 	if (boolPane) boolPane.hidden = which !== "bool";
+	if (utilPane) utilPane.hidden = which !== "util";
 	// Assets owns the kicker label with no sub-title. Object / Scene / Camera /
 	// GenCell / WorkflowCell use "Properties : <label>". "none" hides the whole
 	// header for a blank switcher zone.
@@ -6543,7 +6717,7 @@ function forceRightPane(which, label) {
 	if (sepEl) sepEl.style.display = (isFullPane || isBlank) ? "none" : "";
 	if (titleEl) {
 		titleEl.style.display = (isFullPane || isBlank) ? "none" : "";
-		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : which === "gencell" ? "Generator" : which === "workflowcell" ? "Workflow" : which === "mediapipe" ? "MediaPipe" : which === "bool" ? "Boolean" : "Object");
+		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : which === "gencell" ? "Generator" : which === "workflowcell" ? "Workflow" : which === "mediapipe" ? "MediaPipe" : which === "bool" ? "Boolean" : which === "util" ? "Util" : "Object");
 	}
 	// Keep top-header + viewport-toolbar buttons in sync with whichever full-pane
 	// view is active. Assistant button now toggles agent-zone collapse (wired
@@ -7295,6 +7469,21 @@ function refreshOutliner() {
 	// Clear button is only meaningful when the list isn't empty.
 	const clearBtn = document.getElementById("clear-btn");
 	if (clearBtn) clearBtn.hidden = objects.length === 0;
+	// Hide-all toggle — square eye button, visible whenever the list has
+	// anything to hide. Icon flips based on current state: open eye if any
+	// object is visible (click to hide all), crossed-out eye if every object
+	// is hidden (click to restore). Useful before a recording when you want
+	// to isolate what the camera sees.
+	const hideAllBtn = document.getElementById("outliner-hide-all");
+	if (hideAllBtn) {
+		hideAllBtn.hidden = objects.length === 0;
+		const pickable = objects.filter(o => o !== renderCam);
+		const allHidden = pickable.length > 0 && pickable.every(o => o.visible === false);
+		hideAllBtn.innerHTML = allHidden
+			? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 0 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>`
+			: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>`;
+		hideAllBtn.title = allHidden ? "Show all objects" : "Hide all objects";
+	}
 	if (objects.length === 0) {
 		const empty = document.createElement("div");
 		empty.className = "out-empty";
@@ -8531,6 +8720,71 @@ function _stopMediaPipeCompositor() {
 	_mp.compositing = false;
 }
 
+// BG compositor — needed when the user has an image or video background set
+// via Scene Properties. The BG lives in a separate <img>/<video> DOM layer
+// underneath the WebGL canvas (which is transparent where the 3D scene is
+// empty), so `canvas.captureStream()` on its own only sees the WebGL layer
+// and the recording comes out with a black background instead of the loaded
+// BG. This compositor draws the BG first (via the same `drawBgLayerToSnapshotCtx`
+// autoSnapshot uses for stills), then the WebGL canvas on top — matching
+// what the user sees on screen.
+let _bgCompositor = null;
+function _startBgCompositor(w, h) {
+	console.log("[bgCompositor] start attempt", { w, h, bgMode, hasBgVideo: !!bgVideo, hasBgImage: !!bgImage, videoReadyState: canvasBgVideo?.readyState, videoW: canvasBgVideo?.videoWidth, videoPaused: canvasBgVideo?.paused, bgOpacity });
+	if (bgMode !== "image" && bgMode !== "video") { console.warn("[bgCompositor] SKIP — bgMode is neither image nor video:", bgMode); return null; }
+	if (bgMode === "image" && !bgImage) { console.warn("[bgCompositor] SKIP — image mode but bgImage falsy"); return null; }
+	if (bgMode === "video" && !bgVideo) { console.warn("[bgCompositor] SKIP — video mode but bgVideo falsy"); return null; }
+	const cv = document.createElement("canvas");
+	cv.width = w;
+	cv.height = h;
+	const ctx = cv.getContext("2d");
+	// captureStream() on an OFF-DOM canvas silently only emits its very
+	// first frame in Chrome — subsequent RAF paints don't tick the video
+	// track. Park the canvas in the DOM (opacity 0, 1×1 CSS size, off to
+	// the corner) so it's technically painted and the stream stays live.
+	// Backing store stays at (w, h); CSS size only affects display, not
+	// captureStream.
+	cv.style.cssText = "position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1";
+	document.body.appendChild(cv);
+	// captureStream(0) puts us in explicit-push mode — the video track only
+	// emits a frame when we call track.requestFrame(), which lets us pace
+	// exactly to our RAF loop instead of racing an internal FPS timer that
+	// misses paints on off-screen canvases.
+	const stream = cv.captureStream(0);
+	const videoTrack = stream.getVideoTracks()[0];
+	const state = { running: true, canvas: cv, stream };
+	const loop = () => {
+		if (!state.running) return;
+		try {
+			// Clear each frame — WebGL canvas has transparency, so a stale
+			// prior frame would ghost through under empty scene regions.
+			ctx.save();
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.fillStyle = "#000";
+			ctx.fillRect(0, 0, w, h);
+			ctx.restore();
+			// BG layer (image or video) with the user's blur / opacity /
+			// offset / scale applied — same helper autoSnapshot uses so
+			// still snapshots and recording composites are visually identical.
+			drawBgLayerToSnapshotCtx(ctx, w, h);
+			// WebGL scene on top. Alpha-preserving so BG shows through
+			// where the 3D scene doesn't draw a pixel.
+			ctx.drawImage(canvas, 0, 0, w, h);
+			// Explicitly push this composited frame into the MediaStream —
+			// captureStream(0) doesn't auto-tick, so without this the
+			// MediaRecorder only ever sees the priming frame above.
+			try { videoTrack?.requestFrame?.(); } catch {}
+		} catch {}
+		if (state.running) requestAnimationFrame(loop);
+	};
+	loop();
+	state.stop = () => {
+		state.running = false;
+		try { cv.remove(); } catch {}
+	};
+	return state;
+}
+
 // Video opacity + blur sliders — tuned live so the user can dial in the
 // mix they want (landmarks + faint background). Opacity 0 = landmarks
 // alone on black; blur softens facial features without hiding motion.
@@ -9649,28 +9903,495 @@ function setActiveWorkflowCell(id) {
 	}
 }
 
+// Utility modules (workflow manifests with util:true) live in a separate map
+// and get rendered as buttons in the Tools grid — NOT the WORKFLOWS section.
+const utilModules = {};
+
 async function fetchWorkflowModules() {
 	try {
 		const r = await fetch("/api/modules");
 		if (!r.ok) return;
 		const data = await r.json();
 		for (const m of (data.modules || [])) {
-			if (m.source === "workflow") workflowModules[m.id] = m;
+			if (m.source !== "workflow") continue;
+			if (m.util) {
+				utilModules[m.id] = m;
+			} else {
+				workflowModules[m.id] = m;
+			}
 		}
 	} catch (e) {
 		console.warn("[workflow] module list fetch failed:", e);
 	}
-	// Every registered module gets a cell so it's visible above the Add chip
-	// instead of hiding in the dropdown. Cells the user explicitly removed
-	// (× button) leave the module registered on disk but re-appear here on
-	// reload — same as Generate's built-in cells always come back if wiped.
+	// Every registered non-util module gets a cell so it's visible above the
+	// Add chip instead of hiding in the dropdown. Cells the user explicitly
+	// removed (× button) leave the module registered on disk but re-appear
+	// here on reload — same as Generate's built-in cells always come back if
+	// wiped. Utils never live in the Workflows section (they're Tools).
 	for (const m of Object.values(workflowModules)) {
 		if (!workflowCells.some(c => c.moduleId === m.id)) {
 			workflowCells.push({ id: newGenCellId(), moduleId: m.id, values: {}, expanded: false });
 		}
 	}
 	refreshWorkflowCells();
+	refreshUtilTools();
 }
+
+// Inject a button into the Tools grid for each registered util module,
+// replacing any existing button with data-tool="util:<id>" so re-fetching
+// stays idempotent. Uses the manifest's `icon` SVG if provided, otherwise
+// a generic wrench glyph.
+function refreshUtilTools() {
+	const grid = document.querySelector('.section[data-section="tools"] .prim-grid');
+	if (!grid) return;
+	// Remove any util-tool buttons that no longer correspond to a live module.
+	for (const btn of grid.querySelectorAll('button[data-tool^="util:"]')) {
+		const id = btn.dataset.tool.slice("util:".length);
+		if (!utilModules[id]) btn.remove();
+	}
+	const DEFAULT_UTIL_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6 6 3 3 6-6a4 4 0 0 0 5.4-5.4l-2 2-2-2-2-2z"/></svg>`;
+	for (const m of Object.values(utilModules)) {
+		let btn = grid.querySelector(`button[data-tool="util:${m.id}"]`);
+		const isNew = !btn;
+		if (isNew) {
+			btn = document.createElement("button");
+			btn.className = "prim-btn";
+			btn.type = "button";
+			btn.dataset.tool = `util:${m.id}`;
+		}
+		btn.dataset.label = m.label || m.id;
+		btn.title = `${m.label || m.id} — util workflow, output lands in Assets`;
+		btn.innerHTML = m.icon || DEFAULT_UTIL_ICON;
+		if (isNew) {
+			// Replace the first available "soon-*" placeholder if one exists,
+			// otherwise append to the end of the grid.
+			const slot = grid.querySelector('button[data-tool^="soon-"]');
+			if (slot) slot.replaceWith(btn);
+			else grid.appendChild(btn);
+			btn.addEventListener("click", () => runUtilTool(m.id));
+			// Hover-label wiring (matches the other tool buttons — section-label
+			// swaps to "TOOLS : <name>" while the button is hovered).
+			const section = btn.closest(".section");
+			const labelEl = section?.querySelector(".section-label");
+			if (labelEl) {
+				btn.addEventListener("mouseenter", () => {
+					if (labelEl.dataset._origLabel === undefined) {
+						labelEl.dataset._origLabel = labelEl.textContent;
+					}
+					labelEl.textContent = `${labelEl.dataset._origLabel} : ${btn.dataset.label}`;
+				});
+				btn.addEventListener("mouseleave", () => {
+					if (labelEl.dataset._origLabel !== undefined) {
+						labelEl.textContent = labelEl.dataset._origLabel;
+					}
+				});
+			}
+		}
+	}
+}
+
+// Which util is currently active in the right pane. Set when the tool is
+// clicked, cleared when the user navigates away.
+let _activeUtilId = null;
+
+// Open the util tool's properties pane. Doesn't run the workflow — the user
+// checks the source setup + hits the Run button in the pane. Ripple state:
+// button-active flags let the user see which tool is currently "open".
+function runUtilTool(moduleId) {
+	const m = utilModules[moduleId];
+	if (!m) return;
+	if (_activeUtilId && _activeUtilId !== moduleId) {
+		document.querySelector(`button[data-tool="util:${_activeUtilId}"]`)?.classList.remove("active");
+	}
+	_activeUtilId = moduleId;
+	_utilSourceIsUpload = false;
+	document.querySelector(`button[data-tool="util:${moduleId}"]`)?.classList.add("active");
+	forceRightPane?.("util", m.label || moduleId);
+	renderUtilToolPane();
+}
+
+// Populate #rp-pane-util based on the active util module's manifest. Handles
+// scene-video inputs today (Lotus Pose); scene-image / other input types can
+// be added the same way as the util catalog grows.
+function renderUtilToolPane() {
+	const pane = document.getElementById("rp-pane-util");
+	if (!pane) return;
+	const m = _activeUtilId ? utilModules[_activeUtilId] : null;
+	if (!m) {
+		pane.innerHTML = `<div class="section"><div class="hint">No utility selected.</div></div>`;
+		return;
+	}
+	const sections = [];
+	const numberInputs = (m.inputs || []).filter(s => s.type === "number");
+	for (const spec of (m.inputs || [])) {
+		if (spec.type === "scene-video") {
+			// Extra params — number inputs get rendered as dropdowns inside
+			// the same card (aligns with "downscale width" for VHS_LoadVideo).
+			// Common downscale widths + a Source option (custom_width=0 → no
+			// resize). If the manifest declares min/max/default the user can
+			// still enter a value via the inline numeric input to the right.
+			const paramRows = numberInputs.map(n => {
+				const def = n.default ?? 0;
+				const label = n.label || n.name;
+				// Manifest can supply its own options list (e.g. Lotus Pose's
+				// downscale uses resolution presets; max_frames uses count
+				// presets). Fall back to a generic resolution list for old
+				// manifests that don't declare options.
+				const OPTIONS = Array.isArray(n.options) && n.options.length ? n.options : [
+					{ value: 0, label: "Source" },
+					{ value: 512, label: "512" },
+					{ value: 768, label: "768" },
+					{ value: 1024, label: "1024" },
+					{ value: 1280, label: "1280" },
+					{ value: 1920, label: "1920" },
+				];
+				const defOpt = OPTIONS.find(o => o.value === def) || OPTIONS[0];
+				const optRows = OPTIONS.map(o => `
+					<div class="util-dd-opt" data-value="${o.value}" style="padding:6px 10px;font-size:11px;color:rgba(255,255,255,0.85);cursor:pointer">${o.label}</div>
+				`).join("");
+				// Native <select> popups don't reliably respect dark themes
+				// across browsers — a tiny custom dropdown keeps styling in
+				// our hands. State lives on the button: data-value holds the
+				// current numeric value that the run handler reads.
+				return `
+					<div style="display:flex;align-items:center;gap:6px;margin-top:8px" data-util-input="${n.name}">
+						<span style="flex:1;font-size:10px;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:0.06em">${label}</span>
+						<div class="util-dd" style="position:relative;min-width:110px">
+							<button type="button" class="util-num-input util-dd-btn" data-name="${n.name}" data-value="${defOpt.value}" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:6px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85);border:1px solid rgba(255,255,255,0.08);border-radius:3px;padding:4px 8px;font-size:11px;cursor:pointer;font:inherit">
+								<span class="util-dd-label">${defOpt.label}</span>
+								<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.6"><polyline points="6 9 12 15 18 9"/></svg>
+							</button>
+							<div class="util-dd-menu" hidden style="position:absolute;top:calc(100% + 4px);left:0;right:0;background:#1a1a22;border:1px solid rgba(255,255,255,0.1);border-radius:4px;box-shadow:0 6px 20px rgba(0,0,0,0.5);z-index:1000;max-height:220px;overflow:auto">
+								${optRows}
+							</div>
+						</div>
+					</div>
+				`;
+			}).join("");
+			sections.push(`
+				<div class="section">
+					<div class="section-label">${spec.label || spec.name}</div>
+					<div style="margin-top:6px;padding:8px 10px;border:1px solid rgba(255,255,255,0.06);border-radius:4px;background:rgba(0,0,0,0.15)">
+						<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+							<span style="width:6px;height:6px;border-radius:50%;background:#ff5c5c;flex:0 0 auto"></span>
+							<div style="font-size:10px;color:rgba(255,255,255,0.85);font-weight:600;letter-spacing:0.05em;text-transform:uppercase">Video Input</div>
+						</div>
+						<div id="util-rec-preview-slot" style="width:100%;min-height:120px;border-radius:3px;background:#000;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.35);font-size:10px">Loading preview…</div>
+						${paramRows}
+						<div style="display:flex;gap:6px;margin-top:10px">
+							<button type="button" class="mp-still-btn" id="util-upload-btn" style="flex:1;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.8)">Upload video</button>
+							<input type="file" id="util-upload-file" accept="video/*" hidden>
+							<button type="button" class="mp-still-btn" id="util-run-btn" style="flex:1">Generate</button>
+						</div>
+						<div class="hint" id="util-status" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5)">Idle</div>
+						<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Upload replaces the preview. Generate records the viewport (if nothing's uploaded), then runs the workflow — result lands in Assets.</div>
+					</div>
+				</div>
+			`);
+		}
+	}
+	pane.innerHTML = sections.join("");
+
+	// Wire the custom dropdowns for any number inputs the pane rendered.
+	// Click the button → toggle menu. Click an option → set value + close.
+	// Doc-level click closes any open menu (so switching between multiple
+	// dropdowns doesn't leave stale panels open).
+	pane.querySelectorAll(".util-dd-btn").forEach(btn => {
+		btn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			const menu = btn.parentElement.querySelector(".util-dd-menu");
+			const wasHidden = menu.hidden;
+			// Close any other open menus first — one open at a time.
+			pane.querySelectorAll(".util-dd-menu").forEach(m => { m.hidden = true; });
+			menu.hidden = !wasHidden;
+		});
+	});
+	pane.querySelectorAll(".util-dd-opt").forEach(opt => {
+		opt.addEventListener("mouseenter", () => { opt.style.background = "rgba(255,180,84,0.18)"; });
+		opt.addEventListener("mouseleave", () => { opt.style.background = ""; });
+		opt.addEventListener("click", (e) => {
+			e.stopPropagation();
+			const menu = opt.closest(".util-dd-menu");
+			const btn = menu.parentElement.querySelector(".util-dd-btn");
+			btn.dataset.value = opt.dataset.value;
+			btn.querySelector(".util-dd-label").textContent = opt.textContent;
+			menu.hidden = true;
+		});
+	});
+	// One doc-level close listener per pane render — bounces open menus
+	// when the user clicks anywhere outside a dropdown.
+	if (!pane._utilDdCloseHooked) {
+		pane._utilDdCloseHooked = true;
+		document.addEventListener("click", () => {
+			pane.querySelectorAll(".util-dd-menu").forEach(m => { m.hidden = true; });
+		});
+	}
+
+	// Preview slot lives in a helper so onstop / upload paths can refresh it
+	// in place without tearing down the whole pane (which would clobber the
+	// Generate-button busy state during a run).
+	_updateUtilPreviewSlot();
+	// Restore button state — pane rebuilds forget the current busy phase, so
+	// re-drive it from the flag so a re-render mid-run keeps showing the spinner.
+	_setUtilRunButton(_utilRunPhase);
+
+	// Upload path — the user explicitly picked a source video, so subsequent
+	// Run clicks skip the auto-record step and just use the upload. Flag
+	// resets on pane re-render so a stale session-flag can't linger.
+	pane.querySelector("#util-upload-btn")?.addEventListener("click", () => {
+		pane.querySelector("#util-upload-file")?.click();
+	});
+	pane.querySelector("#util-upload-file")?.addEventListener("change", async (e) => {
+		const f = e.target.files?.[0];
+		e.target.value = "";
+		if (!f) return;
+		_setUtilStatus(`uploading ${f.name}…`, "busy");
+		try {
+			const j = await uploadVideo(f);
+			if (!j?.success) throw new Error(j?.error || "upload failed");
+			_utilSourceIsUpload = true;
+			_setUtilStatus("upload saved — preview updated", "ok");
+			_updateUtilPreviewSlot();
+		} catch (err) {
+			console.error("[util] upload failed:", err);
+			_setUtilStatus(`upload failed · ${String(err.message || err).slice(0, 120)}`, "error");
+		}
+	});
+
+	// Single primary action — records the viewport first if no upload has
+	// happened this session, then runs the workflow. If the user has already
+	// uploaded a video via the button above, the record step is skipped.
+	pane.querySelector("#util-run-btn")?.addEventListener("click", async () => {
+		if (!_activeUtilId) return;
+		if (_utilRunPhase !== "idle") return; // guard double-clicks
+		try {
+			// Only auto-record when there's no source video already staged —
+			// either an explicit upload OR a prior recording still visible in
+			// the preview slot. Re-clicking Generate should run the workflow
+			// on the existing source, not re-record from scratch. To force a
+			// fresh recording, hit the X on the preview to clear the source.
+			const hasExistingSource = !!pane.querySelector("#util-rec-preview-video");
+			if (!_utilSourceIsUpload && !hasExistingSource && !recording) {
+				_setUtilRunButton("recording");
+				_setUtilStatus("recording viewport…", "busy");
+				const rec = new Promise((resolve, reject) => {
+					window.__utilAwaitingRecording = { resolve, reject };
+					setTimeout(() => reject(new Error("recording timed out")), 60_000);
+				});
+				document.getElementById("tl-rec")?.click();
+				await rec;
+			}
+			_setUtilRunButton("running");
+			_setUtilStatus(`running ${_activeUtilId}…`, "busy");
+			// Harvest any per-run number inputs the pane rendered (downscale,
+			// etc). Server's apply_manifest_inputs picks them up by name and
+			// patches the workflow's mapped widgets.
+			const runInputs = {};
+			pane.querySelectorAll(".util-num-input").forEach(el => {
+				// Custom dropdowns keep the numeric value in dataset.value
+				// (button element); native <input>/<select> would use .value,
+				// so fall through to that if dataset is missing.
+				const raw = el.dataset.value ?? el.value;
+				const v = parseFloat(raw);
+				if (!Number.isNaN(v)) runInputs[el.dataset.name] = v;
+			});
+			const r = await fetch(`/api/run/${encodeURIComponent(_activeUtilId)}`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ node_id: NODE_ID, inputs: runInputs }),
+			});
+			if (!r.ok) {
+				const err = await r.text();
+				throw new Error(err || `HTTP ${r.status}`);
+			}
+			const j = await r.json();
+			_setUtilStatus(`done · ${j.filename || "saved to Assets"}`, "ok");
+			window.refreshAssets?.();
+		} catch (err) {
+			console.error(`[util:${_activeUtilId}] run failed:`, err);
+			_setUtilStatus(`failed · ${String(err.message || err).slice(0, 120)}`, "error");
+		} finally {
+			_setUtilRunButton("idle");
+			window.__utilAwaitingRecording = null;
+		}
+	});
+}
+
+// In-place refresh of the util pane's video preview — probe /video, fall
+// back to /image (Blockout snapshot), then to the "no source" nudge.
+// Called from renderUtilToolPane on first render AND from the recording
+// onstop handler after the fresh clip lands, so the preview reflects the
+// latest source without a full pane rebuild (which would blow away the
+// Generate button's busy state mid-run).
+function _updateUtilPreviewSlot() {
+	const slot = document.getElementById("util-rec-preview-slot");
+	if (!slot) return;
+	const t = Date.now();
+	const nid = encodeURIComponent(NODE_ID);
+	const videoUrl = `/comfyblockout/video/${nid}?t=${t}`;
+	const imageUrl = `/comfyblockout/image/${nid}?t=${t}`;
+	const clearSlotStyles = () => {
+		slot.style.minHeight = "auto";
+		slot.style.background = "#000";
+		slot.style.display = "block";
+	};
+	const showVideo = () => {
+		clearSlotStyles();
+		// Wrap the video so we can absolutely-position the X clear button
+		// in the top-right corner without displacing the layout.
+		slot.innerHTML = `
+			<div style="position:relative">
+				<video id="util-rec-preview-video" src="${videoUrl}#t=0.5" controls muted loop playsinline preload="metadata" style="width:100%;max-height:180px;border-radius:3px;background:#000;display:block"></video>
+				<button type="button" id="util-rec-clear-btn" title="Clear source video" style="position:absolute;top:6px;right:6px;width:22px;height:22px;padding:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.15);border-radius:50%;color:rgba(255,255,255,0.85);cursor:pointer;font:600 14px/1 ui-sans-serif,system-ui,sans-serif">×</button>
+			</div>
+			<div id="util-rec-preview-meta" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;font-size:10px;color:rgba(255,255,255,0.55);letter-spacing:0.04em">
+				<span id="util-rec-meta-loading">reading metadata…</span>
+			</div>
+		`;
+		document.getElementById("util-rec-clear-btn")?.addEventListener("click", async (e) => {
+			e.stopPropagation();
+			try {
+				await fetch(`/comfyblockout/video/${nid}`, { method: "DELETE" }).catch(() => {});
+			} catch {}
+			_utilSourceIsUpload = false;
+			showNone();
+		});
+		// Populate the metadata line once the browser decodes the video's
+		// intrinsic dims + duration. FPS isn't directly on <video>; we
+		// approximate via requestVideoFrameCallback if available (Chrome).
+		const vid = document.getElementById("util-rec-preview-video");
+		if (!vid) return;
+		vid.addEventListener("loadedmetadata", () => {
+			const w = vid.videoWidth, h = vid.videoHeight;
+			const dur = vid.duration;
+			const aspect = _gcdAspect(w, h);
+			let line = `${w}×${h} · ${aspect} · ${isFinite(dur) ? dur.toFixed(2) + "s" : "?"}`;
+			const meta = document.getElementById("util-rec-preview-meta");
+			if (meta) meta.innerHTML = `<span>${line}</span>`;
+			// Try to derive fps from requestVideoFrameCallback timings —
+			// we accumulate a handful of frame intervals and average.
+			if (typeof vid.requestVideoFrameCallback === "function") {
+				let last = null;
+				const samples = [];
+				const step = (_now, meta) => {
+					if (last !== null) samples.push(meta.mediaTime - last);
+					last = meta.mediaTime;
+					if (samples.length < 6) {
+						vid.requestVideoFrameCallback(step);
+					} else {
+						const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+						const fps = avg > 0 ? (1 / avg) : null;
+						if (fps && isFinite(fps)) {
+							const metaEl = document.getElementById("util-rec-preview-meta");
+							if (metaEl) metaEl.innerHTML = `<span>${w}×${h} · ${aspect} · ${dur.toFixed(2)}s · ${fps.toFixed(1)} fps</span>`;
+						}
+						try { vid.pause(); vid.currentTime = 0; } catch {}
+					}
+				};
+				try { vid.play().catch(() => {}); } catch {}
+				vid.requestVideoFrameCallback(step);
+			}
+		}, { once: true });
+	};
+	const showImage = () => {
+		clearSlotStyles();
+		slot.innerHTML = `<img src="${imageUrl}" alt="" style="width:100%;max-height:180px;object-fit:contain;border-radius:3px;background:#000;display:block">`;
+	};
+	const showNone = () => {
+		slot.style.minHeight = "80px";
+		slot.style.background = "rgba(0,0,0,0.15)";
+		slot.style.display = "flex";
+		slot.innerHTML = `<div style="font-size:10px;color:rgba(255,180,84,0.85);padding:8px 12px;text-align:center">No source yet — hit <strong>Generate</strong> to record the viewport, or <strong>Upload video</strong>.</div>`;
+	};
+	// Probe existence via the JSON endpoint — FastAPI's @app.get routes
+	// return 405 for HEAD by default, which the old probe misread as
+	// "no source". /video_url returns {url: string|null} unambiguously.
+	// Retries a few times in case the server-side ffmpeg transcode hasn't
+	// finalized the mp4 by the time upload's HTTP response has returned.
+	const probe = (attempt = 0) => {
+		fetch(`/comfyblockout/video_url?node_id=${nid}&t=${t + attempt}`).then(r => r.ok ? r.json() : { url: null })
+			.then(j => {
+				if (j?.url) return showVideo();
+				return fetch(`/comfyblockout/image_url?node_id=${nid}&t=${t + attempt}`).then(r2 => r2.ok ? r2.json() : { url: null })
+					.then(j2 => {
+						if (j2?.url) return showImage();
+						if (attempt < 4) setTimeout(() => probe(attempt + 1), 250);
+						else showNone();
+					});
+			})
+			.catch(() => { if (attempt < 4) setTimeout(() => probe(attempt + 1), 250); else showNone(); });
+	};
+	probe();
+}
+
+// Reduce a W×H pair to its simplest ratio label. Non-integer aspects
+// (e.g. 720×576 → 5:4) still land on a common divisor via Euclid's
+// algorithm; anything unusual falls back to the decimal form.
+function _gcdAspect(w, h) {
+	if (!w || !h) return "?";
+	const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
+	const g = gcd(w, h);
+	const rw = w / g, rh = h / g;
+	// Keep pretty ratios readable; anything above 30 on either side is
+	// probably not a common aspect, so show decimal instead.
+	if (rw <= 30 && rh <= 30) return `${rw}:${rh}`;
+	return `${(w / h).toFixed(2)}:1`;
+}
+
+// Tracked run phase — the pane's button + Upload state derive from this,
+// so a pane re-render mid-run doesn't drop back to the idle "Generate"
+// label. Phases: "idle" (default), "recording" (waiting for the transport
+// clip), "running" (server workflow in flight).
+let _utilRunPhase = "idle";
+const _UTIL_SPINNER_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" style="animation:util-spin 900ms linear infinite;vertical-align:middle" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3a9 9 0 0 1 9 9" opacity="0.9"/><path d="M12 3a9 9 0 0 0-9 9" opacity="0.25"/></svg>`;
+function _setUtilRunButton(phase) {
+	_utilRunPhase = phase;
+	const runBtn = document.getElementById("util-run-btn");
+	const upBtn = document.getElementById("util-upload-btn");
+	if (!runBtn) return;
+	const busy = phase !== "idle";
+	runBtn.disabled = busy;
+	if (upBtn) upBtn.disabled = busy;
+	const label = phase === "recording" ? "Recording…"
+		: phase === "running" ? "Running…"
+		: "Generate";
+	runBtn.innerHTML = busy
+		? `<span style="display:inline-flex;align-items:center;gap:6px;justify-content:center">${_UTIL_SPINNER_SVG}<span>${label}</span></span>`
+		: "Generate";
+}
+// One-time keyframes for the spinner — appended lazily so we don't
+// pollute the stylesheet block for a util that may never open.
+(() => {
+	if (document.getElementById("util-spin-keyframes")) return;
+	const s = document.createElement("style");
+	s.id = "util-spin-keyframes";
+	s.textContent = "@keyframes util-spin { to { transform: rotate(360deg); } }";
+	document.head.appendChild(s);
+})();
+
+// Session flag — true once the user has explicitly uploaded a source video
+// via the util pane. Subsequent Run clicks then skip the auto-record step.
+// Reset on tool open so a fresh session starts clean.
+let _utilSourceIsUpload = false;
+
+function _setUtilStatus(text, kind) {
+	const el = document.getElementById("util-status");
+	if (!el) return;
+	el.textContent = text;
+	const color = kind === "error" ? "#ff8a8a"
+		: kind === "busy" ? "rgba(255,180,84,0.9)"
+		: kind === "ok" ? "rgba(102,204,255,0.9)"
+		: "rgba(255,255,255,0.5)";
+	el.style.color = color;
+}
+
+// Re-render the util pane whenever the BG video changes so the preview
+// stays in sync — hook into saveScene indirectly via a light polling on
+// selection changes isn't right; instead, wire the render call to the
+// existing scene save hook only if the util pane is currently open.
+window.__utilPaneOnBgChange = () => {
+	if (_activeUtilId) renderUtilToolPane();
+};
 
 // Manifest-driven local workflow rows appended into the unified #workflow-cells
 // container. Called from refreshWorkflowsList after the API generator rows.
@@ -9881,6 +10602,25 @@ function renderWorkflowCellProperties(cell) {
 						<input type="file" class="gen-slot-file" accept="image/*" hidden>
 					</div>
 					<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Empty = uses current viewport</div>
+				</div>
+			`;
+		} else if (spec.type === "scene-video") {
+			// Video source input — pulls from Scene Properties → Background → Video.
+			// No drop slot in the cell; the user configures the video once in
+			// the Scene pane and every scene-video workflow uses it. Cell just
+			// surfaces the current BG video's filename (or a "set one" nudge).
+			const has = !!(bgVideo && bgVideo.assetId);
+			const filename = has ? `${bgVideo.assetId}.${bgVideo.ext}` : "—";
+			const statusColor = has ? "rgba(102,204,255,0.85)" : "rgba(255,180,84,0.85)";
+			const statusText = has ? "Uses Scene → Background → Video" : "Set a background video in Scene Properties first";
+			inputsHtml += `
+				<div style="margin-top:6px;padding:8px 10px;border:1px solid rgba(255,255,255,0.06);border-radius:4px;background:rgba(0,0,0,0.15)">
+					<div style="display:flex;align-items:center;gap:8px">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:${statusColor};flex:0 0 auto"><rect x="3" y="5" width="15" height="14" rx="2"/><path d="M18 10l3-2v8l-3-2z"/></svg>
+						<div style="font-size:11px;color:rgba(255,255,255,0.85);font-weight:600">${label}</div>
+					</div>
+					<div class="hint" style="margin-top:4px;font-size:10px;color:${statusColor}">${statusText}</div>
+					${has ? `<div class="hint" style="margin-top:2px;font-size:9px;color:rgba(255,255,255,0.35);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${filename}</div>` : ""}
 				</div>
 			`;
 		} else {
@@ -11424,7 +12164,14 @@ document.getElementById("scene-props-btn")?.addEventListener("click", () => {
 	else forceRightPane("scene", "Scene");
 });
 
-let snapEnabled = false;
+// Snap enablement persists at the workspace level so the transform gizmo's
+// snap state carries across sessions — matches the "workspace should be
+// where you left it" expectation the user set for grid + panels.
+const CB_SNAP_KEY = "cb.workspace.snapEnabled";
+let snapEnabled = (() => {
+	try { return localStorage.getItem(CB_SNAP_KEY) === "1"; }
+	catch { return false; }
+})();
 // Shift-held temporarily flips snap ON — matches Blender/Maya muscle memory. The
 // two states OR together, so a snap-off toggle + held Shift still snaps.
 let shiftSnapHeld = false;
@@ -11455,8 +12202,13 @@ function applyTransformSnap() {
 snapToggle.addEventListener("click", () => {
 	snapEnabled = !snapEnabled;
 	snapToggle.classList.toggle("active", snapEnabled);
+	try { localStorage.setItem(CB_SNAP_KEY, snapEnabled ? "1" : "0"); } catch {}
 	applyTransformSnap();
 });
+// Reflect the persisted snap state on the toggle at boot — the click handler
+// picks up from there.
+snapToggle.classList.toggle("active", snapEnabled);
+applyTransformSnap();
 applyTransformSnap();
 // Hold Shift → snap. Release → back to toggle state. Repeat keydown events fire
 // while held, so guard on the boolean to avoid thrashing setTranslationSnap.
@@ -11719,6 +12471,35 @@ transform.addEventListener("objectChange", () => {
 
 document.getElementById("clear-btn").addEventListener("click", () => {
 	while (objects.length) deleteObject(objects[0]);
+});
+// Bulk visibility toggle for the outliner — flips every object between
+// visible and hidden in one click. If any object is currently visible the
+// button hides them all; if every object is already hidden, it restores
+// them. renderCam is excluded so the camera helper stays on-screen.
+// Also toggles the transform gizmo so hiding all really does clear the
+// viewport — otherwise the arrow handles keep floating on top of nothing.
+document.getElementById("outliner-hide-all")?.addEventListener("click", (e) => {
+	// Don't let the click bubble to the section-head-row's collapse-toggle
+	// handler — the header's `.closest("button")` guard doesn't help once
+	// we swap innerHTML on the button and lose the original DOM node the
+	// event delegate was bound against.
+	e.stopPropagation();
+	const pickable = objects.filter(o => o !== renderCam);
+	if (!pickable.length) return;
+	const allHidden = pickable.every(o => o.visible === false);
+	const target = allHidden; // if all hidden → make visible (true), else hide (false)
+	for (const o of pickable) {
+		o.visible = target;
+		// Particles have a play-gate that rewrites .visible each frame — stash
+		// the user's intent so the gate honors it.
+		if (o.userData?.primKind === "particles") o.userData._userVisible = target;
+	}
+	// When hiding everything, detach the transform so its handles don't
+	// linger on an invisible object. When showing everything back, we don't
+	// auto-reattach — the user can click any object to re-select.
+	if (!target) transform.detach();
+	refreshOutliner();
+	saveScene?.();
 });
 
 const fovSlider = document.getElementById("fov");
@@ -12902,9 +13683,22 @@ orbit.addEventListener("change", updateCameraSliders);
 updateCameraSliders();
 
 const gridToggle = document.getElementById("toggle-grid");
+// Grid visibility persists at the workspace level (not just per-scene) so
+// reopening the app lands on whatever the user left last, even across new
+// scenes. Scene-level `grid` state still saves too — that's for round-trips
+// through /new + reload.
+const CB_GRID_KEY = "cb.workspace.gridVisible";
+try {
+	const saved = localStorage.getItem(CB_GRID_KEY);
+	if (saved !== null) {
+		grid.visible = saved === "1";
+		gridToggle.classList.toggle("active", grid.visible);
+	}
+} catch {}
 gridToggle.addEventListener("click", () => {
 	grid.visible = !grid.visible;
 	gridToggle.classList.toggle("active", grid.visible);
+	try { localStorage.setItem(CB_GRID_KEY, grid.visible ? "1" : "0"); } catch {}
 	saveScene?.();
 });
 
@@ -12952,6 +13746,77 @@ const bgOffsetYInput = document.getElementById("bg-offset-y");
 const bgOffsetYVal = document.getElementById("bg-offset-y-val");
 const bgScaleInput = document.getElementById("bg-scale");
 const bgScaleVal = document.getElementById("bg-scale-val");
+// Dual-handle trim scrubber wiring — pointer drag on either handle scales
+// its normalized position (0..1) across the video's full duration, clamps
+// the two handles to keep IN < OUT (min 0.1s span), then commits via
+// _commitBgVideoTrim which snaps scene duration + syncs playhead.
+(function wireBgVideoTrimScrubber() {
+	const track = document.getElementById("bg-video-trim-track");
+	const inH = document.getElementById("bg-video-trim-in");
+	const outH = document.getElementById("bg-video-trim-out");
+	if (!track || !inH || !outH) return;
+	let dragging = null; // "in" | "out" | null
+	const startDrag = (which) => (e) => {
+		e.preventDefault();
+		dragging = which;
+		try { e.target.setPointerCapture(e.pointerId); } catch {}
+	};
+	inH.addEventListener("pointerdown", startDrag("in"));
+	outH.addEventListener("pointerdown", startDrag("out"));
+	track.addEventListener("pointermove", (e) => {
+		if (!dragging) return;
+		const dur = canvasBgVideo?.duration;
+		if (!isFinite(dur) || dur <= 0) return;
+		const rect = track.getBoundingClientRect();
+		const norm = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+		const t = norm * dur;
+		if (dragging === "in") bgVideoIn = Math.min((bgVideoOut ?? dur) - 0.1, t);
+		else bgVideoOut = Math.max((bgVideoIn ?? 0) + 0.1, t);
+		_refreshBgVideoTrimUI();
+	});
+	const endDrag = (e) => {
+		if (!dragging) return;
+		dragging = null;
+		try { e.target.releasePointerCapture(e.pointerId); } catch {}
+		_commitBgVideoTrim();
+	};
+	track.addEventListener("pointerup", endDrag);
+	track.addEventListener("pointercancel", endDrag);
+})();
+
+// Redraw the scrubber's handle positions + fill + readout from the current
+// bgVideoIn/Out state. Called during a drag AND after external updates
+// (scene load, video swap).
+function _refreshBgVideoTrimUI() {
+	const dur = canvasBgVideo?.duration;
+	if (!isFinite(dur) || dur <= 0) return;
+	const inT = bgVideoIn ?? 0, outT = bgVideoOut ?? dur;
+	const inN = inT / dur, outN = outT / dur;
+	const inH = document.getElementById("bg-video-trim-in");
+	const outH = document.getElementById("bg-video-trim-out");
+	const fill = document.getElementById("bg-video-trim-fill");
+	const readout = document.getElementById("bg-video-trim-readout");
+	if (inH) inH.style.left = `${inN * 100}%`;
+	if (outH) outH.style.left = `${outN * 100}%`;
+	if (fill) { fill.style.left = `${inN * 100}%`; fill.style.right = `${(1 - outN) * 100}%`; }
+	if (readout) readout.textContent = `${inT.toFixed(1)}s → ${outT.toFixed(1)}s`;
+}
+
+// Post-drag commit: snap the scene duration to the trimmed span, sync the
+// video to the new IN so the user's next scrub starts on the trimmed edge,
+// and persist to disk.
+function _commitBgVideoTrim() {
+	const durEl = document.getElementById("duration");
+	if (durEl && bgVideoIn !== null && bgVideoOut !== null) {
+		const snapped = Math.max(1, Math.min(10, Math.round((bgVideoOut - bgVideoIn) * 2) / 2));
+		if (parseFloat(durEl.value) !== snapped) {
+			durEl.value = String(snapped);
+			durEl.dispatchEvent(new Event("input", { bubbles: true }));
+		}
+	}
+	syncBgVideoToPlayhead();
+	saveSceneDebounced?.();
+}
 // Single cluster wrapper — Transform sub-header + X/Y/Scale grid, Display
 // sub-header + Blur/Opacity grid. Hidden until an image/video is active.
 const bgAdjustCluster = document.getElementById("bg-adjust-cluster");
@@ -12959,6 +13824,11 @@ const bgAdjustCluster = document.getElementById("bg-adjust-cluster");
 let bgMode = "color";  // "color" | "image" | "video"
 let bgImage = null;    // { assetId, ext } | null
 let bgVideo = null;    // { assetId, ext } | null
+// IN/OUT trim on the BG video, in seconds. Both null → use the full clip
+// (auto-set on video load to 0 and the clip's duration). Persisted with the
+// scene state so a saved trim survives reload.
+let bgVideoIn = null;
+let bgVideoOut = null;
 let bgBlur = 0;        // 0–40 px, applied via CSS filter to the active bg layer
 let bgOpacity = 100;   // 0–100 %, applied via CSS opacity to the active bg layer
 let bgOffsetX = 0;     // pixel offset, applied via CSS transform translate
@@ -13023,6 +13893,15 @@ function applyBgVideo(url) {
 			canvasBgVideo.src = url;
 			canvasBgVideo.load();
 		}
+		// Detect intrinsic aspect + fps and snap the transport selectors.
+		// Attaches every time so scene restore (same URL, no re-load) still
+		// triggers when the video's metadata event fires. If metadata is
+		// already there (cached/reused), run the helper synchronously.
+		if (canvasBgVideo.readyState >= 1 && canvasBgVideo.videoWidth) {
+			_autoApplyBgVideoAspectFps();
+		} else {
+			canvasBgVideo.addEventListener("loadedmetadata", _autoApplyBgVideoAspectFps, { once: true });
+		}
 		canvasBgVideo.style.filter = bgBlur > 0 ? `blur(${bgBlur}px)` : "";
 		canvasBgVideo.style.opacity = String(bgOpacity / 100);
 		canvasBgVideo.style.transform = `translate(${bgOffsetX}px, ${bgOffsetY}px) scale(${bgScale / 100})`;
@@ -13043,14 +13922,116 @@ function applyBgVideo(url) {
 	}
 }
 
-// Playhead is 0..1 over the scene duration. We map it linearly across the video's
-// full duration so scrubbing the transport plays the whole clip end-to-end
-// regardless of scene length.
+// After the BG video's metadata arrives, snap the transport's aspect
+// selector to the closest match and (on Chrome) sample fps from the
+// video's frame timings so recordings default to the source clip's
+// dimensions + rate instead of a stock 16:9 @ 30. Both settings stay
+// user-editable — this just spares the manual match-up step.
+function _autoApplyBgVideoAspectFps() {
+	if (!canvasBgVideo) return;
+	const vw = canvasBgVideo.videoWidth, vh = canvasBgVideo.videoHeight;
+	if (!vw || !vh) return;
+	// Match scene duration to the (possibly trimmed) video length so the
+	// transport scrubs 1:1 with real video time. Duration input clamps
+	// 1..10 sec in 0.5 steps.
+	const durEl = document.getElementById("duration");
+	const vDur = canvasBgVideo.duration;
+	if (durEl && isFinite(vDur) && vDur > 0) {
+		// Initialize IN/OUT to the full clip on first load — don't clobber a
+		// saved trim from scene restore. Then paint the scrubber positions.
+		if (bgVideoIn === null) bgVideoIn = 0;
+		if (bgVideoOut === null) bgVideoOut = vDur;
+		const trimBlock = document.getElementById("bg-video-trim-block");
+		if (trimBlock) trimBlock.hidden = false;
+		_refreshBgVideoTrimUI();
+		const trimmedDur = Math.max(0.5, bgVideoOut - bgVideoIn);
+		const snapped = Math.max(1, Math.min(10, Math.round(trimmedDur * 2) / 2));
+		if (parseFloat(durEl.value) !== snapped) {
+			durEl.value = String(snapped);
+			durEl.dispatchEvent(new Event("input", { bubbles: true }));
+		}
+	}
+	const ratio = vw / vh;
+	// Presets from the <select id="aspect"> — pick the one closest to the
+	// source ratio. Tolerance ~2% before we fall back to "free" (which
+	// records at the current viewport's fit, uncropped).
+	const OPTIONS = [
+		{ v: "16:9",  r: 16 / 9  },
+		{ v: "9:16",  r: 9 / 16  },
+		{ v: "1:1",   r: 1       },
+		{ v: "4:5",   r: 4 / 5   },
+		{ v: "4:3",   r: 4 / 3   },
+		{ v: "21:9",  r: 21 / 9  },
+	];
+	let best = OPTIONS[0], bestDelta = Infinity;
+	for (const o of OPTIONS) {
+		const d = Math.abs(o.r - ratio) / o.r;
+		if (d < bestDelta) { best = o; bestDelta = d; }
+	}
+	const aspectSel = document.getElementById("aspect");
+	// Respect an intentional user choice — if they explicitly picked an
+	// aspect from the selector (tracked via the isTrusted change listener),
+	// loading a video with different dimensions must NOT clobber it.
+	if (aspectSel && !_userTouchedAspect) {
+		aspectSel.value = bestDelta < 0.02 ? best.v : "free";
+		aspectSel.dispatchEvent(new Event("change", { bubbles: true }));
+	}
+	// FPS sampling — Chrome / recent Firefox expose requestVideoFrameCallback
+	// on HTMLVideoElement. We collect a few frame intervals and snap to the
+	// nearest step supported by the transport (min=12, max=60, step=6).
+	const fpsInput = document.getElementById("fps");
+	if (!fpsInput || typeof canvasBgVideo.requestVideoFrameCallback !== "function") return;
+	let last = null;
+	const samples = [];
+	const wasPaused = canvasBgVideo.paused;
+	const step = (_now, meta) => {
+		if (last !== null) samples.push(meta.mediaTime - last);
+		last = meta.mediaTime;
+		if (samples.length < 8) {
+			canvasBgVideo.requestVideoFrameCallback(step);
+		} else {
+			const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+			const fps = avg > 0 ? (1 / avg) : null;
+			if (fps && isFinite(fps)) {
+				// Snap to fps slider steps (6-apart, 12..60). Round to
+				// nearest multiple, then clamp into range.
+				const snapped = Math.max(12, Math.min(60, Math.round(fps / 6) * 6));
+				fpsInput.value = String(snapped);
+				fpsInput.dispatchEvent(new Event("input", { bubbles: true }));
+			}
+			if (wasPaused) { try { canvasBgVideo.pause(); canvasBgVideo.currentTime = 0; } catch {} }
+		}
+	};
+	try { canvasBgVideo.play().catch(() => {}); } catch {}
+	canvasBgVideo.requestVideoFrameCallback(step);
+}
+
+// Render preview mirror of syncBgVideoToPlayhead — maps the transport
+// playhead 0..1 across the render video's duration so scrubbing the
+// timeline seeks the mp4. Same 50ms deadband guard so we don't fight the
+// element's own clock during play(). Skipped when nothing's loaded yet or
+// the overlay isn't in render mode.
+function syncRenderPreviewToPlayhead() {
+	if (!resultOverlayVid || !resultOverlayVid.src) return;
+	const dur = resultOverlayVid.duration;
+	if (!isFinite(dur) || dur <= 0) return;
+	const target = playhead * dur;
+	if (Math.abs(resultOverlayVid.currentTime - target) > 0.05) {
+		try { resultOverlayVid.currentTime = target; } catch {}
+	}
+}
+
+// Playhead is 0..1 over the scene duration. We map it linearly across the
+// active trim window of the video (bgVideoIn..bgVideoOut) so scrubbing the
+// transport lets the user preview only the sub-range they chose.
 function syncBgVideoToPlayhead() {
 	if (bgMode !== "video" || !bgVideo) return;
 	const dur = canvasBgVideo.duration;
 	if (!isFinite(dur) || dur <= 0) return;
-	const target = playhead * dur;
+	const inT = Math.max(0, bgVideoIn ?? 0);
+	const outT = Math.min(dur, (bgVideoOut ?? dur) || dur);
+	const span = Math.max(0.001, outT - inT);
+	const target = inT + playhead * span;
 	if (Math.abs(canvasBgVideo.currentTime - target) > 0.05) {
 		try { canvasBgVideo.currentTime = target; } catch {}
 	}
@@ -13114,29 +14095,86 @@ function refreshBgImageUI() {
 		bgVideoThumb.classList.add("has-image");
 		bgVideoBtn.classList.add("has-image");
 		if (vclearBtn) vclearBtn.hidden = false;
+		// Populate the thumb with a poster frame from the video's first
+		// decoded frame. Uses an off-DOM <video> so seeking here doesn't
+		// disturb the live canvasBgVideo playback. Cached by URL so
+		// refreshBgImageUI can re-run without re-generating.
+		if (bgVideoThumb.dataset._posterUrl !== vurl) {
+			bgVideoThumb.dataset._posterUrl = vurl;
+			bgVideoThumb.style.backgroundImage = "";
+			const probe = document.createElement("video");
+			probe.muted = true;
+			probe.playsInline = true;
+			probe.crossOrigin = "anonymous";
+			probe.preload = "auto";
+			probe.src = vurl;
+			probe.addEventListener("loadedmetadata", () => {
+				// Seek slightly into the clip — some codecs render frame 0
+				// as black or full-frame key-frame junk on first decode.
+				try { probe.currentTime = Math.min(0.5, (probe.duration || 1) * 0.05); } catch {}
+			}, { once: true });
+			probe.addEventListener("seeked", () => {
+				try {
+					const c = document.createElement("canvas");
+					c.width = probe.videoWidth || 160;
+					c.height = probe.videoHeight || 90;
+					c.getContext("2d").drawImage(probe, 0, 0, c.width, c.height);
+					const dataUrl = c.toDataURL("image/jpeg", 0.72);
+					// Only assign if this URL is still the active one — user
+					// may have swapped videos while we were seeking.
+					if (bgVideoThumb.dataset._posterUrl === vurl) {
+						bgVideoThumb.style.backgroundImage = `url("${dataUrl}")`;
+					}
+				} catch (e) {
+					console.warn("[bg-video-thumb] poster capture failed:", e);
+				}
+			}, { once: true });
+		}
 	} else {
 		bgVideoThumb.classList.remove("has-image");
 		bgVideoBtn.classList.remove("has-image");
+		bgVideoThumb.style.backgroundImage = "";
+		bgVideoThumb.dataset._posterUrl = "";
 		if (vclearBtn) vclearBtn.hidden = true;
 	}
 	bgImageLabel.textContent = "Image";
 	bgVideoLabel.textContent = "Video";
-	bgColorBtn.classList.toggle("active-bg", bgMode === "color");
-	bgImageBtn.classList.toggle("active-bg", bgMode === "image");
-	bgVideoBtn.classList.toggle("active-bg", bgMode === "video");
+	// New stacked-cell UI — sync .has-content on each cell so the picker
+	// button auto-hides when an asset is loaded. Also mirror the color
+	// swatch's background so its thumb matches the current pick.
+	const imgCell = document.querySelector('.bg-cell[data-bgmode="image"]');
+	const vidCell = document.querySelector('.bg-cell[data-bgmode="video"]');
+	if (imgCell) imgCell.classList.toggle("has-content", !!url);
+	if (vidCell) vidCell.classList.toggle("has-content", !!vurl);
+	const colorSwatch = document.getElementById("bg-color-swatch");
+	if (colorSwatch) colorSwatch.style.background = bgColorInput?.value || "#000";
 	refreshBgSliderUI();
 }
 
 function applyBgMode() {
-	if (bgMode === "image" && bgImage) {
-		applyBgImage(bgAssetUrl(bgImage));
-	} else if (bgMode === "video" && bgVideo) {
-		applyBgVideo(bgAssetUrl(bgVideo));
+	if (bgMode === "image") {
+		if (bgImage) applyBgImage(bgAssetUrl(bgImage));
+		else applyBgImage(null); // empty state — pane still shows the picker
+	} else if (bgMode === "video") {
+		if (bgVideo) applyBgVideo(bgAssetUrl(bgVideo));
+		else applyBgVideo(null);
 	} else {
 		bgMode = "color";
 		applyBgColor(bgColorInput.value);
 	}
 	refreshBgImageUI();
+	if (typeof _syncBgModeUI === "function") _syncBgModeUI();
+	// Relocate the shared Transform/Display/Trim cluster into the active
+	// cell's body so the properties feel like they're part of the cell
+	// itself — not floating below. Only Image/Video need it; Color hides
+	// the whole block.
+	const cluster = document.getElementById("bg-adjust-cluster");
+	if (cluster) {
+		const targetCell = document.querySelector(`.bg-cell[data-bgmode="${bgMode}"] .bg-cell-body`);
+		if (bgMode !== "color" && targetCell && cluster.parentElement !== targetCell) {
+			targetCell.appendChild(cluster);
+		}
+	}
 }
 
 bgColorInput.addEventListener("input", e => {
@@ -13154,6 +14192,181 @@ bgColorBtn.addEventListener("click", e => {
 		saveScene?.();
 	}
 });
+
+// Stacked BG cells — clicking a head activates that mode + expands the cell
+// (only one active at a time). The head's X clear button and the internal
+// picker buttons still handle their own actions (via stopPropagation).
+document.querySelectorAll(".bg-cell .bg-cell-head").forEach(head => {
+	head.addEventListener("click", (e) => {
+		// Clear buttons live inside the head — don't switch mode when they
+		// bubble. Their own listeners handle the actual clear.
+		if (e.target.closest("[data-role='clear']")) return;
+		const cell = head.parentElement;
+		const mode = cell?.dataset.bgmode;
+		if (!mode) return;
+		// Thumb click on an already-loaded Image/Video re-opens the file
+		// picker to swap the asset (hover shows the upload-arrow overlay).
+		// We check the thumb hit path first because clicking the thumb
+		// while the cell IS already active would otherwise fall through
+		// to the mode-activation branch and no-op the picker.
+		const clickedThumb = e.target.closest(".bg-cell-thumb");
+		if (clickedThumb && cell.classList.contains("has-content")) {
+			if (mode === "image") document.getElementById("bg-image-file")?.click?.();
+			else if (mode === "video") document.getElementById("bg-video-file")?.click?.();
+			// Still activate the mode if not already
+			if (mode !== bgMode) { bgMode = mode; applyBgMode(); saveScene?.(); }
+			return;
+		}
+		if (mode !== bgMode) {
+			bgMode = mode;
+			applyBgMode();
+			saveScene?.();
+		}
+		// One-click UX — clicking a cell's head auto-fires its picker so
+		// the user doesn't need to hunt for a second button in the body.
+		// Color has an inline custom picker (already expanded), so nothing
+		// to pop there. Image / Video pop the file picker only when empty
+		// (avoids re-picking on every click once a source is loaded).
+		if (mode === "image" && !bgImage) {
+			document.getElementById("bg-image-file")?.click?.();
+		} else if (mode === "video" && !bgVideo) {
+			document.getElementById("bg-video-file")?.click?.();
+		}
+	});
+});
+// Live-refresh the color swatch thumb whenever the user picks a color —
+// otherwise the head's swatch shows the old color until refreshBgImageUI
+// runs (which only fires on mode changes).
+document.getElementById("bg-color")?.addEventListener("input", (e) => {
+	const sw = document.getElementById("bg-color-swatch");
+	if (sw) sw.style.background = e.target.value;
+});
+
+// ── Custom hue × lightness color picker (Color cell body) ───────────────
+(function wireColorPicker() {
+	const spectrum = document.getElementById("cp-spectrum");
+	const cursor = document.getElementById("cp-spectrum-cursor");
+	const hex = document.getElementById("cp-hex");
+	const nativeInput = document.getElementById("bg-color");
+	if (!spectrum || !cursor || !hex || !nativeInput) return;
+
+	// Convert HSL (h 0-360, s 0-1, l 0-1) → #rrggbb.
+	function hslToHex(h, s, l) {
+		s = Math.max(0, Math.min(1, s));
+		l = Math.max(0, Math.min(1, l));
+		h = ((h % 360) + 360) % 360;
+		const c = (1 - Math.abs(2 * l - 1)) * s;
+		const hp = h / 60;
+		const x = c * (1 - Math.abs((hp % 2) - 1));
+		let r = 0, g = 0, b = 0;
+		if (hp < 1) { r = c; g = x; }
+		else if (hp < 2) { r = x; g = c; }
+		else if (hp < 3) { g = c; b = x; }
+		else if (hp < 4) { g = x; b = c; }
+		else if (hp < 5) { r = x; b = c; }
+		else { r = c; b = x; }
+		const m = l - c / 2;
+		const to = v => Math.round((v + m) * 255).toString(16).padStart(2, "0");
+		return `#${to(r)}${to(g)}${to(b)}`;
+	}
+
+	// Convert #rrggbb → HSL (h 0-360, s 0-1, l 0-1).
+	function hexToHsl(h) {
+		const m = /^#?([0-9a-f]{6})$/i.exec(String(h).trim());
+		if (!m) return null;
+		const int = parseInt(m[1], 16);
+		const r = ((int >> 16) & 255) / 255, g = ((int >> 8) & 255) / 255, b = (int & 255) / 255;
+		const max = Math.max(r, g, b), min = Math.min(r, g, b);
+		const l = (max + min) / 2;
+		let s = 0, hue = 0;
+		if (max !== min) {
+			const d = max - min;
+			s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+			if (max === r) hue = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+			else if (max === g) hue = ((b - r) / d + 2) * 60;
+			else hue = ((r - g) / d + 4) * 60;
+		}
+		return { h: hue, s, l };
+	}
+
+	// Push a hex value everywhere — cursor position, hex input, native
+	// input (fires 'input' so downstream listeners react), swatch thumb.
+	function commitColor(hexStr, fromCursor) {
+		hex.value = hexStr.toUpperCase();
+		nativeInput.value = hexStr;
+		// Fire input on the native so bgColor change chain runs.
+		nativeInput.dispatchEvent(new Event("input", { bubbles: true }));
+		nativeInput.dispatchEvent(new Event("change", { bubbles: true }));
+		const sw = document.getElementById("bg-color-swatch");
+		if (sw) sw.style.background = hexStr;
+		if (!fromCursor) _renderCursorFromHex(hexStr);
+	}
+
+	// Map a hex color → cursor position in the spectrum. Y is lightness
+	// (0→1 spans top→bottom), X is hue (0→360 spans left→right).
+	function _renderCursorFromHex(hexStr) {
+		const hsl = hexToHsl(hexStr);
+		if (!hsl) return;
+		const xPct = hsl.h / 360;
+		const yPct = 1 - hsl.l;
+		cursor.style.left = `${xPct * 100}%`;
+		cursor.style.top = `${yPct * 100}%`;
+	}
+
+	// Handle a pointer at (px, py) inside the spectrum — compute hue from
+	// X, lightness from Y (top=1, bottom=0), full saturation. Commit.
+	function _handleAt(clientX, clientY) {
+		const rect = spectrum.getBoundingClientRect();
+		const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+		const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
+		const h = (x / rect.width) * 360;
+		const l = 1 - y / rect.height;
+		cursor.style.left = `${(x / rect.width) * 100}%`;
+		cursor.style.top = `${(y / rect.height) * 100}%`;
+		commitColor(hslToHex(h, 1, l), true);
+	}
+
+	let dragging = false;
+	spectrum.addEventListener("pointerdown", (e) => {
+		e.preventDefault();
+		dragging = true;
+		try { spectrum.setPointerCapture(e.pointerId); } catch {}
+		_handleAt(e.clientX, e.clientY);
+	});
+	spectrum.addEventListener("pointermove", (e) => {
+		if (!dragging) return;
+		_handleAt(e.clientX, e.clientY);
+	});
+	spectrum.addEventListener("pointerup", (e) => {
+		dragging = false;
+		try { spectrum.releasePointerCapture(e.pointerId); } catch {}
+	});
+
+	// Hex input — typed value applies on Enter/blur; short of that just
+	// waits so the user can freely edit without cursor jumping mid-type.
+	function _tryApplyHex() {
+		const v = hex.value.trim();
+		const m = /^#?([0-9a-f]{6})$/i.exec(v);
+		if (!m) return;
+		commitColor(`#${m[1].toLowerCase()}`);
+	}
+	hex.addEventListener("change", _tryApplyHex);
+	hex.addEventListener("keydown", (e) => { if (e.key === "Enter") { _tryApplyHex(); hex.blur(); } });
+
+	// Initial sync from whatever value the native input already carries
+	// (defaulted from #000000, updated by scene deserialize).
+	_renderCursorFromHex(nativeInput.value || "#000000");
+	hex.value = (nativeInput.value || "#000000").toUpperCase();
+})();
+
+// Reflect current bgMode across the stacked cells: the active one gets the
+// .active class (which expands its body via CSS). Called from applyBgMode.
+function _syncBgModeUI() {
+	document.querySelectorAll(".bg-cell").forEach(c => {
+		c.classList.toggle("active", c.dataset.bgmode === bgMode);
+	});
+}
+_syncBgModeUI();
 
 bgImageBtn.addEventListener("click", () => {
 	// The × clear has its own stopPropagation handler — this fires for clicks on the
@@ -13506,7 +14719,13 @@ function updateAspectFrame() {
 	}
 }
 
-aspectSelect.addEventListener("change", () => {
+// Sticky flag — true once the user has explicitly picked an aspect via
+// the selector. BG-video auto-detect (see _autoApplyBgVideoAspectFps) skips
+// overriding the aspect once this is set, so loading a video with different
+// dimensions won't clobber an intentional project setup like 9:16.
+let _userTouchedAspect = false;
+aspectSelect.addEventListener("change", (e) => {
+	if (e.isTrusted) _userTouchedAspect = true;
 	handleResize();
 	updateAspectFrame();
 	updateResultOverlayPos();
@@ -13587,6 +14806,40 @@ function refreshToggleActive() {
 
 async function showBlockoutSnapshot() {
 	resultOverlay.hidden = false;
+	// If a recording is staged for this node, Blockout should show THAT
+	// (it's what the model will see when a video workflow runs). No
+	// recording? Fall back to the auto-composited still snapshot — the
+	// image-workflow equivalent of "what the model will see".
+	const t = Date.now();
+	const nid = encodeURIComponent(NODE_ID);
+	try {
+		const r = await fetch(`/comfyblockout/video_url?node_id=${nid}&t=${t}`);
+		const j = r.ok ? await r.json() : null;
+		if (j?.url) {
+			// Video path — show the recording (transport playhead controls it,
+			// same wiring as the render preview via syncRenderPreviewToPlayhead).
+			resultOverlayImg.removeAttribute("src");
+			resultOverlayImg.style.display = "none";
+			resultOverlayVid.style.display = "";
+			resultOverlayVid.src = `${j.url}?t=${t}`;
+			resultOverlayVid.controls = false;
+			resultOverlayVid.autoplay = false;
+			resultOverlayVid.loop = true;
+			resultOverlayVid.muted = true;
+			resultOverlayVid.playsInline = true;
+			resultOverlayVid.addEventListener("loadedmetadata", () => {
+				syncBlockoutPreviewToPlayhead();
+				if (!isPlayingPreview) resultOverlayVid.pause?.();
+			}, { once: true });
+			if (isPlayingPreview) {
+				resultOverlayVid.play?.().catch(() => {});
+			}
+			resultOverlay.classList.remove("loading");
+			updateResultOverlayPos();
+			return;
+		}
+	} catch {}
+	// Still-image path (default for image workflows / scenes without a recording).
 	resultOverlayVid.removeAttribute("src");
 	resultOverlayVid.style.display = "none";
 	resultOverlayImg.style.display = "";
@@ -13615,6 +14868,19 @@ async function showBlockoutSnapshot() {
 	resultOverlay.classList.remove("loading");
 }
 
+// Mirror of syncRenderPreviewToPlayhead but scoped to when the Blockout
+// tab is showing a video (i.e., resultOverlayVid is playing the recorded
+// clip). Same 50ms deadband so scrubs stay quiet during live playback.
+function syncBlockoutPreviewToPlayhead() {
+	if (resultMode !== "blockout" || !resultOverlayVid || !resultOverlayVid.src) return;
+	const dur = resultOverlayVid.duration;
+	if (!isFinite(dur) || dur <= 0) return;
+	const target = playhead * dur;
+	if (Math.abs(resultOverlayVid.currentTime - target) > 0.05) {
+		try { resultOverlayVid.currentTime = target; } catch {}
+	}
+}
+
 function showRenderResult() {
 	if (!lastResult) { resultMode = "viewport"; applyResultMode(); return; }
 	resultOverlay.hidden = false;
@@ -13623,9 +14889,29 @@ function showRenderResult() {
 		resultOverlayImg.style.display = "none";
 		resultOverlayVid.style.display = "";
 		resultOverlayVid.src = lastResult.url;
-		resultOverlayVid.controls = true;
-		resultOverlayVid.autoplay = true;
-		resultOverlayVid.play?.().catch(() => {});
+		// No native controls — the transport bar is the SOLE driver of
+		// play/pause/scrub (see setPlayhead + playPreview/stopPreview).
+		// Autoplay off + explicit pause: if the video played on its own
+		// clock while the transport playhead was parked, currentTime would
+		// drift out of sync and a "skipped frame" would appear on the next
+		// scrub as the video snapped back.
+		resultOverlayVid.controls = false;
+		resultOverlayVid.autoplay = false;
+		resultOverlayVid.loop = true;
+		resultOverlayVid.muted = true;
+		resultOverlayVid.playsInline = true;
+		// Snap the freshly-loaded video to whatever the transport currently
+		// shows, then hold there until the user hits play.
+		resultOverlayVid.addEventListener("loadedmetadata", () => {
+			syncRenderPreviewToPlayhead();
+			if (!isPlayingPreview) resultOverlayVid.pause?.();
+		}, { once: true });
+		if (isPlayingPreview) {
+			syncRenderPreviewToPlayhead();
+			resultOverlayVid.play?.().catch(() => {});
+		} else {
+			resultOverlayVid.pause?.();
+		}
 	} else {
 		resultOverlayVid.removeAttribute("src");
 		resultOverlayVid.style.display = "none";
@@ -14739,7 +16025,25 @@ function setPlayhead(t) {
 	// Video BG follows the transport — mapped playhead 0..1 → video 0..duration.
 	// During live playback the <video> element is play()'d, so we only nudge
 	// currentTime on scrubs and paused steps to avoid fighting its own clock.
-	if (bgMode === "video" && bgVideo && !isPlayingPreview) syncBgVideoToPlayhead();
+	// Skip the seek nudge during recording — startRecording plays the
+	// BG video freely so drawImage reads a naturally-decoded frame. Any
+	// per-frame currentTime write here would fight that playback.
+	if (bgMode === "video" && bgVideo && !isPlayingPreview && !recording) syncBgVideoToPlayhead();
+	// Render preview video (Result overlay in "Render" mode) also follows the
+	// transport — scrubbing the timeline seeks the video so the playhead is
+	// the single source of truth. Same "skip during live playback" rule
+	// applies (playPreview / stopPreview drive .play/.pause themselves).
+	if (resultMode === "render" && lastResult && lastResult.kind === "video"
+		&& resultOverlayVid && !isPlayingPreview && !recording) {
+		syncRenderPreviewToPlayhead();
+	}
+	// Blockout tab may also be showing a recorded video (the "what the
+	// model will see" for video workflows). Same scrub-to-seek treatment.
+	if (resultMode === "blockout" && resultOverlayVid && resultOverlayVid.src
+		&& resultOverlayVid.style.display !== "none"
+		&& !isPlayingPreview && !recording) {
+		syncBlockoutPreviewToPlayhead();
+	}
 	// Persist manual scrubs so closing the editor lands on the same frame later.
 	// Skipped during playback (saveScene runs on stop instead) and during scene
 	// restore. try/catch swallows the boot-time TDZ on saveSceneDebounced/recording
@@ -15260,6 +16564,19 @@ async function playPreview() {
 		syncBgVideoToPlayhead();
 		canvasBgVideo.play?.().catch(() => {});
 	}
+	// Same treatment for the render preview video — sync to the current
+	// playhead then let its own clock advance while playing.
+	if (resultMode === "render" && lastResult && lastResult.kind === "video" && resultOverlayVid) {
+		syncRenderPreviewToPlayhead();
+		resultOverlayVid.play?.().catch(() => {});
+	}
+	// Blockout tab may also be playing a recorded video (the workflow's
+	// source clip). Kick it off in step with the transport.
+	if (resultMode === "blockout" && resultOverlayVid && resultOverlayVid.src
+		&& resultOverlayVid.style.display !== "none") {
+		syncBlockoutPreviewToPlayhead();
+		resultOverlayVid.play?.().catch(() => {});
+	}
 	// Playback respects the current view: Scene view keeps you watching the overview
 	// (with the renderCam wireframe animating alongside object animation), Camera view
 	// looks through the shot. applyCameraState always mutates renderCam so keyframes
@@ -15322,6 +16639,10 @@ function stopPreview() {
 	isPlayingPreview = false;
 	setMixersPlaying(false);
 	if (bgMode === "video" && bgVideo) canvasBgVideo.pause?.();
+	if ((resultMode === "render" || resultMode === "blockout")
+		&& resultOverlayVid && resultOverlayVid.style.display !== "none") {
+		resultOverlayVid.pause?.();
+	}
 	saveSceneDebounced?.();
 }
 
@@ -15448,6 +16769,13 @@ async function startRecording() {
 	const prevStyleW = canvas.style.width;
 	const prevStyleH = canvas.style.height;
 	const prevAspect = camera.aspect;
+	// Force pixelRatio=1 while recording — otherwise Three multiplies the
+	// backbuffer by devicePixelRatio (1.2×–2×), inflating a nominal 1280-wide
+	// render to 1500–2560 px per row. That extra fill-rate throttles both
+	// canvas.captureStream (fps drops to ~15 on some hardware) and the
+	// VP8/VP9 encoder. Restored below in onstop alongside setSize.
+	const prevPixelRatio = renderer.getPixelRatio();
+	renderer.setPixelRatio(1);
 	renderer.setSize(recW, recH, false);
 	canvas.style.width = prevStyleW;
 	canvas.style.height = prevStyleH;
@@ -15471,6 +16799,60 @@ async function startRecording() {
 	if (anyCameraKeys) {
 		const s0 = sampleCameraAt(recStartNorm);
 		if (s0) applyCameraState(s0);
+	}
+	// BG video: force playback during recording so drawImage() reads a
+	// naturally-decoded frame each RAF. Otherwise setPlayhead's per-frame
+	// seek storm on a paused element means drawImage keeps returning the
+	// same undecoded frame (usually the black opening frame) → recording
+	// comes out solid black. Snap to the trim-start position first, then
+	// let it play at 1× — recording length usually matches or exceeds the
+	// clip anyway. Playing state restored in onstop below.
+	let _bgVideoWasPaused = null;
+	if (bgMode === "video" && bgVideo && canvasBgVideo) {
+		_bgVideoWasPaused = canvasBgVideo.paused;
+		const dur = canvasBgVideo.duration;
+		if (isFinite(dur) && dur > 0) {
+			// Seek to the trim IN so playback starts at the sub-window the
+			// user picked in Scene Properties, not the video's absolute 0.
+			// recStartNorm already inserts trimGap for the timeline handles;
+			// we bias by the video's IN on top of that.
+			const inT = Math.max(0, bgVideoIn ?? 0);
+			const outT = Math.min(dur, (bgVideoOut ?? dur) || dur);
+			const span = Math.max(0.001, outT - inT);
+			try { canvasBgVideo.currentTime = inT + recStartNorm * span; } catch {}
+		}
+		try { canvasBgVideo.play?.().catch(() => {}); } catch {}
+		// Wait for the seek + a real decoded frame before the compositor
+		// starts. Otherwise readyState may still be 1 (HAVE_METADATA), or
+		// mid-seek with a partial videoWidth (338 instead of the true W)
+		// — drawBgLayerToSnapshotCtx bails on readyState < 2 and the entire
+		// recording comes out black. We check readyState AFTER events fire
+		// too; if still < 2 (network-slow file) we loop a short poll so
+		// the compositor doesn't kick off on stale metadata. Bounded 2s
+		// so a bad source can't hang record indefinitely.
+		const bgReady = () => canvasBgVideo.readyState >= 2 && canvasBgVideo.videoWidth > 0;
+		if (!bgReady()) {
+			await new Promise(resolve => {
+				let done = false;
+				const finish = () => { if (!done && bgReady()) { done = true; cleanup(); resolve(); } };
+				const forceFinish = () => { if (!done) { done = true; cleanup(); resolve(); } };
+				const onEv = () => finish();
+				const cleanup = () => {
+					canvasBgVideo.removeEventListener("canplay", onEv);
+					canvasBgVideo.removeEventListener("loadeddata", onEv);
+					canvasBgVideo.removeEventListener("seeked", onEv);
+					clearInterval(poll);
+					clearTimeout(hardTimeout);
+				};
+				canvasBgVideo.addEventListener("canplay", onEv);
+				canvasBgVideo.addEventListener("loadeddata", onEv);
+				canvasBgVideo.addEventListener("seeked", onEv);
+				const poll = setInterval(finish, 100);
+				const hardTimeout = setTimeout(forceFinish, 2000);
+				finish();
+			});
+		}
+		console.log("[record] BG video ready-check post-await", { readyState: canvasBgVideo.readyState, videoW: canvasBgVideo.videoWidth, paused: canvasBgVideo.paused });
 	}
 	const animate = () => {
 		if (!tweenRunning) return;
@@ -15498,6 +16880,19 @@ async function startRecording() {
 			mpRecordingActive = true;
 		}
 	}
+	// If a BG image/video is set, capture from a composite of (BG layer) +
+	// (WebGL canvas). Otherwise `canvas.captureStream` misses the BG entirely
+	// because it lives in a separate DOM layer under the transparent canvas.
+	if (!stream && (bgMode === "image" || bgMode === "video")) {
+		// Cap compositor at recW/recH (before DPR) so drawImage(canvas /* WebGL */)
+		// doesn't have to blit a full 4MP+ buffer every RAF — that GPU→CPU copy
+		// throttles the loop to ~15fps on some machines.
+		_bgCompositor = _startBgCompositor(recW, recH);
+		// The compositor now builds its own MediaStream via captureStream(0)
+		// so it can push frames explicitly (fixes off-DOM captureStream only
+		// emitting a single frame — see _startBgCompositor for why).
+		if (_bgCompositor) stream = _bgCompositor.stream;
+	}
 	if (!stream) stream = canvas.captureStream(fps);
 	recordChunks = [];
 	const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9") ? "video/webm;codecs=vp9" : "video/webm";
@@ -15506,6 +16901,18 @@ async function startRecording() {
 	mediaRecorder.onstop = async () => {
 		tweenRunning = false;
 		if (mpRecordingActive) _stopMediaPipeCompositor();
+		if (_bgCompositor) { _bgCompositor.stop(); _bgCompositor = null; }
+		// Restore the BG video's paused state — startRecording force-played
+		// it so the compositor could pull decoded frames; if the user had
+		// it paused (transport not in preview mode), pause it again now so
+		// the viewport matches the parked playhead instead of playing on.
+		if (bgMode === "video" && canvasBgVideo && _bgVideoWasPaused === true) {
+			try { canvasBgVideo.pause?.(); } catch {}
+			// Re-sync to the current playhead now that the recording seek
+			// storm is over — brings the visible frame back in line with
+			// where the user parked the transport.
+			try { syncBgVideoToPlayhead?.(); } catch {}
+		}
 		recordedBlob = new Blob(recordChunks, { type: "video/webm" });
 		recording = false;
 		setRecordingMode(false);
@@ -15519,6 +16926,7 @@ async function startRecording() {
 		// Restore the renderer back to its visible/aspect-fit size now that capture is done.
 		camera.aspect = prevAspect;
 		camera.updateProjectionMatrix();
+		renderer.setPixelRatio(prevPixelRatio);
 		renderer.setSize(prevW, prevH, false);
 		canvas.style.width = prevStyleW;
 		canvas.style.height = prevStyleH;
@@ -15537,13 +16945,28 @@ async function startRecording() {
 				tlRec.classList.add("rec-done");
 				setTimeout(() => tlRec.classList.remove("rec-done"), 1100);
 				notifyParentSaved();
-				// Land the recording in the viewport overlay (same "Render/Blockout/Viewport"
-				// switcher generated images/videos use) and refresh Assets so it can be
-				// dragged into Seedance's Ref video slot.
-				if (j.out_url && window.showResultInViewport) {
-					window.showResultInViewport("video", j.out_url, j.out_filename || "recording.mp4");
-				} else {
-					window.refreshAssets?.();
+				// A transport recording is the workflow INPUT, not an output — so
+				// route it to the Blockout tab (which now shows the video when
+				// there's one staged for this node). Render tab stays reserved
+				// for the workflow's own output. Assets still gets a refresh so
+				// the recording appears in the modal / drag-source.
+				window.refreshAssets?.();
+				// Reveal the Blockout pill (same as Generate does) and switch
+				// to it so the user sees the freshly-recorded source video.
+				if (typeof blockoutToggleBtn !== "undefined" && blockoutToggleBtn) {
+					blockoutToggleBtn.hidden = false;
+				}
+				resultMode = "blockout";
+				applyResultMode?.();
+				// If a util tool pane is open (Lotus Pose etc), swap in the fresh
+				// recording video WITHOUT a full pane rebuild — the run flow's
+				// button busy state must survive the record→run transition.
+				if (typeof _updateUtilPreviewSlot === "function" && _activeUtilId) _updateUtilPreviewSlot();
+				// If a "Record + Run" chain is awaiting the recording, wake
+				// it up so the util run kicks off with the fresh video.
+				if (window.__utilAwaitingRecording) {
+					window.__utilAwaitingRecording.resolve();
+					window.__utilAwaitingRecording = null;
 				}
 			} else {
 				updateStatus(`upload failed: ${j.error}`);
@@ -15752,6 +17175,8 @@ function serializeScene() {
 			bgMode,
 			bgImage,
 			bgVideo,
+			bgVideoIn,
+			bgVideoOut,
 			bgBlur,
 			bgOpacity,
 			bgOffsetX,
@@ -15969,6 +17394,10 @@ async function deserializeScene(state, opts = {}) {
 	setActiveView(state.activeView || activeView);
 	if (state.aspect) {
 		aspectSelect.value = state.aspect;
+		// A saved aspect is the user's intent — mark it as "touched" so a
+		// later applyBgVideo loading a mismatched clip can't clobber it via
+		// the auto-detect path in _autoApplyBgVideoAspectFps.
+		_userTouchedAspect = true;
 		handleResize();
 		updateAspectFrame();
 	}
@@ -16016,6 +17445,8 @@ async function deserializeScene(state, opts = {}) {
 		}
 		bgImage = (state.viewport.bgImage && state.viewport.bgImage.assetId) ? state.viewport.bgImage : null;
 		bgVideo = (state.viewport.bgVideo && state.viewport.bgVideo.assetId) ? state.viewport.bgVideo : null;
+		bgVideoIn = (typeof state.viewport.bgVideoIn === "number") ? state.viewport.bgVideoIn : null;
+		bgVideoOut = (typeof state.viewport.bgVideoOut === "number") ? state.viewport.bgVideoOut : null;
 		bgMode = (state.viewport.bgMode === "image" || state.viewport.bgMode === "video") ? state.viewport.bgMode : "color";
 		// Old saves might carry both — enforce the "only one" constraint on load
 		// so an unused chip doesn't come up showing a × for a phantom asset.
@@ -16176,6 +17607,7 @@ function applyLightSync(state) {
 	}
 	if (state.aspect && state.aspect !== aspectSelect.value) {
 		aspectSelect.value = state.aspect;
+		_userTouchedAspect = true;
 		handleResize();
 		updateAspectFrame();
 	}
@@ -16969,8 +18401,11 @@ function drawBgLayerToSnapshotCtx(ctx, w, h) {
 	const sW = source.videoWidth || source.naturalWidth || 0;
 	const sH = source.videoHeight || source.naturalHeight || 0;
 	if (!sW || !sH) return;
-	// Cover fit: source fills (w, h) preserving aspect, cropping overflow.
-	const cover = Math.max(w / sW, h / sH);
+	// Contain fit: source scales to fit inside (w, h) preserving aspect,
+	// leaving pillar/letterbox bars if the aspects don't match. Matches the
+	// live CSS `object-fit: contain` so recorded composites and still
+	// snapshots reproduce exactly what the user sees on-screen.
+	const cover = Math.min(w / sW, h / sH);
 	const dW = sW * cover;
 	const dH = sH * cover;
 	// User transform — CSS transform values were authored against the live

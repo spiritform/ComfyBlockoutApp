@@ -22,33 +22,13 @@
       "preprocessor": "OpenposePreprocessor",
       "resolution": 512,
       "image": [
-        "86",
+        "84",
         0
       ]
     },
     "class_type": "AIO_Preprocessor",
     "_meta": {
       "title": "AIO Aux Preprocessor"
-    }
-  },
-  "86": {
-    "inputs": {
-      "image": [
-        "84",
-        0
-      ],
-      "width": 512,
-      "height": 512,
-      "upscale_method": "lanczos",
-      "keep_proportion": "total_pixels",
-      "pad_color": "0, 0, 0",
-      "crop_position": "center",
-      "divisible_by": 8,
-      "device": "cpu"
-    },
-    "class_type": "ImageResizeKJv2",
-    "_meta": {
-      "title": "Resize Image v2"
     }
   },
   "83": {
@@ -58,7 +38,7 @@
         0
       ],
       "loop_count": 0,
-      "filename_prefix": "util_lotuspose",
+      "filename_prefix": "AnimateDiff",
       "format": "video/h264-mp4",
       "pix_fmt": "yuv420p",
       "crf": 19,
@@ -77,12 +57,12 @@
     },
     "class_type": "VHS_VideoCombine",
     "_meta": {
-      "title": "Video Combine"
+      "title": "Video Combine 🎥🅥🅗🅢"
     }
   },
   "84": {
     "inputs": {
-      "video": "placeholder.mp4",
+      "video": "Seedance2.0_r2v_00003_.mp4",
       "force_rate": 0,
       "custom_width": 0,
       "custom_height": 0,
@@ -93,7 +73,7 @@
     },
     "class_type": "VHS_LoadVideo",
     "_meta": {
-      "title": "Load Video"
+      "title": "Load Video (Upload) 🎥🅥🅗🅢"
     }
   },
   "85": {
@@ -105,7 +85,7 @@
     },
     "class_type": "VHS_VideoInfo",
     "_meta": {
-      "title": "Video Info"
+      "title": "Video Info 🎥🅥🅗🅢"
     }
   },
   "74:8": {
@@ -233,7 +213,7 @@
   "74:23": {
     "inputs": {
       "pixels": [
-        "86",
+        "84",
         0
       ],
       "vae": [

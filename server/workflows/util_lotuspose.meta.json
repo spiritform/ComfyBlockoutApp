@@ -1,0 +1,73 @@
+{
+  "id": "util_lotuspose",
+  "label": "Lotus Pose",
+  "kind": "video",
+  "output_ext": "mp4",
+  "runner": "local",
+  "util": true,
+  "icon": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"5\" r=\"2\"/><path d=\"M12 7v6\"/><path d=\"M8 10l4 1 4-1\"/><path d=\"M12 13l-3 5\"/><path d=\"M12 13l3 5\"/></svg>",
+  "inputs": [
+    {
+      "name": "video",
+      "type": "scene-video",
+      "label": "Source Video",
+      "required": true,
+      "patch": {
+        "node_id": 84,
+        "widget_index": 0,
+        "widget_name": "video"
+      }
+    },
+    {
+      "name": "resolution",
+      "type": "number",
+      "label": "Resolution",
+      "required": false,
+      "default": 512,
+      "min": 128,
+      "max": 1024,
+      "step": 64,
+      "options": [
+        { "value": 384, "label": "384 (fast)" },
+        { "value": 448, "label": "448" },
+        { "value": 512, "label": "512" },
+        { "value": 640, "label": "640" },
+        { "value": 768, "label": "768 (slow)" },
+        { "value": 1024, "label": "1024 (heavy)" }
+      ],
+      "patch": [
+        {
+          "node_id": 86,
+          "widget_name": "width"
+        },
+        {
+          "node_id": 86,
+          "widget_name": "height"
+        }
+      ]
+    },
+    {
+      "name": "max_frames",
+      "type": "number",
+      "label": "Max frames",
+      "required": false,
+      "default": 30,
+      "min": 0,
+      "max": 600,
+      "step": 15,
+      "options": [
+        { "value": 0, "label": "All" },
+        { "value": 15, "label": "15" },
+        { "value": 30, "label": "30" },
+        { "value": 45, "label": "45" },
+        { "value": 60, "label": "60" },
+        { "value": 90, "label": "90" },
+        { "value": 120, "label": "120" }
+      ],
+      "patch": {
+        "node_id": 84,
+        "widget_name": "frame_load_cap"
+      }
+    }
+  ]
+}

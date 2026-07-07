@@ -38,6 +38,15 @@ class ModuleDef:
     # WORKFLOW section (parallel to GENERATE) so the two paths stay isolated
     # while the workflow-import flow is being tested.
     source: str = "python"
+    # util = True → the module is a utility (transforms one media type into
+    # another, e.g. video → pose video). Client surfaces these as buttons in
+    # the Tools grid instead of the Workflows sidebar list, and their output
+    # is expected to feed downstream workflows via Assets rather than be a
+    # final "render" the user views.
+    util: bool = False
+    # SVG icon markup for the tool button — only used when util=True.
+    # Default is a small stack of horizontal bars (generic utility glyph).
+    icon: str = ""
 
 
 def _run_cli_sync(cmd: list[str], cwd: Path | None, timeout: int) -> tuple[int, str, str]:
