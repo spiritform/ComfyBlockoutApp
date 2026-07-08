@@ -2474,6 +2474,24 @@
 		border-top: 1px solid rgba(255,255,255,0.04);
 	}
 	.bg-cell.active .bg-cell-body { display: flex; }
+	/* Compact joint-slider row inside the Mannequin joints cell — one row per
+	   axis, label on the left, slider fills, degrees readout pinned right.
+	   Sliders share a tight visual footprint so the ~19-bone stack fits in
+	   the pane without excessive scroll. */
+	.joint-slider-row {
+		display: grid; grid-template-columns: 14px 1fr 40px;
+		align-items: center; gap: 8px;
+		font: 11px ui-monospace, SFMono-Regular, Consolas, monospace;
+		color: rgba(255,255,255,0.72);
+	}
+	.joint-slider-row input[type=range] {
+		width: 100%; height: 14px; margin: 0; background: transparent; accent-color: #ffb454;
+	}
+	.joint-slider-row .joint-val {
+		text-align: right; color: rgba(255,255,255,0.55); font-size: 10px;
+	}
+	.joint-slider-row.non-zero .joint-val { color: #ffd28a; }
+	.joint-slider-row .joint-axis-label { color: rgba(255,255,255,0.4); text-transform: uppercase; }
 	.bg-cell-picker {
 		width: 100%; padding: 8px 12px;
 		background: rgba(255,255,255,0.06);
@@ -2934,7 +2952,7 @@
 				<button class="prim-btn" data-prim="plane" data-label="Plane"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 16l9-4 9 4-9 4-9-4z"/></svg></button>
 				<button class="prim-btn" data-prim="text" data-label="Text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 7V5h14v2"/><path d="M12 5v14"/><path d="M9 19h6"/></svg></button>
 				<button class="prim-btn" data-prim="custom" data-label="Import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M8 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4"/></svg></button>
-				<button class="prim-btn" data-prim="particles" data-label="Particles"><svg viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="1.3" fill="currentColor"/><circle cx="12" cy="4" r="0.9" fill="currentColor"/><circle cx="18" cy="7" r="1.1" fill="currentColor"/><circle cx="5" cy="13" r="0.9" fill="currentColor"/><circle cx="11" cy="11" r="1.4" fill="currentColor"/><circle cx="17" cy="14" r="1" fill="currentColor"/><circle cx="8" cy="18" r="1.1" fill="currentColor"/><circle cx="15" cy="20" r="0.9" fill="currentColor"/><circle cx="20" cy="17" r="0.8" fill="currentColor"/></svg></button>
+				<button class="prim-btn" data-prim="particles" data-label="Particles"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></svg></button>
 			</div>
 		</div>
 
@@ -2943,7 +2961,13 @@
 				<span class="section-label">Tools</span>
 			</div>
 			<div class="prim-grid">
-				<button class="prim-btn" data-fx="clouds" data-label="Clouds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M7 17h11a3.5 3.5 0 0 0 .5-6.9A5.5 5.5 0 0 0 8 8.5 4 4 0 0 0 7 17z"/></svg></button>
+				<!-- Lotus Pose util — hardcoded so the button paints at boot
+				     (avoids the "soon-*" placeholder → real button pop-in
+				     you get when refreshUtilTools races the /api/modules
+				     fetch). refreshUtilTools sees this existing DOM node
+				     and just updates the label/title from the manifest
+				     without redrawing. -->
+				<button class="prim-btn" data-tool="util:util_lotuspose" data-label="Lotus Pose" title="Lotus Pose — extract pose skeleton video from a source clip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 12v4a1 1 0 0 1-1 1h-4"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M17 8V7"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M7 17h.01"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="5" height="5" rx="1"/></svg></button>
 				<!-- MediaPipe tool — opens a browser webcam surface with
 				     MediaPipe.js pose/hand/face detection running client-side. -->
 				<button class="prim-btn" data-tool="mediapipe" data-label="MediaPipe" title="Webcam + MediaPipe pose/hand/face — record a sequence, take stills, or use as viewport source"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="8"/><circle cx="12" cy="10" r="3"/><path d="M7 22h10"/><path d="M12 22v-4"/></svg></button>
@@ -2952,17 +2976,11 @@
 				     open. Result replaces the source objects in place. -->
 				<button class="prim-btn" data-tool="bool" data-label="Boolean" title="Boolean — union / subtract / intersect two or more selected objects into a single mesh."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 22a2 2 0 0 1-2-2"/><path d="M16 22h-2"/><path d="M16 4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3a1 1 0 0 0 1-1v-5a2 2 0 0 1 2-2h5a1 1 0 0 0 1-1z"/><path d="M20 8a2 2 0 0 1 2 2"/><path d="M22 14v2"/><path d="M22 20a2 2 0 0 1-2 2"/></svg></button>
 				<button class="prim-btn" data-fx="scatter" data-label="Scatter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="18.5" cy="5.5" r=".5" fill="currentColor"/><circle cx="11.5" cy="11.5" r=".5" fill="currentColor"/><circle cx="7.5" cy="16.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="14.5" r=".5" fill="currentColor"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/></svg></button>
-				<!-- Lotus Pose util — hardcoded so the button paints at boot
-				     (avoids the "soon-*" placeholder → real button pop-in
-				     you get when refreshUtilTools races the /api/modules
-				     fetch). refreshUtilTools sees this existing DOM node
-				     and just updates the label/title from the manifest
-				     without redrawing. -->
-				<button class="prim-btn" data-tool="util:util_lotuspose" data-label="Lotus Pose" title="Lotus Pose — extract pose skeleton video from a source clip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 12v4a1 1 0 0 1-1 1h-4"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M17 8V7"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M7 17h.01"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="5" height="5" rx="1"/></svg></button>
-				<!-- Point Cloud util — one-shot image → PLY via Triposplat pipeline.
-				     Result loads as THREE.Points in the scene (sharp discrete
-				     dots vs. Triposplat's default gaussian-splat rendering). -->
-				<button class="prim-btn" data-tool="util:util_pointcloud" data-label="Point Cloud" title="Point Cloud — generate a 3D point cloud from a source image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="1" fill="currentColor"/><circle cx="10" cy="4" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/><circle cx="19" cy="7" r="1" fill="currentColor"/><circle cx="4" cy="11" r="1" fill="currentColor"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="14" cy="11" r="1" fill="currentColor"/><circle cx="20" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="16" r="1" fill="currentColor"/><circle cx="11" cy="17" r="1" fill="currentColor"/><circle cx="16" cy="16" r="1" fill="currentColor"/><circle cx="19" cy="18" r="1" fill="currentColor"/></svg></button>
+				<!-- TripoSplat util — image → gaussian splat (.ply) via a local
+				     ComfyUI TripoSplat workflow. Hardcoded so the astroid glyph
+				     paints at boot instead of the button popping in after the
+				     /api/modules fetch resolves. -->
+				<button class="prim-btn" data-tool="util:triposplat-local" data-label="TripoSplat" title="TripoSplat — generate a 3D gaussian splat from a source image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.983 21.186a1 1 0 0 1-1.966 0 10 10 0 0 0-8.203-8.203 1 1 0 0 1 0-1.966 10 10 0 0 0 8.203-8.203 1 1 0 0 1 1.966 0 10 10 0 0 0 8.203 8.203 1 1 0 0 1 0 1.966 10 10 0 0 0-8.203 8.203"/></svg></button>
 				<button class="prim-btn" data-tool="soon-1" data-label="Coming soon" title="Reserved slot — future tool" style="opacity:0.35"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg></button>
 				<!-- Skybox — spawns a massive inverted sphere the user can upload
 				     or generate a 360° equirectangular image onto. Acts as scene
@@ -2974,7 +2992,8 @@
 				     Group with primKind="mannequin" so a future rigged GLB slots
 				     in without changing the object-inspector / delete / selection
 				     paths — those all already treat Groups as one addressable unit. -->
-				<button class="prim-btn" data-tool="mannequin" data-label="Mannequin" title="Mannequin — spawn a ~1.72m human-scale block figure for reference"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6"/><path d="m6 8 6 2 6-2"/><path d="M12 10v4"/></svg></button>
+				<button class="prim-btn" data-tool="mannequin" data-label="Mannequin" title="Mannequin — spawn a ~1.72m human-scale block figure for reference"><svg viewBox="3 3 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6"/><path d="m6 8 6 2 6-2"/><path d="M12 10v4"/></svg></button>
+				<button class="prim-btn" data-fx="clouds" data-label="Clouds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M7 17h11a3.5 3.5 0 0 0 .5-6.9A5.5 5.5 0 0 0 8 8.5 4 4 0 0 0 7 17z"/></svg></button>
 			</div>
 			<input type="file" id="loadmedia-file" accept="image/*,video/*" hidden>
 		</div>
@@ -3329,6 +3348,12 @@
 						<textarea id="obj-mannequin-pose-json" readonly rows="6" spellcheck="false"
 							style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.06);border-radius:4px;padding:6px 8px;color:rgba(255,255,255,0.85);font:11px ui-monospace,SFMono-Regular,Consolas,monospace;line-height:1.4;resize:vertical;outline:none">{}</textarea>
 						<button type="button" id="obj-mannequin-copy-pose" class="mp-still-btn" style="width:100%;margin-top:6px">Copy Pose JSON</button>
+						<!-- Per-bone slider stack — every posable bone gets a
+						     collapsible cell with X/Y/Z sliders that live-drive
+						     the bone rotation. Cell bodies build on first expand
+						     so the whole section stays cheap when collapsed. -->
+						<div class="sub-label" style="margin-top:10px">Joint Rotations</div>
+						<div class="bg-cells" id="obj-mannequin-joints-cells" style="margin-top:4px"></div>
 					</div>
 					<div class="section" id="obj-tps-convert-section" style="display:none">
 					<div class="section-label">Mode</div>
@@ -10417,11 +10442,16 @@ function refreshUtilTools() {
 		}
 		btn.dataset.label = m.label || m.id;
 		btn.title = `${m.label || m.id} — util workflow, output lands in Assets`;
-		// Only overwrite the icon if the button was JUST created OR the
-		// manifest supplies one — static-HTML buttons carry their own
-		// hand-tuned SVG that shouldn't be replaced by the generic wrench
-		// fallback just because the manifest didn't declare an icon.
-		if (isNew || m.icon) btn.innerHTML = m.icon || DEFAULT_UTIL_ICON;
+		// Only paint the icon on newly-created buttons. Static-HTML buttons
+		// have a hand-tuned SVG in their initial markup and we want that
+		// exact glyph to survive the manifest fetch — otherwise the app
+		// visibly flickers icons at init as the async workflow_modules
+		// response lands and replaces the pre-tuned glyph with whatever
+		// the server sent. Users iterating on button icons in HTML then
+		// see their edits get clobbered until they also update the
+		// manifest, which is confusing. Keep them in sync manually and
+		// let the HTML win at boot.
+		if (isNew) btn.innerHTML = m.icon || DEFAULT_UTIL_ICON;
 		if (isNew) {
 			// Replace the first available "soon-*" placeholder if one exists,
 			// otherwise append to the end of the grid.
@@ -11557,10 +11587,30 @@ const MANNEQUIN_POSES = {
 		"mixamorigRightArm.z":    20,
 	},
 	"Crouching": {
-		"mixamorigLeftUpLeg.x":  -55,
-		"mixamorigRightUpLeg.x": -55,
-		"mixamorigLeftLeg.x":     75,
-		"mixamorigRightLeg.x":    75,
+		"mixamorigHead.x":         -21.7,
+		"mixamorigHead.y":          -4.6,
+		"mixamorigNeck.x":          17.4,
+		"mixamorigNeck.y":           3.3,
+		"mixamorigSpine1.x":        32.4,
+		"mixamorigSpine1.y":        -2.7,
+		"mixamorigLeftArm.y":      -27.4,
+		"mixamorigLeftArm.z":      -48.4,
+		"mixamorigRightArm.y":      -0.7,
+		"mixamorigRightArm.z":      62.2,
+		"mixamorigLeftForeArm.y":  -47.6,
+		"mixamorigRightForeArm.y":  42.6,
+		"mixamorigRightHand.x":      3.3,
+		"mixamorigRightHand.y":      1.7,
+		"mixamorigLeftUpLeg.x":    -57.9,
+		"mixamorigLeftUpLeg.y":     -4,
+		"mixamorigRightUpLeg.x":    -9.9,
+		"mixamorigRightUpLeg.y":    -9.3,
+		"mixamorigLeftLeg.x":       72,
+		"mixamorigRightLeg.x":      67,
+		"mixamorigLeftFoot.x":      -7.5,
+		"mixamorigLeftFoot.y":      -9.7,
+		"mixamorigRightFoot.x":    -38.8,
+		"mixamorigRightFoot.y":    -17.7,
 	},
 };
 const _MANNEQUIN_GIZMO_RADIUS = 0.014;
@@ -11762,6 +11812,7 @@ function mannequinSetPose(wrapper, presetName) {
 	clearSelectionTint();
 	if (selected === wrapper) applySelectionTint(wrapper);
 	_mannequinRenderPoseJson(wrapper);
+	_mannequinRefreshJointCellsFromState(wrapper);
 	if (typeof saveScene === "function") saveScene();
 }
 
@@ -11829,6 +11880,145 @@ function _mannequinRenderPoseJson(wrapper) {
 	const rounded = {};
 	for (const [k, v] of Object.entries(joints)) rounded[k] = Number(v.toFixed(1));
 	ta.value = JSON.stringify(rounded, null, 2);
+}
+
+// ── Joint slider cells ───────────────────────────────────────────
+// Per-posable-bone expandable cell with X/Y/Z sliders that drive the
+// bone's rotation live. Cells build once on first render + refresh
+// their slider values whenever the pose changes (preset apply, drag-
+// pose release, or a slider on another cell mutating the state).
+//
+// UI parallels the BG image/video cells in scene properties — one
+// cell open at a time, clicking a head toggles .active. Sliders act
+// as relative offsets from the bone's REST rotation (same convention
+// as MANNEQUIN_POSES entries), so 0 = rest and the value on the right
+// reads as degrees off T-pose.
+
+// Display order — head-to-toe grouping so the stack reads
+// anatomically instead of alphabetically.
+const MANNEQUIN_JOINT_DISPLAY_ORDER = [
+	"mixamorigHead", "mixamorigNeck",
+	"mixamorigSpine2", "mixamorigSpine1", "mixamorigSpine",
+	"mixamorigLeftShoulder", "mixamorigLeftArm", "mixamorigLeftForeArm", "mixamorigLeftHand",
+	"mixamorigRightShoulder", "mixamorigRightArm", "mixamorigRightForeArm", "mixamorigRightHand",
+	"mixamorigLeftUpLeg", "mixamorigLeftLeg", "mixamorigLeftFoot",
+	"mixamorigRightUpLeg", "mixamorigRightLeg", "mixamorigRightFoot",
+];
+
+function _mannequinPrettyBoneName(mixamorigName) {
+	// mixamorigLeftForeArm → "Left ForeArm"
+	const stripped = mixamorigName.replace(/^mixamorig/, "");
+	return stripped.replace(/([A-Z])/g, " $1").trim();
+}
+
+function _mannequinBuildJointCells(wrapper) {
+	const host = document.getElementById("obj-mannequin-joints-cells");
+	if (!host) return;
+	host.innerHTML = "";
+	if (!wrapper || wrapper.userData?.primKind !== "mannequin") return;
+	const bonesByName = wrapper.userData._bonesByName;
+	if (!bonesByName) return;
+	for (const boneName of MANNEQUIN_JOINT_DISPLAY_ORDER) {
+		if (!bonesByName.has(boneName)) continue;
+		const cell = document.createElement("div");
+		cell.className = "bg-cell";
+		cell.dataset.bone = boneName;
+		cell.innerHTML = `
+			<div class="bg-cell-head" data-role="joint-head">
+				<div class="bg-cell-thumb" style="display:flex;align-items:center;justify-content:center;background:transparent;border:none;color:rgba(255,255,255,0.6);font-family:ui-monospace,monospace;font-size:14px">◉</div>
+				<div class="bg-cell-label">${_mannequinPrettyBoneName(boneName)}</div>
+				<div style="color:rgba(255,255,255,0.4);font:10px ui-monospace,monospace" data-role="joint-summary"></div>
+			</div>
+			<div class="bg-cell-body">
+				${["x", "y", "z"].map(a => `
+					<div class="joint-slider-row" data-axis="${a}">
+						<span class="joint-axis-label">${a}</span>
+						<input type="range" min="-180" max="180" step="0.1" value="0" data-bone="${boneName}" data-axis="${a}">
+						<span class="joint-val">0.0°</span>
+					</div>
+				`).join("")}
+			</div>
+		`;
+		host.appendChild(cell);
+	}
+	// One accordion, click any head to expand / collapse. Only one open
+	// at a time so the pane doesn't grow into an unreadable wall.
+	host.querySelectorAll('[data-role="joint-head"]').forEach(head => {
+		head.addEventListener("click", () => {
+			const cell = head.closest(".bg-cell");
+			const wasActive = cell.classList.contains("active");
+			host.querySelectorAll(".bg-cell.active").forEach(c => c.classList.remove("active"));
+			if (!wasActive) cell.classList.add("active");
+		});
+	});
+	// Slider input → live-rotate the bone off rest + persist as a
+	// pose-joints delta so save/restore and Current Pose readout stay
+	// in sync.
+	host.querySelectorAll('input[type=range][data-bone]').forEach(inp => {
+		inp.addEventListener("input", (e) => {
+			const targetWrap = selected?.userData?.primKind === "mannequin" ? selected : null;
+			if (!targetWrap) return;
+			const boneName = inp.dataset.bone;
+			const axis = inp.dataset.axis;
+			const deg = Number(inp.value);
+			const bone = targetWrap.userData._bonesByName?.get(boneName);
+			const rest = targetWrap.userData._restRotations?.get(boneName);
+			if (!bone || !rest) return;
+			bone.rotation[axis] = rest[axis] + deg * Math.PI / 180;
+			// Sparse pose-joints update — only carry entries with
+			// non-trivial deltas so serialization stays clean.
+			const joints = targetWrap.userData.mannequinPoseJoints || {};
+			const key = `${boneName}.${axis}`;
+			if (Math.abs(deg) > 0.05) joints[key] = deg;
+			else delete joints[key];
+			targetWrap.userData.mannequinPoseJoints = joints;
+			targetWrap.userData.mannequinPoseName = null;
+			const poseSel = document.getElementById("obj-mannequin-pose");
+			if (poseSel && document.activeElement !== poseSel) poseSel.value = "";
+			_mannequinRenderPoseJson(targetWrap);
+			_mannequinRefreshJointCellsFromState(targetWrap, inp);
+		});
+		inp.addEventListener("change", () => {
+			// Release commits — reground feet + persist so foot placement
+			// after big hip/knee changes catches up + the pose survives
+			// reload. Skipping this on every "input" tick keeps the drag
+			// interactive without thrashing the server.
+			const targetWrap = selected?.userData?.primKind === "mannequin" ? selected : null;
+			if (!targetWrap) return;
+			_mannequinReground(targetWrap);
+			clearSelectionTint();
+			if (selected === targetWrap) applySelectionTint(targetWrap);
+			if (typeof saveScene === "function") saveScene();
+		});
+	});
+}
+
+// Sync slider positions + numeric readouts + non-zero-axis summary
+// from the current pose-joints state. Called on preset apply, drag-
+// pose release, selection change, and after each slider tick (with
+// the tick's own input excluded to avoid clobbering the cursor).
+function _mannequinRefreshJointCellsFromState(wrapper, exceptInput) {
+	const host = document.getElementById("obj-mannequin-joints-cells");
+	if (!host || !wrapper) return;
+	const joints = wrapper.userData?.mannequinPoseJoints || {};
+	for (const cell of host.querySelectorAll(".bg-cell")) {
+		const boneName = cell.dataset.bone;
+		let nonZeroCount = 0;
+		for (const axis of ["x", "y", "z"]) {
+			const key = `${boneName}.${axis}`;
+			const deg = joints[key] || 0;
+			const inp = cell.querySelector(`input[data-axis="${axis}"]`);
+			const val = cell.querySelector(`.joint-slider-row[data-axis="${axis}"] .joint-val`);
+			const row = cell.querySelector(`.joint-slider-row[data-axis="${axis}"]`);
+			if (inp && inp !== exceptInput) inp.value = String(deg);
+			if (val) val.textContent = `${deg.toFixed(1)}°`;
+			const isNonZero = Math.abs(deg) > 0.05;
+			if (row) row.classList.toggle("non-zero", isNonZero);
+			if (isNonZero) nonZeroCount++;
+		}
+		const summary = cell.querySelector('[data-role="joint-summary"]');
+		if (summary) summary.textContent = nonZeroCount ? `${nonZeroCount} ${nonZeroCount === 1 ? "axis" : "axes"}` : "";
+	}
 }
 
 // ── Joint gizmos ──────────────────────────────────────────────────
@@ -12035,6 +12225,7 @@ function _mannequinClearHover() {
 		wrapper.userData.mannequinPoseName = null;
 		const poseSel = document.getElementById("obj-mannequin-pose");
 		if (poseSel && document.activeElement !== poseSel) poseSel.value = "";
+		_mannequinRefreshJointCellsFromState(wrapper);
 		if (typeof saveScene === "function") saveScene();
 	};
 	canvas.addEventListener("pointerup", endDrag, { capture: true });
@@ -15282,6 +15473,8 @@ function refreshObjectInspector() {
 			const poseSel = document.getElementById("obj-mannequin-pose");
 			if (poseSel) poseSel.value = selected.userData.mannequinPoseName || "";
 			_mannequinRenderPoseJson(selected);
+			_mannequinBuildJointCells(selected);
+			_mannequinRefreshJointCellsFromState(selected);
 		}
 	}
 	// TripoSplat Mode section — visible on TripoSplat results, whether the

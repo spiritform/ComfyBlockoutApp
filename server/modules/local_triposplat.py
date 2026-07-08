@@ -276,13 +276,12 @@ MODULE = ModuleDef(
     ],
     output_ext="ply",
     util=True,
-    # Lucide "asterisk" — placeholder splat glyph until a better one lands.
+    # Lucide "astroid" — a four-cusped concave diamond that reads as
+    # "converging point cloud" better than the earlier asterisk placeholder.
     icon=(
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"'
         ' stroke-linecap="round" stroke-linejoin="round">'
-        '<path d="M12 6v12"/>'
-        '<path d="M17.196 9 6.804 15"/>'
-        '<path d="m6.804 9 10.392 6"/>'
+        '<path d="M12.983 21.186a1 1 0 0 1-1.966 0 10 10 0 0 0-8.203-8.203 1 1 0 0 1 0-1.966 10 10 0 0 0 8.203-8.203 1 1 0 0 1 1.966 0 10 10 0 0 0 8.203 8.203 1 1 0 0 1 0 1.966 10 10 0 0 0-8.203 8.203"/>'
         '</svg>'
     ),
     run=run,
