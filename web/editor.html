@@ -827,6 +827,19 @@
 	.gen-add-item:disabled { opacity: 0.4; cursor: not-allowed; }
 	.gen-add-item svg { width: 14px; height: 14px; flex: 0 0 auto; }
 	.gen-add-item .gen-add-check { margin-left: auto; font-size: 10px; opacity: 0.6; }
+	/* Inline trash on dropdown items that represent removable workflow modules.
+	   Hidden by default, appears on row hover so the resting dropdown stays
+	   clean. Red-tinted on the trash's own hover to signal destructive intent. */
+	.gen-add-item .gen-add-del {
+		width: 18px; height: 18px; margin-left: 6px; padding: 0;
+		background: transparent; border: none; border-radius: 3px;
+		color: rgba(255,255,255,0.4); cursor: pointer;
+		display: none; align-items: center; justify-content: center;
+		flex: 0 0 auto;
+	}
+	.gen-add-item:hover .gen-add-del { display: inline-flex; }
+	.gen-add-item .gen-add-del:hover { background: rgba(255,80,80,0.22); color: #ff8a8a; }
+	.gen-add-item .gen-add-del svg { width: 12px; height: 12px; }
 	.gen-cell:focus { outline: none; }
 
 	/* Assistant (LLM + MCP) panel */
@@ -915,15 +928,30 @@
 	#rp-pane-assistant .assistant-shell { flex: 1; min-height: 0; }
 	#rp-pane-assistant .assistant-log {
 		flex: 1; height: auto; min-height: 0; resize: none;
-		/* Reserve space for the absolute-pinned bottom band so scroll content
-		   stops at the context bar's top instead of running under it. */
-		padding-bottom: 110px;
+		/* padding-bottom used to reserve space here but Chrome doesn't
+		   consistently include it in scrollHeight — the last messages ended
+		   up rendered UNDER the opaque bottom-band. Reserved via ::after
+		   spacer below instead (see rule after this block). */
 		/* Chat convention: messages hug the bottom of the visible area (new
 		   messages push older ones up). Short logs get their empty space
 		   ABOVE the messages, right below the header — which is where the
 		   user expects "no chat yet" negative space, not between the last
-		   message and the input row. */
-		justify-content: flex-end;
+		   message and the input row.
+		   Was `justify-content: flex-end` which breaks scroll (browsers can't
+		   scroll to overflow beyond a flex-end child). Using margin-top:auto
+		   on the first child pushes short-log content to the bottom without
+		   the scroll-lock quirk — JS keeps the tail in view on new messages. */
+	}
+	#rp-pane-assistant .assistant-log > *:first-child { margin-top: auto; }
+	/* Real space reservation for the absolute-pinned bottom band. A padding-
+	   bottom rule doesn't reliably contribute to scrollHeight in Chrome, so
+	   the last messages ended up scrolling into (and being hidden by) the
+	   band. A real DOM-participating pseudo-element always does. Height =
+	   context chip (32) + input row (78) = 110, matching the band. */
+	#rp-pane-assistant .assistant-log::after {
+		content: "";
+		flex: 0 0 110px;
+		display: block;
 	}
 	/* Bottom band pinned to the RIGHT PANEL's bottom edge (not the pane's).
 	   Right panel is always full-height and its bottom == transport bar's
@@ -972,7 +1000,10 @@
 	/* Focus tint lives on the bottom band (context chip + 78px input row) — NOT
 	   the whole shell, otherwise the log area would light up too and destroy
 	   the intentional log/input separation. */
-	#rp-pane-assistant .assistant-bottom-band:focus-within { background: rgba(255,255,255,0.03); }
+	/* Opaque lifted color instead of the transparent white overlay we had
+	   before — otherwise focusing the input made the band see-through and
+	   the log's tail messages visually leaked into the textarea area. */
+	#rp-pane-assistant .assistant-bottom-band:focus-within { background: #1e1e28; }
 	/* Docked pane: input padding + arrow position tuned together so the arrow's
 	   crossbar sits ~2px above the first line of typed text. */
 	#rp-pane-assistant .assistant-input { height: 100%; padding: 17px 12px 12px 32px; }
@@ -1133,6 +1164,14 @@
 	.assistant-shell:focus-within { border-color: rgba(255,180,84,0.35); }
 
 	.prim-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; position: relative; }
+	/* Reserved future-tool placeholders (data-tool="soon-1" etc.) get hidden
+	   entirely instead of rendering a dim empty circle during the ~100ms
+	   before refreshUtilTools resolves. When a util module claims one of the
+	   slots, the button's data-tool attribute changes from `soon-*` to
+	   `util:<id>` and this selector no longer applies — the real tool renders
+	   normally. If no util claims it, the slot stays hidden and the grid
+	   collapses that column. */
+	.prim-btn[data-tool^="soon-"] { display: none; }
 	.prim-btn {
 		position: relative;
 		height: 40px; background: rgba(255,255,255,0.04); border: none;
@@ -1393,6 +1432,20 @@
 	   rule below sets display:inline-flex which overrides it — so an empty slot still
 	   showed the ×. Re-assert display:none via the [hidden] attribute selector. */
 	.gen-slot-clear[hidden] { display: none; }
+	/* Canonical remove-X. Small square button with a red-tinted hover.
+	   Mirrors .gen-slot-clear (used by gen cells + object image-ref) so a
+	   single class works for skybox panorama, projects rows, and any new
+	   "remove this assigned resource" affordance. */
+	.remove-x {
+		width: 18px; height: 18px; border-radius: 3px;
+		background: transparent; border: none; padding: 0;
+		color: rgba(255,255,255,0.45); cursor: pointer;
+		display: inline-flex; align-items: center; justify-content: center;
+		font-size: 14px; line-height: 1;
+		flex: 0 0 auto;
+	}
+	.remove-x:hover { background: rgba(255,80,80,0.22); color: #ff8a8a; }
+	.remove-x[hidden] { display: none; }
 	/* While uploading: block interaction but keep full opacity so the preview thumbnail
 	   under the spinner stays readable. Dark overlay + spinner (below) do the signalling. */
 	.gen-slot.uploading { pointer-events: none; }
@@ -2171,6 +2224,30 @@
 		font-size: 11px; color: rgba(255,255,255,0.45);
 		padding: 16px 4px; text-align: center;
 	}
+	/* Projects pane list rows — outliner-family list style.
+	   Title left, datestamp right, delete X on hover. Double-click loads. */
+	#rp-pane-projects .projects-list {
+		display: flex; flex-direction: column; gap: 1px;
+		padding: 2px 0;
+	}
+	.projects-row {
+		display: flex; align-items: center; gap: 8px;
+		padding: 8px 10px; border-radius: 5px;
+		cursor: pointer; user-select: none;
+	}
+	.projects-row:hover { background: rgba(255,255,255,0.05); }
+	.projects-row-name {
+		flex: 1; overflow: hidden; text-overflow: ellipsis;
+		white-space: nowrap; color: rgba(255,255,255,0.9);
+		font-size: 12px;
+	}
+	.projects-row-date {
+		font-size: 10px; color: rgba(255,255,255,0.4);
+		letter-spacing: 0.02em; flex: 0 0 auto;
+	}
+	/* Show the row's remove-X only on hover so quiet rows read cleanly. */
+	.projects-row .remove-x { visibility: hidden; }
+	.projects-row:hover .remove-x { visibility: visible; }
 	.assets-filter {
 		display: flex; align-items: baseline; gap: 4px;
 		margin-left: auto;
@@ -2649,6 +2726,17 @@
 		transition: background 0.12s;
 	}
 	#rp-split-handle:hover, #rp-split-handle.dragging { background: rgba(255,180,84,0.6); }
+	/* New-message pulse — a soft slow amber pulse to signal "check the chat"
+	   when the agent replies while its zone is collapsed. Only active when the
+	   panel is collapsed AND the handle carries the `.has-new` marker (set by
+	   pushAssistantMsg on bot replies, cleared when the user uncollapses). */
+	@keyframes cb-split-pulse {
+		0%, 100% { background: rgba(255,180,84,0.35); }
+		50%      { background: rgba(255,180,84,0.85); }
+	}
+	#right-panel.rp-agent-collapsed #rp-split-handle.has-new {
+		animation: cb-split-pulse 2.2s ease-in-out infinite;
+	}
 	#rp-header {
 		flex: 0 0 40px;
 		padding: 0 20px;
@@ -2876,8 +2964,17 @@
 				     dots vs. Triposplat's default gaussian-splat rendering). -->
 				<button class="prim-btn" data-tool="util:util_pointcloud" data-label="Point Cloud" title="Point Cloud — generate a 3D point cloud from a source image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="1" fill="currentColor"/><circle cx="10" cy="4" r="1" fill="currentColor"/><circle cx="15" cy="5" r="1" fill="currentColor"/><circle cx="19" cy="7" r="1" fill="currentColor"/><circle cx="4" cy="11" r="1" fill="currentColor"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="14" cy="11" r="1" fill="currentColor"/><circle cx="20" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="16" r="1" fill="currentColor"/><circle cx="11" cy="17" r="1" fill="currentColor"/><circle cx="16" cy="16" r="1" fill="currentColor"/><circle cx="19" cy="18" r="1" fill="currentColor"/></svg></button>
 				<button class="prim-btn" data-tool="soon-1" data-label="Coming soon" title="Reserved slot — future tool" style="opacity:0.35"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg></button>
-				<button class="prim-btn" data-tool="soon-2" data-label="Coming soon" title="Reserved slot — future tool" style="opacity:0.35"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg></button>
-				<button class="prim-btn" data-tool="soon-3" data-label="Coming soon" title="Reserved slot — future tool" style="opacity:0.35"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg></button>
+				<!-- Skybox — spawns a massive inverted sphere the user can upload
+				     or generate a 360° equirectangular image onto. Acts as scene
+				     backdrop; raycast disabled so the interior surface doesn't
+				     steal every viewport click (select via Outliner). -->
+				<button class="prim-btn" data-tool="skybox" data-label="Skybox" title="Skybox — spawn a giant inverted sphere and paint a 360° panorama onto it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></button>
+				<!-- Mannequin — procedural block-figure at real-world 1.72m scale.
+				     Reference for blockouts (door frames, couches, camera height).
+				     Group with primKind="mannequin" so a future rigged GLB slots
+				     in without changing the object-inspector / delete / selection
+				     paths — those all already treat Groups as one addressable unit. -->
+				<button class="prim-btn" data-tool="mannequin" data-label="Mannequin" title="Mannequin — spawn a ~1.72m human-scale block figure for reference"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="4" r="1"/><path d="m18 19 1-7-6 1"/><path d="m5 8 3-3 5.5 3-2.36 3.5"/><path d="M4.24 14.5a5 5 0 0 0 6.88 6"/><path d="M13.76 17.5a5 5 0 0 0-6.88-6"/></svg></button>
 			</div>
 			<input type="file" id="loadmedia-file" accept="image/*,video/*" hidden>
 		</div>
@@ -3163,13 +3260,74 @@
 					<div class="hint" id="obj-pc-status" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5)">Idle</div>
 					<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Upload a still image or leave empty to use the current Blockout snapshot. Object mode isolates the subject; Scene mode keeps the full frame.</div>
 				</div>
+				<!-- Skybox panorama controls — visible only when the selection
+				     is a skybox object. Upload picks a 360° equirectangular
+				     image; the prompt + Generate runs a local T2I pass and
+				     applies the result. Thumb is wide-aspect so the equirect
+				     preview reads correctly. -->
+				<div class="section" id="obj-skybox-section" style="display:none">
+					<div class="section-label">Panorama Image</div>
+					<div style="position:relative;margin-bottom:8px">
+						<div id="obj-skybox-thumb" style="width:100%;aspect-ratio:2/1;background:rgba(0,0,0,0.28) center/cover no-repeat;border:1px solid rgba(255,255,255,0.06);border-radius:4px;display:flex;align-items:center;justify-content:center;color:rgba(255,180,84,0.75);font-size:10px;letter-spacing:0.04em;text-align:center;padding:8px;box-sizing:border-box">NO IMAGE — UPLOAD OR GENERATE</div>
+						<!-- Clear X — top-right of the thumb, shown only while a
+						     texture is applied. Uses the shared .remove-x class so
+						     it matches gen-slot-clear / obj-image-clear visually. -->
+						<button type="button" class="remove-x" id="obj-skybox-clear" title="Remove panorama image" hidden style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.55)">×</button>
+					</div>
+					<input type="file" id="obj-skybox-upload-file" accept="image/*" hidden>
+					<div style="display:flex;gap:6px;margin-bottom:8px">
+						<button type="button" id="obj-skybox-upload-btn" class="mp-still-btn" style="flex:1;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85)">Upload</button>
+					</div>
+					<div class="sub-label">Prompt</div>
+					<textarea id="obj-skybox-prompt" rows="2" placeholder="A misty pine forest at dawn…" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.08);border-radius:4px;color:rgba(255,255,255,0.85);padding:6px 8px;font-size:11px;font-family:inherit;resize:vertical;margin-bottom:6px"></textarea>
+					<button type="button" id="obj-skybox-generate-btn" class="mp-still-btn" style="width:100%">Generate</button>
+					<!-- Opacity slider — drives the sphere material's alpha. Handy
+					     for fading the panorama out to see the scene BG through it
+					     during blockout composition. Persisted per-object on
+					     userData._skyboxOpacity so multiple skyboxes keep their
+					     own settings. -->
+					<div class="param-grid cols-2" style="margin-top:10px">
+						<div class="slider-row">
+							<label>Opacity</label>
+							<input type="range" id="obj-skybox-opacity" min="0" max="100" step="1" value="100">
+							<span class="slider-val" id="obj-skybox-opacity-val">100</span>
+						</div>
+					</div>
+					<div class="hint" id="obj-skybox-status" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5)">Idle</div>
+					<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Generation runs the local Flux 2 pipeline — "equirectangular 360° panorama" is added to your prompt automatically.</div>
+				</div>
 				<!-- TripoSplat representation toggle — appears on TripoSplat
 				     results (splat OR resampled points with the pcResult flag
 				     + cached _srcPlyUrl). Live switches between spark.js splat
 				     rendering and a density-sampled point cloud, both driven
 				     off the same cached PLY. Density slider only takes effect
 				     in Point Cloud mode. -->
-				<div class="section" id="obj-tps-convert-section" style="display:none">
+				<div class="section" id="obj-mannequin-section" style="display:none">
+						<div class="section-label">Mannequin</div>
+						<div class="sub-label">Size</div>
+						<div class="select-row">
+							<select id="obj-mannequin-kind">
+								<option value="Adult">Adult</option>
+								<option value="Child">Child</option>
+							</select>
+						</div>
+						<div class="sub-label" style="margin-top:10px">Pose</div>
+						<div class="select-row">
+							<select id="obj-mannequin-pose">
+								<option value="tpose">T-Pose</option>
+							</select>
+						</div>
+						<button type="button" id="obj-mannequin-reset" class="mp-still-btn" style="width:100%;margin-top:8px">Reset to T-Pose</button>
+						<!-- Live readout of the current joint state — updates on
+						     drag release, preset apply, and selection change. Format
+						     matches MANNEQUIN_POSES entries so you can paste values
+						     straight back to add new presets. -->
+						<div class="sub-label" style="margin-top:10px">Current Pose</div>
+						<textarea id="obj-mannequin-pose-json" readonly rows="6" spellcheck="false"
+							style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.06);border-radius:4px;padding:6px 8px;color:rgba(255,255,255,0.85);font:11px ui-monospace,SFMono-Regular,Consolas,monospace;line-height:1.4;resize:vertical;outline:none">{}</textarea>
+						<button type="button" id="obj-mannequin-copy-pose" class="mp-still-btn" style="width:100%;margin-top:6px">Copy Pose JSON</button>
+					</div>
+					<div class="section" id="obj-tps-convert-section" style="display:none">
 					<div class="section-label">Mode</div>
 					<div class="pill-toggle" style="margin-top:4px">
 						<button type="button" id="obj-tps-mode-splat" class="active">Gaussian Splat</button>
@@ -3633,6 +3791,21 @@
 					</div>
 				</div>
 
+				<!-- Grid opacity — separate from the top-bar grid visibility
+				     toggle. Persists to localStorage (workspace-level) so a fresh
+				     scene lands on the same setting the user last chose. Range
+				     0-100% maps 1:1 to grid.material.opacity. -->
+				<div class="section">
+					<div class="section-label">Grid</div>
+					<div class="param-grid cols-2">
+						<div class="slider-row">
+							<label>Opacity</label>
+							<input type="range" id="grid-opacity" min="0" max="100" step="1" value="11">
+							<span class="slider-val" id="grid-opacity-val">11</span>
+						</div>
+					</div>
+				</div>
+
 				<div class="section" id="fog-section">
 					<div class="section-head-row">
 						<label class="section-label" title="Enable scene fog" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">
@@ -3847,6 +4020,20 @@
 					</div>
 					<div class="assets-grid" id="assets-grid"></div>
 					<div class="assets-hint">Drag a tile onto an object's image slot in the Outliner to set it as that object's material reference.</div>
+				</div>
+			</div>
+
+			<!-- Projects pane — inline right-panel view opened from the top-header
+			     "Open" button. Rows are title + creation datestamp; double-click a
+			     row to load. Same visual family as rp-pane-assets: kicker header
+			     "Projects", no sub-title, own populate function (refreshProjectsPane). -->
+			<div class="rp-pane" id="rp-pane-projects" hidden>
+				<div class="section">
+					<div class="assets-empty" id="projects-empty" hidden>
+						No saved projects yet — use Save As to create one.
+					</div>
+					<div class="projects-list" id="projects-list"></div>
+					<div class="assets-hint">Double-click a project to load it.</div>
 				</div>
 			</div>
 
@@ -5055,6 +5242,12 @@ let outlinerRangeAnchor = null;
 // refreshChatContextChip's initial paint at boot (well before the assistant
 // wiring block) doesn't hit a temporal-dead-zone error.
 let chatAttachments = [];
+// Set by the error modal's Inspect button so the chat context chip surfaces
+// `INSPECT ERROR · <module id>` alongside the auto-sent inspection prompt.
+// Higher priority than attachments/selection in refreshChatContextChip since
+// the user just explicitly asked "help me with this failure" — that's the
+// active conversation frame. Cleared by the ✕ chip button or /clear.
+let _inspectErrorContext = null;
 // Group-drag snapshot — captured in transform mouseDown when the set has >1
 // member, consumed in objectChange to apply the primary's delta to the rest.
 // Null outside a drag or during single-select drags.
@@ -6213,6 +6406,9 @@ function deleteObject(obj) {
 		if (idx >= 0) fbxMixers.splice(idx, 1);
 		obj.userData.mixer.stopAllAction();
 	}
+	if (obj.userData.primKind === "mannequin") {
+		if (typeof _mannequinDisposeGizmos === "function") _mannequinDisposeGizmos(obj);
+	}
 	if (obj.userData.primKind === "splat") {
 		scene.remove(obj);
 		obj.userData.splatMesh?.dispose?.();
@@ -6896,6 +7092,7 @@ function forceRightPane(which, label) {
 	const mpPane  = document.getElementById("rp-pane-mediapipe");
 	const boolPane = document.getElementById("rp-pane-bool");
 	const utilPane = document.getElementById("rp-pane-util");
+	const prjPane = document.getElementById("rp-pane-projects");
 	const titleEl = document.getElementById("rp-title");
 	const kickerEl = document.getElementById("rp-kicker");
 	const sepEl = document.getElementById("rp-sep");
@@ -6908,14 +7105,16 @@ function forceRightPane(which, label) {
 	if (mpPane)  mpPane.hidden  = which !== "mediapipe";
 	if (boolPane) boolPane.hidden = which !== "bool";
 	if (utilPane) utilPane.hidden = which !== "util";
-	// Assets owns the kicker label with no sub-title. Object / Scene / Camera /
-	// GenCell / WorkflowCell use "Properties : <label>". "none" hides the whole
-	// header for a blank switcher zone.
+	if (prjPane) prjPane.hidden = which !== "projects";
+	// Assets + Projects own the kicker label with no sub-title. Object / Scene /
+	// Camera / GenCell / WorkflowCell use "Properties : <label>". "none" hides
+	// the whole header for a blank switcher zone.
 	const isAssets = which === "assets";
-	const isFullPane = isAssets;
+	const isProjects = which === "projects";
+	const isFullPane = isAssets || isProjects;
 	const isBlank = which === "none";
 	if (kickerEl) {
-		kickerEl.textContent = isAssets ? "Assets" : "Properties";
+		kickerEl.textContent = isAssets ? "Assets" : isProjects ? "Projects" : "Properties";
 		kickerEl.style.display = isBlank ? "none" : "";
 	}
 	if (sepEl) sepEl.style.display = (isFullPane || isBlank) ? "none" : "";
@@ -6927,6 +7126,7 @@ function forceRightPane(which, label) {
 	// view is active. Assistant button now toggles agent-zone collapse (wired
 	// below in the split-handle IIFE) rather than swapping the switcher pane.
 	document.getElementById("th-assets")?.classList.toggle("active", isAssets);
+	document.getElementById("project-open")?.classList.toggle("active", isProjects);
 	// Toolbar pills light amber ONLY while their pane is the visible one. That
 	// makes "lit" == "properties currently showing this".
 	// #scene-props-btn (top toolbar) is amber whenever the Scene properties
@@ -7246,6 +7446,11 @@ function clearSelectionTint() {
 function applySelectionTint(obj) {
 	if (!obj || obj === renderCam) return;
 	if (obj.userData?.primKind === "splat") return;
+	// Skybox is a 50m inverted sphere wrapping the whole scene — a Box3Helper
+	// cage at that scale would fill the viewport with amber lines and hide
+	// every other object. The user is "selecting" the skybox via the Outliner
+	// or the Tools button re-click, not by clicking on its geometry.
+	if (obj.userData?.primKind === "skybox") return;
 	// Universal selection cage — a Box3Helper built from the object's LOCAL
 	// bounding box and parented to the object so it inherits the transform.
 	// Unlike BoxHelper (which does world-space AABB and stays axis-aligned to
@@ -8143,6 +8348,22 @@ function runTool(kind) {
 	}
 	if (kind === "bool") {
 		openBooleanTool();
+		return;
+	}
+	if (kind === "skybox") {
+		// Re-click focuses the existing skybox rather than piling new spheres
+		// into the scene. The tag lookup mirrors how TripoSplat handles its
+		// pcPlaceholder — you almost always want ONE skybox and to keep tweaking
+		// its panorama, not five stacked at the origin.
+		const existing = objects.find(o => o.userData?.primKind === "skybox" && o.visible !== false);
+		if (existing) select(existing);
+		else spawnSkybox();
+		refreshObjectInspector?.();
+		return;
+	}
+	if (kind === "mannequin") {
+		spawnMannequin();
+		refreshObjectInspector?.();
 		return;
 	}
 	if (kind && kind.startsWith("soon-")) return;
@@ -9159,6 +9380,12 @@ let activeGenCellId = null;
 // hoist they're in the TDZ during boot and the whole init IIFE explodes.
 const workflowModules = {};
 const workflowCells = [];
+// Session-scoped set of module ids the user has explicitly removed from the
+// WORKFLOWS list via the ✕ button. Prevents the auto-populate loop in
+// refreshWorkflowsList's caller from re-adding them the moment the ✕ splice
+// completes. Cleared on page reload — the design still wants every registered
+// module to be visible on a fresh session, ✕ is a "hide for now" gesture.
+const _sessionRemovedWorkflowModules = new Set();
 let activeWorkflowCellId = null;
 
 function getActiveGenCell() {
@@ -10149,10 +10376,11 @@ async function fetchWorkflowModules() {
 	}
 	// Every registered non-util module gets a cell so it's visible above the
 	// Add chip instead of hiding in the dropdown. Cells the user explicitly
-	// removed (× button) leave the module registered on disk but re-appear
-	// here on reload — same as Generate's built-in cells always come back if
-	// wiped. Utils never live in the Workflows section (they're Tools).
+	// removed via ✕ during this session are held out via
+	// `_sessionRemovedWorkflowModules` so they don't ping-pong back. Reload
+	// clears that set — a fresh session shows everything registered.
 	for (const m of Object.values(workflowModules)) {
+		if (_sessionRemovedWorkflowModules.has(m.id)) continue;
 		if (!workflowCells.some(c => c.moduleId === m.id)) {
 			workflowCells.push({ id: newGenCellId(), moduleId: m.id, values: {}, expanded: false });
 		}
@@ -11217,6 +11445,710 @@ function _setPcRunButton(phase) {
 	else hook();
 })();
 
+// ─── Skybox tool ────────────────────────────────────────────────────
+// Spawn a giant (radius 50) inverted sphere at the world origin, tagged
+// primKind="skybox". BackSide + MeshBasicMaterial means it renders like a
+// classic sky backdrop — lit ambiently by its own texture, no interaction
+// with scene lights or fog needing configuration. Raycast disabled so
+// viewport clicks on empty space keep hitting whatever's actually in the
+// scene rather than the inner surface of the wrapper.
+function spawnSkybox() {
+	snapshotForUndo();
+	primCounters.skybox = (primCounters.skybox || 0) + 1;
+	const geom = new THREE.SphereGeometry(50, 64, 32);
+	const mat = new THREE.MeshBasicMaterial({
+		color: 0x2a2a3a,
+		side: THREE.BackSide,
+		depthWrite: false, // sits behind everything visually; irrelevant to depth sorting
+		// Transparent+opacity=1 renders identical to opaque at full alpha, and
+		// lets the object-inspector opacity slider fade the sphere without
+		// having to flip material.transparent live (which would trigger a
+		// shader recompile every drag frame).
+		transparent: true,
+		opacity: 1,
+	});
+	const mesh = new THREE.Mesh(geom, mat);
+	mesh.name = `Skybox.${String(primCounters.skybox).padStart(3, "0")}`;
+	mesh.position.set(0, 0, 0);
+	mesh.userData.primKind = "skybox";
+	mesh.userData._skyboxOpacity = 1;
+	// Never picks in viewport raycasts — 50m radius interior would steal
+	// every empty-space click. Select via Outliner or the Tools>Skybox re-click.
+	mesh.raycast = () => {};
+	// Skybox is a backdrop, not a subject — render before everything else so
+	// it stays visually behind opaque geometry regardless of camera position.
+	mesh.renderOrder = -1000;
+	stashInitialTransform(mesh);
+	scene.add(mesh);
+	objects.push(mesh);
+	select(mesh);
+	refreshOutliner();
+	updateStatus();
+	if (typeof saveScene === "function") saveScene();
+	return mesh;
+}
+
+function _findActiveSkybox() {
+	return objects.find(o => o.userData?.primKind === "skybox" && o.visible !== false) || null;
+}
+
+// ─── Mannequin tool ─────────────────────────────────────────────────
+// Rigged humanoid built on a Mixamo Xbot GLB (skinned mesh). Sits in
+// an outer THREE.Group wrapper — that wrapper is what lives in
+// `objects[]` so TransformControls attaches at the root and the whole
+// figure moves as one unit.
+//
+// Adult/Child is a uniform-scale toggle on the inner root (Xbot doesn't
+// ship a child variant). Reset returns every bone to its captured rest
+// rotation. Per-bone center-dot gizmos let the user drag-pose bones on
+// the canvas. Saved rotations round-trip via serialization as a sparse
+// "bone.axis" → degrees map.
+
+const MANNEQUIN_XBOT_URL = "https://threejs.org/examples/models/gltf/Xbot.glb";
+const MANNEQUIN_HEIGHT_SCALES = { Adult: 1.0, Child: 0.7 };
+const MANNEQUIN_BODY_COLOR = 0x8a8a90;
+const MANNEQUIN_HIGHLIGHT_COLOR = 0xffb454;
+// Per-bone drag mapping — horizontal drag rotates axisX with sensX,
+// vertical drag rotates axisY with sensY. Signs flip so drags feel
+// natural in the bone's local frame (arm raise decreases when lifting).
+const MANNEQUIN_DRAG_MAP = {
+	mixamorigHead:          { axisX: "y", sensX: 0.5,  axisY: "x", sensY: 0.5 },
+	mixamorigNeck:          { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4 },
+	mixamorigSpine2:        { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4 },
+	mixamorigSpine1:        { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4 },
+	mixamorigSpine:         { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4 },
+	mixamorigLeftShoulder:  { axisX: "y", sensX: 0.4,  axisY: "z", sensY: -0.5 },
+	mixamorigRightShoulder: { axisX: "y", sensX: -0.4, axisY: "z", sensY: 0.5 },
+	mixamorigLeftArm:       { axisX: "y", sensX: 0.4,  axisY: "z", sensY: -0.5 },
+	mixamorigRightArm:      { axisX: "y", sensX: -0.4, axisY: "z", sensY: 0.5 },
+	mixamorigLeftForeArm:   { axisX: null, sensX: 0,   axisY: "y", sensY: 0.6 },
+	mixamorigRightForeArm:  { axisX: null, sensX: 0,   axisY: "y", sensY: -0.6 },
+	mixamorigLeftHand:      { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.5 },
+	mixamorigRightHand:     { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.5 },
+	mixamorigLeftUpLeg:     { axisX: "y", sensX: 0.3,  axisY: "x", sensY: 0.5 },
+	mixamorigRightUpLeg:    { axisX: "y", sensX: -0.3, axisY: "x", sensY: 0.5 },
+	mixamorigLeftLeg:       { axisX: null, sensX: 0,   axisY: "x", sensY: 0.6 },
+	mixamorigRightLeg:      { axisX: null, sensX: 0,   axisY: "x", sensY: 0.6 },
+	mixamorigLeftFoot:      { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.5 },
+	mixamorigRightFoot:     { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.5 },
+};
+const MANNEQUIN_JOINT_NAMES = Object.keys(MANNEQUIN_DRAG_MAP);
+const _MANNEQUIN_GIZMO_RADIUS = 0.014;
+
+// Cached loaded GLTF scene — every spawn clones this via SkeletonUtils
+// so skinning stays intact across independent mannequin instances.
+let _xbotSourceModel = null;
+async function _loadXbotSourceModel() {
+	if (_xbotSourceModel) return _xbotSourceModel;
+	const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+	return new Promise((resolve, reject) => {
+		new GLTFLoader().load(MANNEQUIN_XBOT_URL, (gltf) => {
+			_xbotSourceModel = gltf.scene;
+			resolve(_xbotSourceModel);
+		}, undefined, reject);
+	});
+}
+
+async function _mannequinCloneXbot() {
+	const source = await _loadXbotSourceModel();
+	const { SkeletonUtils } = await import("three/addons/utils/SkeletonUtils.js");
+	return SkeletonUtils.clone(source);
+}
+
+function _mannequinReplaceMaterials(root) {
+	// Fresh grey MeshStandardMaterial per instance — sharing across
+	// mannequins would couple selection tint / future shader hooks
+	// between figures. Cheap to allocate; matches the mockup look.
+	root.traverse(o => {
+		if (o.isMesh) {
+			o.material = new THREE.MeshStandardMaterial({
+				color: MANNEQUIN_BODY_COLOR, roughness: 0.85, metalness: 0.0,
+			});
+			o.castShadow = true;
+		}
+	});
+}
+
+function _mannequinSetScale(wrapper, kindName) {
+	const s = MANNEQUIN_HEIGHT_SCALES[kindName] || 1.0;
+	const root = wrapper.userData._innerRoot;
+	if (root) root.scale.setScalar(s);
+	wrapper.userData.mannequinKind = kindName;
+}
+
+async function spawnMannequin(opts = {}) {
+	snapshotForUndo();
+	primCounters.mannequin = (primCounters.mannequin || 0) + 1;
+	const wrapper = new THREE.Group();
+	wrapper.name = `Mannequin.${String(primCounters.mannequin).padStart(3, "0")}`;
+	wrapper.userData.primKind = "mannequin";
+	// Stash any deserialized joint state onto userData BEFORE the
+	// build step reads it — deserialize passes this through to
+	// preserve custom drag-posed figures across save/load.
+	if (opts.poseJoints && Object.keys(opts.poseJoints).length) {
+		wrapper.userData.mannequinPoseJoints = { ...opts.poseJoints };
+	}
+	wrapper.position.copy(opts.position || new THREE.Vector3(0, 0, 0));
+	if (opts.rotation) wrapper.rotation.set(opts.rotation[0], opts.rotation[1], opts.rotation[2]);
+	if (opts.scale) wrapper.scale.fromArray(opts.scale);
+	scene.add(wrapper);
+	objects.push(wrapper);
+	stashInitialTransform(wrapper);
+	// Select immediately so the selection UI feels responsive even
+	// before the CDN fetch resolves. The selection cage will re-fit
+	// against the mesh once it lands via applySelectionTint.
+	select(wrapper);
+	refreshOutliner();
+	updateStatus();
+	try {
+		const root = await _mannequinCloneXbot();
+		_mannequinReplaceMaterials(root);
+		wrapper.add(root);
+		wrapper.userData._innerRoot = root;
+		// Find the SkinnedMesh + capture its skeleton for bone lookup.
+		let skinnedMesh = null;
+		root.traverse(o => { if (o.isSkinnedMesh && !skinnedMesh) skinnedMesh = o; });
+		if (!skinnedMesh) throw new Error("no SkinnedMesh in Xbot GLB");
+		const skeleton = skinnedMesh.skeleton;
+		const bonesByName = new Map();
+		for (const b of skeleton.bones) bonesByName.set(b.name, b);
+		wrapper.userData._skinnedMesh = skinnedMesh;
+		wrapper.userData._skeleton = skeleton;
+		wrapper.userData._bonesByName = bonesByName;
+		// Snapshot rest rotations so Reset returns bones to their
+		// natural T-pose orientation regardless of what a poseJoints
+		// map has been applied to them.
+		const restRotations = new Map();
+		for (const b of skeleton.bones) restRotations.set(b.name, b.rotation.clone());
+		wrapper.userData._restRotations = restRotations;
+		_mannequinSetScale(wrapper, opts.kind || "Adult");
+		if (opts.poseJoints && Object.keys(opts.poseJoints).length) {
+			_mannequinApplyPoseJoints(wrapper, opts.poseJoints);
+		}
+		_mannequinReground(wrapper);
+		_mannequinBuildGizmos(wrapper);
+		clearSelectionTint();
+		applySelectionTint(wrapper);
+		refreshObjectInspector?.();
+	} catch (e) {
+		console.error("[mannequin] load/build failed:", e);
+	}
+	if (typeof saveScene === "function") saveScene();
+	return wrapper;
+}
+
+// Adult/Child swap. Uniform scale on the inner root; wrapper
+// transform stays untouched so the figure stays anchored.
+function mannequinSetKind(wrapper, kindName) {
+	if (!wrapper || wrapper.userData?.primKind !== "mannequin") return;
+	if (!wrapper.userData._innerRoot) return;
+	_mannequinSetScale(wrapper, kindName);
+	_mannequinReground(wrapper);
+	clearSelectionTint();
+	if (selected === wrapper) applySelectionTint(wrapper);
+	if (typeof saveScene === "function") saveScene();
+}
+
+// Only "tpose" is implemented — resets every bone to its captured
+// rest rotation. Custom preset library was mannequin.js-specific and
+// doesn't survive the port; adding new Xbot presets is straightforward
+// (record a pose via drag, copy the JSON, hardcode).
+function mannequinSetPose(wrapper, presetName) {
+	if (!wrapper || wrapper.userData?.primKind !== "mannequin") return;
+	const rest = wrapper.userData._restRotations;
+	const skeleton = wrapper.userData._skeleton;
+	if (!rest || !skeleton) return;
+	for (const b of skeleton.bones) {
+		const r = rest.get(b.name);
+		if (r) b.rotation.copy(r);
+	}
+	wrapper.userData.mannequinPoseName = presetName;
+	wrapper.userData.mannequinPoseJoints = {};
+	_mannequinReground(wrapper);
+	clearSelectionTint();
+	if (selected === wrapper) applySelectionTint(wrapper);
+	_mannequinRenderPoseJson(wrapper);
+	if (typeof saveScene === "function") saveScene();
+}
+
+// Re-ground feet: reset inner root offset, recompute bbox, translate
+// up by |min.y| so feet touch wrapper y=0.
+function _mannequinReground(wrapper) {
+	const root = wrapper?.userData?._innerRoot;
+	if (!root) return;
+	root.position.y = 0;
+	wrapper.updateMatrixWorld(true);
+	root.updateMatrixWorld(true);
+	const bbox = new THREE.Box3().setFromObject(root);
+	if (isFinite(bbox.min.y)) root.position.y -= bbox.min.y;
+}
+
+// Capture the current per-bone rotation deltas from rest as a flat
+// "bone.axis" → degrees map. Sparse — only bones the user actually
+// posed away from rest land in the map.
+function _mannequinSyncPoseJoints(wrapper) {
+	const skeleton = wrapper.userData._skeleton;
+	const rest = wrapper.userData._restRotations;
+	const bonesByName = wrapper.userData._bonesByName;
+	if (!skeleton || !rest || !bonesByName) return;
+	const joints = {};
+	for (const name of MANNEQUIN_JOINT_NAMES) {
+		const bone = bonesByName.get(name);
+		if (!bone) continue;
+		const r = rest.get(name);
+		for (const axis of ["x", "y", "z"]) {
+			const delta = (bone.rotation[axis] - r[axis]) * 180 / Math.PI;
+			if (Math.abs(delta) > 0.5) joints[`${name}.${axis}`] = Number(delta);
+		}
+	}
+	wrapper.userData.mannequinPoseJoints = joints;
+	_mannequinRenderPoseJson(wrapper);
+}
+
+// Apply a saved poseJoints map. Resets each posable bone to rest
+// first so sparse maps don't leak stale rotations.
+function _mannequinApplyPoseJoints(wrapper, joints) {
+	const rest = wrapper.userData._restRotations;
+	const bonesByName = wrapper.userData._bonesByName;
+	const skeleton = wrapper.userData._skeleton;
+	if (!rest || !bonesByName || !skeleton) return;
+	for (const b of skeleton.bones) {
+		const r = rest.get(b.name);
+		if (r) b.rotation.copy(r);
+	}
+	if (!joints) return;
+	for (const [path, deg] of Object.entries(joints)) {
+		const [name, axis] = path.split(".");
+		const bone = bonesByName.get(name);
+		if (!bone) continue;
+		const r = rest.get(name);
+		if (!r) continue;
+		bone.rotation[axis] = r[axis] + deg * Math.PI / 180;
+	}
+}
+
+function _mannequinRenderPoseJson(wrapper) {
+	const ta = document.getElementById("obj-mannequin-pose-json");
+	if (!ta) return;
+	if (!wrapper || selected !== wrapper) return;
+	const joints = wrapper.userData?.mannequinPoseJoints || {};
+	const rounded = {};
+	for (const [k, v] of Object.entries(joints)) rounded[k] = Number(v.toFixed(1));
+	ta.value = JSON.stringify(rounded, null, 2);
+}
+
+// ── Joint gizmos ──────────────────────────────────────────────────
+// One small white sphere per posable bone. Parented under a Group in
+// the scene root (not under the bone) — bones live in the SkinnedMesh
+// hierarchy which doesn't tick children the way regular Object3Ds do.
+// A per-frame ticker in the render loop syncs each gizmo's position
+// to its bone's world position.
+
+function _mannequinBuildGizmos(wrapper) {
+	const skeleton = wrapper.userData._skeleton;
+	if (!skeleton) return;
+	const container = new THREE.Group();
+	container.name = "MannequinGizmos";
+	container.visible = (selected === wrapper);
+	scene.add(container);
+	const jointGizmos = new Map();
+	for (const name of MANNEQUIN_JOINT_NAMES) {
+		const bone = wrapper.userData._bonesByName.get(name);
+		if (!bone) continue;
+		const sphere = new THREE.Mesh(
+			new THREE.SphereGeometry(_MANNEQUIN_GIZMO_RADIUS, 14, 10),
+			new THREE.MeshBasicMaterial({
+				color: 0xffffff, transparent: true, opacity: 0.55,
+				depthTest: false, depthWrite: false,
+			}),
+		);
+		sphere.renderOrder = 999;
+		sphere.userData._mannequinWrapper = wrapper;
+		sphere.userData._mannequinBone = bone;
+		sphere.userData._mannequinBoneName = name;
+		container.add(sphere);
+		jointGizmos.set(name, sphere);
+	}
+	wrapper.userData._gizmoContainer = container;
+	wrapper.userData._jointGizmos = jointGizmos;
+}
+
+// Per-frame sync + selection-gated visibility. Invoked from the main
+// render loop (see loop()) so gizmos follow bones as poses evolve.
+const _mannequinTickVec = new THREE.Vector3();
+function _mannequinTickGizmos() {
+	for (const obj of objects) {
+		if (obj.userData?.primKind !== "mannequin") continue;
+		const container = obj.userData._gizmoContainer;
+		if (!container) continue;
+		const shouldShow = (selected === obj);
+		if (container.visible !== shouldShow) container.visible = shouldShow;
+		if (!shouldShow) continue;
+		const gizmos = obj.userData._jointGizmos;
+		if (!gizmos) continue;
+		for (const [name, sphere] of gizmos) {
+			const bone = obj.userData._bonesByName.get(name);
+			if (!bone) continue;
+			bone.getWorldPosition(_mannequinTickVec);
+			sphere.position.copy(_mannequinTickVec);
+		}
+	}
+}
+
+// Cleanup for deleteObject — nukes gizmo Group + disposes geometry.
+function _mannequinDisposeGizmos(wrapper) {
+	const container = wrapper?.userData?._gizmoContainer;
+	if (!container) return;
+	container.traverse(o => {
+		if (o.geometry?.dispose) { try { o.geometry.dispose(); } catch {} }
+		if (o.material?.dispose) { try { o.material.dispose(); } catch {} }
+	});
+	if (container.parent) container.parent.remove(container);
+	delete wrapper.userData._gizmoContainer;
+	delete wrapper.userData._jointGizmos;
+}
+
+// ── Drag posing ──────────────────────────────────────────────────
+let _mannequinDrag = null;
+let _mannequinHovered = null;
+const _mannequinRaycaster = new THREE.Raycaster();
+const _mannequinNdc = new THREE.Vector2();
+
+function _mannequinPickGizmo(clientX, clientY) {
+	if (!selected || selected.userData?.primKind !== "mannequin") return null;
+	const gizmos = selected.userData._jointGizmos;
+	if (!gizmos) return null;
+	const rect = canvas.getBoundingClientRect();
+	_mannequinNdc.set(
+		((clientX - rect.left) / rect.width) * 2 - 1,
+		-((clientY - rect.top) / rect.height) * 2 + 1,
+	);
+	_mannequinRaycaster.setFromCamera(_mannequinNdc, camera);
+	const targets = Array.from(gizmos.values());
+	const hits = _mannequinRaycaster.intersectObjects(targets, false);
+	return hits.length ? hits[0].object : null;
+}
+
+function _mannequinSetGizmoTint(sphere, hovered) {
+	const m = sphere.material;
+	if (hovered) {
+		m.color.setHex(MANNEQUIN_HIGHLIGHT_COLOR);
+		m.opacity = 1.0;
+	} else {
+		m.color.setHex(0xffffff);
+		m.opacity = 0.55;
+	}
+}
+
+function _mannequinClearHover() {
+	if (!_mannequinHovered) return;
+	_mannequinSetGizmoTint(_mannequinHovered, false);
+	_mannequinHovered = null;
+	if (canvas.style.cursor === "grab") canvas.style.cursor = "";
+}
+
+(function wireMannequinDragPosing() {
+	canvas.addEventListener("pointerdown", (e) => {
+		if (e.button !== 0) return;
+		if (transform.dragging || transform.axis) return;
+		const gizmo = _mannequinPickGizmo(e.clientX, e.clientY);
+		if (!gizmo) return;
+		e.preventDefault();
+		e.stopPropagation();
+		e.stopImmediatePropagation();
+		orbit.enabled = false;
+		const wrapper = gizmo.userData._mannequinWrapper;
+		const bone = gizmo.userData._mannequinBone;
+		const boneName = gizmo.userData._mannequinBoneName;
+		const map = MANNEQUIN_DRAG_MAP[boneName];
+		const rest = wrapper.userData._restRotations.get(boneName);
+		const startPrimaryDeg   = map.axisY ? (bone.rotation[map.axisY] - rest[map.axisY]) * 180 / Math.PI : 0;
+		const startSecondaryDeg = map.axisX ? (bone.rotation[map.axisX] - rest[map.axisX]) * 180 / Math.PI : 0;
+		_mannequinDrag = {
+			wrapper, bone, boneName, gizmo, map, rest,
+			startX: e.clientX,
+			startY: e.clientY,
+			startPrimary: startPrimaryDeg,
+			startSecondary: startSecondaryDeg,
+		};
+		_mannequinSetGizmoTint(gizmo, true);
+		canvas.style.cursor = "grabbing";
+		try { canvas.setPointerCapture(e.pointerId); } catch {}
+	}, { capture: true });
+
+	canvas.addEventListener("pointermove", (e) => {
+		if (_mannequinDrag) {
+			const dx = e.clientX - _mannequinDrag.startX;
+			const dy = e.clientY - _mannequinDrag.startY;
+			const map = _mannequinDrag.map;
+			const rest = _mannequinDrag.rest;
+			const bone = _mannequinDrag.bone;
+			if (map.axisX && map.sensX) {
+				const rad = (_mannequinDrag.startSecondary + dx * map.sensX) * Math.PI / 180;
+				bone.rotation[map.axisX] = rest[map.axisX] + rad;
+			}
+			if (map.axisY && map.sensY) {
+				const rad = (_mannequinDrag.startPrimary + dy * map.sensY) * Math.PI / 180;
+				bone.rotation[map.axisY] = rest[map.axisY] + rad;
+			}
+			return;
+		}
+		if (transform.dragging || transform.axis) return;
+		if (_mannequinHovered && (!selected || selected.userData?.primKind !== "mannequin")) {
+			_mannequinClearHover();
+		}
+		const gizmo = _mannequinPickGizmo(e.clientX, e.clientY);
+		if (gizmo) {
+			if (_mannequinHovered !== gizmo) {
+				if (_mannequinHovered) _mannequinSetGizmoTint(_mannequinHovered, false);
+				_mannequinSetGizmoTint(gizmo, true);
+				_mannequinHovered = gizmo;
+			}
+			canvas.style.cursor = "grab";
+		} else if (_mannequinHovered) {
+			_mannequinClearHover();
+		}
+	});
+
+	canvas.addEventListener("pointerleave", () => {
+		if (!_mannequinDrag) _mannequinClearHover();
+	});
+
+	const endDrag = (e) => {
+		if (!_mannequinDrag) return;
+		e.preventDefault();
+		e.stopPropagation();
+		e.stopImmediatePropagation();
+		const wrapper = _mannequinDrag.wrapper;
+		_mannequinDrag = null;
+		orbit.enabled = true;
+		canvas.style.cursor = "";
+		_mannequinHovered = null;
+		try { canvas.releasePointerCapture(e.pointerId); } catch {}
+		_mannequinSyncPoseJoints(wrapper);
+		_mannequinReground(wrapper);
+		clearSelectionTint();
+		if (selected === wrapper) applySelectionTint(wrapper);
+		wrapper.userData.mannequinPoseName = null;
+		const poseSel = document.getElementById("obj-mannequin-pose");
+		if (poseSel && document.activeElement !== poseSel) poseSel.value = "";
+		if (typeof saveScene === "function") saveScene();
+	};
+	canvas.addEventListener("pointerup", endDrag, { capture: true });
+	canvas.addEventListener("pointercancel", endDrag, { capture: true });
+})();
+
+function _setSkyboxStatus(text, kind) {
+	const el = document.getElementById("obj-skybox-status");
+	if (!el) return;
+	el.textContent = text;
+	el.style.color = kind === "error" ? "#ff8a8a"
+		: kind === "busy" ? "rgba(255,180,84,0.9)"
+		: kind === "ok" ? "rgba(102,204,255,0.9)"
+		: "rgba(255,255,255,0.5)";
+}
+
+function _setSkyboxRunButton(phase) {
+	const gen = document.getElementById("obj-skybox-generate-btn");
+	const up = document.getElementById("obj-skybox-upload-btn");
+	if (!gen) return;
+	const busy = phase !== "idle";
+	gen.disabled = busy;
+	if (up) up.disabled = busy;
+	const label = phase === "running" ? "Running…" : "Generate";
+	gen.innerHTML = busy
+		? `<span style="display:inline-flex;align-items:center;gap:6px;justify-content:center">${_UTIL_SPINNER_SVG}<span>${label}</span></span>`
+		: "Generate";
+}
+
+function _refreshSkyboxThumb(skybox) {
+	const thumb = document.getElementById("obj-skybox-thumb");
+	if (!thumb) return;
+	const src = skybox?.userData?._skyboxImageUrl || skybox?.material?.map?.image?.src || null;
+	if (src) {
+		thumb.style.backgroundImage = `url("${src}")`;
+		thumb.textContent = "";
+	} else {
+		thumb.style.backgroundImage = "";
+		thumb.textContent = "NO IMAGE — UPLOAD OR GENERATE";
+	}
+	// X pill is only meaningful when there's actually an image to remove.
+	const clearBtn = document.getElementById("obj-skybox-clear");
+	if (clearBtn) clearBtn.hidden = !src;
+}
+
+// Clear the panorama: dispose the map, revert to the placeholder tint, drop
+// the cached URL. Thumb + X visibility re-sync through _refreshSkyboxThumb.
+function _skyboxClearImage() {
+	const skybox = _findActiveSkybox();
+	if (!skybox) return;
+	if (skybox.material?.map) {
+		skybox.material.map.dispose?.();
+		skybox.material.map = null;
+	}
+	skybox.material.color.setHex(0x2a2a3a); // matches spawnSkybox() default tint
+	skybox.material.needsUpdate = true;
+	skybox.userData._skyboxImageUrl = null;
+	_refreshSkyboxThumb(skybox);
+	_setSkyboxStatus("cleared", "ok");
+	if (typeof saveScene === "function") saveScene();
+}
+
+// Apply an equirectangular image URL to the skybox material as its diffuse
+// map. Same texture flow as spawnMediaPlane's image branch, but no aspect
+// resize — the sphere UVs already do the spherical projection. Old URL gets
+// revoked if it was a blob (only when we created it, tracked via the userData
+// flag so we don't accidentally revoke a persistent server URL).
+function _applySkyboxTexture(skybox, url) {
+	if (!skybox || !url) return;
+	new THREE.TextureLoader().load(url, (tex) => {
+		tex.colorSpace = THREE.SRGBColorSpace;
+		// Equirectangular textures on a SphereGeometry read correctly with the
+		// default UV layout; no mapping change needed. Wrap S so the seam falls
+		// on a single meridian without a hard edge.
+		tex.wrapS = THREE.RepeatWrapping;
+		tex.wrapT = THREE.ClampToEdgeWrapping;
+		const oldMap = skybox.material.map;
+		skybox.material.map = tex;
+		skybox.material.color.set(0xffffff); // let the texture drive the look
+		skybox.material.needsUpdate = true;
+		if (oldMap && oldMap !== tex) oldMap.dispose();
+		skybox.userData._skyboxImageUrl = url;
+		_refreshSkyboxThumb(skybox);
+		if (typeof saveScene === "function") saveScene();
+	}, undefined, (err) => {
+		console.warn("[skybox] texture load failed:", err);
+		_setSkyboxStatus?.(`texture load failed`, "error");
+	});
+}
+
+async function _skyboxHandleUpload(file) {
+	if (!file) return;
+	const skybox = _findActiveSkybox();
+	if (!skybox) { _setSkyboxStatus("no skybox — spawn one first", "error"); return; }
+	_setSkyboxStatus(`loading ${file.name}…`, "busy");
+	try {
+		const url = URL.createObjectURL(file);
+		_applySkyboxTexture(skybox, url);
+		_setSkyboxStatus(`applied · ${file.name}`, "ok");
+	} catch (err) {
+		console.error("[skybox] upload failed:", err);
+		_setSkyboxStatus(`upload failed · ${String(err.message || err).slice(0, 120)}`, "error");
+	}
+}
+
+// Fires the local Flux 2 Klein T2I workflow with the user's prompt scaffolded
+// as an equirectangular panorama. Aspect isn't 2:1 in the current workflow
+// (Flux2 defaults to square) — this MVP accepts the aspect skew for now; a
+// dedicated panorama workflow is a natural follow-up if quality matters.
+async function _skyboxGenerate() {
+	const skybox = _findActiveSkybox();
+	if (!skybox) { _setSkyboxStatus("no skybox — spawn one first", "error"); return; }
+	const promptEl = document.getElementById("obj-skybox-prompt");
+	const userPrompt = (promptEl?.value || "").trim();
+	if (!userPrompt) { _setSkyboxStatus("enter a prompt first", "error"); return; }
+	const fullPrompt = `equirectangular 360° panorama, seamless HDRI environment, ${userPrompt}`;
+	try {
+		_setSkyboxRunButton("running");
+		_setSkyboxStatus("running Flux 2…", "busy");
+		const r = await fetch(`/api/run/flux2_klein_t2i_local`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ node_id: NODE_ID, inputs: { prompt: fullPrompt } }),
+		});
+		if (!r.ok) {
+			const err = await r.text();
+			throw new Error(err || `HTTP ${r.status}`);
+		}
+		const j = await r.json();
+		_setSkyboxStatus(`done · ${j.filename || "saved to Assets"}`, "ok");
+		window.refreshAssets?.();
+		if (j.filename) _applySkyboxTexture(skybox, `/data/${j.filename}`);
+	} catch (err) {
+		console.error("[skybox] generate failed:", err);
+		_setSkyboxStatus(`failed · ${String(err.message || err).slice(0, 120)}`, "error");
+	} finally {
+		_setSkyboxRunButton("idle");
+	}
+}
+
+(function wireSkyboxObjectInspectorButtons() {
+	const hook = () => {
+		document.getElementById("obj-skybox-upload-btn")?.addEventListener("click", () => {
+			document.getElementById("obj-skybox-upload-file")?.click();
+		});
+		document.getElementById("obj-skybox-upload-file")?.addEventListener("change", async (e) => {
+			const f = e.target.files?.[0];
+			e.target.value = "";
+			await _skyboxHandleUpload(f);
+		});
+		document.getElementById("obj-skybox-generate-btn")?.addEventListener("click", async () => {
+			await _skyboxGenerate();
+		});
+		document.getElementById("obj-skybox-clear")?.addEventListener("click", () => {
+			_skyboxClearImage();
+		});
+		// Opacity slider — drives the selected skybox's material alpha live.
+		// Stashes the value on userData so re-selection restores the same knob
+		// position, and repeat drags don't have to re-read the material.
+		const opIn = document.getElementById("obj-skybox-opacity");
+		const opVal = document.getElementById("obj-skybox-opacity-val");
+		opIn?.addEventListener("input", (e) => {
+			const v = parseInt(e.target.value, 10) || 0;
+			if (opVal) opVal.textContent = String(v);
+			const skybox = _findActiveSkybox();
+			if (!skybox) return;
+			skybox.material.opacity = v / 100;
+			skybox.userData._skyboxOpacity = v / 100;
+		});
+		opIn?.addEventListener("change", () => {
+			if (typeof saveScene === "function") saveScene();
+		});
+	};
+	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hook, { once: true });
+	else hook();
+})();
+
+// Mannequin object-inspector wiring — dropdowns dispatch to
+// mannequinSetKind / mannequinSetPose against the current selection;
+// Reset returns to T-Pose (also syncs the dropdown value back to tpose).
+(function wireMannequinObjectInspectorButtons() {
+	const hook = () => {
+		document.getElementById("obj-mannequin-kind")?.addEventListener("change", (e) => {
+			if (selected?.userData?.primKind !== "mannequin") return;
+			mannequinSetKind(selected, e.target.value);
+		});
+		document.getElementById("obj-mannequin-pose")?.addEventListener("change", (e) => {
+			if (selected?.userData?.primKind !== "mannequin") return;
+			mannequinSetPose(selected, e.target.value);
+		});
+		document.getElementById("obj-mannequin-reset")?.addEventListener("click", () => {
+			if (selected?.userData?.primKind !== "mannequin") return;
+			mannequinSetPose(selected, "tpose");
+			const sel = document.getElementById("obj-mannequin-pose");
+			if (sel) sel.value = "tpose";
+		});
+		document.getElementById("obj-mannequin-copy-pose")?.addEventListener("click", async () => {
+			const ta = document.getElementById("obj-mannequin-pose-json");
+			if (!ta) return;
+			try {
+				await navigator.clipboard.writeText(ta.value);
+				const btn = document.getElementById("obj-mannequin-copy-pose");
+				const orig = btn.textContent;
+				btn.textContent = "Copied";
+				setTimeout(() => { btn.textContent = orig; }, 1200);
+			} catch (e) {
+				// Clipboard blocked (permissions / focus) — fall back to
+				// selecting the textarea so the user can copy manually.
+				ta.focus();
+				ta.select();
+			}
+		});
+	};
+	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hook, { once: true });
+	else hook();
+})();
+
 // Apply an image Blob/File to the Point Cloud placeholder plane's material
 // and resize the plane geometry to the image's native aspect. Placeholder
 // tint (amber overlay) drops away as the picture takes over.
@@ -11501,6 +12433,10 @@ function _appendWorkflowRows(container) {
 			// the agent (or the DELETE endpoint directly).
 			const i = workflowCells.findIndex(c => c.id === cell.id);
 			if (i >= 0) workflowCells.splice(i, 1);
+			// Mark this moduleId as "removed for the session" so the auto-populate
+			// loop after refresh doesn't immediately re-add it. Reload clears the
+			// set so a fresh session shows everything registered on disk.
+			if (cell.moduleId) _sessionRemovedWorkflowModules.add(cell.moduleId);
 			if (activeWorkflowCellId === cell.id) {
 				activeWorkflowCellId = null;
 				refreshChatContextChip();
@@ -11978,6 +12914,51 @@ fetchWorkflowModules();
 				? '<span class="gen-add-check">added</span>'
 				: '<span class="gen-add-check" style="opacity:0.4">local</span>';
 			item.innerHTML = `${iconFor(m)}<span>${m.label}</span>${suffix}`;
+			// Inline trash on the row's right edge — hits DELETE /api/workflows/{id}
+			// after showConfirm. Server refuses to delete built-in Python modules
+			// (source !== "workflow"), so only manifest-driven entries here get the
+			// button. All modules in `workflowModules` are source="workflow" by the
+			// fetch filter in fetchWorkflowModules, so all get a trash button.
+			const del = document.createElement("button");
+			del.type = "button";
+			del.className = "gen-add-del";
+			del.title = `Delete "${m.label}" permanently`;
+			del.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 4h10M6 4V2.5h4V4M4.5 4l.5 9a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l.5-9M7 7v5M9 7v5"/></svg>`;
+			del.addEventListener("click", async (e) => {
+				e.stopPropagation();
+				const ok = await window.showConfirm?.(
+					"Delete workflow?",
+					`This permanently removes <strong style="color:#fff">${m.label}</strong> (and its files under <code>server/workflows/</code>). You can re-import it later if you have the source.`,
+					{ confirmText: "Delete", danger: true },
+				);
+				if (!ok) return;
+				try {
+					const r = await fetch(`/api/workflows/${encodeURIComponent(m.id)}`, { method: "DELETE" });
+					if (!r.ok) {
+						const err = await r.json().catch(() => ({ detail: r.statusText }));
+						window.showAlert?.("Delete failed", err.detail || `HTTP ${r.status}`);
+						return;
+					}
+					// Purge client-side state so the item doesn't stick around.
+					delete workflowModules[m.id];
+					const deletedCell = workflowCells.find(c => c.moduleId === m.id);
+					if (deletedCell) {
+						workflowCells.splice(workflowCells.indexOf(deletedCell), 1);
+						if (activeWorkflowCellId === deletedCell.id) {
+							activeWorkflowCellId = null;
+							refreshChatContextChip?.();
+						}
+					}
+					_sessionRemovedWorkflowModules.delete(m.id);
+					closeMenu();
+					refreshWorkflowsList();
+					saveSceneDebounced?.();
+				} catch (err) {
+					window.showAlert?.("Delete failed", err.message || String(err));
+				}
+			});
+			// Drop the delete into the item — sits after the suffix on the right edge.
+			item.appendChild(del);
 			item.addEventListener("click", () => {
 				closeMenu();
 				if (exists) {
@@ -11987,6 +12968,10 @@ fetchWorkflowModules();
 				}
 				const cell = { id: newGenCellId(), moduleId: m.id, values: {}, expanded: true };
 				workflowCells.push(cell);
+				// Explicitly adding via + ADD re-enrolls the module — clear it
+				// from the session-removed set so a subsequent refresh doesn't
+				// filter it out again.
+				_sessionRemovedWorkflowModules.delete(m.id);
 				refreshWorkflowsList();
 				setActiveWorkflowCell(cell.id);
 				saveSceneDebounced?.();
@@ -12131,6 +13116,65 @@ const assistantStatus = document.getElementById("assistant-status");
 	}
 })();
 
+// Clipboard paste — dropping an image screenshot into the chat via Ctrl+V.
+// Reads the paste event's clipboardData, uploads any image items to the new
+// /comfyblockout/save_chat_image endpoint (returns a /data/ URL), stashes the
+// URL in chatAttachments, and drops a `[image]` placeholder in the textarea —
+// same flow the drag-drop handler above uses, so the send path expands the
+// placeholder into a markdown ![...] on the wire. Non-image clipboard payloads
+// (plain text, HTML, etc.) fall through to the browser's default paste.
+assistantInput?.addEventListener("paste", async (e) => {
+	const items = e.clipboardData?.items;
+	if (!items || !items.length) return;
+	// Collect image items — Windows/Chrome exposes them under `image/png` when
+	// a screenshot is on the clipboard (Print Screen, Snip & Sketch, macOS
+	// Cmd+Shift+4, etc.). Non-image items get skipped.
+	const files = [];
+	for (const it of items) {
+		if (it.kind === "file" && (it.type || "").startsWith("image/")) {
+			const f = it.getAsFile();
+			if (f) files.push(f);
+		}
+	}
+	if (!files.length) return; // let the browser paste plain text as usual
+	e.preventDefault();
+	for (const file of files) {
+		try {
+			const fd = new FormData();
+			fd.append("image", file, file.name || "pasted.png");
+			const r = await fetch("/comfyblockout/save_chat_image", { method: "POST", body: fd });
+			const j = await r.json().catch(() => ({}));
+			if (!j.success || !j.url) throw new Error(j.error || "upload failed");
+			chatAttachments.push({
+				url: j.url,
+				filename: j.filename,
+				kind: "image",
+				label: "Pasted Image",
+			});
+			// Same insert-at-cursor pattern as the drag-drop handler so the
+			// placeholder lands where the user was typing. Selection collapses
+			// to right after the placeholder for continued typing.
+			const start = assistantInput.selectionStart ?? assistantInput.value.length;
+			const end = assistantInput.selectionEnd ?? assistantInput.value.length;
+			const cur = assistantInput.value || "";
+			const before = cur.slice(0, start);
+			const after = cur.slice(end);
+			const gapBefore = before && !/[\s\n]$/.test(before) ? " " : "";
+			const gapAfter = after && !/^[\s\n]/.test(after) ? " " : "";
+			const placeholder = "[image]";
+			assistantInput.value = before + gapBefore + placeholder + gapAfter + after;
+			const caret = (before + gapBefore + placeholder + gapAfter).length;
+			assistantInput.selectionStart = assistantInput.selectionEnd = caret;
+			assistantInput.dispatchEvent(new Event("input", { bubbles: true }));
+			refreshChatContextChip();
+		} catch (err) {
+			console.error("[chat] paste upload failed:", err);
+			// Non-blocking — pushSystem if we have a way, else silent.
+			try { pushAssistantMsg("system", `→ image paste failed: ${err.message || err}`); } catch {}
+		}
+	}
+});
+
 // Markdown rendering for bot replies — Claude returns GFM with headings,
 // tables, lists, bold/italic, code. We parse via marked then sanitize with
 // DOMPurify so the LLM can't inject scripts via the chat surface.
@@ -12154,8 +13198,38 @@ function pushAssistantMsg(kind, text) {
 	}
 	assistantLog.appendChild(el);
 	assistantLog.scrollTop = assistantLog.scrollHeight;
+	// If the AI Agent zone is currently collapsed, flag the split handle so
+	// its CSS `.has-new` rule kicks the soft amber pulse. Signals "new reply
+	// waiting" without needing the user to un-collapse and check. Cleared by
+	// the MutationObserver below the moment the collapse class comes off.
+	if (kind === "bot") {
+		const panel = document.getElementById("right-panel");
+		const handle = document.getElementById("rp-split-handle");
+		if (panel?.classList.contains("rp-agent-collapsed") && handle) {
+			handle.classList.add("has-new");
+		}
+	}
 	return el;
 }
+
+// Watch #right-panel for the collapse class coming off — that's the moment
+// the user has "seen" the new reply, so drop the pulse marker on the handle.
+// Attached once at boot; the observer node persists for the app lifetime.
+(function wireAgentNewMessagePulseClear() {
+	const attach = () => {
+		const panel = document.getElementById("right-panel");
+		const handle = document.getElementById("rp-split-handle");
+		if (!panel || !handle) return;
+		let wasCollapsed = panel.classList.contains("rp-agent-collapsed");
+		new MutationObserver(() => {
+			const nowCollapsed = panel.classList.contains("rp-agent-collapsed");
+			if (wasCollapsed && !nowCollapsed) handle.classList.remove("has-new");
+			wasCollapsed = nowCollapsed;
+		}).observe(panel, { attributes: true, attributeFilter: ["class"] });
+	};
+	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", attach, { once: true });
+	else attach();
+})();
 
 // Rehydrate the visible chat from the server's persisted log on boot. Server
 // history survives restarts (see _chat_history_path in main.py), but the UI
@@ -12227,6 +13301,14 @@ function refreshChatContextChip() {
 	chip.hidden = false;
 	const selObj = (selected && selected !== renderCam) ? selected : null;
 	const selCount = selectionSet?.size || 0;
+	// Inspect-error context wins over everything — the user just explicitly
+	// asked the agent to look at a specific failure, that IS the current frame.
+	if (_inspectErrorContext) {
+		const { moduleId, label } = _inspectErrorContext;
+		target.textContent = `INSPECT ERROR · ${label || moduleId || "?"}`;
+		if (clearBtn) clearBtn.hidden = false;
+		return;
+	}
 	// Attachments take precedence — dropping an image reframes the conversation
 	// around it, so the chip surfaces the attachment label.
 	if (chatAttachments && chatAttachments.length) {
@@ -12253,6 +13335,7 @@ function refreshChatContextChip() {
 document.getElementById("assistant-context-clear")?.addEventListener("click", () => {
 	activeWorkflowCellId = null;
 	activeGenCellId = null;
+	_inspectErrorContext = null;
 	refreshWorkflowCells?.();
 	refreshGenCells?.();
 	// Chat attachments are part of the context too — clear them alongside so
@@ -12807,6 +13890,7 @@ async function sendAssistant(message, opts = {}) {
 	// server-side history and wipes the log — replaces the retired ↻ button.
 	if (text === "/clear" || text === "/reset") {
 		assistantInput.value = "";
+		_inspectErrorContext = null;
 		try {
 			await fetch("/api/llm/reset", {
 				method: "POST", headers: { "Content-Type": "application/json" },
@@ -12814,6 +13898,7 @@ async function sendAssistant(message, opts = {}) {
 			});
 		} catch {}
 		assistantLog.innerHTML = `<div class="assistant-msg system" id="assistant-intro">Ask the agent to refine a prompt, structure a generation JSON, or call a Comfy MCP tool.</div>`;
+		refreshChatContextChip?.();
 		return;
 	}
 	if (opts.silent) {
@@ -12871,8 +13956,40 @@ async function sendAssistant(message, opts = {}) {
 				break;
 			}
 			if (!r.ok) {
-				const e = await r.json().catch(() => ({}));
-				throw new Error(e.detail || `chat failed (${r.status})`);
+				// Grab whichever shape the backend returned — some paths wrap
+				// the Anthropic error in `detail`, others echo the raw dict
+				// under `error` or `message`, and some clients see it stringified
+				// as the entire response body. Sniff every field + fall back to
+				// the raw text so the tool-state matcher below can't miss.
+				let rawMsg = "";
+				try {
+					const j = await r.clone().json();
+					rawMsg = String(j.detail || j.error || j.message || JSON.stringify(j));
+				} catch {
+					try { rawMsg = await r.text(); } catch {}
+				}
+				// Auto-recover from Claude's "tool_use without tool_result" 400
+				// error — happens when a tool call from the previous turn never
+				// got resolved (e.g. user hit send while a tool_use was still
+				// pending, or a page navigation interrupted the loop). Same fix
+				// as the 409 branch: silently reset server-side history and
+				// surface a friendly line instead of the raw Anthropic error
+				// blob. Log entries above stay visible for continuity.
+				const isToolStateError = r.status === 400 && (
+					/tool_use/i.test(rawMsg) && /tool_result/i.test(rawMsg)
+					|| /invalid_request_error/i.test(rawMsg) && /tool/i.test(rawMsg)
+				);
+				if (isToolStateError) {
+					try {
+						await fetch("/api/llm/reset", {
+							method: "POST", headers: { "Content-Type": "application/json" },
+							body: JSON.stringify({ node_id: NODE_ID }),
+						});
+					} catch {}
+					pushAssistantMsg("system", "→ chat context was reset after an interrupted tool call. Try again.");
+					break;
+				}
+				throw new Error(rawMsg || `chat failed (${r.status})`);
 			}
 			const j = await r.json();
 			if (j.reply) pushAssistantMsg("bot", j.reply);
@@ -14027,6 +15144,43 @@ function refreshObjectInspector() {
 		pcSection.style.display = isPcPlaceholder ? "" : "none";
 		if (isPcPlaceholder) _refreshPcPlaceholderThumb(selected);
 	}
+	// Skybox panorama section — visible only when the selection IS a skybox.
+	// Thumb reflects the currently applied texture (blob URL from upload OR
+	// /data/ path from a Flux 2 generation).
+	const isSkybox = selected.userData?.primKind === "skybox";
+	const skyboxSection = document.getElementById("obj-skybox-section");
+	if (skyboxSection) {
+		skyboxSection.style.display = isSkybox ? "" : "none";
+		if (isSkybox) {
+			_refreshSkyboxThumb(selected);
+			// Sync opacity slider — read the material's current alpha (fallback
+			// to userData tag if the material was recreated without preserving
+			// it). Slider represents 0–100%; material is 0–1.
+			const opIn = document.getElementById("obj-skybox-opacity");
+			const opVal = document.getElementById("obj-skybox-opacity-val");
+			const current = (typeof selected.userData._skyboxOpacity === "number")
+				? selected.userData._skyboxOpacity
+				: (selected.material?.opacity ?? 1);
+			const pct = Math.round(current * 100);
+			if (opIn) opIn.value = String(pct);
+			if (opVal) opVal.textContent = String(pct);
+		}
+	}
+	// Mannequin — Kind + Pose dropdowns + Reset. Sync the dropdowns to the
+	// wrapper's persisted userData so re-selecting a figure shows its own
+	// state rather than whatever was picked last.
+	const isMannequin = selected.userData?.primKind === "mannequin";
+	const mannequinSection = document.getElementById("obj-mannequin-section");
+	if (mannequinSection) {
+		mannequinSection.style.display = isMannequin ? "" : "none";
+		if (isMannequin) {
+			const kindSel = document.getElementById("obj-mannequin-kind");
+			if (kindSel) kindSel.value = selected.userData.mannequinKind || "Adult";
+			const poseSel = document.getElementById("obj-mannequin-pose");
+			if (poseSel) poseSel.value = selected.userData.mannequinPoseName || "";
+			_mannequinRenderPoseJson(selected);
+		}
+	}
 	// TripoSplat Mode section — visible on TripoSplat results, whether the
 	// object is currently rendered as a splat or a resampled point cloud.
 	// The section IS the Splat ↔ Points toggle so it stays alive across both
@@ -14870,6 +16024,30 @@ gridToggle.addEventListener("click", () => {
 	gridToggle.classList.toggle("active", grid.visible);
 	try { localStorage.setItem(CB_GRID_KEY, grid.visible ? "1" : "0"); } catch {}
 	saveScene?.();
+});
+
+// Grid opacity — workspace-level preference. Restore on boot, drive
+// grid.material.opacity on input, persist on release. Default 11% matches
+// the historical bake-in value so nothing visually changes for existing users.
+const CB_GRID_OPACITY_KEY = "cb.workspace.gridOpacity";
+const gridOpacityInput = document.getElementById("grid-opacity");
+const gridOpacityVal = document.getElementById("grid-opacity-val");
+try {
+	const saved = localStorage.getItem(CB_GRID_OPACITY_KEY);
+	if (saved !== null) {
+		const v = Math.max(0, Math.min(100, parseInt(saved, 10) || 0));
+		grid.material.opacity = v / 100;
+		if (gridOpacityInput) gridOpacityInput.value = String(v);
+		if (gridOpacityVal) gridOpacityVal.textContent = String(v);
+	}
+} catch {}
+gridOpacityInput?.addEventListener("input", (e) => {
+	const v = parseInt(e.target.value, 10) || 0;
+	grid.material.opacity = v / 100;
+	if (gridOpacityVal) gridOpacityVal.textContent = String(v);
+});
+gridOpacityInput?.addEventListener("change", (e) => {
+	try { localStorage.setItem(CB_GRID_OPACITY_KEY, String(parseInt(e.target.value, 10) || 0)); } catch {}
 });
 
 const rightPanel = document.getElementById("right-panel");
@@ -16800,6 +17978,10 @@ function loop() {
 			}
 		}
 		tickFlyMovement(dt);
+		// Sync mannequin joint-gizmo positions to their bones + gate
+		// visibility to the currently selected mannequin. Cheap loop —
+		// noop when no mannequins exist.
+		if (typeof _mannequinTickGizmos === "function") _mannequinTickGizmos();
 		orbit.update();
 		if (anchorMode) updatePivotMarker();
 		// Keep the render-camera helper in sync with renderCam's current pose so the
@@ -18396,6 +19578,21 @@ function serializeScene() {
 			config: o.userData.scatterFx.config,
 			keyframes: serializeObjectKeyframes(o),
 		})),
+		mannequins: objects.filter(o => o.userData.primKind === "mannequin").map(o => ({
+			name: o.name,
+			kind: o.userData.mannequinKind || "Adult",
+			poseName: o.userData.mannequinPoseName || undefined,
+			poseJoints: (o.userData.mannequinPoseJoints && Object.keys(o.userData.mannequinPoseJoints).length)
+				? o.userData.mannequinPoseJoints
+				: undefined,
+			position: o.position.toArray(),
+			rotation: [o.rotation.x, o.rotation.y, o.rotation.z],
+			scale: o.scale.toArray(),
+			visible: o.visible !== false,
+			locked: o.userData.locked || undefined,
+			notes: o.userData.notes || undefined,
+			keyframes: serializeObjectKeyframes(o),
+		})),
 		camera: {
 			position: sceneCam.position.toArray(),
 			target: (activeView === "scene" ? orbit.target : sceneCamTarget).toArray(),
@@ -18599,6 +19796,29 @@ async function deserializeScene(state, opts = {}) {
 		if (cc.notes) obj.userData.notes = cc.notes;
 		if (Array.isArray(cc.keyframes)) obj.userData.keyframes = deserializeObjectKeyframes(cc.keyframes);
 		syncCloudsUniforms(obj);
+	}
+
+	// Mannequins — spawnMannequin is async (lazy-loads the library on first
+	// use); kick each spawn with the saved kind/pose/transform, no await
+	// because deserialize should stay non-blocking. Individual spawns
+	// resolve independently; missing/late arrivals don't cascade-break
+	// the rest of the scene restore.
+	for (const mn of (state.mannequins || [])) {
+		spawnMannequin({
+			kind: mn.kind || "Adult",
+			poseName: mn.poseName || "tpose",
+			poseJoints: mn.poseJoints,
+			position: mn.position ? new THREE.Vector3().fromArray(mn.position) : undefined,
+			rotation: mn.rotation,
+			scale: mn.scale,
+		}).then(obj => {
+			if (!obj) return;
+			if (mn.name) obj.name = mn.name;
+			if (mn.visible === false) obj.visible = false;
+			if (mn.locked) obj.userData.locked = true;
+			if (mn.notes) obj.userData.notes = mn.notes;
+			if (Array.isArray(mn.keyframes)) obj.userData.keyframes = deserializeObjectKeyframes(mn.keyframes);
+		}).catch(e => console.error("[mannequin] restore failed:", e));
 	}
 
 	// Scatters hydrate LAST so their sourceName references resolve — every
@@ -19066,7 +20286,27 @@ const EMPTY_SCENE = {
 async function listProjects() {
 	const r = await fetch("/comfyblockout/projects/list");
 	const j = await r.json();
-	return j.projects || [];
+	// Server now returns objects {name, created, modified}. Fall back to the
+	// legacy string[] shape so an old server doesn't break Open Project.
+	return (j.projects || []).map(p => typeof p === "string" ? { name: p, created: 0, modified: 0 } : p);
+}
+
+// Human-friendly datestamp for the Open Project panel — "Today 3:42 PM",
+// "Yesterday 8:15 AM", "Mar 4", "Nov 12 2024". Matches how the assets pane
+// treats recency (recent times are more specific, older ones lose precision).
+function _formatProjectDate(epochSeconds) {
+	if (!epochSeconds) return "—";
+	const d = new Date(epochSeconds * 1000);
+	if (Number.isNaN(d.getTime())) return "—";
+	const now = new Date();
+	const oneDayMs = 86400000;
+	const startOfDay = (dt) => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+	const diffDays = Math.round((startOfDay(now) - startOfDay(d)) / oneDayMs);
+	const time = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+	if (diffDays === 0) return `Today ${time}`;
+	if (diffDays === 1) return `Yesterday ${time}`;
+	if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+	return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 async function saveProject(name) {
 	const r = await fetch("/comfyblockout/projects/save", {
@@ -19096,71 +20336,144 @@ async function deleteProject(name) {
 function showProjectPicker() {
 	return new Promise(async (resolve) => {
 		const projects = await listProjects();
+		// Full-viewport backdrop for click-outside-to-dismiss, but the card
+		// itself reads as a panel (right-anchored list, list-style rows)
+		// rather than a centered modal — the Outliner is the visual reference,
+		// not the Confirm dialog.
 		const backdrop = document.createElement("div");
 		Object.assign(backdrop.style, {
 			position: "fixed", inset: "0", zIndex: "9998",
-			background: "rgba(0,0,0,0.65)", display: "flex",
-			alignItems: "center", justifyContent: "center",
+			background: "rgba(0,0,0,0.55)", display: "flex",
+			alignItems: "flex-start", justifyContent: "flex-end",
+			paddingTop: "56px", paddingRight: "16px",
 		});
-		const card = document.createElement("div");
-		Object.assign(card.style, {
-			background: "#15151c", border: "1px solid rgba(255,255,255,0.08)",
-			borderRadius: "10px", padding: "18px", minWidth: "320px", maxWidth: "440px",
-			maxHeight: "70vh", overflow: "auto",
+		backdrop.addEventListener("click", (e) => {
+			if (e.target === backdrop) { cleanup(); resolve(null); }
+		});
+		const panel = document.createElement("div");
+		Object.assign(panel.style, {
+			background: "#191922", border: "1px solid rgba(255,255,255,0.08)",
+			borderRadius: "8px", padding: "12px 14px 10px",
+			width: "min(420px, 90vw)", maxHeight: "min(72vh, 640px)",
+			display: "flex", flexDirection: "column",
 			color: "#ddd", fontFamily: "Inter, sans-serif", fontSize: "12px",
+			boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
 		});
-		card.innerHTML = `<div style="font-size:13px;font-weight:600;margin-bottom:12px">Open Project</div>`;
+
+		// Header — matches the Outliner/Assets section-head cadence (uppercase
+		// label + right-aligned count) so the panel visually belongs to the
+		// same family.
+		const head = document.createElement("div");
+		Object.assign(head.style, {
+			display: "flex", alignItems: "baseline", justifyContent: "space-between",
+			padding: "0 2px 10px", borderBottom: "1px solid rgba(255,255,255,0.05)",
+			marginBottom: "8px",
+		});
+		head.innerHTML = `
+			<span style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.55)">Open Project</span>
+			<span style="font-size:10px;color:rgba(255,255,255,0.32)">${projects.length} ${projects.length === 1 ? "project" : "projects"}</span>
+		`;
+		panel.appendChild(head);
+
+		const list = document.createElement("div");
+		Object.assign(list.style, {
+			flex: "1", overflow: "auto", minHeight: "0",
+			display: "flex", flexDirection: "column", gap: "1px",
+		});
+
 		if (projects.length === 0) {
 			const empty = document.createElement("div");
 			empty.textContent = "No saved projects yet — use Save As to create one.";
-			empty.style.color = "rgba(255,255,255,0.45)";
-			empty.style.padding = "12px 0";
-			card.appendChild(empty);
+			Object.assign(empty.style, {
+				color: "rgba(255,255,255,0.45)", padding: "20px 4px",
+				textAlign: "center", fontSize: "11px",
+			});
+			list.appendChild(empty);
 		} else {
-			for (const name of projects) {
+			for (const project of projects) {
+				const { name, created } = project;
 				const row = document.createElement("div");
 				Object.assign(row.style, {
 					display: "flex", alignItems: "center", gap: "8px",
-					padding: "8px 10px", borderRadius: "6px", cursor: "pointer",
+					padding: "8px 10px", borderRadius: "5px",
+					cursor: "pointer", userSelect: "none",
 				});
-				row.onmouseenter = () => row.style.background = "rgba(255,255,255,0.06)";
+				row.title = "Double-click to open";
+				row.onmouseenter = () => row.style.background = "rgba(255,255,255,0.05)";
 				row.onmouseleave = () => row.style.background = "transparent";
+
 				const label = document.createElement("span");
 				label.textContent = name;
-				label.style.flex = "1";
+				Object.assign(label.style, {
+					flex: "1", overflow: "hidden", textOverflow: "ellipsis",
+					whiteSpace: "nowrap", color: "rgba(255,255,255,0.9)",
+				});
+
+				const date = document.createElement("span");
+				date.textContent = _formatProjectDate(created);
+				Object.assign(date.style, {
+					fontSize: "10px", color: "rgba(255,255,255,0.4)",
+					letterSpacing: "0.02em", flex: "0 0 auto",
+				});
+
 				const del = document.createElement("span");
 				del.textContent = "✕";
-				Object.assign(del.style, { opacity: "0.4", padding: "0 6px", cursor: "pointer" });
-				del.onmouseenter = () => { del.style.opacity = "1"; del.style.color = "#ff8a8a"; };
-				del.onmouseleave = () => { del.style.opacity = "0.4"; del.style.color = ""; };
+				Object.assign(del.style, {
+					opacity: "0.35", padding: "0 4px", cursor: "pointer",
+					fontSize: "12px", flex: "0 0 auto",
+				});
+				del.title = "Delete project";
+				del.onmouseenter = (e) => { e.stopPropagation(); del.style.opacity = "1"; del.style.color = "#ff8a8a"; };
+				del.onmouseleave = () => { del.style.opacity = "0.35"; del.style.color = ""; };
 				del.onclick = async (e) => {
 					e.stopPropagation();
 					const okDel = await showConfirm(
-					"Delete project?",
-					`<strong style="color:#fff">${name}</strong><br>This removes the saved scene and its asset copies.`,
-					{ confirmText: "Delete", danger: true },
-				);
-				if (!okDel) return;
+						"Delete project?",
+						`<strong style="color:#fff">${name}</strong><br>This removes the saved scene and its asset copies.`,
+						{ confirmText: "Delete", danger: true },
+					);
+					if (!okDel) return;
 					await deleteProject(name);
 					row.remove();
 				};
-				row.append(label, del);
-				row.onclick = () => { cleanup(); resolve(name); };
-				card.appendChild(row);
+
+				// Double-click to open. Single-click on a row is intentionally
+				// a no-op — matches asset-panel semantics where a click selects
+				// and a dblclick invokes. Prevents accidental scene swaps while
+				// browsing.
+				row.ondblclick = () => { cleanup(); resolve(name); };
+
+				row.append(label, date, del);
+				list.appendChild(row);
 			}
 		}
-		const closeRow = document.createElement("div");
-		Object.assign(closeRow.style, { textAlign: "right", marginTop: "14px" });
+		panel.appendChild(list);
+
+		// Footer — hint + Cancel. Hint reinforces the double-click affordance
+		// on first use.
+		const foot = document.createElement("div");
+		Object.assign(foot.style, {
+			display: "flex", alignItems: "center", justifyContent: "space-between",
+			marginTop: "10px", paddingTop: "8px",
+			borderTop: "1px solid rgba(255,255,255,0.05)",
+		});
+		const hint = document.createElement("span");
+		hint.textContent = projects.length ? "Double-click a project to open" : "";
+		Object.assign(hint.style, {
+			fontSize: "10px", color: "rgba(255,255,255,0.35)",
+		});
 		const closeBtn = document.createElement("button");
 		closeBtn.textContent = "Cancel";
 		Object.assign(closeBtn.style, {
-			background: "rgba(255,255,255,0.08)", border: "none", color: "#fff",
-			padding: "6px 12px", borderRadius: "6px", cursor: "pointer", fontFamily: "inherit", fontSize: "11px",
+			background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)",
+			color: "rgba(255,255,255,0.85)", padding: "5px 12px", borderRadius: "5px",
+			cursor: "pointer", fontFamily: "inherit", fontSize: "11px",
 		});
 		closeBtn.onclick = () => { cleanup(); resolve(null); };
-		closeRow.appendChild(closeBtn);
-		card.appendChild(closeRow);
-		backdrop.appendChild(card);
+		foot.append(hint, closeBtn);
+		panel.appendChild(foot);
+
+		backdrop.appendChild(panel);
 		document.body.appendChild(backdrop);
 		const onKey = (e) => { if (e.key === "Escape") { cleanup(); resolve(null); } };
 		document.addEventListener("keydown", onKey);
@@ -19208,9 +20521,63 @@ document.getElementById("project-new").addEventListener("click", async () => {
 	updateStatus("new scene");
 });
 
-document.getElementById("project-open").addEventListener("click", async () => {
-	const name = await showProjectPicker();
-	if (!name) return;
+// Inline Projects pane — replaces the old floating picker modal. Clicking Open
+// swaps the right-panel switcher to the "projects" pane (kicker "PROJECTS", no
+// sub-title), populated with title + creation-date rows. Double-click a row to
+// load. Re-clicking Open while the pane is already open returns to the default
+// pane (toggle behavior, matches the Assets top-header button).
+async function refreshProjectsPane() {
+	const listEl = document.getElementById("projects-list");
+	const emptyEl = document.getElementById("projects-empty");
+	if (!listEl) return;
+	const projects = await listProjects();
+	listEl.innerHTML = "";
+	if (emptyEl) emptyEl.hidden = projects.length !== 0;
+	for (const project of projects) {
+		const { name, created } = project;
+		const row = document.createElement("div");
+		row.className = "projects-row";
+		row.title = "Double-click to load";
+		row.dataset.name = name;
+
+		const nameEl = document.createElement("span");
+		nameEl.className = "projects-row-name";
+		nameEl.textContent = name;
+
+		const dateEl = document.createElement("span");
+		dateEl.className = "projects-row-date";
+		dateEl.textContent = _formatProjectDate(created);
+
+		const del = document.createElement("button");
+		del.type = "button";
+		del.className = "remove-x";
+		del.textContent = "×";
+		del.title = "Delete project";
+		del.addEventListener("click", async (e) => {
+			e.stopPropagation();
+			const okDel = await showConfirm(
+				"Delete project?",
+				`<strong style="color:#fff">${name}</strong><br>This removes the saved scene and its asset copies.`,
+				{ confirmText: "Delete", danger: true },
+			);
+			if (!okDel) return;
+			await deleteProject(name);
+			row.remove();
+			// Re-check empty state after remove — user may have deleted the last one.
+			const remaining = listEl.querySelectorAll(".projects-row").length;
+			if (emptyEl) emptyEl.hidden = remaining !== 0;
+		});
+
+		row.addEventListener("dblclick", async () => {
+			await _loadProjectInline(name);
+		});
+
+		row.append(nameEl, dateEl, del);
+		listEl.appendChild(row);
+	}
+}
+
+async function _loadProjectInline(name) {
 	updateStatus(`opening ${name}…`);
 	const j = await loadProject(name);
 	if (!j.success) { updateStatus(`open failed: ${j.error || "unknown"}`); return; }
@@ -19219,9 +20586,23 @@ document.getElementById("project-open").addEventListener("click", async () => {
 	await deserializeScene(j.scene, { skipSave: true });
 	applyProjectName(name);
 	updateStatus(`opened · ${name}`);
+	// Return the right-panel to its default view now that the load is complete.
+	forceRightPane(defaultRightPane());
 	// Ask the parent to fully rebuild the in-node preview iframe — live scene-sync
 	// can miss when the preview was minted with a different NODE_ID than the editor.
 	try { window.parent?.postMessage({ source: "comfy3d-editor", type: "preview-refresh", node_id: NODE_ID }, "*"); } catch {}
+}
+
+document.getElementById("project-open").addEventListener("click", async () => {
+	// Toggle: if the Projects pane is already showing, close it back to the
+	// default pane. Otherwise refresh + swap the switcher to Projects.
+	const prjPane = document.getElementById("rp-pane-projects");
+	if (prjPane && !prjPane.hidden) {
+		forceRightPane(defaultRightPane());
+		return;
+	}
+	await refreshProjectsPane();
+	forceRightPane("projects");
 });
 
 // Exposed on window so callers in the classic-script IIFE (which loads before
@@ -19303,9 +20684,14 @@ function showAlert(title, message, opts = {}) {
 		send.onclick = () => {
 			const text = card.querySelector(".alert-message")?.textContent || "";
 			const prompt = `Please inspect and fix "${title}":\n\n${text}`;
-			// Activate the target the error belongs to so the context chip
-			// shows it before we send. Prefer workflow modules (editable via
-			// get_workflow_module), fall back to the built-in gen cells.
+			// Set the chat context chip to INSPECT ERROR · <module id> so the
+			// user sees which failure the agent is being asked about, even if
+			// no workflow/gen cell corresponds (e.g. the run was fired from the
+			// top-header Generate button, not a WORKFLOWS cell).
+			_inspectErrorContext = { moduleId: contextModuleId || null, label: contextModuleId || title || null };
+			// Best-effort cell activation too — matches gen-cell chip behavior
+			// when a cell exists. Doesn't override the inspect-error chip since
+			// _inspectErrorContext has higher priority in refreshChatContextChip.
 			if (contextModuleId) {
 				const w = workflowCells.find(c => c.moduleId === contextModuleId);
 				if (w) {
@@ -19317,7 +20703,6 @@ function showAlert(title, message, opts = {}) {
 					}
 				}
 			}
-			try { window.forceRightPane?.("assistant"); } catch {}
 			cleanup();
 			// Auto-send instead of pre-filling the input. Two reasons:
 			//  1) A pasted error blob makes the input textarea look nasty

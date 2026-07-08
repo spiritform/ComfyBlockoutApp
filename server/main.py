@@ -415,6 +415,22 @@ async def save_image_route(
     return JSONResponse({"success": True, "path": str(out_path), "bytes": len(file_bytes)})
 
 
+@app.post("/comfyblockout/save_chat_image")
+async def save_chat_image_route(image: UploadFile = File(...)):
+    """Save a chat-paste image under a unique name in DATA_DIR and return its
+    /data/ URL. Separate from /save_image (which is keyed by node_id and gets
+    overwritten each snapshot) so multiple pastes in one conversation don't
+    collide. Called by the assistant textarea's paste handler."""
+    import uuid
+    file_bytes = await image.read()
+    if not file_bytes:
+        return JSONResponse({"success": False, "error": "empty upload"}, status_code=400)
+    suffix = Path(image.filename or "").suffix.lower() or ".png"
+    fname = f"chat_paste_{uuid.uuid4().hex[:12]}{suffix}"
+    (DATA_DIR / fname).write_bytes(file_bytes)
+    return JSONResponse({"success": True, "url": f"/data/{fname}", "filename": fname, "bytes": len(file_bytes)})
+
+
 @app.post("/comfyblockout/save_prompt")
 async def save_prompt(request: Request):
     data = await request.json()
@@ -574,8 +590,21 @@ async def serve_image(node_id: str):
 @app.get("/comfyblockout/projects/list")
 async def list_projects():
     root = _projects_root()
-    names = sorted([p.name for p in root.iterdir() if p.is_dir() and (p / "scene.json").exists()])
-    return JSONResponse({"projects": names})
+    entries = []
+    for p in root.iterdir():
+        scene = p / "scene.json"
+        if not p.is_dir() or not scene.exists():
+            continue
+        try:
+            st = scene.stat()
+            # created = ctime (Windows: file creation, Unix: inode change).
+            # modified = mtime (last time the scene.json was saved).
+            entries.append({"name": p.name, "created": st.st_ctime, "modified": st.st_mtime})
+        except OSError:
+            entries.append({"name": p.name, "created": 0, "modified": 0})
+    # Newest-modified first — matches how the assets pane sorts by recency.
+    entries.sort(key=lambda e: e.get("modified", 0), reverse=True)
+    return JSONResponse({"projects": entries})
 
 
 @app.post("/comfyblockout/projects/save")

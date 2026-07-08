@@ -276,15 +276,13 @@ MODULE = ModuleDef(
     ],
     output_ext="ply",
     util=True,
+    # Lucide "asterisk" — placeholder splat glyph until a better one lands.
     icon=(
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"'
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"'
         ' stroke-linecap="round" stroke-linejoin="round">'
-        '<circle cx="8" cy="8" r="2.5" fill="currentColor" opacity="0.85"/>'
-        '<circle cx="15" cy="9" r="1.8" fill="currentColor" opacity="0.65"/>'
-        '<circle cx="10" cy="15" r="2" fill="currentColor" opacity="0.75"/>'
-        '<circle cx="16" cy="15" r="1.5" fill="currentColor" opacity="0.55"/>'
-        '<circle cx="6" cy="13" r="1.3" fill="currentColor" opacity="0.5"/>'
-        '<circle cx="13" cy="6" r="1" fill="currentColor" opacity="0.6"/>'
+        '<path d="M12 6v12"/>'
+        '<path d="M17.196 9 6.804 15"/>'
+        '<path d="m6.804 9 10.392 6"/>'
         '</svg>'
     ),
     run=run,

@@ -1,0 +1,18 @@
+{
+  "id": "rodin_gen25_i2m_cloud",
+  "label": "Rodin Gen2.5 \u00b7 I2M",
+  "kind": "3d",
+  "output_ext": "glb",
+  "runner": "cloud",
+  "inputs": [
+    {
+      "name": "image",
+      "type": "scene-image",
+      "patch": {
+        "node_id": 2,
+        "widget_index": 0,
+        "widget_name": "image"
+      }
+    }
+  ]
+}

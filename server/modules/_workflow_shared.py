@@ -197,11 +197,19 @@ def _make_run(workflow_path: Path, manifest: dict):
     async def run_local(**kwargs):
         from ._workflow_local import run_local_workflow
         data_dir = kwargs.pop("data_dir")
-        # If a converted API-format workflow exists as <stem>.local.json, prefer
-        # that over the raw imported JSON — the "prepare for local" agent flow
-        # writes the converted output there so we don't clobber the original.
-        local_path = workflow_path.parent / (workflow_path.stem + ".local.json")
-        target = local_path if local_path.exists() else workflow_path
+        # Prefer an API-format sidecar over the raw imported JSON. Two naming
+        # conventions:
+        #   - `<stem>.local.json`  — written by the "prepare for local" agent flow
+        #   - `<stem>_api.json`    — ComfyUI's default "Save (API Format)" naming,
+        #                            so the user doesn't have to rename after export
+        # First existing one wins. Falls back to the raw workflow_path (which
+        # then errors gracefully in run_local_workflow if it's still GUI-format).
+        parent = workflow_path.parent
+        candidates = [
+            parent / (workflow_path.stem + ".local.json"),
+            parent / (workflow_path.stem + "_api.json"),
+        ]
+        target = next((p for p in candidates if p.exists()), workflow_path)
         return await run_local_workflow(target, manifest, kwargs, data_dir)
 
     async def run(*, data_dir: Path, **kwargs):
