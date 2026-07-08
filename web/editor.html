@@ -2958,7 +2958,7 @@
 				     fetch). refreshUtilTools sees this existing DOM node
 				     and just updates the label/title from the manifest
 				     without redrawing. -->
-				<button class="prim-btn" data-tool="util:util_lotuspose" data-label="Lotus Pose" title="Lotus Pose — extract pose skeleton video from a source clip"><svg viewBox="4 3 16 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6"/><path d="m6 8 6 2 6-2"/><path d="M12 10v4"/></svg></button>
+				<button class="prim-btn" data-tool="util:util_lotuspose" data-label="Lotus Pose" title="Lotus Pose — extract pose skeleton video from a source clip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 12v4a1 1 0 0 1-1 1h-4"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M17 8V7"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M7 17h.01"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="5" height="5" rx="1"/></svg></button>
 				<!-- Point Cloud util — one-shot image → PLY via Triposplat pipeline.
 				     Result loads as THREE.Points in the scene (sharp discrete
 				     dots vs. Triposplat's default gaussian-splat rendering). -->
@@ -2974,7 +2974,7 @@
 				     Group with primKind="mannequin" so a future rigged GLB slots
 				     in without changing the object-inspector / delete / selection
 				     paths — those all already treat Groups as one addressable unit. -->
-				<button class="prim-btn" data-tool="mannequin" data-label="Mannequin" title="Mannequin — spawn a ~1.72m human-scale block figure for reference"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="4" r="1"/><path d="m18 19 1-7-6 1"/><path d="m5 8 3-3 5.5 3-2.36 3.5"/><path d="M4.24 14.5a5 5 0 0 0 6.88 6"/><path d="M13.76 17.5a5 5 0 0 0-6.88-6"/></svg></button>
+				<button class="prim-btn" data-tool="mannequin" data-label="Mannequin" title="Mannequin — spawn a ~1.72m human-scale block figure for reference"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6"/><path d="m6 8 6 2 6-2"/><path d="M12 10v4"/></svg></button>
 			</div>
 			<input type="file" id="loadmedia-file" accept="image/*,video/*" hidden>
 		</div>
@@ -3314,7 +3314,10 @@
 						<div class="sub-label" style="margin-top:10px">Pose</div>
 						<div class="select-row">
 							<select id="obj-mannequin-pose">
-								<option value="tpose">T-Pose</option>
+								<option value="T-Pose">T-Pose</option>
+								<option value="A-Pose">A-Pose</option>
+								<option value="Sitting">Sitting</option>
+								<option value="Crouching">Crouching</option>
 							</select>
 						</div>
 						<button type="button" id="obj-mannequin-reset" class="mp-still-btn" style="width:100%;margin-top:8px">Reset to T-Pose</button>
@@ -7075,7 +7078,7 @@ function forceRightPane(which, label) {
 	// back to the Boolean pane so the user can keep clicking objects to
 	// build a selection without losing access to Union/Subtract/Intersect.
 	// Explicit "home" panes (assets/scene/camera) still switch away.
-	if (typeof _bool !== "undefined" && _bool?.active) {
+	if (window._bool?.active) {
 		if (which === "object" || which === "gencell" || which === "workflowcell" || which === "none") {
 			which = "bool";
 			label = "Boolean";
@@ -8378,6 +8381,7 @@ function runTool(kind) {
 // tagged with userData.boolCutter re-run the CSG whenever a gizmo drag
 // ends (transform dragging-changed → false).
 const _bool = { loaded: false, loading: null, CSG: null, active: false };
+window._bool = _bool;
 async function _loadBooleanLib() {
 	if (_bool.loaded) return true;
 	if (_bool.loading) return _bool.loading;
@@ -11533,6 +11537,32 @@ const MANNEQUIN_DRAG_MAP = {
 	mixamorigRightFoot:     { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.5 },
 };
 const MANNEQUIN_JOINT_NAMES = Object.keys(MANNEQUIN_DRAG_MAP);
+
+// Sparse pose presets — same "boneName.axis" → degrees format as the
+// user-authored maps that come out of Copy Pose JSON, so recording new
+// presets is drag → copy → paste an entry in here. Missing bones stay
+// at rest (T-pose). "T-Pose" is the empty map = full reset.
+const MANNEQUIN_POSES = {
+	"T-Pose": {},
+	"A-Pose": {
+		"mixamorigLeftArm.z":  -35,
+		"mixamorigRightArm.z":  35,
+	},
+	"Sitting": {
+		"mixamorigLeftUpLeg.x":  -85,
+		"mixamorigRightUpLeg.x": -85,
+		"mixamorigLeftLeg.x":     90,
+		"mixamorigRightLeg.x":    90,
+		"mixamorigLeftArm.z":    -20,
+		"mixamorigRightArm.z":    20,
+	},
+	"Crouching": {
+		"mixamorigLeftUpLeg.x":  -55,
+		"mixamorigRightUpLeg.x": -55,
+		"mixamorigLeftLeg.x":     75,
+		"mixamorigRightLeg.x":    75,
+	},
+};
 const _MANNEQUIN_GIZMO_RADIUS = 0.014;
 
 // Cached loaded GLTF scene — every spawn clones this via SkeletonUtils
@@ -11551,22 +11581,87 @@ async function _loadXbotSourceModel() {
 
 async function _mannequinCloneXbot() {
 	const source = await _loadXbotSourceModel();
-	const { SkeletonUtils } = await import("three/addons/utils/SkeletonUtils.js");
+	const SkeletonUtils = await import("three/addons/utils/SkeletonUtils.js");
 	return SkeletonUtils.clone(source);
 }
 
-function _mannequinReplaceMaterials(root) {
+function _mannequinReplaceMaterials(root, wrapper) {
 	// Fresh grey MeshStandardMaterial per instance — sharing across
 	// mannequins would couple selection tint / future shader hooks
 	// between figures. Cheap to allocate; matches the mockup look.
+	// transparent=true is required so the shader-injected alpha drop in
+	// the fade bubble around a hovered joint actually reaches the
+	// framebuffer as blending.
+	const fadeUniforms = {
+		fadeCenter: { value: new THREE.Vector3() },
+		fadeActive: { value: 0.0 },
+		fadeInner:  { value: 0.02 },  // fully-faded core (small dot, not a hard disk)
+		fadeOuter:  { value: 0.32 },  // fully-opaque falloff radius (wide gradient reads as gentle mist)
+		fadeAlpha:  { value: 0.15 },  // target opacity at the very center
+	};
+	wrapper.userData._fadeUniforms = fadeUniforms;
 	root.traverse(o => {
 		if (o.isMesh) {
-			o.material = new THREE.MeshStandardMaterial({
+			const mat = new THREE.MeshStandardMaterial({
 				color: MANNEQUIN_BODY_COLOR, roughness: 0.85, metalness: 0.0,
+				transparent: true, opacity: 1.0, depthWrite: true,
 			});
+			_mannequinInstallFadeShader(mat, fadeUniforms);
+			o.material = mat;
 			o.castShadow = true;
 		}
 	});
+}
+
+// Radial-gradient fade around the hovered/dragged joint's WORLD position —
+// mesh becomes see-through in a bounded sphere around the interaction target
+// so the gizmo dot pops without dimming the whole limb chain a subtree mask
+// would. Runs off onBeforeCompile so we only patch three's standard shader
+// with minimal chunk-splice edits (no full material rewrite).
+function _mannequinInstallFadeShader(material, uniforms) {
+	material.onBeforeCompile = (shader) => {
+		shader.uniforms.fadeCenter = uniforms.fadeCenter;
+		shader.uniforms.fadeActive = uniforms.fadeActive;
+		shader.uniforms.fadeInner  = uniforms.fadeInner;
+		shader.uniforms.fadeOuter  = uniforms.fadeOuter;
+		shader.uniforms.fadeAlpha  = uniforms.fadeAlpha;
+		// VERTEX — pass post-skinning WORLD position to the fragment stage.
+		// three's <skinning_vertex> chunk deposits the final skinned local
+		// position in `transformed`; modelMatrix lifts it to world space.
+		shader.vertexShader = shader.vertexShader
+			.replace("#include <common>", `#include <common>
+varying vec3 vFadeWorldPos;`)
+			.replace("#include <skinning_vertex>", `#include <skinning_vertex>
+vFadeWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
+		// FRAGMENT — smoothstep between fadeInner and fadeOuter on world-
+		// space distance to fadeCenter. fadeActive gates the whole effect
+		// so it's a straight no-op when nothing's hovered.
+		shader.fragmentShader = shader.fragmentShader
+			.replace("#include <common>", `#include <common>
+uniform vec3 fadeCenter;
+uniform float fadeActive;
+uniform float fadeInner;
+uniform float fadeOuter;
+uniform float fadeAlpha;
+varying vec3 vFadeWorldPos;`)
+			.replace("#include <colorspace_fragment>", `float _fdist = distance(vFadeWorldPos, fadeCenter);
+float _fmask = (1.0 - smoothstep(fadeInner, fadeOuter, _fdist)) * fadeActive;
+gl_FragColor.a *= mix(1.0, fadeAlpha, _fmask);
+#include <colorspace_fragment>`);
+	};
+	material.needsUpdate = true;
+}
+
+// Position the fade sphere at the given bone's current world position
+// on the wrapper's uniforms. Passing null bone deactivates the effect.
+const _mannequinFadeTmpVec = new THREE.Vector3();
+function _mannequinSetFade(wrapper, bone) {
+	const u = wrapper?.userData?._fadeUniforms;
+	if (!u) return;
+	if (!bone) { u.fadeActive.value = 0.0; return; }
+	bone.getWorldPosition(_mannequinFadeTmpVec);
+	u.fadeCenter.value.copy(_mannequinFadeTmpVec);
+	u.fadeActive.value = 1.0;
 }
 
 function _mannequinSetScale(wrapper, kindName) {
@@ -11602,7 +11697,7 @@ async function spawnMannequin(opts = {}) {
 	updateStatus();
 	try {
 		const root = await _mannequinCloneXbot();
-		_mannequinReplaceMaterials(root);
+		_mannequinReplaceMaterials(root, wrapper);
 		wrapper.add(root);
 		wrapper.userData._innerRoot = root;
 		// Find the SkinnedMesh + capture its skeleton for bone lookup.
@@ -11649,21 +11744,20 @@ function mannequinSetKind(wrapper, kindName) {
 	if (typeof saveScene === "function") saveScene();
 }
 
-// Only "tpose" is implemented — resets every bone to its captured
-// rest rotation. Custom preset library was mannequin.js-specific and
-// doesn't survive the port; adding new Xbot presets is straightforward
-// (record a pose via drag, copy the JSON, hardcode).
+// Apply a named preset from MANNEQUIN_POSES. "T-Pose" (or legacy
+// "tpose" from pre-preset saves) is the empty map — everything resets
+// to rest. Missing presets fall through to empty so a stale saved name
+// can't leave the figure frozen mid-pose.
 function mannequinSetPose(wrapper, presetName) {
 	if (!wrapper || wrapper.userData?.primKind !== "mannequin") return;
-	const rest = wrapper.userData._restRotations;
 	const skeleton = wrapper.userData._skeleton;
-	if (!rest || !skeleton) return;
-	for (const b of skeleton.bones) {
-		const r = rest.get(b.name);
-		if (r) b.rotation.copy(r);
-	}
+	if (!skeleton) return;
+	const joints = presetName === "tpose"
+		? {}
+		: (MANNEQUIN_POSES[presetName] || {});
+	_mannequinApplyPoseJoints(wrapper, joints);
 	wrapper.userData.mannequinPoseName = presetName;
-	wrapper.userData.mannequinPoseJoints = {};
+	wrapper.userData.mannequinPoseJoints = { ...joints };
 	_mannequinReground(wrapper);
 	clearSelectionTint();
 	if (selected === wrapper) applySelectionTint(wrapper);
@@ -11842,9 +11936,11 @@ function _mannequinSetGizmoTint(sphere, hovered) {
 
 function _mannequinClearHover() {
 	if (!_mannequinHovered) return;
+	const wrapper = _mannequinHovered.userData._mannequinWrapper;
 	_mannequinSetGizmoTint(_mannequinHovered, false);
 	_mannequinHovered = null;
 	if (canvas.style.cursor === "grab") canvas.style.cursor = "";
+	if (wrapper) _mannequinSetFade(wrapper, null);
 }
 
 (function wireMannequinDragPosing() {
@@ -11872,6 +11968,7 @@ function _mannequinClearHover() {
 			startSecondary: startSecondaryDeg,
 		};
 		_mannequinSetGizmoTint(gizmo, true);
+		_mannequinSetFade(wrapper, bone);
 		canvas.style.cursor = "grabbing";
 		try { canvas.setPointerCapture(e.pointerId); } catch {}
 	}, { capture: true });
@@ -11891,6 +11988,10 @@ function _mannequinClearHover() {
 				const rad = (_mannequinDrag.startPrimary + dy * map.sensY) * Math.PI / 180;
 				bone.rotation[map.axisY] = rest[map.axisY] + rad;
 			}
+			// Keep the fade bubble pinned to the dragged bone as its world
+			// position moves — otherwise the fade lingers at the drag-start
+			// spot and drifts off the joint you're actively posing.
+			_mannequinSetFade(_mannequinDrag.wrapper, bone);
 			return;
 		}
 		if (transform.dragging || transform.axis) return;
@@ -11904,6 +12005,7 @@ function _mannequinClearHover() {
 				_mannequinSetGizmoTint(gizmo, true);
 				_mannequinHovered = gizmo;
 			}
+			_mannequinSetFade(gizmo.userData._mannequinWrapper, gizmo.userData._mannequinBone);
 			canvas.style.cursor = "grab";
 		} else if (_mannequinHovered) {
 			_mannequinClearHover();
@@ -11924,6 +12026,7 @@ function _mannequinClearHover() {
 		orbit.enabled = true;
 		canvas.style.cursor = "";
 		_mannequinHovered = null;
+		_mannequinSetFade(wrapper, null);
 		try { canvas.releasePointerCapture(e.pointerId); } catch {}
 		_mannequinSyncPoseJoints(wrapper);
 		_mannequinReground(wrapper);
@@ -12124,9 +12227,9 @@ async function _skyboxGenerate() {
 		});
 		document.getElementById("obj-mannequin-reset")?.addEventListener("click", () => {
 			if (selected?.userData?.primKind !== "mannequin") return;
-			mannequinSetPose(selected, "tpose");
+			mannequinSetPose(selected, "T-Pose");
 			const sel = document.getElementById("obj-mannequin-pose");
-			if (sel) sel.value = "tpose";
+			if (sel) sel.value = "T-Pose";
 		});
 		document.getElementById("obj-mannequin-copy-pose")?.addEventListener("click", async () => {
 			const ta = document.getElementById("obj-mannequin-pose-json");
@@ -19806,7 +19909,7 @@ async function deserializeScene(state, opts = {}) {
 	for (const mn of (state.mannequins || [])) {
 		spawnMannequin({
 			kind: mn.kind || "Adult",
-			poseName: mn.poseName || "tpose",
+			poseName: mn.poseName === "tpose" ? "T-Pose" : (mn.poseName || "T-Pose"),
 			poseJoints: mn.poseJoints,
 			position: mn.position ? new THREE.Vector3().fromArray(mn.position) : undefined,
 			rotation: mn.rotation,
