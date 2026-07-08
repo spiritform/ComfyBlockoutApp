@@ -47,6 +47,12 @@ class ModuleDef:
     # SVG icon markup for the tool button — only used when util=True.
     # Default is a small stack of horizontal bars (generic utility glyph).
     icon: str = ""
+    # Preset picker entries — populated from a manifest's `presets` array so
+    # one util tile can front several workflows (Video Preprocessors: Lotus
+    # Depth + OpenPose, DepthCrafter, Depth Pro). Each entry: {id, label,
+    # workflow?, coming_soon?}. Client renders as a dropdown at the top of
+    # the util pane; server routes the picked id to the workflow stem.
+    presets: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _run_cli_sync(cmd: list[str], cwd: Path | None, timeout: int) -> tuple[int, str, str]:

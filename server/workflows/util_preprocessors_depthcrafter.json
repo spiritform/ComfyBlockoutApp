@@ -1,0 +1,106 @@
+{
+  "4": {
+    "inputs": {
+      "video": "Seedance2.0_r2v_00003_.mp4",
+      "force_rate": 0,
+      "custom_width": 0,
+      "custom_height": 0,
+      "frame_load_cap": 30,
+      "skip_first_frames": 0,
+      "select_every_nth": 1,
+      "format": "AnimateDiff"
+    },
+    "class_type": "VHS_LoadVideo",
+    "_meta": {
+      "title": "Load Video (Upload) 🎥🅥🅗🅢"
+    }
+  },
+  "6": {
+    "inputs": {
+      "frame_rate": [
+        "7",
+        0
+      ],
+      "loop_count": 0,
+      "filename_prefix": "util_preprocessors_depthcrafter",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "196",
+        0
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  },
+  "7": {
+    "inputs": {
+      "video_info": [
+        "4",
+        3
+      ]
+    },
+    "class_type": "VHS_VideoInfo",
+    "_meta": {
+      "title": "Video Info 🎥🅥🅗🅢"
+    }
+  },
+  "8": {
+    "inputs": {
+      "width": 512,
+      "height": 512,
+      "upscale_method": "lanczos",
+      "keep_proportion": "total_pixels",
+      "pad_color": "0, 0, 0",
+      "crop_position": "center",
+      "divisible_by": 2,
+      "device": "cpu",
+      "image": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "ImageResizeKJv2",
+    "_meta": {
+      "title": "Resize Image v2"
+    }
+  },
+  "196": {
+    "inputs": {
+      "force_size": true,
+      "num_inference_steps": 5,
+      "guidance_scale": 1,
+      "window_size": 110,
+      "overlap": 25,
+      "depthcrafter_model": [
+        "197",
+        0
+      ],
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "DepthCrafter",
+    "_meta": {
+      "title": "DepthCrafter"
+    }
+  },
+  "197": {
+    "inputs": {
+      "enable_model_cpu_offload": false,
+      "enable_sequential_cpu_offload": false
+    },
+    "class_type": "DownloadAndLoadDepthCrafterModel",
+    "_meta": {
+      "title": "DownloadAndLoadDepthCrafterModel"
+    }
+  }
+}

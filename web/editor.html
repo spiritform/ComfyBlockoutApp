@@ -2113,6 +2113,14 @@
 		line-height: 1.5;
 	}
 	@keyframes spin { to { transform: rotate(360deg); } }
+	/* Motion pane amber-dot pulse — used on requirement-row dots while the
+	   probe is in flight so the user gets a clear "actively checking" cue
+	   instead of static amber. Same visual language as a heartbeat. */
+	@keyframes motion-req-pulse {
+		0%, 100% { transform: scale(1); box-shadow: 0 0 6px rgba(255,180,84,0.35); }
+		50%      { transform: scale(1.35); box-shadow: 0 0 12px rgba(255,180,84,0.9); }
+	}
+	.motion-req-dot-checking { animation: motion-req-pulse 1.1s ease-in-out infinite; }
 	/* Save flash — amber tint on the label that eases down to the neutral
 	   button color. Longer duration + linear curve so the decay reads as a
 	   smooth fade rather than the "pop" a fast ease-out produced. forwards
@@ -2429,6 +2437,31 @@
 		background: rgba(255,180,84,0.08);
 		border-color: rgba(255,180,84,0.35);
 	}
+	/* Upload-in-flight overlay — mirrors the boot #init-overlay look (amber
+	   spinner on a dark scrim) so the user gets the same "we're working on
+	   it" signal they saw at page-init. Stays visible through both the
+	   server-side write AND the browser's fetch-back-for-display step so the
+	   ring doesn't vanish before the picture actually paints. */
+	.bg-cell.uploading { position: relative; pointer-events: none; }
+	.bg-cell.uploading::after {
+		content: "";
+		position: absolute; inset: 0;
+		background: rgba(10, 12, 18, 0.55);
+		backdrop-filter: blur(1px);
+		border-radius: 5px;
+		z-index: 3;
+	}
+	.bg-cell.uploading::before {
+		content: "";
+		position: absolute; top: 50%; left: 50%;
+		width: 22px; height: 22px; margin: -11px 0 0 -11px;
+		border-radius: 50%;
+		border: 2px solid rgba(255, 255, 255, 0.14);
+		border-top-color: #ffb454;
+		animation: spin 0.9s linear infinite;
+		z-index: 4;
+		pointer-events: none;
+	}
 	.bg-cell-head {
 		display: grid; grid-template-columns: 28px 1fr auto;
 		align-items: center; gap: 10px;
@@ -2508,7 +2541,7 @@
 	   (white) through middle (full-sat) to bottom (black). Drag the
 	   crosshair inside to pick. */
 	.cp-spectrum {
-		position: relative; width: 100%; aspect-ratio: 4 / 3;
+		position: relative; width: 100%; aspect-ratio: 16 / 6;
 		border-radius: 4px; cursor: crosshair; overflow: hidden;
 		background:
 			linear-gradient(180deg, #fff 0%, transparent 50%, #000 100%),
@@ -2520,6 +2553,23 @@
 		border: 2px solid #fff; border-radius: 50%;
 		box-shadow: 0 0 0 1px rgba(0,0,0,0.6);
 		margin-left: -7px; margin-top: -7px;
+		pointer-events: none;
+	}
+	/* Dedicated grayscale strip — makes picking pure whites/grays/blacks
+	   trivial without having to nudge the crosshair to the exact edge of a
+	   row in the hue spectrum. X = lightness (left=white, right=black). */
+	.cp-grayscale {
+		position: relative; width: 100%; height: 18px;
+		border-radius: 4px; cursor: crosshair; overflow: hidden;
+		background: linear-gradient(90deg, #fff 0%, #000 100%);
+		user-select: none; touch-action: none;
+		margin-top: 8px;
+	}
+	.cp-grayscale-cursor {
+		position: absolute; top: 50%; width: 12px; height: 12px;
+		border: 2px solid #fff; border-radius: 50%;
+		box-shadow: 0 0 0 1px rgba(0,0,0,0.6);
+		margin-left: -6px; margin-top: -6px;
 		pointer-events: none;
 	}
 	.cp-hex-row {
@@ -2961,13 +3011,14 @@
 				<span class="section-label">Tools</span>
 			</div>
 			<div class="prim-grid">
-				<!-- Lotus Pose util — hardcoded so the button paints at boot
+				<!-- Preprocessors util — hardcoded so the button paints at boot
 				     (avoids the "soon-*" placeholder → real button pop-in
 				     you get when refreshUtilTools races the /api/modules
 				     fetch). refreshUtilTools sees this existing DOM node
 				     and just updates the label/title from the manifest
-				     without redrawing. -->
-				<button class="prim-btn" data-tool="util:util_lotuspose" data-label="Lotus Pose" title="Lotus Pose — extract pose skeleton video from a source clip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 12v4a1 1 0 0 1-1 1h-4"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M17 8V7"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M7 17h.01"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="5" height="5" rx="1"/></svg></button>
+				     without redrawing. Preset picker inside the pane routes
+				     between Lotus Depth + OpenPose, DepthCrafter, Depth Pro. -->
+				<button class="prim-btn" data-tool="util:util_preprocessors" data-hardcoded="1" data-label="Video Preprocessors" title="Video Preprocessors — run a video through a preprocessor preset (Lotus depth, OpenPose, DepthCrafter, Depth Pro)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 12v4a1 1 0 0 1-1 1h-4"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M17 8V7"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M7 17h.01"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="5" height="5" rx="1"/></svg></button>
 				<!-- MediaPipe tool — opens a browser webcam surface with
 				     MediaPipe.js pose/hand/face detection running client-side. -->
 				<button class="prim-btn" data-tool="mediapipe" data-label="MediaPipe" title="Webcam + MediaPipe pose/hand/face — record a sequence, take stills, or use as viewport source"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="8"/><circle cx="12" cy="10" r="3"/><path d="M7 22h10"/><path d="M12 22v-4"/></svg></button>
@@ -2980,8 +3031,13 @@
 				     ComfyUI TripoSplat workflow. Hardcoded so the astroid glyph
 				     paints at boot instead of the button popping in after the
 				     /api/modules fetch resolves. -->
-				<button class="prim-btn" data-tool="util:triposplat-local" data-label="TripoSplat" title="TripoSplat — generate a 3D gaussian splat from a source image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.983 21.186a1 1 0 0 1-1.966 0 10 10 0 0 0-8.203-8.203 1 1 0 0 1 0-1.966 10 10 0 0 0 8.203-8.203 1 1 0 0 1 1.966 0 10 10 0 0 0 8.203 8.203 1 1 0 0 1 0 1.966 10 10 0 0 0-8.203 8.203"/></svg></button>
-				<button class="prim-btn" data-tool="soon-1" data-label="Coming soon" title="Reserved slot — future tool" style="opacity:0.35"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg></button>
+				<button class="prim-btn" data-tool="util:triposplat-local" data-hardcoded="1" data-label="TripoSplat" title="TripoSplat — generate a 3D gaussian splat from a source image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.983 21.186a1 1 0 0 1-1.966 0 10 10 0 0 0-8.203-8.203 1 1 0 0 1 0-1.966 10 10 0 0 0 8.203-8.203 1 1 0 0 1 1.966 0 10 10 0 0 0 8.203 8.203 1 1 0 0 1 0 1.966 10 10 0 0 0-8.203 8.203"/></svg></button>
+				<!-- Motion util — text-to-motion animation targeting the mannequin's
+				     Mixamo skeleton via AnimoFlow. Pane renders a requirements
+				     card (Docker + container + mannequin-in-scene) instead of
+				     the generic scene-video/image UI, so the user sees exactly
+				     what's needed before they try to generate. -->
+				<button class="prim-btn" data-tool="util:motion" data-hardcoded="1" data-label="AnimoFlow" title="AnimoFlow — text prompt → animated motion clip that drives the mannequin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z"/><path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z"/><path d="M16 17h4"/><path d="M4 13h4"/></svg></button>
 				<!-- Skybox — spawns a massive inverted sphere the user can upload
 				     or generate a 360° equirectangular image onto. Acts as scene
 				     backdrop; raycast disabled so the interior surface doesn't
@@ -3200,7 +3256,7 @@
 		<div id="tl-rec-status" hidden></div>
 		<div id="timeline">
 			<button class="tl-btn rec" id="tl-rec" title="Record (auto-tween if keyframes exist)">●</button>
-			<button class="tl-btn" id="tl-play" title="Play / pause (space)">▶</button>
+			<button class="tl-btn" id="tl-play" title="Play / pause (space)" data-play-glyph="▶" data-pause-glyph="⏸">▶</button>
 			<button class="tl-btn" id="tl-loop" title="Loop playback — restart at trim start when the playhead hits the end">↻</button>
 			<button class="tl-btn" id="tl-rewind" title="Rewind to start">◀◀</button>
 			<button class="tl-btn" id="tl-addkey" title="Add keyframe at playhead — keys the selected object's pos/rot/scale, or the camera if nothing is selected">+</button>
@@ -3354,6 +3410,20 @@
 						     so the whole section stays cheap when collapsed. -->
 						<div class="sub-label" style="margin-top:10px">Joint Rotations</div>
 						<div class="bg-cells" id="obj-mannequin-joints-cells" style="margin-top:4px"></div>
+						<!-- Animation loader — accepts a GLB (Mixamo-rigged clip
+						     from Mixamo / three.js examples / AnimoFlow). The
+						     first AnimationClip drives the mannequin's skeleton
+						     via an AnimationMixer that plugs into fbxMixers so
+						     the transport's play/scrub/freeze controls it for
+						     free. Load-time bone-name match — clip tracks like
+						     `mixamorigLeftArm.quaternion` bind to the equivalent
+						     bones in Xbot's skeleton by name. -->
+						<div class="sub-label" style="margin-top:10px">Animation</div>
+						<div id="obj-mannequin-anim-status" class="hint" style="margin-top:2px;font-size:10px;color:rgba(255,255,255,0.5)">No clip loaded</div>
+						<button type="button" id="obj-mannequin-anim-load" class="mp-still-btn" style="width:100%;margin-top:6px">Load animation…</button>
+						<button type="button" id="obj-mannequin-anim-clear" class="mp-still-btn" style="width:100%;margin-top:6px;background:rgba(255,80,80,0.14);color:#ff8a8a;display:none">Clear animation</button>
+						<input type="file" id="obj-mannequin-anim-file" accept=".glb,.gltf" hidden>
+						<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Mixamo-rigged .glb — transport scrubs the clip, play button plays it.</div>
 					</div>
 					<div class="section" id="obj-tps-convert-section" style="display:none">
 					<div class="section-label">Mode</div>
@@ -3709,6 +3779,9 @@
 								<div class="cp-spectrum" id="cp-spectrum">
 									<div class="cp-spectrum-cursor" id="cp-spectrum-cursor"></div>
 								</div>
+								<div class="cp-grayscale" id="cp-grayscale">
+									<div class="cp-grayscale-cursor" id="cp-grayscale-cursor"></div>
+								</div>
 								<div class="cp-hex-row">
 									<label style="font-size:10px;color:rgba(255,255,255,0.55);letter-spacing:0.06em">HEX</label>
 									<input type="text" id="cp-hex" value="#000000" maxlength="7" spellcheck="false" style="flex:1;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.9);border:1px solid rgba(255,255,255,0.08);border-radius:3px;padding:4px 8px;font-size:11px;font-family:ui-monospace,monospace;text-transform:uppercase">
@@ -4002,7 +4075,7 @@
 
 			<!-- ===== UTIL TOOL TAB ===== -->
 			<!-- Content populated dynamically by openUtilTool based on which util
-			     module the user activated (Lotus Pose, future preprocessors etc). -->
+			     module the user activated (Preprocessors, TripoSplat, etc). -->
 			<div class="rp-pane" id="rp-pane-util" hidden></div>
 
 			<!-- ===== BOOLEAN TAB ===== -->
@@ -6436,6 +6509,14 @@ function deleteObject(obj) {
 	}
 	if (obj.userData.primKind === "mannequin") {
 		if (typeof _mannequinDisposeGizmos === "function") _mannequinDisposeGizmos(obj);
+		// Also pull the animation mixer if the user had loaded a clip —
+		// otherwise the fbxMixers loop keeps ticking a dead root and the
+		// GC can't collect the wrapper's inner skeleton.
+		if (typeof _mannequinClearAnimation === "function") _mannequinClearAnimation(obj, { silent: true });
+		// Dispose the MoMask stick-figure preview if one was generated —
+		// scene.remove + geometry/material disposal to avoid a lingering
+		// LineSegments ghost.
+		if (typeof _mannequinDetachMotionPreview === "function") _mannequinDetachMotionPreview(obj);
 	}
 	if (obj.userData.primKind === "splat") {
 		scene.remove(obj);
@@ -7605,6 +7686,15 @@ function select(obj, opts = {}) {
 		else transform.attach(selected);
 		if (anchorMode) tintGizmo(0xffb454);
 		orbit.enabled = true;
+		// AnimoFlow-managed mannequins have no user-editable properties (pose is
+		// driven by the motion clip, joints can't be keyframed or hand-posed).
+		// Route selection straight to the AnimoFlow tool pane so the user gets
+		// prompt + Generate instead of a Mannequin properties panel that would
+		// mislead them into thinking they can adjust the character.
+		if (selected.userData?.animoflowManaged) {
+			runUtilTool("motion");
+			return;
+		}
 		forceRightPane("object", objectPaneLabel(selected));
 		refreshObjectInspector?.();
 	} else {
@@ -10426,7 +10516,15 @@ function refreshUtilTools() {
 	const grid = document.querySelector('.section[data-section="tools"] .prim-grid');
 	if (!grid) return;
 	// Remove any util-tool buttons that no longer correspond to a live module.
+	// Hardcoded buttons (data-hardcoded="1") get spared even when their id
+	// isn't in the current module list — otherwise a live manifest rename
+	// or a not-yet-restarted server temporarily invalidates the hardcoded id,
+	// the button gets ripped out, and every button to its right shifts left
+	// (with any stale server-side util then slotting into soon-1). Keeping
+	// the hardcoded button anchored preserves the canonical Tools-grid order
+	// across dev iterations.
 	for (const btn of grid.querySelectorAll('button[data-tool^="util:"]')) {
+		if (btn.dataset.hardcoded === "1") continue;
 		const id = btn.dataset.tool.slice("util:".length);
 		if (!utilModules[id]) btn.remove();
 	}
@@ -10460,7 +10558,7 @@ function refreshUtilTools() {
 			else grid.appendChild(btn);
 		}
 		// Click + hover-label wiring runs even for pre-existing static buttons
-		// so the hardcoded Lotus Pose tile in the HTML picks up its handlers
+		// so the hardcoded Preprocessors tile in the HTML picks up its handlers
 		// on first refreshUtilTools call. Guard via a data flag so a static
 		// button doesn't get its listener attached twice.
 		if (!btn.dataset._utilWired) {
@@ -10506,6 +10604,43 @@ function runUtilTool(moduleId) {
 	// picked image onto it as a texture, and a successful Generate swaps the
 	// plane for a THREE.Points at the same transform. Other utils stay
 	// pane-only for now.
+	if (moduleId === "motion") {
+		// Motion pane no longer auto-re-probes on every tab open — the cache
+		// in localStorage already knows Docker + AnimoFlow are green, so
+		// flashing amber every re-entry felt like the pane was undoing its
+		// own memory. Re-check button stays for explicit refresh. First-ever
+		// open (no cache) still fires the initial probe via the render fn.
+		// Auto-spawn a mannequin when the environment is already set up —
+		// once the user has installed Docker + AnimoFlow + containers, the
+		// Mannequin step is just friction, so opening Motion should feel
+		// "click → prompt → generate". Guard on cached reqs so we don't
+		// spawn a mannequin before the user's even done the install setup.
+		let cachedReqs = null;
+		try {
+			const raw = localStorage.getItem("cb.motion.reqs");
+			if (raw) cachedReqs = JSON.parse(raw);
+		} catch {}
+		const envReady = !!(cachedReqs?.docker?.ok && cachedReqs?.animoflow_node?.ok && cachedReqs?.animoflow_containers?.ok);
+		const hasMannequinNow = Array.isArray(objects) && objects.some(o => o?.userData?.primKind === "mannequin");
+		if (envReady && !hasMannequinNow) {
+			// Fire-and-forget spawn — spawnMannequin is async but we don't need
+			// to await it to keep the flow snappy; select() flips to the
+			// Mannequin inspector, but the util-pane switch below overrides
+			// that back to Motion once forceRightPane runs. After spawn, tag
+			// the wrapper as AnimoFlow-managed and rename in the outliner so
+			// the user can tell it apart from a hand-spawned Mannequin — and
+			// the properties inspector suppresses the pose-editor controls
+			// (Size / Joint Rotations / Copy Pose) since AnimoFlow drives it.
+			spawnMannequin().then(wrapper => {
+				if (!wrapper) return;
+				wrapper.userData.animoflowManaged = true;
+				const num = String((wrapper.name || "").replace(/\D/g, "") || "001");
+				wrapper.name = `AF_Mannequin.${num}`;
+				refreshOutliner?.();
+				refreshObjectInspector?.();
+			}).catch(e => console.warn("[motion] auto-spawn failed:", e));
+		}
+	}
 	if (moduleId === "triposplat-local") {
 		// TripoSplat is a one-shot Image → Splat tool: spawn (or reselect) a
 		// tagged placeholder plane, let the OBJECT properties inspector render
@@ -10520,7 +10655,12 @@ function runUtilTool(moduleId) {
 		refreshObjectInspector?.();
 		return;
 	}
-	forceRightPane?.("util", m.label || moduleId);
+	// Prefer a hardcoded label for the motion util so the header reads
+	// "AnimoFlow" even if the server module is on an older label ("Motion")
+	// and hasn't been restarted since the rename. Keeps the pane header
+	// consistent with the tool tile the user just clicked.
+	const displayLabel = moduleId === "motion" ? "AnimoFlow" : (m.label || moduleId);
+	forceRightPane?.("util", displayLabel);
 	renderUtilToolPane();
 }
 
@@ -10868,8 +11008,8 @@ async function _replacePcPlaneWithSplat(plyUrl) {
 }
 
 // Populate #rp-pane-util based on the active util module's manifest. Handles
-// scene-video inputs today (Lotus Pose); scene-image / other input types can
-// be added the same way as the util catalog grows.
+// scene-video inputs (Preprocessors), scene-image inputs (TripoSplat), and
+// renders a preset picker at the top when the manifest declares one.
 function renderUtilToolPane() {
 	const pane = document.getElementById("rp-pane-util");
 	if (!pane) return;
@@ -10878,7 +11018,49 @@ function renderUtilToolPane() {
 		pane.innerHTML = `<div class="section"><div class="hint">No utility selected.</div></div>`;
 		return;
 	}
+	// Motion tool has its own layout — a requirements + prompt pattern
+	// instead of the generic scene-video/scene-image renderer below. Gated
+	// on module id so future tools with heavy external deps (SHARP, Docker-
+	// backed things) can follow the same pattern with their own branch.
+	if (m.id === "motion") {
+		_renderMotionUtilPane(pane, m);
+		return;
+	}
 	const sections = [];
+	// Preset picker — a manifest can declare a `presets` array so one util
+	// tile fronts several workflows (Preprocessors: Lotus Depth+OpenPose,
+	// DepthCrafter, Depth Pro). Coming-soon entries render dimmed and
+	// un-clickable so the aspirational list is visible without letting the
+	// user run a workflow that doesn't exist yet. Selected id lives on the
+	// button's data-value and is sent as `preset` in the run inputs.
+	const presets = Array.isArray(m.presets) ? m.presets : [];
+	if (presets.length) {
+		const first = presets.find(p => !p.coming_soon) || presets[0];
+		const presetOptRows = presets.map(p => {
+			const soon = !!p.coming_soon;
+			const style = soon
+				? "padding:6px 10px;font-size:11px;color:rgba(255,255,255,0.35);cursor:not-allowed;font-style:italic"
+				: "padding:6px 10px;font-size:11px;color:rgba(255,255,255,0.85);cursor:pointer";
+			const suffix = soon ? " · soon" : "";
+			return `<div class="util-dd-opt${soon ? " util-dd-opt-soon" : ""}" data-value="${p.id}" data-soon="${soon ? "1" : ""}" style="${style}">${p.label}${suffix}</div>`;
+		}).join("");
+		sections.push(`
+			<div class="section">
+				<div class="section-label">Preset</div>
+				<div style="margin-top:6px" data-util-input="preset">
+					<div class="util-dd" style="position:relative">
+						<button type="button" class="util-preset-btn util-dd-btn" data-name="preset" data-value="${first.id}" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:6px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85);border:1px solid rgba(255,255,255,0.08);border-radius:3px;padding:6px 10px;font-size:11px;cursor:pointer;font:inherit">
+							<span class="util-dd-label">${first.label}</span>
+							<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.6"><polyline points="6 9 12 15 18 9"/></svg>
+						</button>
+						<div class="util-dd-menu" hidden style="position:absolute;top:calc(100% + 4px);left:0;right:0;background:#1a1a22;border:1px solid rgba(255,255,255,0.1);border-radius:4px;box-shadow:0 6px 20px rgba(0,0,0,0.5);z-index:1000;max-height:220px;overflow:auto">
+							${presetOptRows}
+						</div>
+					</div>
+				</div>
+			</div>
+		`);
+	}
 	const numberInputs = (m.inputs || []).filter(s => s.type === "number");
 	for (const spec of (m.inputs || [])) {
 		if (spec.type === "scene-video") {
@@ -10890,8 +11072,8 @@ function renderUtilToolPane() {
 			const paramRows = numberInputs.map(n => {
 				const def = n.default ?? 0;
 				const label = n.label || n.name;
-				// Manifest can supply its own options list (e.g. Lotus Pose's
-				// downscale uses resolution presets; max_frames uses count
+				// Manifest can supply its own options list (e.g. Preprocessors'
+				// resolution uses dimension presets; max_frames uses count
 				// presets). Fall back to a generic resolution list for old
 				// manifests that don't declare options.
 				const OPTIONS = Array.isArray(n.options) && n.options.length ? n.options : [
@@ -11021,14 +11203,22 @@ function renderUtilToolPane() {
 		});
 	});
 	pane.querySelectorAll(".util-dd-opt").forEach(opt => {
-		opt.addEventListener("mouseenter", () => { opt.style.background = "rgba(255,180,84,0.18)"; });
+		const isSoon = opt.dataset.soon === "1";
+		opt.addEventListener("mouseenter", () => { if (!isSoon) opt.style.background = "rgba(255,180,84,0.18)"; });
 		opt.addEventListener("mouseleave", () => { opt.style.background = ""; });
 		opt.addEventListener("click", (e) => {
 			e.stopPropagation();
+			// Coming-soon options are read-only advertisements — hovering shows
+			// the label but selecting one would send an unknown preset id to
+			// the server. Just leave the menu open until the user picks a real one.
+			if (isSoon) return;
 			const menu = opt.closest(".util-dd-menu");
 			const btn = menu.parentElement.querySelector(".util-dd-btn");
 			btn.dataset.value = opt.dataset.value;
-			btn.querySelector(".util-dd-label").textContent = opt.textContent;
+			// Strip a trailing " · soon" the option renders with — we only ever
+			// hit this branch for real options today, but keeps the label clean
+			// if the flag is ever mid-flight during a manifest edit.
+			btn.querySelector(".util-dd-label").textContent = opt.textContent.replace(/\s·\ssoon$/, "");
 			menu.hidden = true;
 		});
 	});
@@ -11142,6 +11332,10 @@ function renderUtilToolPane() {
 				const v = parseFloat(raw);
 				if (!Number.isNaN(v)) runInputs[el.dataset.name] = v;
 			});
+			// Preset picker (string, not number) — routes the server to a
+			// per-preset workflow file when the manifest declares presets.
+			const presetBtn = pane.querySelector(".util-preset-btn");
+			if (presetBtn?.dataset.value) runInputs.preset = presetBtn.dataset.value;
 			const r = await fetch(`/api/run/${encodeURIComponent(_activeUtilId)}`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -11171,6 +11365,772 @@ function renderUtilToolPane() {
 	});
 }
 
+// Detect a video element's source frame rate via requestVideoFrameCallback
+// (Chrome/Edge). Plays the video briefly, catches the first few decoded
+// frames' mediaTime stamps, and averages the deltas. Falls back to 20fps
+// when the API isn't available (Firefox / Safari without the RVFC polyfill).
+async function _detectVideoFps(vid) {
+	if (typeof vid.requestVideoFrameCallback !== "function") return 20;
+	return await new Promise((resolve) => {
+		const samples = [];
+		const targetSamples = 6;
+		let lastMediaTime = null;
+		const step = (_now, meta) => {
+			if (lastMediaTime !== null) {
+				const dt = meta.mediaTime - lastMediaTime;
+				if (dt > 0) samples.push(dt);
+			}
+			lastMediaTime = meta.mediaTime;
+			if (samples.length < targetSamples) {
+				vid.requestVideoFrameCallback(step);
+			} else {
+				try { vid.pause(); vid.currentTime = 0; } catch {}
+				const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+				resolve(avg > 0 ? 1 / avg : 20);
+			}
+		};
+		try { vid.play().catch(() => {}); } catch {}
+		vid.requestVideoFrameCallback(step);
+		// Safety timeout — if the browser stalls (autoplay-blocked, decoding
+		// wedged), fall through with what we've got or the default.
+		setTimeout(() => {
+			try { vid.pause(); vid.currentTime = 0; } catch {}
+			if (samples.length >= 2) {
+				const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+				resolve(avg > 0 ? 1 / avg : 20);
+			} else {
+				resolve(20);
+			}
+		}, 2500);
+	});
+}
+
+// Extract a HumanML3D-shape pose sequence from an uploaded video using
+// MediaPipe's PoseLandmarker. Seeks the video frame-by-frame at ~20fps,
+// pulls 33 world-landmarks per frame (3D relative to the hip midpoint),
+// then remaps those to the 22-joint HumanML3D layout MoMask outputs so the
+// existing retarget pipeline drives the mannequin unchanged. Runs entirely
+// client-side — no server proxy, no AnimoFlow containers needed.
+async function _motionExtractPoseFromVideo(pane, m) {
+	const status = pane.querySelector("#motion-video-status");
+	const setStatus = (msg, tone) => {
+		if (!status) return;
+		status.textContent = msg;
+		status.style.color = tone === "error" ? "#ff8a8a"
+			: tone === "busy" ? "rgba(255,180,84,0.9)"
+			: tone === "ok" ? "rgba(102,204,122,0.9)"
+			: "rgba(255,255,255,0.5)";
+	};
+	const target = selected?.userData?.primKind === "mannequin"
+		? selected
+		: objects.find(o => o?.userData?.primKind === "mannequin");
+	if (!target) { setStatus("No mannequin in scene — spawn one first", "error"); return; }
+	setStatus("Loading MediaPipe…", "busy");
+	let landmarker;
+	try {
+		const ok = await _loadMediaPipe();
+		if (!ok) throw new Error("MediaPipe library failed to load");
+		landmarker = await _ensureLandmarker("pose");
+	} catch (e) {
+		setStatus(`MediaPipe load failed · ${String(e.message || e).slice(0, 200)}`, "error");
+		return;
+	}
+	if (!landmarker) { setStatus("PoseLandmarker unavailable", "error"); return; }
+	// Grab an OFFSCREEN video element — the visible preview is user-controlled
+	// (they may be scrubbing it). Fresh element = clean seek queue.
+	const vid = document.createElement("video");
+	vid.src = pane._motionVideoBlobUrl;
+	vid.muted = true;
+	vid.playsInline = true;
+	vid.preload = "auto";
+	await new Promise((resolve, reject) => {
+		vid.addEventListener("loadedmetadata", resolve, { once: true });
+		vid.addEventListener("error", () => reject(new Error("video decode failed")), { once: true });
+	});
+	const dur = vid.duration;
+	if (!isFinite(dur) || dur <= 0) { setStatus("Video has no duration", "error"); return; }
+	// Detect source fps via requestVideoFrameCallback (Chrome/Edge) so we
+	// sample at the video's actual frame rate instead of a fixed 20fps.
+	// Cap at 30 because MoMask/HumanML3D is 20fps by convention — going
+	// higher adds detection cost without meaningful benefit for retarget.
+	setStatus("Reading video frame rate…", "busy");
+	const detectedFps = await _detectVideoFps(vid);
+	const targetFps = Math.min(Math.max(10, detectedFps), 30);
+	const maxFrames = 300;
+	const frameCount = Math.min(maxFrames, Math.max(2, Math.floor(dur * targetFps)));
+	const frameDt = dur / frameCount;
+	setStatus(`Detected ${detectedFps.toFixed(1)}fps · sampling at ${targetFps.toFixed(0)}fps…`, "busy");
+	// Offscreen canvas so we can grab an ImageBitmap for MediaPipe.
+	const cw = 640;
+	const ch = Math.round(cw * (vid.videoHeight || 1) / (vid.videoWidth || 1));
+	const cvs = document.createElement("canvas");
+	cvs.width = cw;
+	cvs.height = ch;
+	const ctx = cvs.getContext("2d", { willReadFrequently: false });
+	const worldFrames = [];
+	for (let i = 0; i < frameCount; i++) {
+		setStatus(`Detecting pose · frame ${i + 1}/${frameCount}`, "busy");
+		const t = Math.min(dur - 0.001, i * frameDt);
+		await new Promise((resolve) => {
+			const onSeeked = () => { vid.removeEventListener("seeked", onSeeked); resolve(); };
+			vid.addEventListener("seeked", onSeeked);
+			try { vid.currentTime = t; } catch { resolve(); }
+		});
+		ctx.drawImage(vid, 0, 0, cw, ch);
+		// detectForVideo needs strictly increasing timestamps in ms.
+		let result;
+		try {
+			result = landmarker.detectForVideo(cvs, Math.round(t * 1000));
+		} catch (e) {
+			console.warn("[motion/video] detect failed at frame", i, e);
+			continue;
+		}
+		const wlm = result?.worldLandmarks?.[0];
+		if (wlm && wlm.length >= 33) worldFrames.push(wlm);
+	}
+	if (worldFrames.length < 2) {
+		setStatus(`Only ${worldFrames.length} pose frames detected — try a clip with a clearer, unoccluded person`, "error");
+		return;
+	}
+	setStatus(`Mapping ${worldFrames.length} frames to skeleton…`, "busy");
+	const poses = worldFrames.map(_mpWorldToHumanML3D);
+	_mannequinAttachMotionPreview(target, poses, "(video source)");
+	setStatus(`${poses.length} frames · scrub the timeline to preview`, "ok");
+}
+
+// MediaPipe world-landmarks (33 joints, hip-centered, Y-DOWN, X mirrored so
+// the user's LEFT is anatomical left) → HumanML3D 22-joint layout MoMask
+// outputs (Y-up, X = anatomical right → +X). Coord flip: negate Y, negate X
+// (MediaPipe mirrors the user; HumanML3D doesn't). Missing joints in MP
+// (spine1/spine2/spine3/neck/collars) are interpolated from anatomical
+// landmarks (mid-hip → mid-shoulder).
+function _mpWorldToHumanML3D(mpLm) {
+	const P = (idx) => {
+		const l = mpLm[idx];
+		// MP is meters, Y-down, X-mirrored — flip both to match HumanML3D.
+		return [-l.x, -l.y, l.z];
+	};
+	const midpoint = (a, b) => [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5, (a[2] + b[2]) * 0.5];
+	const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+	const L_HIP = 23, R_HIP = 24, L_SHOULDER = 11, R_SHOULDER = 12;
+	const L_KNEE = 25, R_KNEE = 26, L_ANKLE = 27, R_ANKLE = 28;
+	const L_ELBOW = 13, R_ELBOW = 14, L_WRIST = 15, R_WRIST = 16;
+	const NOSE = 0, L_HEEL = 29, R_HEEL = 30, L_FOOT_IDX = 31, R_FOOT_IDX = 32;
+	const lHip = P(L_HIP), rHip = P(R_HIP);
+	const lSh = P(L_SHOULDER), rSh = P(R_SHOULDER);
+	const pelvis = midpoint(lHip, rHip);
+	const midShoulder = midpoint(lSh, rSh);
+	// Spine chain — evenly space three points between pelvis and midShoulder.
+	const spine1 = lerp(pelvis, midShoulder, 0.33);
+	const spine2 = lerp(pelvis, midShoulder, 0.66);
+	const spine3 = midShoulder; // chest joint = between the shoulders
+	// Neck ≈ midway between chest and nose along vertical.
+	const nose = P(NOSE);
+	const neck = lerp(midShoulder, nose, 0.55);
+	// Collars — halfway from midShoulder toward each shoulder.
+	const lCollar = lerp(midShoulder, lSh, 0.5);
+	const rCollar = lerp(midShoulder, rSh, 0.5);
+	return [
+		pelvis,               // 0 pelvis
+		lHip,                 // 1 L_hip
+		rHip,                 // 2 R_hip
+		spine1,               // 3 spine1
+		P(L_KNEE),            // 4 L_knee
+		P(R_KNEE),            // 5 R_knee
+		spine2,               // 6 spine2
+		P(L_ANKLE),           // 7 L_ankle
+		P(R_ANKLE),           // 8 R_ankle
+		spine3,               // 9 spine3/chest
+		P(L_FOOT_IDX),        // 10 L_foot
+		P(R_FOOT_IDX),        // 11 R_foot
+		neck,                 // 12 neck
+		lCollar,              // 13 L_collar
+		rCollar,              // 14 R_collar
+		nose,                 // 15 head
+		lSh,                  // 16 L_shoulder
+		rSh,                  // 17 R_shoulder
+		P(L_ELBOW),           // 18 L_elbow
+		P(R_ELBOW),           // 19 R_elbow
+		P(L_WRIST),           // 20 L_wrist
+		P(R_WRIST),           // 21 R_wrist
+	];
+}
+
+// Custom pane for the Motion tool — a requirements card (Docker, container,
+// mannequin-in-scene) with live status dots + right-side action buttons, then
+// a prompt textarea + Generate button. The Generate button stays disabled
+// until all requirements go green. Reusable pattern for future tools with
+// heavy external deps — copy this function, rewire the requirement checks +
+// action buttons, and add a branch in renderUtilToolPane.
+function _renderMotionUtilPane(pane, m) {
+	// Local status stash so a re-render (e.g. mannequin spawned mid-flow)
+	// doesn't blow away the last fetched Docker status. Refreshed via the
+	// re-check button + on initial render.
+	if (!pane._motionReqs) {
+		// Load last-known status from localStorage so the pane doesn't re-show
+		// "checking…" every time the user opens the Motion tab. The background
+		// probe still fires to catch state changes (Docker quit, containers
+		// stopped), but the initial paint uses whatever we knew last time.
+		let cached = null;
+		try {
+			const raw = localStorage.getItem("cb.motion.reqs");
+			if (raw) cached = JSON.parse(raw);
+		} catch {}
+		pane._motionReqs = cached || {
+			docker: { ok: false, detail: "checking…", install_url: "https://www.docker.com/products/docker-desktop/" },
+			animoflow_node: { ok: false, detail: "checking…", path: "", target: "", repo_url: "https://github.com/AnimoFlow/comfyui-animoflow" },
+			animoflow_containers: { ok: false, detail: "checking…", installed: false },
+		};
+		// If cache exists, treat this session as already "fetched" so dots
+		// stay green/red instead of flashing amber during the background probe.
+		pane._motionReqsFetchedOnce = !!cached;
+	}
+	const reqs = pane._motionReqs;
+	// Mannequin-in-scene is client-side — cheap to compute so no caching.
+	const hasMannequin = Array.isArray(objects) && objects.some(o => o?.userData?.primKind === "mannequin");
+	// Amber "checking" state — before the first probe OR during a Re-check,
+	// dots go amber instead of alarming red. Uses the same _motionReqsFetchedOnce
+	// signal that guards the auto-refresh, so first render (before the fetch
+	// resolves) reads as "we're looking" instead of "everything's broken".
+	const checking = !pane._motionReqsFetchedOnce || !!pane._motionReqsChecking;
+
+	function reqRow(label, ok, detail, action) {
+		const dotColor = ok ? "#66cc7a" : (checking ? "#ffb454" : "#ff5c5c");
+		const dotClass = (!ok && checking) ? " motion-req-dot-checking" : "";
+		const status = checking && !ok ? "Checking…" : (ok ? "Ready" : (detail || "Missing"));
+		return `
+			<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+				<span class="motion-req-dot${dotClass}" style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex:0 0 auto;box-shadow:0 0 6px ${dotColor}55"></span>
+				<div style="flex:1;min-width:0">
+					<div style="font-size:11px;color:rgba(255,255,255,0.85);font-weight:500">${label}</div>
+					<div style="font-size:9px;color:rgba(255,255,255,0.45);letter-spacing:0.03em;margin-top:1px">${status}</div>
+				</div>
+				${action || ""}
+			</div>
+		`;
+	}
+	const linkBtn = (label, href) => `<a href="${href}" target="_blank" rel="noopener" style="font-size:10px;color:#ffb454;background:rgba(255,180,84,0.1);border:1px solid rgba(255,180,84,0.25);border-radius:3px;padding:3px 8px;text-decoration:none;letter-spacing:0.04em">${label} ↗</a>`;
+	const spawnBtn = () => `<button type="button" id="motion-spawn-mannequin" style="font-size:10px;color:#ffb454;background:rgba(255,180,84,0.1);border:1px solid rgba(255,180,84,0.25);border-radius:3px;padding:3px 8px;cursor:pointer;letter-spacing:0.04em">Spawn ↗</button>`;
+
+	// Docker just-installed hint — the ComfyBlockout server captured its PATH
+	// at boot, so a freshly installed Docker won't be visible until run.bat is
+	// relaunched. The "docker command not on PATH" error IS that state; when
+	// we see it, tack on an explicit restart hint below the row so the user
+	// doesn't sit staring at a red dot after the install finished.
+	const dockerNeedsRestart = !reqs.docker.ok && /not on PATH|command not found|cannot find/i.test(reqs.docker.detail || "");
+	const dockerRestartHint = dockerNeedsRestart
+		? `<div style="margin:-2px 0 6px 16px;font-size:9px;color:rgba(255,180,84,0.8);letter-spacing:0.03em">↻ Restart ComfyBlockout (Ctrl-C run.bat &amp; relaunch) so the server picks up Docker's PATH.</div>`
+		: "";
+	const dockerRow = reqRow(
+		"Docker Desktop",
+		reqs.docker.ok,
+		reqs.docker.ok ? "Running" : (reqs.docker.detail || "Not detected"),
+		reqs.docker.ok ? "" : linkBtn("Install", reqs.docker.install_url),
+	) + dockerRestartHint;
+	// Install-action button — clicked, POSTs /api/motion/install which git-
+	// clones the AnimoFlow repo into APP_DIR/tools/animoflow. Spinner state
+	// lives on pane so it survives the re-renders that fire after Re-check
+	// resolves. Shows even when checking is in flight so the amber probe
+	// doesn't hide the primary CTA.
+	const installBtn = () => {
+		const installing = !!pane._motionInstalling;
+		return `<button type="button" id="motion-install-node" ${installing ? "disabled" : ""} style="font-size:10px;color:#ffb454;background:rgba(255,180,84,0.1);border:1px solid rgba(255,180,84,0.25);border-radius:3px;padding:3px 8px;cursor:${installing ? "wait" : "pointer"};letter-spacing:0.04em;display:inline-flex;align-items:center;gap:5px">${installing ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;border:1.5px solid rgba(255,180,84,0.25);border-top-color:#ffb454;animation:spin 0.9s linear infinite"></span>Installing…` : "Install"}</button>`;
+	};
+
+	const nodeRow = reqRow(
+		"Repo installed",
+		reqs.animoflow_node.ok,
+		reqs.animoflow_node.ok
+			? `Installed at ${reqs.animoflow_node.path}`
+			: (pane._motionInstalling ? "Cloning repo…" : `Not installed — will land at ${reqs.animoflow_node.target || "tools/animoflow"}`),
+		reqs.animoflow_node.ok ? "" : installBtn(),
+	);
+
+	// Start-containers button — triggered manually after AnimoFlow is
+	// installed. Warns about the first-build cost (models + compose stack
+	// download, can take 10+ minutes) via a persistent long-running spinner.
+	const startBtn = () => {
+		const starting = !!pane._motionStarting;
+		return `<button type="button" id="motion-start-containers" ${starting ? "disabled" : ""} style="font-size:10px;color:#ffb454;background:rgba(255,180,84,0.1);border:1px solid rgba(255,180,84,0.25);border-radius:3px;padding:3px 8px;cursor:${starting ? "wait" : "pointer"};letter-spacing:0.04em;display:inline-flex;align-items:center;gap:5px">${starting ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;border:1.5px solid rgba(255,180,84,0.25);border-top-color:#ffb454;animation:spin 0.9s linear infinite"></span>Starting…` : "Start ↗"}</button>`;
+	};
+	const canStartContainers = reqs.docker.ok && reqs.animoflow_node.ok && !reqs.animoflow_containers.ok;
+
+	const containersRow = reqRow(
+		"Containers running",
+		reqs.animoflow_containers.ok,
+		reqs.animoflow_containers.ok
+			? `Running · ${reqs.animoflow_containers.detail}`
+			: (pane._motionStarting
+				? "Starting containers (first run builds images — 10+ min)…"
+				: (reqs.docker.ok
+					? (reqs.animoflow_node.ok ? "Not started yet" : "Install AnimoFlow first")
+					: "Needs Docker first")),
+		canStartContainers ? startBtn() : "",
+	);
+	const mannequinRow = reqRow(
+		"Mannequin in scene",
+		hasMannequin,
+		hasMannequin ? "Ready" : "No mannequin found",
+		hasMannequin ? "" : spawnBtn(),
+	);
+
+	const allGreen = reqs.docker.ok && reqs.animoflow_node.ok && reqs.animoflow_containers.ok && hasMannequin;
+
+	// Persistent error banner — survives re-renders so the auto Re-check
+	// that fires right after a failed install/start doesn't wipe the message
+	// the moment the user needs to read it. Rendered directly under the row
+	// whose action produced the error (Install → node row, Start → containers
+	// row) so the user immediately sees which step needs attention. Dismiss via ×.
+	const errBanner = pane._motionLastError ? `
+		<div style="margin:2px 16px 6px 16px;padding:8px 10px;background:rgba(255,80,80,0.08);border:1px solid rgba(255,80,80,0.25);border-radius:4px;display:flex;gap:8px;align-items:flex-start">
+			<div style="flex:1;font-size:10px;color:#ff8a8a;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;line-height:1.4;word-break:break-word;max-height:180px;overflow-y:auto">${pane._motionLastError.replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c])}</div>
+			<button type="button" id="motion-err-dismiss" style="background:transparent;border:none;color:rgba(255,138,138,0.6);cursor:pointer;font-size:12px;line-height:1;padding:0 2px;flex:0 0 auto">×</button>
+		</div>
+	` : "";
+	// Which row the error belongs to. Install errors dock under the AnimoFlow
+	// node row; start/compose errors dock under the containers row. Others
+	// fall through to the bottom of the section (rare — network fetch fails).
+	const errSlot = pane._motionLastErrorRow || "containers";
+	// Requirements section collapses to a small "environment ready" chip once
+	// all four dots are green — the user has proven the environment works, so
+	// leaving the whole checklist visible each session was noise. The chip
+	// stays clickable to expand + Re-check if the user needs to diagnose later.
+	const showRequirements = !allGreen || !!pane._motionReqsExpanded;
+	pane.innerHTML = `
+		${allGreen ? `
+			<div class="section" style="padding-bottom:2px">
+				<button type="button" id="motion-env-chip" title="Expand requirements" style="display:flex;align-items:center;gap:8px;width:100%;background:rgba(102,204,122,0.06);border:1px solid rgba(102,204,122,0.2);border-radius:4px;padding:6px 10px;cursor:pointer;color:rgba(255,255,255,0.75);font:inherit;font-size:11px;letter-spacing:0.04em">
+					<span style="width:8px;height:8px;border-radius:50%;background:#66cc7a;box-shadow:0 0 6px rgba(102,204,122,0.4);flex:0 0 auto"></span>
+					<span style="flex:1;text-align:left">Environment ready</span>
+					<span style="font-size:9px;color:rgba(255,255,255,0.4)">${showRequirements ? "hide ▲" : "details ▼"}</span>
+				</button>
+			</div>
+		` : ""}
+		${showRequirements ? `
+		<div class="section">
+			<div class="section-label" style="display:flex;justify-content:space-between;align-items:center">
+				<span>Requirements</span>
+				<button type="button" id="motion-req-refresh" title="Re-check" style="font-size:10px;color:${checking ? "rgba(255,180,84,0.9)" : "rgba(255,255,255,0.55)"};background:transparent;border:1px solid ${checking ? "rgba(255,180,84,0.4)" : "rgba(255,255,255,0.1)"};border-radius:3px;padding:2px 6px;cursor:pointer;letter-spacing:0.04em;display:inline-flex;align-items:center;gap:5px">${checking ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;border:1.5px solid rgba(255,180,84,0.25);border-top-color:#ffb454;animation:spin 0.9s linear infinite"></span>` : ""}Re-check</button>
+			</div>
+			<div style="margin-top:6px">
+				${dockerRow}
+				${nodeRow}
+				${errSlot === "node" ? errBanner : ""}
+				${containersRow}
+				${errSlot === "containers" ? errBanner : ""}
+				${mannequinRow}
+			</div>
+		</div>
+		` : ""}
+		<div class="section">
+			<!-- Source toggle — Text hits MoMask over HTTP (needs the containers
+			     running); Video runs MediaPipe PoseLandmarker client-side on
+			     an uploaded clip and drives the mannequin from that (works
+			     even if AnimoFlow's containers aren't up, since MP is already
+			     loaded for the webcam tool). -->
+			<div class="section-label">Source</div>
+			<div class="pill-toggle" style="margin-top:6px">
+				<button type="button" id="motion-src-text"  class="${pane._motionSource !== "video" ? "active" : ""}">Text prompt</button>
+				<button type="button" id="motion-src-video" class="${pane._motionSource === "video" ? "active" : ""}">Video</button>
+			</div>
+		</div>
+		${pane._motionSource === "video" ? `
+		<div class="section">
+			<div class="section-label">Source Video</div>
+			<div style="margin-top:6px;padding:8px 10px;border:1px solid rgba(255,255,255,0.06);border-radius:4px;background:rgba(0,0,0,0.15)">
+				<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+					<span style="width:6px;height:6px;border-radius:50%;background:#ff5c5c;flex:0 0 auto"></span>
+					<div style="font-size:10px;color:rgba(255,255,255,0.85);font-weight:600;letter-spacing:0.05em;text-transform:uppercase">Video Input</div>
+				</div>
+				<div id="motion-video-preview" style="width:100%;min-height:120px;border-radius:3px;background:#000;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.35);font-size:10px">No video loaded</div>
+				<div style="display:flex;gap:6px;margin-top:10px">
+					<button type="button" class="mp-still-btn" id="motion-video-upload" style="flex:1;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.8)">Upload video</button>
+					<input type="file" id="motion-video-file" accept="video/*" hidden>
+					<button type="button" class="mp-still-btn" id="motion-video-extract" style="flex:1;${pane._motionVideoBlob ? "" : "opacity:0.4;cursor:not-allowed"}" ${pane._motionVideoBlob ? "" : "disabled"}>Extract pose</button>
+				</div>
+				<div class="hint" id="motion-video-status" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5)">${pane._motionVideoBlob ? "Ready to extract" : "Upload a video with a single visible person"}</div>
+				<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">MediaPipe extracts 3D pose per frame client-side. Best results: front-facing camera, full body in frame, no occlusions.</div>
+			</div>
+		</div>
+		` : `
+		<div class="section">
+			<div class="section-label">Prompt</div>
+			<textarea id="motion-prompt" rows="3" placeholder="e.g. walking in a circle, waving both arms, sitting down on a chair" style="width:100%;margin-top:6px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.9);border:1px solid rgba(255,255,255,0.08);border-radius:3px;padding:8px 10px;font:inherit;font-size:11px;resize:vertical;box-sizing:border-box"></textarea>
+			<!-- Custom .util-dd dropdown matches the Video Preprocessors styling
+			     so the dark theme stays consistent. Native <select> pop-ups
+			     use the OS chrome and read wrong on dark backgrounds. -->
+			<div style="display:flex;align-items:center;gap:6px;margin-top:10px" data-motion-param="frames">
+				<span style="flex:1;font-size:10px;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:0.06em">Frames</span>
+				<div class="util-dd" style="position:relative;min-width:120px">
+					<button type="button" class="util-dd-btn" data-name="frames" data-value="120" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:6px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85);border:1px solid rgba(255,255,255,0.08);border-radius:3px;padding:4px 8px;font-size:11px;cursor:pointer;font:inherit">
+						<span class="util-dd-label">120 (~6s)</span>
+						<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.6"><polyline points="6 9 12 15 18 9"/></svg>
+					</button>
+					<div class="util-dd-menu" hidden style="position:absolute;top:calc(100% + 4px);left:0;right:0;background:#1a1a22;border:1px solid rgba(255,255,255,0.1);border-radius:4px;box-shadow:0 6px 20px rgba(0,0,0,0.5);z-index:1000;max-height:220px;overflow:auto">
+						${[
+							{ v:30,  l:"30 (~1.5s)" },
+							{ v:60,  l:"60 (~3s)" },
+							{ v:120, l:"120 (~6s)" },
+							{ v:180, l:"180 (~9s)" },
+							{ v:240, l:"240 (~12s)" },
+						].map(o => `<div class="util-dd-opt" data-value="${o.v}" style="padding:6px 10px;font-size:11px;color:rgba(255,255,255,0.85);cursor:pointer">${o.l}</div>`).join("")}
+					</div>
+				</div>
+			</div>
+			<div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+				<span style="flex:1;font-size:10px;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:0.06em">Seed</span>
+				<input type="number" id="motion-seed" value="42" min="0" max="2147483647" step="1" style="width:80px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85);border:1px solid rgba(255,255,255,0.08);border-radius:3px;padding:4px 8px;font:inherit;font-size:11px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace">
+				<button type="button" id="motion-seed-random" title="Random seed" style="background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.08);border-radius:3px;padding:4px 8px;font:inherit;font-size:11px;cursor:pointer">⚂</button>
+			</div>
+			<button type="button" class="mp-still-btn" id="motion-generate" style="width:100%;margin-top:12px;${allGreen ? "" : "opacity:0.4;cursor:not-allowed"}" ${allGreen ? "" : "disabled"}>Generate motion</button>
+			<div class="hint" id="motion-status" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5)">${allGreen ? "Ready" : "Fix requirements above to enable"}</div>
+			<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Motion generates a Mixamo-rigged clip and drives the current mannequin's skeleton via the timeline transport.</div>
+		</div>
+		`}
+		<!-- Experimental-tool disclaimer — points at the AnimoFlow project so
+		     users know where the underlying tech comes from + can file issues
+		     upstream when the model itself misbehaves (as opposed to our
+		     retarget wrapper). Muted styling keeps it out of the way. -->
+		<div style="margin:14px 8px 4px 8px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.04);font-size:9px;color:rgba(255,255,255,0.35);line-height:1.5;letter-spacing:0.02em">
+			<span style="color:rgba(255,180,84,0.7);font-weight:600;letter-spacing:0.06em;text-transform:uppercase">Disclaimer</span> — experimental. Motion quality, retarget accuracy, and pose extraction all depend on the underlying AnimoFlow project (MoMask, MediaPipe). <a href="https://github.com/AnimoFlow/comfyui-animoflow" target="_blank" rel="noopener" style="color:rgba(255,180,84,0.85);text-decoration:none">AnimoFlow ↗</a></div>
+	`;
+
+	// Wire the re-check button — repolls /api/motion/requirements and
+	// re-renders. Doesn't tear down the prompt textarea since we save its
+	// value first and restore after the innerHTML swap.
+	pane.querySelector("#motion-req-refresh")?.addEventListener("click", async () => {
+		if (pane._motionReqsChecking) return; // double-click guard
+		const savedPrompt = pane.querySelector("#motion-prompt")?.value || "";
+		// Flip to amber "Checking…" state before the fetch so the user gets
+		// immediate feedback that Re-check was clicked (and the dots don't
+		// stay red the whole time — that read as "still broken").
+		pane._motionReqsChecking = true;
+		_renderMotionUtilPane(pane, m);
+		const promptElPre = pane.querySelector("#motion-prompt");
+		if (promptElPre) promptElPre.value = savedPrompt;
+		// Minimum-visible duration for the checking state — Docker-up = ~50ms
+		// probe returns, which flashes by too fast to actually see the pulse.
+		// Holding for ~700ms means the user always perceives "yes it ran".
+		const checkStart = Date.now();
+		// 12s hard abort so a subprocess hang on the server (docker daemon
+		// unresponsive, missing PATH) doesn't leave the pane stuck on
+		// "Checking…". The server side's own subprocess timeouts are ~3s
+		// each but the endpoint can still stall if the socket wedges.
+		const ctrl = new AbortController();
+		const abortTimer = setTimeout(() => ctrl.abort(), 12000);
+		try {
+			const r = await fetch("/api/motion/requirements", { signal: ctrl.signal });
+			if (r.ok) {
+				const fresh = await r.json();
+				// Merge over the existing defaults instead of replacing wholesale,
+				// so a server running an older endpoint schema (missing
+				// animoflow_node / animoflow_containers keys) doesn't leave the
+				// client accessing undefined during render.
+				pane._motionReqs = {
+					...pane._motionReqs,
+					...fresh,
+				};
+				// Persist so the next tab-open / page reload paints the last
+				// known status immediately instead of the amber-checking flash.
+				try { localStorage.setItem("cb.motion.reqs", JSON.stringify(pane._motionReqs)); } catch {}
+				// Detect the "server is on the old schema" case — if the newer
+				// keys came back missing, force a visible "server behind — restart"
+				// signal on those rows so the user isn't left staring at
+				// "checking…" forever.
+				if (!fresh.animoflow_node) {
+					pane._motionReqs.animoflow_node = {
+						ok: false,
+						detail: "server on old schema — restart run.bat",
+						path: "", target_hint: "", repo_url: "https://github.com/AnimoFlow/comfyui-animoflow", clone_cmd: "",
+					};
+				}
+				if (!fresh.animoflow_containers) {
+					pane._motionReqs.animoflow_containers = {
+						ok: false,
+						detail: "server on old schema — restart run.bat",
+						start_cmd: "",
+					};
+				}
+			}
+		} catch (e) {
+			console.warn("[motion] requirements probe failed:", e);
+			// Leave the row details visibly signalling the probe couldn't
+			// complete instead of the misleading "checking…" placeholder.
+			const errDetail = e.name === "AbortError" ? "probe timed out — server busy?" : "probe failed";
+			pane._motionReqs = {
+				...pane._motionReqs,
+				docker: { ...(pane._motionReqs?.docker || {}), detail: errDetail },
+			};
+		} finally {
+			clearTimeout(abortTimer);
+		}
+		// Enforce the min-visible checking state so a sub-100ms probe still
+		// registers as "yes, it ran" instead of instantly snapping to green.
+		const elapsed = Date.now() - checkStart;
+		const minHold = 700;
+		if (elapsed < minHold) {
+			await new Promise(r => setTimeout(r, minHold - elapsed));
+		}
+		pane._motionReqsChecking = false;
+		_renderMotionUtilPane(pane, m);
+		const promptEl = pane.querySelector("#motion-prompt");
+		if (promptEl) promptEl.value = savedPrompt;
+	});
+	pane.querySelector("#motion-spawn-mannequin")?.addEventListener("click", async () => {
+		// Mannequin isn't a util module — it's a data-tool prim with its own
+		// spawnMannequin() path. spawnMannequin() selects the fresh figure,
+		// which flips the right pane to the Mannequin inspector — so after
+		// it resolves we re-open the Motion util pane so the user isn't
+		// unexpectedly kicked away from the flow they were in.
+		try {
+			await spawnMannequin();
+		} catch (e) {
+			console.error("[motion] spawnMannequin failed:", e);
+		}
+		runUtilTool("motion");
+	});
+	// Error-banner dismiss — one-click clear so a stale message doesn't
+	// linger after the user has moved on to fixing the underlying issue.
+	pane.querySelector("#motion-err-dismiss")?.addEventListener("click", () => {
+		pane._motionLastError = "";
+		pane._motionLastErrorRow = "";
+		_renderMotionUtilPane(pane, m);
+	});
+	// Random seed — small dice button drops a fresh seed into the input so
+	// the user can quickly try a different variant without touching the field.
+	pane.querySelector("#motion-seed-random")?.addEventListener("click", () => {
+		const seedEl = pane.querySelector("#motion-seed");
+		if (seedEl) seedEl.value = String(Math.floor(Math.random() * 2147483647));
+	});
+	// Source-toggle pill — switch Text ↔ Video re-renders the pane so the
+	// input surface changes, but Docker/AnimoFlow status stays cached.
+	pane.querySelector("#motion-src-text")?.addEventListener("click", () => {
+		pane._motionSource = "text";
+		_renderMotionUtilPane(pane, m);
+	});
+	pane.querySelector("#motion-src-video")?.addEventListener("click", () => {
+		pane._motionSource = "video";
+		_renderMotionUtilPane(pane, m);
+	});
+	// Custom dropdown wiring — same pattern as Video Preprocessors uses.
+	pane.querySelectorAll(".util-dd-btn").forEach(btn => {
+		btn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			const menu = btn.parentElement.querySelector(".util-dd-menu");
+			const wasHidden = menu.hidden;
+			pane.querySelectorAll(".util-dd-menu").forEach(m => { m.hidden = true; });
+			menu.hidden = !wasHidden;
+		});
+	});
+	pane.querySelectorAll(".util-dd-opt").forEach(opt => {
+		opt.addEventListener("mouseenter", () => { opt.style.background = "rgba(255,180,84,0.18)"; });
+		opt.addEventListener("mouseleave", () => { opt.style.background = ""; });
+		opt.addEventListener("click", (e) => {
+			e.stopPropagation();
+			const menu = opt.closest(".util-dd-menu");
+			const btn = menu.parentElement.querySelector(".util-dd-btn");
+			btn.dataset.value = opt.dataset.value;
+			btn.querySelector(".util-dd-label").textContent = opt.textContent;
+			menu.hidden = true;
+		});
+	});
+	if (!pane._motionDdCloseHooked) {
+		pane._motionDdCloseHooked = true;
+		document.addEventListener("click", () => {
+			pane.querySelectorAll(".util-dd-menu").forEach(m => { m.hidden = true; });
+		});
+	}
+	// Video-input handlers — upload swaps the preview to the picked file
+	// and enables Extract pose. Extract runs the MediaPipe pipeline defined
+	// further down in _motionExtractPoseFromVideo.
+	pane.querySelector("#motion-video-upload")?.addEventListener("click", () => {
+		pane.querySelector("#motion-video-file")?.click();
+	});
+	pane.querySelector("#motion-video-file")?.addEventListener("change", (e) => {
+		const f = e.target.files?.[0];
+		e.target.value = "";
+		if (!f) return;
+		if (pane._motionVideoBlobUrl) { try { URL.revokeObjectURL(pane._motionVideoBlobUrl); } catch {} }
+		pane._motionVideoBlob = f;
+		pane._motionVideoBlobUrl = URL.createObjectURL(f);
+		_renderMotionUtilPane(pane, m);
+		// Paint the preview once the DOM has the new elements. Small delay
+		// via microtask lets the re-render commit before we access the slot.
+		queueMicrotask(() => {
+			const slot = pane.querySelector("#motion-video-preview");
+			if (!slot) return;
+			slot.innerHTML = `<div style="position:relative"><video id="motion-video-el" src="${pane._motionVideoBlobUrl}" controls muted playsinline preload="metadata" style="width:100%;max-height:180px;display:block;border-radius:3px;background:#000"></video><button type="button" class="remove-x" id="motion-video-clear" title="Clear source video" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.55);color:rgba(255,255,255,0.85)">×</button></div>`;
+		});
+	});
+	pane.querySelector("#motion-video-extract")?.addEventListener("click", async () => {
+		if (!pane._motionVideoBlob) return;
+		await _motionExtractPoseFromVideo(pane, m);
+	});
+	// X on the video preview clears the source so the user can pick a
+	// different clip without re-selecting the upload button. Also drops
+	// the blob URL so the browser can free the decoded video memory.
+	pane.querySelector("#motion-video-clear")?.addEventListener("click", (e) => {
+		e.stopPropagation();
+		if (pane._motionVideoBlobUrl) {
+			try { URL.revokeObjectURL(pane._motionVideoBlobUrl); } catch {}
+		}
+		pane._motionVideoBlob = null;
+		pane._motionVideoBlobUrl = "";
+		_renderMotionUtilPane(pane, m);
+	});
+	// If we already have a blob from a prior render (source toggle), rehydrate
+	// the preview after the pane rebuilds.
+	if (pane._motionSource === "video" && pane._motionVideoBlobUrl) {
+		const slot = pane.querySelector("#motion-video-preview");
+		if (slot) slot.innerHTML = `<div style="position:relative"><video id="motion-video-el" src="${pane._motionVideoBlobUrl}" controls muted playsinline preload="metadata" style="width:100%;max-height:180px;display:block;border-radius:3px;background:#000"></video><button type="button" class="remove-x" id="motion-video-clear" title="Clear source video" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.55);color:rgba(255,255,255,0.85)">×</button></div>`;
+	}
+	// Environment-ready chip toggles the full requirements checklist so a
+	// user who's set up can still peek at what's registered without needing
+	// to blow away localStorage state.
+	pane.querySelector("#motion-env-chip")?.addEventListener("click", () => {
+		pane._motionReqsExpanded = !pane._motionReqsExpanded;
+		_renderMotionUtilPane(pane, m);
+	});
+	// AnimoFlow one-click install — POST to /api/motion/install which git-
+	// clones the repo into APP_DIR/tools/animoflow, then auto-re-checks so
+	// the row flips green as soon as the clone completes.
+	pane.querySelector("#motion-install-node")?.addEventListener("click", async () => {
+		if (pane._motionInstalling) return;
+		pane._motionInstalling = true;
+		_renderMotionUtilPane(pane, m);
+		const savedPrompt = pane.querySelector("#motion-prompt")?.value || "";
+		const promptEl = pane.querySelector("#motion-prompt");
+		if (promptEl) promptEl.value = savedPrompt;
+		try {
+			const r = await fetch("/api/motion/install", { method: "POST" });
+			if (!r.ok) {
+				const body = await r.text().catch(() => "");
+				pane._motionLastError = `install failed · ${body.slice(-2000)}`;
+				pane._motionLastErrorRow = "node";
+			}
+		} catch (e) {
+			console.warn("[motion] install failed:", e);
+			pane._motionLastError = `install error · ${String(e.message || e).slice(0, 200)}`;
+			pane._motionLastErrorRow = "node";
+		} finally {
+			pane._motionInstalling = false;
+			// Re-check pulls the fresh status (should flip AnimoFlow row green).
+			pane.querySelector("#motion-req-refresh")?.click();
+		}
+	});
+	// Start-containers action — POSTs /api/motion/start_containers which
+	// runs `docker compose up -d --build` from tools/animoflow. Blocks until
+	// the images are built (can be 10+ min on first run — models download).
+	// No client-side abort so the user can safely navigate away without
+	// killing the long compose step.
+	pane.querySelector("#motion-start-containers")?.addEventListener("click", async () => {
+		if (pane._motionStarting) return;
+		pane._motionStarting = true;
+		pane._motionLastError = "";  // clear any earlier error before we try again
+		pane._motionLastErrorRow = "";
+		_renderMotionUtilPane(pane, m);
+		const savedPrompt = pane.querySelector("#motion-prompt")?.value || "";
+		const promptEl = pane.querySelector("#motion-prompt");
+		if (promptEl) promptEl.value = savedPrompt;
+		try {
+			const r = await fetch("/api/motion/start_containers", { method: "POST" });
+			if (!r.ok) {
+				const body = await r.text().catch(() => "");
+				// Take the TAIL of the body — server already tail-truncated
+				// the docker output so the meaningful error lives at the end.
+				// 2000 chars gives room for a full traceback in the pane.
+				const tail = body.length > 2000 ? body.slice(-2000) : body;
+				pane._motionLastError = `docker compose failed · ${tail}`;
+				pane._motionLastErrorRow = "containers";
+			}
+		} catch (e) {
+			console.warn("[motion] start_containers failed:", e);
+			pane._motionLastError = `network/fetch error · ${String(e.message || e).slice(0, 200)}`;
+			pane._motionLastErrorRow = "containers";
+		} finally {
+			pane._motionStarting = false;
+			// Poll re-check until the containers row flips green, or 45s total.
+			// `docker compose up -d` returns as soon as the container is created
+			// but before it registers as `running` in `docker compose ps` — a
+			// single re-check right after can miss it. Polling gives the state
+			// time to settle without making the user click Re-check repeatedly.
+			const startPolling = async () => {
+				for (let i = 0; i < 15; i++) {
+					pane.querySelector("#motion-req-refresh")?.click();
+					// Wait for the click's fetch to settle, plus a small gap
+					// so the next iteration sees an actual state update.
+					await new Promise(r => setTimeout(r, 3000));
+					if (pane._motionReqs?.animoflow_containers?.ok) break;
+				}
+			};
+			startPolling();
+		}
+	});
+	pane.querySelector("#motion-generate")?.addEventListener("click", async () => {
+		if (!allGreen) return;
+		if (pane._motionGenerating) return;
+		const prompt = pane.querySelector("#motion-prompt")?.value?.trim();
+		const statusEl = pane.querySelector("#motion-status");
+		if (!prompt) {
+			if (statusEl) { statusEl.textContent = "Enter a prompt first"; statusEl.style.color = "#ff8a8a"; }
+			return;
+		}
+		// Pick the mannequin the preview will hang off. Prefer current selection
+		// if it's a mannequin; else the first one in the scene.
+		const target = selected?.userData?.primKind === "mannequin"
+			? selected
+			: objects.find(o => o?.userData?.primKind === "mannequin");
+		if (!target) {
+			if (statusEl) { statusEl.textContent = "No mannequin in scene — click Spawn"; statusEl.style.color = "#ff8a8a"; }
+			return;
+		}
+		pane._motionGenerating = true;
+		if (statusEl) { statusEl.textContent = "Generating motion (CPU inference — usually 30–90s)…"; statusEl.style.color = "rgba(255,180,84,0.9)"; }
+		const btn = pane.querySelector("#motion-generate");
+		if (btn) { btn.disabled = true; btn.style.opacity = "0.4"; btn.style.cursor = "wait"; btn.textContent = "Generating…"; }
+		try {
+			const framesBtn = pane.querySelector('.util-dd-btn[data-name="frames"]');
+			const seedEl = pane.querySelector("#motion-seed");
+			const maxFrames = parseInt(framesBtn?.dataset.value || "120", 10) || 120;
+			const seed = parseInt(seedEl?.value || "42", 10);
+			const r = await fetch("/api/motion/generate", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					prompt,
+					max_frames: maxFrames,
+					seed: Number.isFinite(seed) ? seed : 42,
+				}),
+			});
+			if (!r.ok) {
+				const body = await r.text().catch(() => "");
+				throw new Error(body.slice(-500) || `HTTP ${r.status}`);
+			}
+			const j = await r.json();
+			if (!Array.isArray(j.poses) || j.poses.length === 0) throw new Error("empty poses in response");
+			_mannequinAttachMotionPreview(target, j.poses, prompt);
+			if (statusEl) {
+				statusEl.textContent = `${j.num_frames} frames · scrub the timeline to preview`;
+				statusEl.style.color = "rgba(102,204,122,0.9)";
+			}
+		} catch (e) {
+			console.error("[motion] generate failed:", e);
+			if (statusEl) {
+				statusEl.textContent = `generate failed · ${String(e.message || e).slice(0, 300)}`;
+				statusEl.style.color = "#ff8a8a";
+			}
+		} finally {
+			pane._motionGenerating = false;
+			if (btn) { btn.disabled = false; btn.style.opacity = "1"; btn.style.cursor = "pointer"; btn.textContent = "Generate motion"; }
+		}
+	});
+	// Kick off the initial requirements probe if we haven't already this pane visit.
+	if (!pane._motionReqsFetchedOnce) {
+		pane._motionReqsFetchedOnce = true;
+		pane.querySelector("#motion-req-refresh")?.click();
+	}
+}
+
 // In-place refresh of the util pane's video preview — probe /video, fall
 // back to /image (Blockout snapshot), then to the "no source" nudge.
 // Called from renderUtilToolPane on first render AND from the recording
@@ -11197,7 +12157,7 @@ function _updateUtilPreviewSlot() {
 		slot.innerHTML = `
 			<div style="position:relative">
 				<video id="util-rec-preview-video" src="${videoUrl}#t=0.5" controls muted loop playsinline preload="metadata" style="width:100%;max-height:180px;border-radius:3px;background:#000;display:block"></video>
-				<button type="button" id="util-rec-clear-btn" title="Clear source video" style="position:absolute;top:6px;right:6px;width:22px;height:22px;padding:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.15);border-radius:50%;color:rgba(255,255,255,0.85);cursor:pointer;font:600 14px/1 ui-sans-serif,system-ui,sans-serif">×</button>
+				<button type="button" class="remove-x" id="util-rec-clear-btn" title="Clear source video" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.55);color:rgba(255,255,255,0.85)">×</button>
 			</div>
 			<div id="util-rec-preview-meta" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;font-size:10px;color:rgba(255,255,255,0.55);letter-spacing:0.04em">
 				<span id="util-rec-meta-loading">reading metadata…</span>
@@ -11257,7 +12217,7 @@ function _updateUtilPreviewSlot() {
 		slot.innerHTML = `
 			<div style="position:relative">
 				<img src="${imageUrl}" alt="" style="width:100%;max-height:180px;object-fit:contain;border-radius:3px;background:#000;display:block">
-				<button type="button" id="util-rec-clear-btn" title="Clear source image" style="position:absolute;top:6px;right:6px;width:22px;height:22px;padding:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.15);border-radius:50%;color:rgba(255,255,255,0.85);cursor:pointer;font:600 14px/1 ui-sans-serif,system-ui,sans-serif">×</button>
+				<button type="button" class="remove-x" id="util-rec-clear-btn" title="Clear source image" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.55);color:rgba(255,255,255,0.85)">×</button>
 			</div>
 		`;
 		document.getElementById("util-rec-clear-btn")?.addEventListener("click", async (e) => {
@@ -11289,7 +12249,7 @@ function _updateUtilPreviewSlot() {
 	// Probe ORDER is driven by the pane's declared input kind — a util
 	// declaring scene-image probes /image_url first (so a leftover video in
 	// _video_store from a previous session doesn't hijack the Image Input
-	// slot). scene-video probes video first (the Lotus Pose flow).
+	// slot). scene-video probes video first (the Preprocessors flow).
 	const pane = document.getElementById("rp-pane-util");
 	const inputKind = pane?._utilInputKind || "video";
 	const first = inputKind === "image"
@@ -12092,6 +13052,369 @@ function _mannequinDisposeGizmos(wrapper) {
 	delete wrapper.userData._jointGizmos;
 }
 
+// Load an animation GLB and bind its first AnimationClip to the mannequin's
+// skeleton. Wires an AnimationMixer into fbxMixers so the transport's
+// play/scrub/freeze machinery drives it — no separate animation loop needed.
+// Bone binding is by NAME (Xbot + Mixamo both use mixamorig* naming), so the
+// tracks match without any explicit retarget step.
+async function _mannequinLoadAnimation(wrapper, file) {
+	if (!wrapper || !file) return;
+	const innerRoot = wrapper.userData?._innerRoot;
+	if (!innerRoot) {
+		_mannequinSetAnimStatus("mannequin not ready", "error");
+		return;
+	}
+	_mannequinSetAnimStatus(`loading ${file.name}…`, "busy");
+	try {
+		if (!gltfLoader) gltfLoader = new GLTFLoader();
+		const buf = await file.arrayBuffer();
+		const gltf = await new Promise((resolve, reject) => {
+			gltfLoader.parse(buf, "", resolve, reject);
+		});
+		const clip = gltf.animations?.[0];
+		if (!clip) {
+			_mannequinSetAnimStatus("no AnimationClip in this GLB", "error");
+			return;
+		}
+		// Dispose any prior mixer + rewind the mannequin to rest so a re-load
+		// doesn't stack animations against each other.
+		_mannequinClearAnimation(wrapper, { silent: true });
+		const mixer = new THREE.AnimationMixer(innerRoot);
+		const action = mixer.clipAction(clip);
+		action.play();
+		mixer.timeScale = 0; // transport drives time via setTime; leave paused at load
+		fbxMixers.push(mixer);
+		wrapper.userData.animMixer = mixer;
+		wrapper.userData.animClip = clip;
+		wrapper.userData.animFileName = file.name;
+		// Seed to the current playhead so a mid-timeline load doesn't snap
+		// the mannequin to frame 0 — matches the transport's parked state.
+		try {
+			const dur = (typeof currentDuration === "function") ? currentDuration() : 4;
+			mixer.setTime(playhead * dur);
+		} catch {}
+		_mannequinSetAnimStatus(`${file.name} · ${clip.duration.toFixed(2)}s`, "ok");
+		if (typeof saveScene === "function") saveScene();
+	} catch (err) {
+		console.error("[mannequin/anim] load failed:", err);
+		_mannequinSetAnimStatus(`load failed · ${String(err.message || err).slice(0, 120)}`, "error");
+	}
+}
+
+function _mannequinClearAnimation(wrapper, opts = {}) {
+	if (!wrapper) return;
+	const mixer = wrapper.userData?.animMixer;
+	if (mixer) {
+		mixer.stopAllAction?.();
+		const idx = fbxMixers.indexOf(mixer);
+		if (idx >= 0) fbxMixers.splice(idx, 1);
+	}
+	delete wrapper.userData.animMixer;
+	delete wrapper.userData.animClip;
+	delete wrapper.userData.animFileName;
+	// Snap bones back to whatever pose the wrapper was in before the clip
+	// took over. Uses the sparse joint map + rest rotations already stored
+	// on wrapper.userData — same path the pose dropdown drives.
+	const jointMap = wrapper.userData?.mannequinPoseJoints || {};
+	try { _mannequinApplyPoseJoints(wrapper, jointMap); } catch {}
+	if (!opts.silent) {
+		_mannequinSetAnimStatus("No clip loaded", "");
+		if (typeof saveScene === "function") saveScene();
+	}
+}
+
+function _mannequinSetAnimStatus(msg, tone) {
+	const el = document.getElementById("obj-mannequin-anim-status");
+	const clearBtn = document.getElementById("obj-mannequin-anim-clear");
+	if (el) {
+		el.textContent = msg;
+		el.style.color = tone === "error" ? "#ff8a8a"
+			: tone === "busy" ? "rgba(255,180,84,0.85)"
+			: tone === "ok" ? "rgba(102,204,122,0.9)"
+			: "rgba(255,255,255,0.5)";
+	}
+	if (clearBtn) {
+		const active = selected?.userData?.primKind === "mannequin" && !!selected.userData?.animMixer;
+		clearBtn.style.display = active ? "" : "none";
+	}
+}
+
+// HumanML3D 22-joint skeleton connectivity (SMPL body). Each pair is a bone
+// drawn as a line between two joints. Same layout MoMask outputs — indexes
+// into the (T, 22, 3) poses array.
+const HUMANML3D_BONES = [
+	[0, 1], [0, 2], [0, 3],                        // pelvis → hips + spine1
+	[1, 4], [4, 7], [7, 10],                       // left leg
+	[2, 5], [5, 8], [8, 11],                       // right leg
+	[3, 6], [6, 9],                                // spine1 → spine2 → spine3
+	[9, 12], [9, 13], [9, 14],                     // chest → neck + collars
+	[12, 15],                                      // neck → head
+	[13, 16], [16, 18], [18, 20],                  // left arm
+	[14, 17], [17, 19], [19, 21],                  // right arm
+];
+
+// Build a stick-figure preview from a MoMask response (poses = (T, 22, 3)).
+// One THREE.LineSegments with 21 bones × 2 vertices, updated per frame via
+// _motionPreviewTick from the transport playhead. Preview lives on the
+// mannequin wrapper's userData so re-selecting the same figure preserves it.
+function _mannequinAttachMotionPreview(wrapper, poses, prompt) {
+	if (!wrapper || !Array.isArray(poses) || poses.length === 0) return;
+	// Dispose any prior preview so a re-generate replaces cleanly instead
+	// of stacking two stick figures on top of each other.
+	_mannequinDetachMotionPreview(wrapper);
+	// Normalize Y so frame 0's feet start on the ground. MoMask output is
+	// already ground-relative (this is a no-op there). MediaPipe world-
+	// landmarks are HIP-centered, so pelvis sits at Y=0 and feet fall below
+	// — the character walks embedded in the floor unless we shift up.
+	// Uses ankle joints (7=L, 8=R) as the foot reference; toe joints (10, 11)
+	// hang slightly lower and would over-shift a rest-standing pose.
+	try {
+		const f0 = poses[0];
+		const groundY = Math.min(f0[7][1], f0[8][1]);
+		if (Math.abs(groundY) > 1e-4) {
+			for (const frame of poses) {
+				for (const joint of frame) joint[1] -= groundY;
+			}
+		}
+	} catch (e) {
+		console.warn("[motion] Y-normalize skipped:", e);
+	}
+	// Reset every posable bone back to its rest rotation before the new
+	// motion drives it — otherwise a second Generate inherits stale twists
+	// from the previous clip's retarget on bones outside the current map,
+	// and each subsequent prompt looks progressively more warped. Uses the
+	// rest-rotations map spawnMannequin() stashed at Xbot load time.
+	const restRotations = wrapper.userData?._restRotations;
+	const skeleton = wrapper.userData?._skeleton;
+	if (restRotations && skeleton) {
+		for (const bone of skeleton.bones) {
+			const rest = restRotations.get(bone.name);
+			if (rest) bone.rotation.copy(rest);
+		}
+		wrapper.userData._innerRoot?.updateMatrixWorld?.(true);
+	}
+	// Also snap the wrapper back to its last-known "home" position — either
+	// the initial transform from spawn, or the current position if the user
+	// moved it manually since. That way a re-generate doesn't compound the
+	// previous clip's translation on top of the new one.
+	const initTf = wrapper.userData?._initialTransform;
+	if (initTf?.position) wrapper.position.fromArray(initTf.position);
+	const boneCount = HUMANML3D_BONES.length;
+	const positions = new Float32Array(boneCount * 2 * 3);
+	const geom = new THREE.BufferGeometry();
+	geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+	const mat = new THREE.LineBasicMaterial({ color: 0xffb454, linewidth: 2 });
+	const lines = new THREE.LineSegments(geom, mat);
+	lines.name = `Motion.${(wrapper.name || "").replace(/^Mannequin\./, "")}`;
+	lines.userData._motionPreview = true;
+	// Anchor the preview so frame 0's pelvis lines up with the mannequin's
+	// XZ — otherwise the preview shows up wherever MoMask's own coord frame
+	// happened to start (usually offset from origin) and reads as "detached
+	// from the character". Y is left alone so the character stands on the
+	// ground plane naturally.
+	const frame0 = poses[0];
+	const pelvisX = frame0[0][0];
+	const pelvisZ = frame0[0][2];
+	lines.position.set(wrapper.position.x - pelvisX, 0, wrapper.position.z - pelvisZ);
+	scene.add(lines);
+	wrapper.userData._motionPreviewObj = lines;
+	wrapper.userData._motionPoses = poses;
+	wrapper.userData._motionPrompt = prompt || "";
+	wrapper.userData._motionFrameRate = 20; // HumanML3D is 20 fps
+	// Snapshot the wrapper's position at attach time so the tick can apply
+	// the pelvis-delta from frame 0 as world translation — otherwise the
+	// bones do walking motion but the whole rig stays anchored to origin.
+	wrapper.userData._motionInitialWrapperPos = wrapper.position.clone();
+	// Prime frame 0 so something is visible even before the transport ticks.
+	_motionPreviewApplyFrame(wrapper, 0);
+}
+
+function _mannequinDetachMotionPreview(wrapper) {
+	const prev = wrapper?.userData?._motionPreviewObj;
+	if (prev) {
+		try { prev.geometry?.dispose?.(); prev.material?.dispose?.(); } catch {}
+		if (prev.parent) prev.parent.remove(prev);
+	}
+	delete wrapper.userData._motionPreviewObj;
+	delete wrapper.userData._motionPoses;
+	delete wrapper.userData._motionPrompt;
+}
+
+function _motionPreviewApplyFrame(wrapper, frameIdx) {
+	const preview = wrapper?.userData?._motionPreviewObj;
+	const poses = wrapper?.userData?._motionPoses;
+	if (!preview || !Array.isArray(poses) || poses.length === 0) return;
+	const idx = Math.max(0, Math.min(poses.length - 1, frameIdx | 0));
+	const frame = poses[idx];
+	const pos = preview.geometry.attributes.position.array;
+	for (let b = 0; b < HUMANML3D_BONES.length; b++) {
+		const [p, c] = HUMANML3D_BONES[b];
+		const pa = frame[p], ch = frame[c];
+		pos[b * 6 + 0] = pa[0]; pos[b * 6 + 1] = pa[1]; pos[b * 6 + 2] = pa[2];
+		pos[b * 6 + 3] = ch[0]; pos[b * 6 + 4] = ch[1]; pos[b * 6 + 5] = ch[2];
+	}
+	preview.geometry.attributes.position.needsUpdate = true;
+	preview.geometry.computeBoundingSphere?.();
+}
+
+// HumanML3D joint → Mixamo bone retarget map. Each entry describes a bone
+// that aims from `parent` joint to `child` joint — the bone's local rotation
+// is solved so its rest child direction ends up pointing along
+// (frame[child] - frame[parent]). Order is root-to-leaves so a parent bone's
+// world orientation is already updated by the time we read it for its child.
+// A few bones (mixamorigHips, wrists, toes) are left un-driven — hips is the
+// character's root and rotating it hardly reads for in-place motion; wrists
+// and toes have no meaningful HumanML3D "child" to aim at.
+const MANNEQUIN_RETARGET_MAP = [
+	["mixamorigSpine",         0, 3 ],  // pelvis → spine1
+	["mixamorigSpine1",        3, 6 ],
+	["mixamorigSpine2",        6, 9 ],
+	["mixamorigNeck",          9, 12],
+	// mixamorigHead is intentionally omitted — it's a leaf with no useful
+	// aim direction (12→15 is just "up"), so setFromUnitVectors picks an
+	// arbitrary twist and the head ends up misaligned from the body's yaw
+	// when the character rotates. Letting the head inherit its parent's
+	// (neck's) rotation keeps it stuck to the body during turns.
+	["mixamorigLeftShoulder",  13, 16],
+	["mixamorigLeftArm",       16, 18],
+	["mixamorigLeftForeArm",   18, 20],
+	["mixamorigRightShoulder", 14, 17],
+	["mixamorigRightArm",      17, 19],
+	["mixamorigRightForeArm",  19, 21],
+	["mixamorigLeftUpLeg",     1, 4 ],
+	["mixamorigLeftLeg",       4, 7 ],
+	["mixamorigLeftFoot",      7, 10],
+	["mixamorigRightUpLeg",    2, 5 ],
+	["mixamorigRightLeg",      5, 8 ],
+	["mixamorigRightFoot",     8, 11],
+];
+
+// Stashed rest directions per bone — filled lazily on first retarget so we
+// can compare against the current bone-child offset without re-computing
+// per frame. Keyed by bone.uuid so multiple mannequins don't share values.
+const _mannequinRestChildDirCache = new Map();
+
+function _motionApplyRetarget(wrapper, frame) {
+	const bonesByName = wrapper?.userData?._bonesByName;
+	if (!bonesByName) return;
+	const _tmpTargetWorld = new THREE.Vector3();
+	const _tmpParentWorldQuat = new THREE.Quaternion();
+	const _tmpTargetLocal = new THREE.Vector3();
+	const _tmpQ = new THREE.Quaternion();
+
+	// Reset non-retargeted bones to their rest local rotation so any residual
+	// rotation from an earlier retarget pass doesn't ride along. Head is the
+	// obvious one — removed from the map because a leaf can't be aimed
+	// meaningfully. Same treatment for the rest so previous-session state
+	// can't cause "one arm stays bent even when I regenerate" surprises.
+	const restRots = wrapper.userData._restRotations;
+	if (restRots) {
+		const head = bonesByName.get("mixamorigHead");
+		if (head) {
+			const r = restRots.get("mixamorigHead");
+			if (r) head.rotation.copy(r);
+		}
+	}
+
+	// ── Hips (root) world orientation ──
+	// The bone-chain retarget below only sets bone rotations relative to their
+	// parents. Without an explicit hips basis, the character faces whatever
+	// direction the rest pose faces — walking in a circle rotates the LEGS
+	// but the head stays fixed (visible artifact: "walked around a corner and
+	// my head ended up backwards"). Derive the hips basis from the pose data:
+	//   right axis = left_hip → right_hip
+	//   up axis    = pelvis   → spine1  (approximate, orthogonalized below)
+	// Then set mixamorigHips.quaternion in its parent's local space so the
+	// bone's world orientation matches this target basis.
+	const hips = bonesByName.get("mixamorigHips");
+	if (hips && hips.parent) {
+		const lh = frame[1], rh = frame[2], p = frame[0], sp = frame[3];
+		const right = new THREE.Vector3(rh[0] - lh[0], rh[1] - lh[1], rh[2] - lh[2]).normalize();
+		let up = new THREE.Vector3(sp[0] - p[0], sp[1] - p[1], sp[2] - p[2]).normalize();
+		const forward = new THREE.Vector3().crossVectors(right, up).normalize();
+		up = new THREE.Vector3().crossVectors(forward, right).normalize();
+		// Xbot rest-pose convention: character faces -Z, right hand along +X,
+		// up along +Y. Our derived basis has forward=+Z (result of right × up),
+		// so we flip the forward axis to match Xbot's -Z-forward convention.
+		// Without this flip the character faces backward from the walk direction.
+		forward.negate();
+		const m = new THREE.Matrix4().makeBasis(right, up, forward);
+		const targetWorldQuat = new THREE.Quaternion().setFromRotationMatrix(m);
+		hips.parent.getWorldQuaternion(_tmpParentWorldQuat).invert();
+		hips.quaternion.multiplyQuaternions(_tmpParentWorldQuat, targetWorldQuat);
+		hips.updateMatrixWorld(true);
+	}
+
+	for (const [boneName, parentJointIdx, childJointIdx] of MANNEQUIN_RETARGET_MAP) {
+		const bone = bonesByName.get(boneName);
+		if (!bone || !bone.parent) continue;
+		// Prefer the primary child bone under this bone as the "rest aim"
+		// reference — its rest position (relative to this bone) IS the
+		// direction the bone points in its own local frame. Skip bones with
+		// no child (leaf) since there's nothing to aim.
+		const childBone = bone.children.find(c => c.isBone) || bone.children[0];
+		if (!childBone) continue;
+		let restDir = _mannequinRestChildDirCache.get(bone.uuid);
+		if (!restDir) {
+			restDir = childBone.position.clone().normalize();
+			_mannequinRestChildDirCache.set(bone.uuid, restDir);
+		}
+		// World direction we WANT the bone to aim: joint difference in
+		// HumanML3D's world coord frame. Poses are (T, 22, 3) — flat arrays,
+		// so index directly.
+		const pj = frame[parentJointIdx];
+		const cj = frame[childJointIdx];
+		_tmpTargetWorld.set(cj[0] - pj[0], cj[1] - pj[1], cj[2] - pj[2]).normalize();
+		// Convert to the bone's PARENT bone world frame — that's the space
+		// the bone's local rotation lives in.
+		bone.parent.getWorldQuaternion(_tmpParentWorldQuat).invert();
+		_tmpTargetLocal.copy(_tmpTargetWorld).applyQuaternion(_tmpParentWorldQuat);
+		// Solve the local rotation that aligns the rest direction with the
+		// target direction. Twist around the bone axis is undetermined and
+		// stays at whatever setFromUnitVectors picks — good enough for MVP;
+		// artifacts show up mostly on wrists / feet which we're not driving.
+		_tmpQ.setFromUnitVectors(restDir, _tmpTargetLocal);
+		bone.quaternion.copy(_tmpQ);
+		// Update this bone's world matrix immediately so children reading
+		// parent world quat see the fresh value.
+		bone.updateMatrixWorld(true);
+	}
+}
+
+// Called from loop() every frame — scrubs the stick-figure through its
+// pose sequence based on the transport playhead. Cheap when there are no
+// mannequins with motion previews (early return in the loop).
+function _motionPreviewTick() {
+	if (!Array.isArray(objects) || objects.length === 0) return;
+	for (const o of objects) {
+		if (o?.userData?.primKind !== "mannequin") continue;
+		const poses = o.userData?._motionPoses;
+		if (!poses || poses.length === 0) continue;
+		// Map playhead (0..1 over scene duration) to a frame index. Uses the
+		// scene duration as the timeline — a 4s scene sweeps through the
+		// entire clip regardless of the source's own frame rate.
+		const idx = Math.round(playhead * (poses.length - 1));
+		_motionPreviewApplyFrame(o, idx);
+		// Drive the mannequin's Mixamo bones from the same frame so the
+		// character animates AS the stick figure animates.
+		_motionApplyRetarget(o, poses[idx]);
+		// Root translation — pelvis (joint 0) in HumanML3D world coords moves
+		// as the character walks. Add the DELTA from frame 0's pelvis to the
+		// wrapper's initial position so the whole rig moves through the scene
+		// with the animation. Y delta captures jumps/crouches too.
+		const initPos = o.userData._motionInitialWrapperPos;
+		if (initPos) {
+			const p0 = poses[0][0];
+			const pn = poses[idx][0];
+			o.position.set(
+				initPos.x + (pn[0] - p0[0]),
+				initPos.y + (pn[1] - p0[1]),
+				initPos.z + (pn[2] - p0[2]),
+			);
+		}
+	}
+}
+
 // ── Drag posing ──────────────────────────────────────────────────
 let _mannequinDrag = null;
 let _mannequinHovered = null;
@@ -12437,6 +13760,19 @@ async function _skyboxGenerate() {
 				ta.focus();
 				ta.select();
 			}
+		});
+		document.getElementById("obj-mannequin-anim-load")?.addEventListener("click", () => {
+			document.getElementById("obj-mannequin-anim-file")?.click();
+		});
+		document.getElementById("obj-mannequin-anim-file")?.addEventListener("change", async (e) => {
+			const f = e.target.files?.[0];
+			e.target.value = "";
+			if (!f || selected?.userData?.primKind !== "mannequin") return;
+			await _mannequinLoadAnimation(selected, f);
+		});
+		document.getElementById("obj-mannequin-anim-clear")?.addEventListener("click", () => {
+			if (selected?.userData?.primKind !== "mannequin") return;
+			_mannequinClearAnimation(selected);
 		});
 	};
 	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hook, { once: true });
@@ -15475,6 +16811,17 @@ function refreshObjectInspector() {
 			_mannequinRenderPoseJson(selected);
 			_mannequinBuildJointCells(selected);
 			_mannequinRefreshJointCellsFromState(selected);
+			// Animation status reflects THIS mannequin's clip (if any) —
+			// otherwise switching mannequins would show a stale status from
+			// whichever one loaded a clip most recently.
+			if (selected.userData?.animMixer && selected.userData?.animClip) {
+				_mannequinSetAnimStatus(
+					`${selected.userData.animFileName || "animation"} · ${selected.userData.animClip.duration.toFixed(2)}s`,
+					"ok",
+				);
+			} else {
+				_mannequinSetAnimStatus("No clip loaded", "");
+			}
 		}
 	}
 	// TripoSplat Mode section — visible on TripoSplat results, whether the
@@ -16890,6 +18237,8 @@ document.getElementById("bg-color")?.addEventListener("input", (e) => {
 (function wireColorPicker() {
 	const spectrum = document.getElementById("cp-spectrum");
 	const cursor = document.getElementById("cp-spectrum-cursor");
+	const grayscale = document.getElementById("cp-grayscale");
+	const grayCursor = document.getElementById("cp-grayscale-cursor");
 	const hex = document.getElementById("cp-hex");
 	const nativeInput = document.getElementById("bg-color");
 	if (!spectrum || !cursor || !hex || !nativeInput) return;
@@ -16948,6 +18297,8 @@ document.getElementById("bg-color")?.addEventListener("input", (e) => {
 
 	// Map a hex color → cursor position in the spectrum. Y is lightness
 	// (0→1 spans top→bottom), X is hue (0→360 spans left→right).
+	// Also drives the grayscale strip's cursor (X = 1−lightness), so the
+	// two pickers stay in sync no matter which one committed the color.
 	function _renderCursorFromHex(hexStr) {
 		const hsl = hexToHsl(hexStr);
 		if (!hsl) return;
@@ -16955,6 +18306,9 @@ document.getElementById("bg-color")?.addEventListener("input", (e) => {
 		const yPct = 1 - hsl.l;
 		cursor.style.left = `${xPct * 100}%`;
 		cursor.style.top = `${yPct * 100}%`;
+		if (grayCursor) {
+			grayCursor.style.left = `${(1 - hsl.l) * 100}%`;
+		}
 	}
 
 	// Handle a pointer at (px, py) inside the spectrum — compute hue from
@@ -16967,6 +18321,9 @@ document.getElementById("bg-color")?.addEventListener("input", (e) => {
 		const l = 1 - y / rect.height;
 		cursor.style.left = `${(x / rect.width) * 100}%`;
 		cursor.style.top = `${(y / rect.height) * 100}%`;
+		// Live-follow the grayscale cursor by the shared lightness axis so
+		// the two pickers read as coordinated instead of one going stale.
+		if (grayCursor) grayCursor.style.left = `${(1 - l) * 100}%`;
 		commitColor(hslToHex(h, 1, l), true);
 	}
 
@@ -16985,6 +18342,34 @@ document.getElementById("bg-color")?.addEventListener("input", (e) => {
 		dragging = false;
 		try { spectrum.releasePointerCapture(e.pointerId); } catch {}
 	});
+
+	// Grayscale strip — X = lightness (left=1 white → right=0 black). Commits
+	// a pure gray via hslToHex(0, 0, l) so the value is genuinely #XXXXXX with
+	// R=G=B, not a desaturated-red edge case.
+	if (grayscale && grayCursor) {
+		function _handleGrayAt(clientX) {
+			const rect = grayscale.getBoundingClientRect();
+			const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+			const l = 1 - x / rect.width;
+			grayCursor.style.left = `${(x / rect.width) * 100}%`;
+			commitColor(hslToHex(0, 0, l), true);
+		}
+		let grayDragging = false;
+		grayscale.addEventListener("pointerdown", (e) => {
+			e.preventDefault();
+			grayDragging = true;
+			try { grayscale.setPointerCapture(e.pointerId); } catch {}
+			_handleGrayAt(e.clientX);
+		});
+		grayscale.addEventListener("pointermove", (e) => {
+			if (!grayDragging) return;
+			_handleGrayAt(e.clientX);
+		});
+		grayscale.addEventListener("pointerup", (e) => {
+			grayDragging = false;
+			try { grayscale.releasePointerCapture(e.pointerId); } catch {}
+		});
+	}
 
 	// Hex input — typed value applies on Enter/blur; short of that just
 	// waits so the user can freely edit without cursor jumping mid-type.
@@ -17029,9 +18414,21 @@ bgImageFile.addEventListener("change", async () => {
 	const f = bgImageFile.files?.[0];
 	bgImageFile.value = "";
 	if (!f) return;
+	const cell = document.querySelector('.bg-cell[data-bgmode="image"]');
+	cell?.classList.add("uploading");
 	try {
 		const buf = await f.arrayBuffer();
 		const { assetId, ext } = await uploadAsset(f.name, buf);
+		// Preload the persistent URL before flipping bgMode — otherwise the
+		// spinner vanishes the moment the POST resolves, but the CSS
+		// backgroundImage still has to fetch the same file back over HTTP
+		// before it visibly paints, so the user briefly sees "nothing yet".
+		// Warm the browser cache first, then apply.
+		await new Promise((resolve) => {
+			const im = new Image();
+			im.onload = im.onerror = () => resolve();
+			im.src = bgAssetUrl({ assetId, ext });
+		});
 		bgImage = { assetId, ext };
 		// Image + video are mutually exclusive — picking one replaces the other
 		// so the chip that isn't loaded reads as empty (no lingering × on the
@@ -17043,6 +18440,8 @@ bgImageFile.addEventListener("change", async () => {
 	} catch (err) {
 		console.error("[bg-image] upload failed", err);
 		alert(`Background image upload failed: ${err.message || err}`);
+	} finally {
+		cell?.classList.remove("uploading");
 	}
 });
 bgVideoBtn?.addEventListener("click", () => bgVideoFile.click());
@@ -17058,9 +18457,24 @@ bgVideoFile?.addEventListener("change", async () => {
 	const f = bgVideoFile.files?.[0];
 	bgVideoFile.value = "";
 	if (!f) return;
+	const cell = document.querySelector('.bg-cell[data-bgmode="video"]');
+	cell?.classList.add("uploading");
 	try {
 		const buf = await f.arrayBuffer();
 		const { assetId, ext } = await uploadAsset(f.name, buf);
+		// Preload the persistent URL's metadata so the spinner covers the
+		// fetch-back roundtrip, same reason as the image handler (spec:
+		// hold the ring until the media is actually decodable, not just
+		// until the server-write returns).
+		await new Promise((resolve) => {
+			const v = document.createElement("video");
+			v.preload = "metadata";
+			v.muted = true;
+			const done = () => resolve();
+			v.addEventListener("loadedmetadata", done, { once: true });
+			v.addEventListener("error", done, { once: true });
+			v.src = bgAssetUrl({ assetId, ext });
+		});
 		bgVideo = { assetId, ext };
 		// Mutually exclusive with image — see the sibling handler for the why.
 		bgImage = null;
@@ -17070,6 +18484,8 @@ bgVideoFile?.addEventListener("change", async () => {
 	} catch (err) {
 		console.error("[bg-video] upload failed", err);
 		alert(`Background video upload failed: ${err.message || err}`);
+	} finally {
+		cell?.classList.remove("uploading");
 	}
 });
 bgBlurInput?.addEventListener("input", e => {
@@ -18278,6 +19694,7 @@ function loop() {
 		// visibility to the currently selected mannequin. Cheap loop —
 		// noop when no mannequins exist.
 		if (typeof _mannequinTickGizmos === "function") _mannequinTickGizmos();
+		if (typeof _motionPreviewTick === "function") _motionPreviewTick();
 		orbit.update();
 		if (anchorMode) updatePivotMarker();
 		// Keep the render-camera helper in sync with renderCam's current pose so the
@@ -19314,6 +20731,9 @@ async function playPreview() {
 	// looks through the shot. applyCameraState always mutates renderCam so keyframes
 	// drive the wireframe pose in Scene view without disturbing sceneCam's orbit.
 	tlPlay.classList.add("active");
+	// Swap the transport glyph to a pause icon while playing so a second
+	// click reads as "stop this" not "start another one".
+	tlPlay.textContent = tlPlay.dataset.pauseGlyph || "⏸";
 	const dur = currentDuration() * 1000;
 	// Inset the play range by the same visual gap used for the resting playhead so the
 	// yellow line never overlaps the orange trim handles at either end.
@@ -19362,6 +20782,7 @@ async function playPreview() {
 	}
 	isPlayingPreview = false;
 	tlPlay.classList.remove("active");
+	tlPlay.textContent = tlPlay.dataset.playGlyph || "▶";
 	setMixersPlaying(false);
 	if (bgMode === "video" && bgVideo) canvasBgVideo.pause?.();
 	// Persist playhead so closing + reopening the editor lands on the pause frame.
@@ -19369,6 +20790,7 @@ async function playPreview() {
 }
 function stopPreview() {
 	isPlayingPreview = false;
+	tlPlay.textContent = tlPlay.dataset.playGlyph || "▶";
 	setMixersPlaying(false);
 	if (bgMode === "video" && bgVideo) canvasBgVideo.pause?.();
 	if ((resultMode === "render" || resultMode === "blockout")
@@ -19881,6 +21303,11 @@ function serializeScene() {
 			poseJoints: (o.userData.mannequinPoseJoints && Object.keys(o.userData.mannequinPoseJoints).length)
 				? o.userData.mannequinPoseJoints
 				: undefined,
+			// Persist the AnimoFlow-managed flag so a restored AF_Mannequin
+			// keeps its identity — otherwise it comes back as a plain
+			// Mannequin.NNN with the standard pose editor, missing the auto-
+			// redirect-to-AnimoFlow-pane behavior that makes it useful.
+			animoflowManaged: o.userData.animoflowManaged || undefined,
 			position: o.position.toArray(),
 			rotation: [o.rotation.x, o.rotation.y, o.rotation.z],
 			scale: o.scale.toArray(),
@@ -20113,6 +21540,7 @@ async function deserializeScene(state, opts = {}) {
 			if (mn.visible === false) obj.visible = false;
 			if (mn.locked) obj.userData.locked = true;
 			if (mn.notes) obj.userData.notes = mn.notes;
+			if (mn.animoflowManaged) obj.userData.animoflowManaged = true;
 			if (Array.isArray(mn.keyframes)) obj.userData.keyframes = deserializeObjectKeyframes(mn.keyframes);
 		}).catch(e => console.error("[mannequin] restore failed:", e));
 	}

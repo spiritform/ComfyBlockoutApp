@@ -8,3 +8,10 @@ __pycache__/
 
 # Runtime / user data — app re-creates on first run
 data/
+
+# Local dev tooling / IDE
+.claude/
+
+# External tools installed by the app at runtime (AnimoFlow etc.) — cloned
+# fresh via /api/motion/install on user machines, don't commit the vendored copy.
+tools/

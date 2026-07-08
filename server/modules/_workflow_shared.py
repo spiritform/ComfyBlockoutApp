@@ -197,20 +197,58 @@ def _make_run(workflow_path: Path, manifest: dict):
     async def run_local(**kwargs):
         from ._workflow_local import run_local_workflow
         data_dir = kwargs.pop("data_dir")
+        # Preset routing — if the manifest declares a `presets` array and the
+        # client passed `preset` in kwargs, look up the entry and use its
+        # `workflow` stem to load a different JSON. Falls back to the manifest's
+        # own workflow if the preset doesn't override. Coming-soon presets fail
+        # fast with a clear message so the frontend can surface it.
+        preset_id = kwargs.pop("preset", None)
+        base_path = workflow_path
+        active_preset = None
+        presets = manifest.get("presets") or []
+        if presets and preset_id:
+            active_preset = next((p for p in presets if p.get("id") == preset_id), None)
+            if active_preset is None:
+                raise ValueError(f"unknown preset '{preset_id}' for {manifest['id']}")
+            if active_preset.get("coming_soon"):
+                raise ValueError(f"preset '{active_preset.get('label') or preset_id}' isn't wired up yet")
+            preset_stem = active_preset.get("workflow")
+            if preset_stem and preset_stem != workflow_path.stem:
+                candidate = workflow_path.parent / f"{preset_stem}.json"
+                if not candidate.exists():
+                    raise RuntimeError(f"preset workflow missing on disk: {candidate.name}")
+                base_path = candidate
+        # Per-preset patch overrides — when the picked preset points at a
+        # different workflow file its node ids will diverge from the default
+        # workflow's, so the manifest's shared `inputs[i].patch` targets won't
+        # apply cleanly. A preset's optional `patches` dict remaps by input
+        # name → patch (or list of patches). We build an effective manifest
+        # here so the downstream runner sees the correct targets without
+        # having to know about presets at all.
+        effective_manifest = manifest
+        if active_preset and isinstance(active_preset.get("patches"), dict):
+            overrides = active_preset["patches"]
+            new_inputs = []
+            for spec in manifest.get("inputs", []):
+                if spec.get("name") in overrides:
+                    new_inputs.append({**spec, "patch": overrides[spec["name"]]})
+                else:
+                    new_inputs.append(spec)
+            effective_manifest = {**manifest, "inputs": new_inputs}
         # Prefer an API-format sidecar over the raw imported JSON. Two naming
         # conventions:
         #   - `<stem>.local.json`  — written by the "prepare for local" agent flow
         #   - `<stem>_api.json`    — ComfyUI's default "Save (API Format)" naming,
         #                            so the user doesn't have to rename after export
-        # First existing one wins. Falls back to the raw workflow_path (which
+        # First existing one wins. Falls back to the raw base_path (which
         # then errors gracefully in run_local_workflow if it's still GUI-format).
-        parent = workflow_path.parent
+        parent = base_path.parent
         candidates = [
-            parent / (workflow_path.stem + ".local.json"),
-            parent / (workflow_path.stem + "_api.json"),
+            parent / (base_path.stem + ".local.json"),
+            parent / (base_path.stem + "_api.json"),
         ]
-        target = next((p for p in candidates if p.exists()), workflow_path)
-        return await run_local_workflow(target, manifest, kwargs, data_dir)
+        target = next((p for p in candidates if p.exists()), base_path)
+        return await run_local_workflow(target, effective_manifest, kwargs, data_dir)
 
     async def run(*, data_dir: Path, **kwargs):
         kwargs["data_dir"] = data_dir
@@ -226,6 +264,9 @@ def _manifest_to_module_def(workflow_path: Path, manifest: dict) -> ModuleDef:
     # needs to render form inputs.
     ui_inputs = [{k: v for k, v in spec.items() if k != "patch"} for spec in manifest.get("inputs", [])]
     exts = _resolve_output_exts(manifest)
+    presets = manifest.get("presets") or []
+    if not isinstance(presets, list):
+        presets = []
     return ModuleDef(
         id=manifest["id"],
         label=manifest.get("label", manifest["id"]),
@@ -236,6 +277,7 @@ def _manifest_to_module_def(workflow_path: Path, manifest: dict) -> ModuleDef:
         source="workflow",
         util=bool(manifest.get("util", False)),
         icon=manifest.get("icon", "") or "",
+        presets=presets,
     )
 
 

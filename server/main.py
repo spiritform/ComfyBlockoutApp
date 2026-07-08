@@ -1050,12 +1050,271 @@ def _module_dict(m) -> dict:
         "source": getattr(m, "source", "python"),
         "util": bool(getattr(m, "util", False)),
         "icon": getattr(m, "icon", "") or "",
+        "presets": list(getattr(m, "presets", []) or []),
     }
 
 
 @app.get("/api/modules")
 async def list_modules():
     return {"modules": [_module_dict(m) for m in MODULES.values()]}
+
+
+# Requirements probe for the Motion tool. AnimoFlow doesn't publish prebuilt
+# Docker images — it ships a git repo containing Dockerfiles + a compose
+# stack. We install it INTO the ComfyBlockout app tree (`tools/animoflow`)
+# rather than under a ComfyUI custom_nodes folder — that lets us talk to the
+# containers' HTTP endpoints directly and skips the ComfyUI restart dance.
+# Checklist:
+#   1. Docker running                       (docker version → 0)
+#   2. AnimoFlow repo cloned in tools/      (tools/animoflow/.git exists)
+#   3. AnimoFlow containers up              (docker ps --filter name=animoflow)
+# Each check has a hard timeout so the pane doesn't stall if Docker is
+# unresponsive. Frontend re-hits this on Re-check + on pane render.
+_ANIMOFLOW_DIR = APP_DIR / "tools" / "animoflow"
+_ANIMOFLOW_REPO_URL = "https://github.com/AnimoFlow/comfyui-animoflow"
+
+
+def _animoflow_installed() -> bool:
+    """True if the AnimoFlow repo has been cloned into tools/animoflow.
+    Checks for the .git subfolder rather than the parent — a bare mkdir
+    shouldn't register as installed."""
+    return (_ANIMOFLOW_DIR / ".git").exists()
+
+
+@app.get("/api/motion/requirements")
+async def motion_requirements():
+    import subprocess
+    docker_ok = False
+    docker_installed = False
+    docker_error = ""
+    try:
+        # `docker version` (client only, no --format that hits the server) tells
+        # us if the CLI is present + installed. Then we probe the daemon
+        # separately so we can distinguish "not installed" from "installed but
+        # not running" — very different fix instructions for the user.
+        r = subprocess.run(
+            ["docker", "--version"],
+            capture_output=True, text=True, timeout=3,
+        )
+        docker_installed = r.returncode == 0
+        if docker_installed:
+            r2 = subprocess.run(
+                ["docker", "version", "--format", "{{.Server.Version}}"],
+                capture_output=True, text=True, timeout=3,
+            )
+            docker_ok = r2.returncode == 0 and bool(r2.stdout.strip())
+            if not docker_ok:
+                # Daemon not responding — common when Docker Desktop is
+                # installed but the tray app hasn't been launched yet.
+                docker_error = "Installed, not running"
+        else:
+            docker_error = (r.stderr or r.stdout or "").strip()[:200] or "docker command failed"
+    except FileNotFoundError:
+        docker_error = "docker command not on PATH"
+    except subprocess.TimeoutExpired:
+        # Timeout on --version is a real hang (rare); on `version` (with daemon
+        # probe) means Docker Desktop is starting up or wedged.
+        docker_error = "docker daemon not responding"
+        docker_installed = True  # if we got past --version we know it exists
+    except Exception as e:
+        docker_error = str(e)[:200]
+
+    # AnimoFlow install — filesystem check against APP_DIR/tools/animoflow.
+    node_ok = _animoflow_installed()
+    node_path = str(_ANIMOFLOW_DIR) if node_ok else ""
+
+    # AnimoFlow containers running — use plain `docker ps` and match names
+    # that start with "animoflow" (compose defaults the project name to the
+    # cloned folder, and services become `<project>-<service>-1` in modern
+    # docker compose). More robust than `docker compose ps --format` which
+    # has inconsistent output between docker versions.
+    containers_ok = False
+    containers_detail = ""
+    if docker_ok and _animoflow_installed():
+        try:
+            r = subprocess.run(
+                ["docker", "ps", "--format", "{{.Names}}"],
+                capture_output=True, text=True, timeout=5,
+            )
+            names = [n.strip() for n in (r.stdout or "").splitlines() if n.strip()]
+            animoflow_names = [n for n in names if n.lower().startswith("animoflow")]
+            containers_ok = len(animoflow_names) > 0
+            containers_detail = ", ".join(animoflow_names[:3]) if animoflow_names else ""
+        except Exception:
+            containers_ok = False
+
+    return {
+        "docker": {
+            "ok": docker_ok,
+            "installed": docker_installed,
+            "detail": docker_error,
+            "install_url": "https://www.docker.com/products/docker-desktop/",
+        },
+        "animoflow_node": {
+            "ok": node_ok,
+            "path": node_path,
+            "target": str(_ANIMOFLOW_DIR),
+            "repo_url": _ANIMOFLOW_REPO_URL,
+        },
+        "animoflow_containers": {
+            "ok": containers_ok,
+            "detail": containers_detail,
+            "installed": node_ok,
+        },
+    }
+
+
+@app.post("/api/motion/start_containers")
+async def motion_start_containers():
+    """Build + start the AnimoFlow containers via docker compose. First run
+    downloads model weights + builds images — can take 10+ minutes on a slow
+    connection. Returns as soon as `docker compose up -d --build` returns
+    (which is *after* the images are built — compose blocks). The frontend
+    should show a long-running spinner and periodically Re-check to detect
+    when containers land in `docker ps`."""
+    import subprocess
+    if not _animoflow_installed():
+        raise HTTPException(400, "AnimoFlow not installed yet — click Install on the AnimoFlow row first")
+    # Detect the compose file — repo ships either docker-compose.yml or
+    # compose.yaml (newer convention). Bail early with a clear message if
+    # neither is present rather than letting docker error confusingly.
+    compose_candidates = [
+        _ANIMOFLOW_DIR / "docker-compose.yml",
+        _ANIMOFLOW_DIR / "docker-compose.yaml",
+        _ANIMOFLOW_DIR / "compose.yml",
+        _ANIMOFLOW_DIR / "compose.yaml",
+    ]
+    if not any(p.exists() for p in compose_candidates):
+        raise HTTPException(500, f"no docker-compose file found in {_ANIMOFLOW_DIR} — check the repo layout")
+    # Workaround for an upstream inconsistency — mdm's Dockerfile.cpu does
+    # `COPY weights/ ./weights/` but the `weights/` folder is meant to be
+    # bind-mounted at runtime, not baked in. The COPY still requires the source
+    # dir to exist at build time, so we create an empty one. The compose file's
+    # volume mount overlays the real weights when the container starts.
+    (_ANIMOFLOW_DIR / "containers" / "mdm" / "weights").mkdir(parents=True, exist_ok=True)
+    try:
+        # Start only the momask service for the MVP text-to-motion path.
+        # Skipping the rest for now because:
+        #   - mdm needs external weights bind-mounted (MDM_WEIGHTS_DIR)
+        #   - priormdm downloads from Google Drive — flaky rate-limits
+        #   - retargeter's Dockerfile COPYs Mixamo FBX files that aren't in the repo
+        #   - kimodo is behind a `gpu` profile and needs an NVIDIA GPU
+        # MoMask alone is self-contained (bakes checkpoints via gdown in its
+        # own build) and reachable at http://localhost:8003.
+        # No `--build` flag: docker compose builds the image on first run when
+        # it doesn't exist, and re-uses the cached image on subsequent starts.
+        # Force-rebuild belongs in a separate "Rebuild" button we'll add later.
+        r = subprocess.run(
+            ["docker", "compose", "up", "-d", "momask"],
+            capture_output=True, text=True, timeout=1800, cwd=str(_ANIMOFLOW_DIR),
+        )
+        if r.returncode != 0:
+            # Docker compose spams progress lines before the actual failure —
+            # take the TAIL of the combined output so the important part isn't
+            # buried under "Image alpine Pulling / Pulled" noise. 1500 chars
+            # is usually enough to see the failing RUN step + its error.
+            combined = ((r.stderr or "") + "\n" + (r.stdout or "")).strip()
+            tail = combined[-1500:] if len(combined) > 1500 else combined
+            raise HTTPException(500, f"docker compose failed:\n{tail}")
+    except FileNotFoundError:
+        raise HTTPException(500, "docker command not on PATH — restart run.bat after installing Docker")
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "docker compose timed out after 30 minutes — check Docker Desktop's build logs")
+    return {"success": True}
+
+
+@app.post("/api/motion/generate")
+async def motion_generate(request: Request):
+    """Proxy the client's prompt to MoMask's /generate endpoint, decode the
+    returned NPZ (which is a numpy zip carrying poses: (T, 22, 3) joint
+    positions in HumanML3D order), and return the frames as plain JSON. Doing
+    the NPZ decode server-side sidesteps needing a JS numpy zip parser.
+    HumanML3D coord frame is Y-up, meters-scale — the client can plot the
+    joints directly as world positions."""
+    import base64
+    import io
+    import httpx
+    try:
+        import numpy as np
+    except ImportError:
+        raise HTTPException(500, "numpy not installed — required to decode MoMask output")
+    body = await request.json()
+    prompt = (body.get("prompt") or "").strip()
+    if not prompt:
+        raise HTTPException(400, "prompt is required")
+    payload = {
+        "prompt": prompt,
+        "max_frames": int(body.get("max_frames") or 120),
+        "seed": int(body.get("seed") or 42),
+    }
+    # 5 min hard cap — CPU inference on a longer prompt can take a couple of
+    # minutes; anything beyond that likely means the container's model isn't
+    # loaded or the request wedged. httpx AsyncClient handles the wait cleanly.
+    try:
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            r = await client.post("http://localhost:8003/generate", json=payload)
+            if r.status_code != 200:
+                raise HTTPException(r.status_code, f"MoMask error: {r.text[:500]}")
+            data = r.json()
+    except httpx.ConnectError:
+        raise HTTPException(503, "can't reach MoMask at localhost:8003 — is the container running?")
+    npz_b64 = data.get("npz_b64")
+    metadata = data.get("metadata") or {}
+    if not npz_b64:
+        raise HTTPException(500, "MoMask response missing npz_b64")
+    # Decode the NPZ envelope. Only `poses` is required — MoMask also stuffs the
+    # prompt in there but we already have it client-side. `poses` shape is
+    # (T frames, 22 joints, 3 xyz).
+    try:
+        buf = io.BytesIO(base64.b64decode(npz_b64))
+        with np.load(buf, allow_pickle=True) as npz:
+            poses = npz["poses"].astype(float)
+    except Exception as e:
+        raise HTTPException(500, f"NPZ decode failed: {e}")
+    if poses.ndim != 3 or poses.shape[1] != 22 or poses.shape[2] != 3:
+        raise HTTPException(500, f"unexpected poses shape {poses.shape} — expected (T, 22, 3)")
+    return {
+        "prompt": prompt,
+        "num_frames": int(poses.shape[0]),
+        "joints_per_frame": 22,
+        # Round to 4 decimals — enough precision for visualization, cuts JSON
+        # payload roughly in half vs full float precision.
+        "poses": poses.round(4).tolist(),
+        "metadata": metadata,
+    }
+
+
+@app.post("/api/motion/install")
+async def motion_install_animoflow():
+    """Clone the AnimoFlow repo into APP_DIR/tools/animoflow. Runs synchronously
+    with a hard timeout — clone is a few dozen MB so it should complete inside
+    2 minutes on a normal connection. Returns success even if the folder was
+    already present (idempotent) so the frontend can re-trigger without
+    thinking about state."""
+    import subprocess
+    if _animoflow_installed():
+        return {"success": True, "already_installed": True, "path": str(_ANIMOFLOW_DIR)}
+    _ANIMOFLOW_DIR.parent.mkdir(parents=True, exist_ok=True)
+    # If the target dir exists but isn't a git repo (partial prior attempt),
+    # bail early with a clear message rather than letting git error confusingly.
+    if _ANIMOFLOW_DIR.exists() and not (_ANIMOFLOW_DIR / ".git").exists():
+        raise HTTPException(400, f"target exists but isn't a git repo: {_ANIMOFLOW_DIR} — delete it and retry")
+    try:
+        r = subprocess.run(
+            ["git", "clone", "--depth", "1", _ANIMOFLOW_REPO_URL, str(_ANIMOFLOW_DIR)],
+            capture_output=True, text=True, timeout=180,
+        )
+        if r.returncode != 0:
+            msg = (r.stderr or r.stdout or "").strip()[:400]
+            raise HTTPException(500, f"git clone failed: {msg}")
+    except FileNotFoundError:
+        raise HTTPException(
+            500,
+            "git not found on PATH — install Git for Windows (https://git-scm.com/download/win) then Re-check.",
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "git clone timed out after 180s — check your connection")
+    return {"success": True, "path": str(_ANIMOFLOW_DIR)}
 
 
 # ---------- workflow import (upload + AI-analyze) ----------
