@@ -1163,7 +1163,7 @@
 	.assistant-input-row:focus-within { background: rgba(255,255,255,0.05); }
 	.assistant-shell:focus-within { border-color: rgba(255,180,84,0.35); }
 
-	.prim-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; position: relative; }
+	.prim-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; position: relative; }
 	/* Reserved future-tool placeholders (data-tool="soon-1" etc.) get hidden
 	   entirely instead of rendering a dim empty circle during the ~100ms
 	   before refreshUtilTools resolves. When a util module claims one of the
@@ -1531,7 +1531,7 @@
 	.out-group:hover { background: rgba(255,255,255,0.06); }
 	.out-group.selected { background: rgba(255,180,84,0.10); box-shadow: inset 0 0 0 1px rgba(255,180,84,0.28); }
 	.out-group.selected .out-name { color: #ffb454; }
-	.out-group.hidden .out-name { opacity: 0.35; text-decoration: line-through; }
+	.out-group.hidden { opacity: 0.5; }
 	.out-group.locked .out-lock { color: #ffb454; }
 	.out-group.locked .out-name { opacity: 0.55; }
 	.out-group-icon {
@@ -1648,12 +1648,12 @@
 	.out-img.has-image { border-style: solid; border-color: rgba(255,255,255,0.12); }
 	.out-img svg { width: 12px; height: 12px; }
 	.out-img.has-image svg { display: none; }
-	.out-row.hidden .out-img { opacity: 0.45; }
 	.out-row:hover { background: rgba(255,255,255,0.07); }
 	.out-row.selected { background: rgba(255,180,84,0.12); box-shadow: inset 0 0 0 1px rgba(255,180,84,0.35); }
 	.out-row.selected .out-name { color: #ffb454; }
-	.out-row.hidden .out-name { opacity: 0.35; text-decoration: line-through; }
-	.out-row.hidden .out-color, .out-row.hidden .out-ref { opacity: 0.45; }
+	/* Hidden — dim the whole row uniformly. No strikethrough; the eye glyph +
+	   reduced opacity are the signal. */
+	.out-row.hidden { opacity: 0.5; }
 
 	.out-color {
 		width: 26px; height: 26px; padding: 0; border: none;
@@ -2507,24 +2507,35 @@
 		border-top: 1px solid rgba(255,255,255,0.04);
 	}
 	.bg-cell.active .bg-cell-body { display: flex; }
-	/* Compact joint-slider row inside the Mannequin joints cell — one row per
-	   axis, label on the left, slider fills, degrees readout pinned right.
-	   Sliders share a tight visual footprint so the ~19-bone stack fits in
-	   the pane without excessive scroll. */
-	.joint-slider-row {
-		display: grid; grid-template-columns: 14px 1fr 40px;
-		align-items: center; gap: 8px;
-		font: 11px ui-monospace, SFMono-Regular, Consolas, monospace;
-		color: rgba(255,255,255,0.72);
+	/* Collapse override — clicking the head of the currently-active cell hides
+	   its body without dropping the mode. Lets the user tuck the color picker
+	   / image controls out of the way when they're done tweaking. */
+	.bg-cell.active.collapsed .bg-cell-body { display: none; }
+	/* Compact per-bone row inside the Mannequin joints list — dot + label +
+	   three X/Y/Z drag-num pills fit on one line so the ~19-bone stack shows
+	   without any accordion expand step. Non-zero pills get an amber tint so
+	   the user can eyeball which bones have been posed off rest. */
+	.joint-rows { display: flex; flex-direction: column; gap: 3px; }
+	.joint-row {
+		display: grid; grid-template-columns: 14px 1fr repeat(3, 46px);
+		align-items: center; gap: 4px;
+		padding: 4px 6px;
+		background: rgba(255,255,255,0.03);
+		border-radius: 4px;
+		font: 11px ui-sans-serif, system-ui;
+		color: rgba(255,255,255,0.85);
 	}
-	.joint-slider-row input[type=range] {
-		width: 100%; height: 14px; margin: 0; background: transparent; accent-color: #ffb454;
+	.joint-row .joint-thumb {
+		text-align: center; color: rgba(255,255,255,0.5);
+		font: 12px ui-monospace, monospace;
 	}
-	.joint-slider-row .joint-val {
-		text-align: right; color: rgba(255,255,255,0.55); font-size: 10px;
+	.joint-row .joint-label { font-size: 11px; }
+	.joint-row .drag-num {
+		height: 22px; padding: 0 6px; gap: 4px;
+		font: 10px ui-monospace, SFMono-Regular, Consolas, monospace;
 	}
-	.joint-slider-row.non-zero .joint-val { color: #ffd28a; }
-	.joint-slider-row .joint-axis-label { color: rgba(255,255,255,0.4); text-transform: uppercase; }
+	.joint-row .drag-num .drag-label { font-size: 9px; }
+	.joint-row .drag-num.non-zero .drag-val { color: #ffd28a; }
 	.bg-cell-picker {
 		width: 100%; padding: 8px 12px;
 		background: rgba(255,255,255,0.06);
@@ -3001,8 +3012,15 @@
 				<button class="prim-btn" data-prim="cone" data-label="Cone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="20" rx="7" ry="2"/><path d="M5 20L12 3l7 17"/></svg></button>
 				<button class="prim-btn" data-prim="plane" data-label="Plane"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 16l9-4 9 4-9 4-9-4z"/></svg></button>
 				<button class="prim-btn" data-prim="text" data-label="Text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 7V5h14v2"/><path d="M12 5v14"/><path d="M9 19h6"/></svg></button>
-				<button class="prim-btn" data-prim="custom" data-label="Import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M8 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4"/></svg></button>
 				<button class="prim-btn" data-prim="particles" data-label="Particles"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></svg></button>
+				<!-- Skybox + Clouds live in Objects rather than Tools since they're
+				     spawnable scene elements (backdrop sphere / volumetric FX) not
+				     workflow utilities. Clicks still route through data-tool /
+				     data-fx (routers at editor.html:8415, editor.html:8421 bind by
+				     attribute globally, section-agnostic). -->
+				<button class="prim-btn" data-tool="skybox" data-label="Skybox" title="Skybox — spawn a giant inverted sphere and paint a 360° panorama onto it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></button>
+				<button class="prim-btn" data-fx="clouds" data-label="Clouds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M7 17h11a3.5 3.5 0 0 0 .5-6.9A5.5 5.5 0 0 0 8 8.5 4 4 0 0 0 7 17z"/></svg></button>
+				<button class="prim-btn" data-prim="custom" data-label="Import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M8 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4"/></svg></button>
 			</div>
 		</div>
 
@@ -3038,18 +3056,19 @@
 				     the generic scene-video/image UI, so the user sees exactly
 				     what's needed before they try to generate. -->
 				<button class="prim-btn" data-tool="util:motion" data-hardcoded="1" data-label="AnimoFlow" title="AnimoFlow — text prompt → animated motion clip that drives the mannequin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z"/><path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z"/><path d="M16 17h4"/><path d="M4 13h4"/></svg></button>
-				<!-- Skybox — spawns a massive inverted sphere the user can upload
-				     or generate a 360° equirectangular image onto. Acts as scene
-				     backdrop; raycast disabled so the interior surface doesn't
-				     steal every viewport click (select via Outliner). -->
-				<button class="prim-btn" data-tool="skybox" data-label="Skybox" title="Skybox — spawn a giant inverted sphere and paint a 360° panorama onto it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></button>
+				<!-- Turntable — bakes a full 360° Y-rotation across the timeline
+				     as keyframes. Two modes: rotate the selected object, or
+				     orbit the render camera around a pivot (target object if
+				     set, otherwise renderCamTarget). Sets scene duration to
+				     the chosen turn length so the loop covers exactly one
+				     revolution. Everything runs client-side. -->
+				<button class="prim-btn" data-tool="turntable" data-label="Turntable" title="Turntable — bake a 360° rotation on the selection or an orbit on the camera as keyframes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3.4-7.03"/><path d="M21 4v5h-5"/></svg></button>
 				<!-- Mannequin — procedural block-figure at real-world 1.72m scale.
 				     Reference for blockouts (door frames, couches, camera height).
 				     Group with primKind="mannequin" so a future rigged GLB slots
 				     in without changing the object-inspector / delete / selection
 				     paths — those all already treat Groups as one addressable unit. -->
 				<button class="prim-btn" data-tool="mannequin" data-label="Mannequin" title="Mannequin — spawn a ~1.72m human-scale block figure for reference"><svg viewBox="3 3 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6"/><path d="m6 8 6 2 6-2"/><path d="M12 10v4"/></svg></button>
-				<button class="prim-btn" data-fx="clouds" data-label="Clouds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M7 17h11a3.5 3.5 0 0 0 .5-6.9A5.5 5.5 0 0 0 8 8.5 4 4 0 0 0 7 17z"/></svg></button>
 			</div>
 			<input type="file" id="loadmedia-file" accept="image/*,video/*" hidden>
 		</div>
@@ -3130,6 +3149,12 @@
 				     overlay; hoisted into the toolbar so the XYZ axis legend can
 				     reclaim that corner. Snap + grid sit alongside it since they
 				     configure the whole viewport (not a per-object tool). -->
+				<!-- Scene properties pill — used to live top-left of the viewport
+				     overlay; hoisted into the toolbar so the XYZ axis legend can
+				     reclaim that corner. Snap + grid sit alongside it since they
+				     configure the whole viewport (not a per-object tool). Camera
+				     properties open via the outliner's Camera row instead — the
+				     dedicated toolbar button was redundant. -->
 				<button class="vt-btn vt-icon-btn" id="scene-props-btn" title="Scene properties — environment, fog, post FX. Opens on the right without changing the view.">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="17" cy="6" r="2"/><path d="M3 19l5-6 4 4 3-3 6 5"/><path d="M3 21h18"/></svg>
 				</button>
@@ -3235,7 +3260,7 @@
 			<div id="preview-transport">
 				<button id="pv-edit" class="pv-btn" title="Edit Scene"><img class="pv-icon" src="/extensions/ComfyBlockout/icons/edit.png" alt="edit"></button>
 				<button class="pv-btn rec" id="pv-rec" title="Record video"><img class="pv-icon" src="/extensions/ComfyBlockout/icons/record.svg" alt="record"></button>
-				<button class="pv-btn" id="pv-play" title="Play / pause"><img class="pv-icon" src="/extensions/ComfyBlockout/icons/play.svg" alt="play"></button>
+				<button class="pv-btn" id="pv-play" title="Play / pause"><img class="pv-icon" src="/extensions/ComfyBlockout/icons/pause.svg" alt="pause"></button>
 				<button class="pv-btn" id="pv-rewind" title="Rewind"><img class="pv-icon" src="/extensions/ComfyBlockout/icons/rewind.svg" alt="rewind"></button>
 				<button class="pv-btn pv-glyph" id="pv-addkey" title="Add keyframe at playhead">+</button>
 				<button class="pv-btn pv-glyph" id="pv-clearkey" title="Delete selected keyframe (or all)">✕</button>
@@ -3256,7 +3281,7 @@
 		<div id="tl-rec-status" hidden></div>
 		<div id="timeline">
 			<button class="tl-btn rec" id="tl-rec" title="Record (auto-tween if keyframes exist)">●</button>
-			<button class="tl-btn" id="tl-play" title="Play / pause (space)" data-play-glyph="▶" data-pause-glyph="⏸">▶</button>
+			<button class="tl-btn" id="tl-play" title="Play / pause (space)" data-play-glyph="▶" data-pause-glyph="⏸">⏸</button>
 			<button class="tl-btn" id="tl-loop" title="Loop playback — restart at trim start when the playhead hits the end">↻</button>
 			<button class="tl-btn" id="tl-rewind" title="Rewind to start">◀◀</button>
 			<button class="tl-btn" id="tl-addkey" title="Add keyframe at playhead — keys the selected object's pos/rot/scale, or the camera if nothing is selected">+</button>
@@ -3379,12 +3404,16 @@
 				     in Point Cloud mode. -->
 				<div class="section" id="obj-mannequin-section" style="display:none">
 						<div class="section-label">Mannequin</div>
-						<div class="sub-label">Size</div>
-						<div class="select-row">
-							<select id="obj-mannequin-kind">
-								<option value="Adult">Adult</option>
-								<option value="Child">Child</option>
-							</select>
+						<!-- Copy Pose + Reset + Load side-by-side at the top so the
+						     three whole-mannequin actions sit as one row above the
+						     presets + per-joint drag stack. Copy pulls straight from
+						     the poseJoints userData (no live readout textarea to
+						     keep in sync). Load triggers the same hidden file input
+						     the animation loader below uses. -->
+						<div style="display:flex;gap:6px">
+							<button type="button" id="obj-mannequin-copy-pose" class="mp-still-btn" style="flex:1">Copy Pose</button>
+							<button type="button" id="obj-mannequin-reset" class="mp-still-btn" style="flex:1">Reset</button>
+							<button type="button" id="obj-mannequin-anim-load" class="mp-still-btn" style="flex:1">Load</button>
 						</div>
 						<div class="sub-label" style="margin-top:10px">Pose</div>
 						<div class="select-row">
@@ -3395,35 +3424,24 @@
 								<option value="Crouching">Crouching</option>
 							</select>
 						</div>
-						<button type="button" id="obj-mannequin-reset" class="mp-still-btn" style="width:100%;margin-top:8px">Reset to T-Pose</button>
-						<!-- Live readout of the current joint state — updates on
-						     drag release, preset apply, and selection change. Format
-						     matches MANNEQUIN_POSES entries so you can paste values
-						     straight back to add new presets. -->
-						<div class="sub-label" style="margin-top:10px">Current Pose</div>
-						<textarea id="obj-mannequin-pose-json" readonly rows="6" spellcheck="false"
-							style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.06);border-radius:4px;padding:6px 8px;color:rgba(255,255,255,0.85);font:11px ui-monospace,SFMono-Regular,Consolas,monospace;line-height:1.4;resize:vertical;outline:none">{}</textarea>
-						<button type="button" id="obj-mannequin-copy-pose" class="mp-still-btn" style="width:100%;margin-top:6px">Copy Pose JSON</button>
-						<!-- Per-bone slider stack — every posable bone gets a
-						     collapsible cell with X/Y/Z sliders that live-drive
-						     the bone rotation. Cell bodies build on first expand
-						     so the whole section stays cheap when collapsed. -->
+						<!-- Per-bone rotation rows — one row per posable bone with
+						     inline X/Y/Z drag-num pills that live-drive the bone
+						     rotation. Compact enough to fit the whole stack without
+						     needing accordion expand/collapse. -->
 						<div class="sub-label" style="margin-top:10px">Joint Rotations</div>
-						<div class="bg-cells" id="obj-mannequin-joints-cells" style="margin-top:4px"></div>
-						<!-- Animation loader — accepts a GLB (Mixamo-rigged clip
-						     from Mixamo / three.js examples / AnimoFlow). The
-						     first AnimationClip drives the mannequin's skeleton
-						     via an AnimationMixer that plugs into fbxMixers so
-						     the transport's play/scrub/freeze controls it for
-						     free. Load-time bone-name match — clip tracks like
+						<div class="joint-rows" id="obj-mannequin-joints-cells" style="margin-top:4px"></div>
+						<!-- Animation status/clear — Load button lives in the top row
+						     with Copy/Reset. Accepts a Mixamo-rigged GLB (Mixamo /
+						     three.js examples / AnimoFlow). The first AnimationClip
+						     drives the mannequin's skeleton via an AnimationMixer
+						     that plugs into fbxMixers so transport play/scrub/freeze
+						     control it. Bone-name match — clip tracks like
 						     `mixamorigLeftArm.quaternion` bind to the equivalent
 						     bones in Xbot's skeleton by name. -->
-						<div class="sub-label" style="margin-top:10px">Animation</div>
-						<div id="obj-mannequin-anim-status" class="hint" style="margin-top:2px;font-size:10px;color:rgba(255,255,255,0.5)">No clip loaded</div>
-						<button type="button" id="obj-mannequin-anim-load" class="mp-still-btn" style="width:100%;margin-top:6px">Load animation…</button>
+						<div id="obj-mannequin-anim-status" class="hint" style="margin-top:10px;font-size:10px;color:rgba(255,255,255,0.5)">No clip loaded</div>
 						<button type="button" id="obj-mannequin-anim-clear" class="mp-still-btn" style="width:100%;margin-top:6px;background:rgba(255,80,80,0.14);color:#ff8a8a;display:none">Clear animation</button>
 						<input type="file" id="obj-mannequin-anim-file" accept=".glb,.gltf" hidden>
-						<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Mixamo-rigged .glb — transport scrubs the clip, play button plays it.</div>
+						<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Load — Mixamo-rigged .glb; transport scrubs, play plays.</div>
 					</div>
 					<div class="section" id="obj-tps-convert-section" style="display:none">
 					<div class="section-label">Mode</div>
@@ -3750,6 +3768,81 @@
 						<button class="vt-btn" id="toggle-guides">Guides</button>
 						<button class="vt-btn active" id="toggle-ar" title="Toggle aspect ratio overlay (frame + letterbox)">AR</button>
 					</div>
+				</div>
+				<!-- Target Object — when set, the render camera continuously
+				     lookAt()s the chosen object's world position each frame.
+				     Overrides any keyframed rotation (position keyframes still
+				     take effect, but the camera keeps aiming at the target).
+				     Also becomes the pivot for Turntable's Orbit-camera mode. -->
+				<div class="section">
+					<div class="section-label">Target Object</div>
+					<div class="select-row" style="margin-top:6px">
+						<select id="cam-target-select">
+							<option value="">None</option>
+						</select>
+					</div>
+					<div class="hint" style="margin-top:6px">Locks the camera aim to this object every frame. Also used as pivot for Turntable's Orbit mode.</div>
+				</div>
+				<!-- Hand-held — additive shake applied only during camera view
+				     just before render, then restored so the underlying camera
+				     state (used by keyframes / UI readouts / save) stays clean.
+				     Speed drives the noise frequency, Noise the amplitude. -->
+				<div class="section">
+					<div class="section-label">Hand-held</div>
+					<div class="drag-row" style="margin-top:6px">
+						<div class="drag-num" id="cam-handheld-speed"><span class="drag-label">Speed</span><span class="drag-val">0%</span></div>
+						<div class="drag-num" id="cam-handheld-noise"><span class="drag-label">Noise</span><span class="drag-val">0%</span></div>
+					</div>
+					<div class="hint" style="margin-top:6px">Adds subtle position + rotation shake to the render camera. 0% = off.</div>
+				</div>
+			</div>
+
+			<!-- ===== TURNTABLE TAB ===== -->
+			<!-- Client-side keyframe generator. Rotate-subject mode adds five
+			     object keyframes on the selected object's Y axis (0/π/2/π/3π/2/2π);
+			     Orbit-camera mode revolves the render camera around the Target
+			     Object (or renderCamTarget as fallback) at the current radius +
+			     height. Both modes set the scene duration to the chosen length
+			     so one loop = one revolution. -->
+			<div class="rp-pane" id="rp-pane-turntable" hidden>
+				<div class="section">
+					<div class="section-label">Mode</div>
+					<div class="pill-toggle" style="margin-top:6px">
+						<button type="button" class="active" data-tt-mode="subject">Rotate subject</button>
+						<button type="button" data-tt-mode="camera">Orbit camera</button>
+					</div>
+					<div class="hint" id="tt-mode-hint" style="margin-top:6px">Rotates the currently selected object 360° around its Y axis.</div>
+				</div>
+				<div class="section">
+					<div class="section-label">Duration</div>
+					<div class="pill-toggle" style="margin-top:6px">
+						<button type="button" data-tt-dur="3">3s</button>
+						<button type="button" class="active" data-tt-dur="5">5s</button>
+						<button type="button" data-tt-dur="10">10s</button>
+					</div>
+				</div>
+				<div class="section">
+					<div class="section-label">Direction</div>
+					<div class="pill-toggle" style="margin-top:6px">
+						<button type="button" class="active" data-tt-dir="cw">Clockwise</button>
+						<button type="button" data-tt-dir="ccw">Counter</button>
+					</div>
+				</div>
+				<!-- Orbit-mode ring controls — only visible while _camOrbit is
+				     active (Mode = "Orbit camera"). Radius/Height edit the live
+				     procedural constraint so the ring resizes and camera
+				     re-samples on every drag tick, no re-bake step. -->
+				<div class="section" id="tt-orbit-controls" style="display:none">
+					<div class="section-label">Ring</div>
+					<div class="drag-row" style="margin-top:6px">
+						<div class="drag-num" id="tt-radius"><span class="drag-label">Radius</span><span class="drag-val">3.00</span></div>
+						<div class="drag-num" id="tt-height"><span class="drag-label">Height</span><span class="drag-val">1.50</span></div>
+					</div>
+					<div class="hint" style="margin-top:6px">Drag to scale the orbit. Camera stays aimed at the pivot.</div>
+				</div>
+				<div class="section">
+					<button type="button" id="tt-generate" class="mp-still-btn" style="width:100%">Generate Keyframes</button>
+					<div class="hint" id="tt-status" style="margin-top:6px;color:rgba(255,255,255,0.55)"></div>
 				</div>
 			</div>
 
@@ -5228,7 +5321,9 @@ function frameSceneCamOnShot() {
 function setActiveView(which) {
 	// Always sync helper visibility so clicking Scene while already in Scene view
 	// still guarantees the wireframe is showing (helper starts hidden at boot).
-	renderCamHelper.visible = which === "scene";
+	// Honors the outliner's Camera-row eye toggle — if the user hid the wireframe,
+	// scene view stays clean regardless.
+	renderCamHelper.visible = which === "scene" && !renderCam.userData.wireframeHidden;
 	if (which === activeView) return;
 	// Save the outgoing camera's orbit target before swapping so re-entering that
 	// view restores exactly where the user was looking last.
@@ -7201,6 +7296,7 @@ function forceRightPane(which, label) {
 	const mpPane  = document.getElementById("rp-pane-mediapipe");
 	const boolPane = document.getElementById("rp-pane-bool");
 	const utilPane = document.getElementById("rp-pane-util");
+	const ttPane = document.getElementById("rp-pane-turntable");
 	const prjPane = document.getElementById("rp-pane-projects");
 	const titleEl = document.getElementById("rp-title");
 	const kickerEl = document.getElementById("rp-kicker");
@@ -7214,6 +7310,7 @@ function forceRightPane(which, label) {
 	if (mpPane)  mpPane.hidden  = which !== "mediapipe";
 	if (boolPane) boolPane.hidden = which !== "bool";
 	if (utilPane) utilPane.hidden = which !== "util";
+	if (ttPane) ttPane.hidden = which !== "turntable";
 	if (prjPane) prjPane.hidden = which !== "projects";
 	// Assets + Projects own the kicker label with no sub-title. Object / Scene /
 	// Camera / GenCell / WorkflowCell use "Properties : <label>". "none" hides
@@ -7229,7 +7326,7 @@ function forceRightPane(which, label) {
 	if (sepEl) sepEl.style.display = (isFullPane || isBlank) ? "none" : "";
 	if (titleEl) {
 		titleEl.style.display = (isFullPane || isBlank) ? "none" : "";
-		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : which === "gencell" ? "Generator" : which === "workflowcell" ? "Workflow" : which === "mediapipe" ? "MediaPipe" : which === "bool" ? "Boolean" : which === "util" ? "Util" : "Object");
+		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : which === "gencell" ? "Generator" : which === "workflowcell" ? "Workflow" : which === "mediapipe" ? "MediaPipe" : which === "bool" ? "Boolean" : which === "util" ? "Util" : which === "turntable" ? "Turntable" : "Object");
 	}
 	// Keep top-header + viewport-toolbar buttons in sync with whichever full-pane
 	// view is active. Assistant button now toggles agent-zone collapse (wired
@@ -7243,6 +7340,10 @@ function forceRightPane(which, label) {
 	// #mode-view-toggle, whose glyph is driven from setActiveView instead of
 	// from the active properties pane, so no pane-side sync is needed here.
 	document.getElementById("scene-props-btn")?.classList.toggle("active", which === "scene");
+	// Outliner's camera row mirrors the Camera pane's open state — targeted
+	// class toggle instead of a full refreshOutliner() so pane switches don't
+	// tear down + rebuild every row.
+	document.querySelector('#outliner .out-cam-row')?.classList.toggle("selected", which === "camera");
 	// Filter chips live in the right-panel header (so they sit on the ASSETS baseline)
 	// — only meaningful while the assets pane is the active one.
 	const filterEl = document.getElementById("assets-filter");
@@ -7259,6 +7360,21 @@ function forceRightPane(which, label) {
 	if (which === "assets" || which === "scene" || which === "camera") {
 		LAST_SWITCHER_PANE = which;
 		try { localStorage.setItem(LAST_SWITCHER_PANE_KEY, which); } catch {}
+	}
+	// Refresh the Camera pane's Target Object dropdown + Handheld field
+	// readouts every time it becomes visible, so a freshly-added object shows
+	// up as a selectable target and the pills reflect current state after a
+	// deserialize/undo.
+	if (which === "camera") {
+		if (typeof refreshCamTargetOptions === "function") refreshCamTargetOptions();
+		document.getElementById("cam-handheld-speed")?._refresh?.();
+		document.getElementById("cam-handheld-noise")?._refresh?.();
+	}
+	if (which === "turntable") {
+		if (typeof _ttSyncPillsFromState === "function") _ttSyncPillsFromState();
+		if (typeof _ttSyncOrbitControls === "function") _ttSyncOrbitControls();
+		if (typeof _ttSyncGenerateBtn === "function") _ttSyncGenerateBtn();
+		if (typeof _turntableRefreshHint === "function") _turntableRefreshHint();
 	}
 	// Assets pane needs its list populated when it becomes visible — the
 	// pane's own openAssets() handler wires this for user-driven opens, but
@@ -8025,11 +8141,72 @@ function refreshOutliner() {
 			: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>`;
 		hideAllBtn.title = allHidden ? "Show all objects" : "Hide all objects";
 	}
+	// Render camera — always present in the outliner so the user can jump
+	// straight to Camera properties without hunting for the top-toolbar
+	// button. Lock + eye buttons mirror the regular object rows: lock
+	// disables viewport-picking + transform on the renderCam wireframe,
+	// eye toggles the wireframe helper's user-hide preference (which then
+	// ANDs with activeView === "scene" — the helper stays hidden in camera
+	// view regardless). Amber "selected" tint reflects Camera-pane state.
+	{
+		const camPaneOpen = document.getElementById("rp-pane-camera") && !document.getElementById("rp-pane-camera").hidden;
+		const camLocked = !!renderCam.userData.locked;
+		const camHidden = !!renderCam.userData.wireframeHidden;
+		const camRow = document.createElement("div");
+		camRow.className = "out-row out-cam-row"
+			+ (camPaneOpen ? " selected" : "")
+			+ (camHidden ? " hidden" : "")
+			+ (camLocked ? " locked" : "");
+		camRow.innerHTML = `
+			<div class="out-head">
+				<span class="out-cam-icon" style="width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.85);flex:0 0 auto">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+				</span>
+				<span class="out-name"><span class="out-name-text">Camera</span></span>
+				<div class="out-head-end">
+					<button class="out-lock" title="${camLocked ? "Unlock" : "Lock (prevents viewport picking + transform)"}">
+						${camLocked
+							? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`
+							: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0"/></svg>`}
+					</button>
+					<button class="out-vis" title="Show/hide wireframe">${camHidden ? "○" : "◉"}</button>
+					<button class="out-expand-toggle" title="Open Camera properties">▾</button>
+				</div>
+			</div>
+		`;
+		camRow.querySelector(".out-lock").addEventListener("click", e => {
+			e.stopPropagation();
+			renderCam.userData.locked = !renderCam.userData.locked;
+			// If we just locked while renderCam is currently selected, detach
+			// the gizmo — matches how regular object-row lock works.
+			if (renderCam.userData.locked && selected === renderCam) transform.detach();
+			refreshOutliner();
+			saveScene?.();
+		});
+		camRow.querySelector(".out-vis").addEventListener("click", e => {
+			e.stopPropagation();
+			renderCam.userData.wireframeHidden = !renderCam.userData.wireframeHidden;
+			// Recompute effective visibility. Camera view keeps it hidden
+			// regardless; scene view honors the user's preference.
+			renderCamHelper.visible = activeView === "scene" && !renderCam.userData.wireframeHidden;
+			refreshOutliner();
+			saveScene?.();
+		});
+		camRow.addEventListener("click", () => {
+			// Toggle — second click on the row closes the Camera pane back to
+			// the default (Object if something's selected, else nothing). Same
+			// behavior as the top-toolbar cam-props-btn.
+			const pane = document.getElementById("rp-pane-camera");
+			if (pane && !pane.hidden) forceRightPane(defaultRightPane());
+			else forceRightPane("camera", "Camera");
+		});
+		outlinerEl.appendChild(camRow);
+	}
 	if (objects.length === 0) {
-		const empty = document.createElement("div");
-		empty.className = "out-empty";
-		empty.textContent = "Add an object from above";
-		outlinerEl.appendChild(empty);
+		// No user-added objects yet — the Camera row above stands alone.
+		// Sync the target dropdown so its options reflect the current (empty)
+		// object list, then bail before hitting the group/row layout code.
+		if (typeof refreshCamTargetOptions === "function") refreshCamTargetOptions();
 		return;
 	}
 	// Resolve group members by object REFERENCE (not just name) so duplicate
@@ -8232,6 +8409,10 @@ function refreshOutliner() {
 		}
 		outlinerEl.appendChild(card);
 	}
+	// Sync the Camera pane's Target Object dropdown with the current object
+	// list — new objects appear as options, removed ones drop out (+ clear
+	// the lock if the currently-targeted object is gone).
+	if (typeof refreshCamTargetOptions === "function") refreshCamTargetOptions();
 }
 
 function updateStatus(extra) {
@@ -8254,6 +8435,10 @@ canvas.addEventListener("pointerdown", e => { pointerDownX = e.clientX; pointerD
 // without our pickBox intercepting them.
 canvas.addEventListener("pointerdown", e => {
 	if (!renderCamHelper.visible) return;
+	// Outliner lock — treat renderCam like any locked object: picks don't
+	// route to it and the gizmo can't attach. Users can still hit the row
+	// itself to open Camera properties.
+	if (renderCam.userData.locked) return;
 	if (selected === renderCam) return;
 	if (e.button !== 0 || e.altKey) return; // Alt-drag / RMB stay routed to their handlers
 	if (transform.dragging || transform.axis) return; // already interacting with the gizmo
@@ -8482,6 +8667,15 @@ function runTool(kind) {
 	if (kind === "mannequin") {
 		spawnMannequin();
 		refreshObjectInspector?.();
+		return;
+	}
+	if (kind === "turntable") {
+		// Keep the current selection — the tool needs it to know what to rotate
+		// (subject mode) or orbit around (camera mode). Just opens the pane;
+		// user picks Mode / Duration / Direction then hits Generate. Auto-run
+		// would ship keyframes before the user has a chance to pick a length.
+		forceRightPane("turntable", "Turntable");
+		_turntableRefreshHint?.();
 		return;
 	}
 	if (kind && kind.startsWith("soon-")) return;
@@ -12492,14 +12686,12 @@ function _findActiveSkybox() {
 // `objects[]` so TransformControls attaches at the root and the whole
 // figure moves as one unit.
 //
-// Adult/Child is a uniform-scale toggle on the inner root (Xbot doesn't
-// ship a child variant). Reset returns every bone to its captured rest
-// rotation. Per-bone center-dot gizmos let the user drag-pose bones on
-// the canvas. Saved rotations round-trip via serialization as a sparse
-// "bone.axis" → degrees map.
+// Reset returns every bone to its captured rest rotation. Per-bone
+// center-dot gizmos let the user drag-pose bones on the canvas. Saved
+// rotations round-trip via serialization as a sparse "bone.axis" →
+// degrees map.
 
 const MANNEQUIN_XBOT_URL = "https://threejs.org/examples/models/gltf/Xbot.glb";
-const MANNEQUIN_HEIGHT_SCALES = { Adult: 1.0, Child: 0.7 };
 const MANNEQUIN_BODY_COLOR = 0x8a8a90;
 const MANNEQUIN_HIGHLIGHT_COLOR = 0xffb454;
 // Per-bone drag mapping — horizontal drag rotates axisX with sensX,
@@ -12573,7 +12765,7 @@ const MANNEQUIN_POSES = {
 		"mixamorigRightFoot.y":    -17.7,
 	},
 };
-const _MANNEQUIN_GIZMO_RADIUS = 0.014;
+const _MANNEQUIN_GIZMO_RADIUS = 0.02;
 
 // Cached loaded GLTF scene — every spawn clones this via SkeletonUtils
 // so skinning stays intact across independent mannequin instances.
@@ -12597,88 +12789,15 @@ async function _mannequinCloneXbot() {
 
 function _mannequinReplaceMaterials(root, wrapper) {
 	// Fresh grey MeshStandardMaterial per instance — sharing across
-	// mannequins would couple selection tint / future shader hooks
-	// between figures. Cheap to allocate; matches the mockup look.
-	// transparent=true is required so the shader-injected alpha drop in
-	// the fade bubble around a hovered joint actually reaches the
-	// framebuffer as blending.
-	const fadeUniforms = {
-		fadeCenter: { value: new THREE.Vector3() },
-		fadeActive: { value: 0.0 },
-		fadeInner:  { value: 0.02 },  // fully-faded core (small dot, not a hard disk)
-		fadeOuter:  { value: 0.32 },  // fully-opaque falloff radius (wide gradient reads as gentle mist)
-		fadeAlpha:  { value: 0.15 },  // target opacity at the very center
-	};
-	wrapper.userData._fadeUniforms = fadeUniforms;
+	// mannequins would couple selection tint between figures.
 	root.traverse(o => {
 		if (o.isMesh) {
-			const mat = new THREE.MeshStandardMaterial({
+			o.material = new THREE.MeshStandardMaterial({
 				color: MANNEQUIN_BODY_COLOR, roughness: 0.85, metalness: 0.0,
-				transparent: true, opacity: 1.0, depthWrite: true,
 			});
-			_mannequinInstallFadeShader(mat, fadeUniforms);
-			o.material = mat;
 			o.castShadow = true;
 		}
 	});
-}
-
-// Radial-gradient fade around the hovered/dragged joint's WORLD position —
-// mesh becomes see-through in a bounded sphere around the interaction target
-// so the gizmo dot pops without dimming the whole limb chain a subtree mask
-// would. Runs off onBeforeCompile so we only patch three's standard shader
-// with minimal chunk-splice edits (no full material rewrite).
-function _mannequinInstallFadeShader(material, uniforms) {
-	material.onBeforeCompile = (shader) => {
-		shader.uniforms.fadeCenter = uniforms.fadeCenter;
-		shader.uniforms.fadeActive = uniforms.fadeActive;
-		shader.uniforms.fadeInner  = uniforms.fadeInner;
-		shader.uniforms.fadeOuter  = uniforms.fadeOuter;
-		shader.uniforms.fadeAlpha  = uniforms.fadeAlpha;
-		// VERTEX — pass post-skinning WORLD position to the fragment stage.
-		// three's <skinning_vertex> chunk deposits the final skinned local
-		// position in `transformed`; modelMatrix lifts it to world space.
-		shader.vertexShader = shader.vertexShader
-			.replace("#include <common>", `#include <common>
-varying vec3 vFadeWorldPos;`)
-			.replace("#include <skinning_vertex>", `#include <skinning_vertex>
-vFadeWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
-		// FRAGMENT — smoothstep between fadeInner and fadeOuter on world-
-		// space distance to fadeCenter. fadeActive gates the whole effect
-		// so it's a straight no-op when nothing's hovered.
-		shader.fragmentShader = shader.fragmentShader
-			.replace("#include <common>", `#include <common>
-uniform vec3 fadeCenter;
-uniform float fadeActive;
-uniform float fadeInner;
-uniform float fadeOuter;
-uniform float fadeAlpha;
-varying vec3 vFadeWorldPos;`)
-			.replace("#include <colorspace_fragment>", `float _fdist = distance(vFadeWorldPos, fadeCenter);
-float _fmask = (1.0 - smoothstep(fadeInner, fadeOuter, _fdist)) * fadeActive;
-gl_FragColor.a *= mix(1.0, fadeAlpha, _fmask);
-#include <colorspace_fragment>`);
-	};
-	material.needsUpdate = true;
-}
-
-// Position the fade sphere at the given bone's current world position
-// on the wrapper's uniforms. Passing null bone deactivates the effect.
-const _mannequinFadeTmpVec = new THREE.Vector3();
-function _mannequinSetFade(wrapper, bone) {
-	const u = wrapper?.userData?._fadeUniforms;
-	if (!u) return;
-	if (!bone) { u.fadeActive.value = 0.0; return; }
-	bone.getWorldPosition(_mannequinFadeTmpVec);
-	u.fadeCenter.value.copy(_mannequinFadeTmpVec);
-	u.fadeActive.value = 1.0;
-}
-
-function _mannequinSetScale(wrapper, kindName) {
-	const s = MANNEQUIN_HEIGHT_SCALES[kindName] || 1.0;
-	const root = wrapper.userData._innerRoot;
-	if (root) root.scale.setScalar(s);
-	wrapper.userData.mannequinKind = kindName;
 }
 
 async function spawnMannequin(opts = {}) {
@@ -12726,7 +12845,6 @@ async function spawnMannequin(opts = {}) {
 		const restRotations = new Map();
 		for (const b of skeleton.bones) restRotations.set(b.name, b.rotation.clone());
 		wrapper.userData._restRotations = restRotations;
-		_mannequinSetScale(wrapper, opts.kind || "Adult");
 		if (opts.poseJoints && Object.keys(opts.poseJoints).length) {
 			_mannequinApplyPoseJoints(wrapper, opts.poseJoints);
 		}
@@ -12740,18 +12858,6 @@ async function spawnMannequin(opts = {}) {
 	}
 	if (typeof saveScene === "function") saveScene();
 	return wrapper;
-}
-
-// Adult/Child swap. Uniform scale on the inner root; wrapper
-// transform stays untouched so the figure stays anchored.
-function mannequinSetKind(wrapper, kindName) {
-	if (!wrapper || wrapper.userData?.primKind !== "mannequin") return;
-	if (!wrapper.userData._innerRoot) return;
-	_mannequinSetScale(wrapper, kindName);
-	_mannequinReground(wrapper);
-	clearSelectionTint();
-	if (selected === wrapper) applySelectionTint(wrapper);
-	if (typeof saveScene === "function") saveScene();
 }
 
 // Apply a named preset from MANNEQUIN_POSES. "T-Pose" (or legacy
@@ -12771,7 +12877,6 @@ function mannequinSetPose(wrapper, presetName) {
 	_mannequinReground(wrapper);
 	clearSelectionTint();
 	if (selected === wrapper) applySelectionTint(wrapper);
-	_mannequinRenderPoseJson(wrapper);
 	_mannequinRefreshJointCellsFromState(wrapper);
 	if (typeof saveScene === "function") saveScene();
 }
@@ -12807,7 +12912,6 @@ function _mannequinSyncPoseJoints(wrapper) {
 		}
 	}
 	wrapper.userData.mannequinPoseJoints = joints;
-	_mannequinRenderPoseJson(wrapper);
 }
 
 // Apply a saved poseJoints map. Resets each posable bone to rest
@@ -12832,27 +12936,12 @@ function _mannequinApplyPoseJoints(wrapper, joints) {
 	}
 }
 
-function _mannequinRenderPoseJson(wrapper) {
-	const ta = document.getElementById("obj-mannequin-pose-json");
-	if (!ta) return;
-	if (!wrapper || selected !== wrapper) return;
-	const joints = wrapper.userData?.mannequinPoseJoints || {};
-	const rounded = {};
-	for (const [k, v] of Object.entries(joints)) rounded[k] = Number(v.toFixed(1));
-	ta.value = JSON.stringify(rounded, null, 2);
-}
-
-// ── Joint slider cells ───────────────────────────────────────────
-// Per-posable-bone expandable cell with X/Y/Z sliders that drive the
-// bone's rotation live. Cells build once on first render + refresh
-// their slider values whenever the pose changes (preset apply, drag-
-// pose release, or a slider on another cell mutating the state).
-//
-// UI parallels the BG image/video cells in scene properties — one
-// cell open at a time, clicking a head toggles .active. Sliders act
-// as relative offsets from the bone's REST rotation (same convention
-// as MANNEQUIN_POSES entries), so 0 = rest and the value on the right
-// reads as degrees off T-pose.
+// ── Joint rotation rows ──────────────────────────────────────────
+// Per-posable-bone row with three inline X/Y/Z drag-num pills that
+// live-drive the bone's rotation. Pills use the same setupDragField
+// helper as Transform position/rotation/scale — drag to scrub, click
+// to type. Values are relative offsets from the bone's REST rotation
+// (same convention as MANNEQUIN_POSES entries), so 0 = rest.
 
 // Display order — head-to-toe grouping so the stack reads
 // anatomically instead of alphabetically.
@@ -12880,104 +12969,77 @@ function _mannequinBuildJointCells(wrapper) {
 	if (!bonesByName) return;
 	for (const boneName of MANNEQUIN_JOINT_DISPLAY_ORDER) {
 		if (!bonesByName.has(boneName)) continue;
-		const cell = document.createElement("div");
-		cell.className = "bg-cell";
-		cell.dataset.bone = boneName;
-		cell.innerHTML = `
-			<div class="bg-cell-head" data-role="joint-head">
-				<div class="bg-cell-thumb" style="display:flex;align-items:center;justify-content:center;background:transparent;border:none;color:rgba(255,255,255,0.6);font-family:ui-monospace,monospace;font-size:14px">◉</div>
-				<div class="bg-cell-label">${_mannequinPrettyBoneName(boneName)}</div>
-				<div style="color:rgba(255,255,255,0.4);font:10px ui-monospace,monospace" data-role="joint-summary"></div>
-			</div>
-			<div class="bg-cell-body">
-				${["x", "y", "z"].map(a => `
-					<div class="joint-slider-row" data-axis="${a}">
-						<span class="joint-axis-label">${a}</span>
-						<input type="range" min="-180" max="180" step="0.1" value="0" data-bone="${boneName}" data-axis="${a}">
-						<span class="joint-val">0.0°</span>
-					</div>
-				`).join("")}
-			</div>
+		const row = document.createElement("div");
+		row.className = "joint-row";
+		row.dataset.bone = boneName;
+		row.innerHTML = `
+			<div class="joint-thumb">◉</div>
+			<div class="joint-label">${_mannequinPrettyBoneName(boneName)}</div>
+			${["x", "y", "z"].map(a => `
+				<div class="drag-num joint-drag" data-axis="${a}"><span class="drag-label">${a.toUpperCase()}</span><span class="drag-val">0°</span></div>
+			`).join("")}
 		`;
-		host.appendChild(cell);
+		host.appendChild(row);
+		// Wire each axis pill through the shared setupDragField helper so
+		// they get drag-to-scrub + click-to-edit + undo snapshot + debounced
+		// save for free (same behavior as the Transform position pills).
+		for (const axis of ["x", "y", "z"]) {
+			const pill = row.querySelector(`.drag-num[data-axis="${axis}"]`);
+			setupDragField(pill, {
+				get: () => {
+					const bone = wrapper.userData._bonesByName?.get(boneName);
+					const rest = wrapper.userData._restRotations?.get(boneName);
+					if (!bone || !rest) return 0;
+					return (bone.rotation[axis] - rest[axis]) * 180 / Math.PI;
+				},
+				set: (deg) => {
+					const bone = wrapper.userData._bonesByName?.get(boneName);
+					const rest = wrapper.userData._restRotations?.get(boneName);
+					if (!bone || !rest) return;
+					bone.rotation[axis] = rest[axis] + deg * Math.PI / 180;
+					// Sparse pose-joints update — only carry entries with
+					// non-trivial deltas so serialization stays clean.
+					const joints = wrapper.userData.mannequinPoseJoints || {};
+					const key = `${boneName}.${axis}`;
+					if (Math.abs(deg) > 0.05) joints[key] = deg;
+					else delete joints[key];
+					wrapper.userData.mannequinPoseJoints = joints;
+					wrapper.userData.mannequinPoseName = null;
+					const poseSel = document.getElementById("obj-mannequin-pose");
+					if (poseSel && document.activeElement !== poseSel) poseSel.value = "";
+					pill.classList.toggle("non-zero", Math.abs(deg) > 0.05);
+				},
+				sens: 0.5,
+				min: -180,
+				max: 180,
+				format: v => `${v.toFixed(0)}°`,
+			});
+			// Drag release: reground feet + refit selection cage, mirroring
+			// the drag-pose-on-canvas end-of-drag housekeeping.
+			pill.addEventListener("pointerup", () => {
+				_mannequinReground(wrapper);
+				clearSelectionTint();
+				if (selected === wrapper) applySelectionTint(wrapper);
+			});
+		}
 	}
-	// One accordion, click any head to expand / collapse. Only one open
-	// at a time so the pane doesn't grow into an unreadable wall.
-	host.querySelectorAll('[data-role="joint-head"]').forEach(head => {
-		head.addEventListener("click", () => {
-			const cell = head.closest(".bg-cell");
-			const wasActive = cell.classList.contains("active");
-			host.querySelectorAll(".bg-cell.active").forEach(c => c.classList.remove("active"));
-			if (!wasActive) cell.classList.add("active");
-		});
-	});
-	// Slider input → live-rotate the bone off rest + persist as a
-	// pose-joints delta so save/restore and Current Pose readout stay
-	// in sync.
-	host.querySelectorAll('input[type=range][data-bone]').forEach(inp => {
-		inp.addEventListener("input", (e) => {
-			const targetWrap = selected?.userData?.primKind === "mannequin" ? selected : null;
-			if (!targetWrap) return;
-			const boneName = inp.dataset.bone;
-			const axis = inp.dataset.axis;
-			const deg = Number(inp.value);
-			const bone = targetWrap.userData._bonesByName?.get(boneName);
-			const rest = targetWrap.userData._restRotations?.get(boneName);
-			if (!bone || !rest) return;
-			bone.rotation[axis] = rest[axis] + deg * Math.PI / 180;
-			// Sparse pose-joints update — only carry entries with
-			// non-trivial deltas so serialization stays clean.
-			const joints = targetWrap.userData.mannequinPoseJoints || {};
-			const key = `${boneName}.${axis}`;
-			if (Math.abs(deg) > 0.05) joints[key] = deg;
-			else delete joints[key];
-			targetWrap.userData.mannequinPoseJoints = joints;
-			targetWrap.userData.mannequinPoseName = null;
-			const poseSel = document.getElementById("obj-mannequin-pose");
-			if (poseSel && document.activeElement !== poseSel) poseSel.value = "";
-			_mannequinRenderPoseJson(targetWrap);
-			_mannequinRefreshJointCellsFromState(targetWrap, inp);
-		});
-		inp.addEventListener("change", () => {
-			// Release commits — reground feet + persist so foot placement
-			// after big hip/knee changes catches up + the pose survives
-			// reload. Skipping this on every "input" tick keeps the drag
-			// interactive without thrashing the server.
-			const targetWrap = selected?.userData?.primKind === "mannequin" ? selected : null;
-			if (!targetWrap) return;
-			_mannequinReground(targetWrap);
-			clearSelectionTint();
-			if (selected === targetWrap) applySelectionTint(targetWrap);
-			if (typeof saveScene === "function") saveScene();
-		});
-	});
 }
 
-// Sync slider positions + numeric readouts + non-zero-axis summary
-// from the current pose-joints state. Called on preset apply, drag-
-// pose release, selection change, and after each slider tick (with
-// the tick's own input excluded to avoid clobbering the cursor).
-function _mannequinRefreshJointCellsFromState(wrapper, exceptInput) {
+// Sync pill readouts + non-zero tint from the current pose-joints state.
+// Called on preset apply, drag-pose release, and selection change.
+function _mannequinRefreshJointCellsFromState(wrapper) {
 	const host = document.getElementById("obj-mannequin-joints-cells");
 	if (!host || !wrapper) return;
 	const joints = wrapper.userData?.mannequinPoseJoints || {};
-	for (const cell of host.querySelectorAll(".bg-cell")) {
-		const boneName = cell.dataset.bone;
-		let nonZeroCount = 0;
+	for (const row of host.querySelectorAll(".joint-row")) {
+		const boneName = row.dataset.bone;
 		for (const axis of ["x", "y", "z"]) {
-			const key = `${boneName}.${axis}`;
-			const deg = joints[key] || 0;
-			const inp = cell.querySelector(`input[data-axis="${axis}"]`);
-			const val = cell.querySelector(`.joint-slider-row[data-axis="${axis}"] .joint-val`);
-			const row = cell.querySelector(`.joint-slider-row[data-axis="${axis}"]`);
-			if (inp && inp !== exceptInput) inp.value = String(deg);
-			if (val) val.textContent = `${deg.toFixed(1)}°`;
-			const isNonZero = Math.abs(deg) > 0.05;
-			if (row) row.classList.toggle("non-zero", isNonZero);
-			if (isNonZero) nonZeroCount++;
+			const pill = row.querySelector(`.drag-num[data-axis="${axis}"]`);
+			if (!pill) continue;
+			pill._refresh?.();
+			const deg = joints[`${boneName}.${axis}`] || 0;
+			pill.classList.toggle("non-zero", Math.abs(deg) > 0.05);
 		}
-		const summary = cell.querySelector('[data-role="joint-summary"]');
-		if (summary) summary.textContent = nonZeroCount ? `${nonZeroCount} ${nonZeroCount === 1 ? "axis" : "axes"}` : "";
 	}
 }
 
@@ -13449,11 +13511,9 @@ function _mannequinSetGizmoTint(sphere, hovered) {
 
 function _mannequinClearHover() {
 	if (!_mannequinHovered) return;
-	const wrapper = _mannequinHovered.userData._mannequinWrapper;
 	_mannequinSetGizmoTint(_mannequinHovered, false);
 	_mannequinHovered = null;
 	if (canvas.style.cursor === "grab") canvas.style.cursor = "";
-	if (wrapper) _mannequinSetFade(wrapper, null);
 }
 
 (function wireMannequinDragPosing() {
@@ -13481,7 +13541,6 @@ function _mannequinClearHover() {
 			startSecondary: startSecondaryDeg,
 		};
 		_mannequinSetGizmoTint(gizmo, true);
-		_mannequinSetFade(wrapper, bone);
 		canvas.style.cursor = "grabbing";
 		try { canvas.setPointerCapture(e.pointerId); } catch {}
 	}, { capture: true });
@@ -13501,10 +13560,6 @@ function _mannequinClearHover() {
 				const rad = (_mannequinDrag.startPrimary + dy * map.sensY) * Math.PI / 180;
 				bone.rotation[map.axisY] = rest[map.axisY] + rad;
 			}
-			// Keep the fade bubble pinned to the dragged bone as its world
-			// position moves — otherwise the fade lingers at the drag-start
-			// spot and drifts off the joint you're actively posing.
-			_mannequinSetFade(_mannequinDrag.wrapper, bone);
 			return;
 		}
 		if (transform.dragging || transform.axis) return;
@@ -13518,7 +13573,6 @@ function _mannequinClearHover() {
 				_mannequinSetGizmoTint(gizmo, true);
 				_mannequinHovered = gizmo;
 			}
-			_mannequinSetFade(gizmo.userData._mannequinWrapper, gizmo.userData._mannequinBone);
 			canvas.style.cursor = "grab";
 		} else if (_mannequinHovered) {
 			_mannequinClearHover();
@@ -13535,11 +13589,16 @@ function _mannequinClearHover() {
 		e.stopPropagation();
 		e.stopImmediatePropagation();
 		const wrapper = _mannequinDrag.wrapper;
+		const dragGizmo = _mannequinDrag.gizmo;
 		_mannequinDrag = null;
 		orbit.enabled = true;
 		canvas.style.cursor = "";
+		// Clear the drag tint on the released gizmo — otherwise it sticks amber
+		// after release and a subsequent drag on a different joint leaves TWO
+		// joints tinted. If the cursor is still over it, the next pointermove
+		// re-tints it as hovered within a frame.
+		if (dragGizmo) _mannequinSetGizmoTint(dragGizmo, false);
 		_mannequinHovered = null;
-		_mannequinSetFade(wrapper, null);
 		try { canvas.releasePointerCapture(e.pointerId); } catch {}
 		_mannequinSyncPoseJoints(wrapper);
 		_mannequinReground(wrapper);
@@ -13726,15 +13785,10 @@ async function _skyboxGenerate() {
 	else hook();
 })();
 
-// Mannequin object-inspector wiring — dropdowns dispatch to
-// mannequinSetKind / mannequinSetPose against the current selection;
-// Reset returns to T-Pose (also syncs the dropdown value back to tpose).
+// Mannequin object-inspector wiring — Pose dropdown dispatches to
+// mannequinSetPose against the current selection; Reset returns to T-Pose.
 (function wireMannequinObjectInspectorButtons() {
 	const hook = () => {
-		document.getElementById("obj-mannequin-kind")?.addEventListener("change", (e) => {
-			if (selected?.userData?.primKind !== "mannequin") return;
-			mannequinSetKind(selected, e.target.value);
-		});
 		document.getElementById("obj-mannequin-pose")?.addEventListener("change", (e) => {
 			if (selected?.userData?.primKind !== "mannequin") return;
 			mannequinSetPose(selected, e.target.value);
@@ -13746,20 +13800,28 @@ async function _skyboxGenerate() {
 			if (sel) sel.value = "T-Pose";
 		});
 		document.getElementById("obj-mannequin-copy-pose")?.addEventListener("click", async () => {
-			const ta = document.getElementById("obj-mannequin-pose-json");
-			if (!ta) return;
+			const btn = document.getElementById("obj-mannequin-copy-pose");
+			if (!btn || selected?.userData?.primKind !== "mannequin") return;
+			const joints = selected.userData?.mannequinPoseJoints || {};
+			const rounded = {};
+			for (const [k, v] of Object.entries(joints)) rounded[k] = Number(v.toFixed(1));
+			const text = JSON.stringify(rounded, null, 2);
+			const orig = btn.textContent;
 			try {
-				await navigator.clipboard.writeText(ta.value);
-				const btn = document.getElementById("obj-mannequin-copy-pose");
-				const orig = btn.textContent;
+				await navigator.clipboard.writeText(text);
 				btn.textContent = "Copied";
-				setTimeout(() => { btn.textContent = orig; }, 1200);
 			} catch (e) {
-				// Clipboard blocked (permissions / focus) — fall back to
-				// selecting the textarea so the user can copy manually.
-				ta.focus();
+				// Clipboard blocked (permissions / focus) — fall back to a
+				// textarea + execCommand copy so the user still gets the JSON.
+				const ta = document.createElement("textarea");
+				ta.value = text;
+				document.body.appendChild(ta);
 				ta.select();
+				try { document.execCommand("copy"); btn.textContent = "Copied"; }
+				catch { btn.textContent = "Copy failed"; }
+				ta.remove();
 			}
+			setTimeout(() => { btn.textContent = orig; }, 1200);
 		});
 		document.getElementById("obj-mannequin-anim-load")?.addEventListener("click", () => {
 			document.getElementById("obj-mannequin-anim-file")?.click();
@@ -14813,7 +14875,7 @@ function renderMarkdown(text) {
 	return DOMPurify.sanitize(marked.parse(text || ""));
 }
 
-function pushAssistantMsg(kind, text) {
+function pushAssistantMsg(kind, text, opts = {}) {
 	// Drop the placeholder intro the first time a real message lands.
 	document.getElementById("assistant-intro")?.remove();
 	const el = document.createElement("div");
@@ -14832,7 +14894,11 @@ function pushAssistantMsg(kind, text) {
 	// its CSS `.has-new` rule kicks the soft amber pulse. Signals "new reply
 	// waiting" without needing the user to un-collapse and check. Cleared by
 	// the MutationObserver below the moment the collapse class comes off.
-	if (kind === "bot") {
+	// Suppressed during hydrateAssistantHistory (opts.silent) — replaying the
+	// persisted log on boot should NOT re-mark old bot replies as new; the user
+	// already read them in the previous session, and re-adding .has-new every
+	// reload leaves the handle pulsing until the log is cleared.
+	if (kind === "bot" && !opts.silent) {
 		const panel = document.getElementById("right-panel");
 		const handle = document.getElementById("rp-split-handle");
 		if (panel?.classList.contains("rp-agent-collapsed") && handle) {
@@ -14874,7 +14940,7 @@ async function hydrateAssistantHistory() {
 		const msgs = Array.isArray(data.messages) ? data.messages : [];
 		if (!msgs.length) return;
 		for (const m of msgs) {
-			pushAssistantMsg(m.role === "user" ? "user" : "bot", m.text);
+			pushAssistantMsg(m.role === "user" ? "user" : "bot", m.text, { silent: true });
 		}
 	} catch { /* silent — a broken log shouldn't block startup */ }
 }
@@ -16804,11 +16870,8 @@ function refreshObjectInspector() {
 	if (mannequinSection) {
 		mannequinSection.style.display = isMannequin ? "" : "none";
 		if (isMannequin) {
-			const kindSel = document.getElementById("obj-mannequin-kind");
-			if (kindSel) kindSel.value = selected.userData.mannequinKind || "Adult";
 			const poseSel = document.getElementById("obj-mannequin-pose");
 			if (poseSel) poseSel.value = selected.userData.mannequinPoseName || "";
-			_mannequinRenderPoseJson(selected);
 			_mannequinBuildJointCells(selected);
 			_mannequinRefreshJointCellsFromState(selected);
 			// Animation status reflects THIS mannequin's clip (if any) —
@@ -18209,9 +18272,17 @@ document.querySelectorAll(".bg-cell .bg-cell-head").forEach(head => {
 			return;
 		}
 		if (mode !== bgMode) {
+			// Switching TO a new cell — clear any lingering collapse state
+			// on both the outgoing and incoming so the new mode's body opens.
+			document.querySelectorAll(".bg-cell.collapsed").forEach(c => c.classList.remove("collapsed"));
 			bgMode = mode;
 			applyBgMode();
 			saveScene?.();
+		} else {
+			// Head click on the ALREADY-active cell → toggle its collapse.
+			// Only fires when the click wasn't already consumed by the thumb
+			// (loaded-asset re-picker branch returns above).
+			cell.classList.toggle("collapsed");
 		}
 		// One-click UX — clicking a cell's head auto-fires its picker so
 		// the user doesn't need to hunt for a second button in the body.
@@ -19696,34 +19767,64 @@ function loop() {
 		if (typeof _mannequinTickGizmos === "function") _mannequinTickGizmos();
 		if (typeof _motionPreviewTick === "function") _motionPreviewTick();
 		orbit.update();
+		// Camera Target Object — locks the render camera's aim to the chosen
+		// object's world position each frame. Applied AFTER orbit.update so
+		// the user's orbit tumble is overridden (the whole point of target-
+		// lock is that the aim is a constraint, not a suggestion). The
+		// frameCounter>0 gate skips the synchronous first-loop call (which
+		// fires before the `let _camTargetName` declaration below evaluates
+		// — reading a TDZ binding would throw).
+		if (frameCounter > 0 && typeof _applyCamTarget === "function") _applyCamTarget();
+		// Turntable orbit-mode ring visual — if the pivot object moved,
+		// rebuild the 128-segment LineLoop so the ring follows the pivot.
+		// Also hidden while recording so the amber path doesn't burn into
+		// the exported video (same pattern as the scatter helper boxes).
+		if (frameCounter > 0 && typeof _tickCamOrbitRing === "function") _tickCamOrbitRing();
+		if (_camOrbitRing) _camOrbitRing.visible = !recording;
 		if (anchorMode) updatePivotMarker();
+		// Hand-held shake — cache pre-shake pose then apply an additive
+		// position + rotation delta so shake reads on the final image without
+		// corrupting renderCam.position (which UI, save, and keyframes read).
+		// try/finally guarantees the pose is restored even if the render step
+		// throws — without it, a mid-render exception would leave renderCam
+		// shifted and every subsequent frame's shake would stack on top of the
+		// drift. frameCounter>0 gate matches _applyCamTarget above.
+		//
+		// Applied BEFORE renderCamHelper.update so the wireframe (visible in
+		// scene view) picks up the shaken pose — user can preview handheld
+		// motion without switching to camera view.
+		const _shakeRestore = (frameCounter > 0 && typeof _applyCamShake === "function") ? _applyCamShake() : null;
 		// Keep the render-camera helper in sync with renderCam's current pose so the
-		// wireframe follows keyframe tweens / user edits in real time.
+		// wireframe follows keyframe tweens / user edits / handheld shake in real time.
 		if (renderCamHelper.visible) renderCamHelper.update();
-		// SSAO post pipeline runs when enabled AND we're not recording (recorded
-		// mp4s stay clean for use as motion references downstream). N8AOPass keeps
-		// its own scene/camera refs — but we need to point it at the current
-		// active `camera` alias each frame since setActiveView swaps sceneCam <-> renderCam.
-		if (aoEnabled && aoComposer && !recording) {
-			// The `camera` alias swaps between sceneCam and renderCam when the
-			// user toggles Scene ↔ Camera view. RenderPass + N8AOPass both cache
-			// the camera they were constructed with, so we retarget them each
-			// frame to whichever view is active. Without this, RenderPass draws
-			// through one POV and AO computes depth from another — result reads
-			// as "no visible AO" even though the pipeline is running.
-			for (const p of aoComposer.passes) {
-				if (p.camera) p.camera = camera;
+		try {
+			// SSAO post pipeline runs when enabled AND we're not recording (recorded
+			// mp4s stay clean for use as motion references downstream). N8AOPass keeps
+			// its own scene/camera refs — but we need to point it at the current
+			// active `camera` alias each frame since setActiveView swaps sceneCam <-> renderCam.
+			if (aoEnabled && aoComposer && !recording) {
+				// The `camera` alias swaps between sceneCam and renderCam when the
+				// user toggles Scene ↔ Camera view. RenderPass + N8AOPass both cache
+				// the camera they were constructed with, so we retarget them each
+				// frame to whichever view is active. Without this, RenderPass draws
+				// through one POV and AO computes depth from another — result reads
+				// as "no visible AO" even though the pipeline is running.
+				for (const p of aoComposer.passes) {
+					if (p.camera) p.camera = camera;
+				}
+				// Color-space handoff: while the composer owns the render, the
+				// renderer must NOT apply sRGB conversion (OutputPass at the tail
+				// does it). Without this the composited output comes out visibly
+				// brighter than a raw render — sRGB gets applied twice.
+				const prevCS = renderer.outputColorSpace;
+				renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+				aoComposer.render();
+				renderer.outputColorSpace = prevCS;
+			} else {
+				renderer.render(scene, camera);
 			}
-			// Color-space handoff: while the composer owns the render, the
-			// renderer must NOT apply sRGB conversion (OutputPass at the tail
-			// does it). Without this the composited output comes out visibly
-			// brighter than a raw render — sRGB gets applied twice.
-			const prevCS = renderer.outputColorSpace;
-			renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
-			aoComposer.render();
-			renderer.outputColorSpace = prevCS;
-		} else {
-			renderer.render(scene, camera);
+		} finally {
+			if (_shakeRestore) _shakeRestore();
 		}
 	} catch (e) {
 		renderErrorCount++;
@@ -19736,6 +19837,477 @@ function loop() {
 	requestAnimationFrame(loop);
 }
 loop();
+
+
+// ── Camera Target Object + Hand-held shake ───────────────────────
+// Target Object: when set, renderCam.lookAt(target world pos) each frame,
+// overriding orbit tumble + keyframe rotation. Selection is by object name
+// (matches outliner labels; survives save/load).
+let _camTargetName = null;
+const _camHandheld = { speed: 0, noise: 0 };
+window._camHandheld = _camHandheld;
+
+function _findCamTarget() {
+	if (!_camTargetName) return null;
+	return objects.find(o => o.name === _camTargetName && o.visible !== false) || null;
+}
+const _camTargetTmp = new THREE.Vector3();
+function _applyCamTarget() {
+	const t = _findCamTarget();
+	if (!t) return;
+	t.getWorldPosition(_camTargetTmp);
+	renderCam.lookAt(_camTargetTmp);
+	renderCamTarget.copy(_camTargetTmp);
+	// If we're in camera view, orbit's target should follow so the user's
+	// next tumble pivots around the same anchor as the lock.
+	if (activeView === "camera") orbit.target.copy(_camTargetTmp);
+}
+
+// Cheap multi-freq waveform in ~[-1, 1], deterministic per (t, seed).
+function _shakeWave(t, seed) {
+	return (
+		Math.sin(t * (0.9 + seed * 0.13)) * 0.5 +
+		Math.sin(t * (2.1 + seed * 0.29) + seed) * 0.3 +
+		Math.sin(t * (5.3 + seed * 0.47) + seed * 2.7) * 0.2
+	);
+}
+
+const _camShakeTmpEuler = new THREE.Euler();
+const _camShakeTmpQuat = new THREE.Quaternion();
+function _applyCamShake() {
+	// Applies to renderCam regardless of view. In camera view the shake is
+	// what the user sees through the lens; in scene view it wobbles the
+	// renderCam wireframe helper so the user can preview the amount of
+	// shake before switching to camera view (helper.update runs AFTER
+	// this hook, so it picks up the shaken pose).
+	//
+	// Exception: in camera view with the transport paused (not playing +
+	// not recording), skip the shake — a shaking still-frame just makes it
+	// hard to compose the shot. Scene view still shakes so the wireframe
+	// preview stays live regardless of transport state.
+	const noise = _camHandheld.noise;
+	if (noise <= 0.001) return null;
+	if (activeView === "camera" && !isPlayingPreview && !recording) return null;
+	const speed = Math.max(0.05, _camHandheld.speed);
+	const t = performance.now() * 0.001 * speed * 4;
+	const savedPos = renderCam.position.clone();
+	const savedQuat = renderCam.quaternion.clone();
+	// Position shake: ~5cm at noise=1. Small enough to feel handheld, big
+	// enough to see. Different seed per axis so they don't sync.
+	const posAmp = noise * 0.05;
+	renderCam.position.x += _shakeWave(t, 7.3) * posAmp;
+	renderCam.position.y += _shakeWave(t, 3.1) * posAmp;
+	renderCam.position.z += _shakeWave(t, 5.9) * posAmp * 0.5;
+	// Rotation shake: ~1.5° at noise=1. Applied as a post-multiply so it
+	// composes on TOP of whatever aim the camera currently has (target lock,
+	// keyframe rotation, orbit).
+	const rotAmp = noise * 0.026;
+	_camShakeTmpEuler.set(
+		_shakeWave(t, 2.7) * rotAmp,
+		_shakeWave(t, 6.1) * rotAmp,
+		_shakeWave(t, 4.4) * rotAmp * 0.4,
+		"XYZ",
+	);
+	_camShakeTmpQuat.setFromEuler(_camShakeTmpEuler);
+	renderCam.quaternion.multiply(_camShakeTmpQuat);
+	return () => {
+		renderCam.position.copy(savedPos);
+		renderCam.quaternion.copy(savedQuat);
+	};
+}
+
+// Populate the Target Object dropdown from the current objects list. Called
+// on scene changes + whenever the Camera pane becomes visible.
+function refreshCamTargetOptions() {
+	const sel = document.getElementById("cam-target-select");
+	if (!sel) return;
+	const current = _camTargetName;
+	sel.innerHTML = `<option value="">None</option>`;
+	for (const o of objects) {
+		if (o.visible === false) continue;
+		const opt = document.createElement("option");
+		opt.value = o.name;
+		opt.textContent = o.name;
+		sel.appendChild(opt);
+	}
+	// Restore selection if the object still exists; otherwise clear + reset
+	// state so a since-deleted target doesn't ghost-lock the camera aim.
+	if (current && objects.some(o => o.name === current)) {
+		sel.value = current;
+	} else if (current) {
+		_camTargetName = null;
+	}
+}
+
+document.getElementById("cam-target-select")?.addEventListener("change", (e) => {
+	_camTargetName = e.target.value || null;
+	saveSceneDebounced?.();
+});
+
+// Handheld drag-num pills. 0–100% surface value maps to 0–1 internal so the
+// downstream math works in normalized units.
+for (const [id, key] of [["cam-handheld-speed", "speed"], ["cam-handheld-noise", "noise"]]) {
+	const el = document.getElementById(id);
+	if (!el) continue;
+	setupDragField(el, {
+		get: () => _camHandheld[key] * 100,
+		set: v => { _camHandheld[key] = Math.max(0, Math.min(1, v / 100)); saveSceneDebounced?.(); },
+		sens: 0.4,
+		min: 0,
+		max: 100,
+		format: v => `${v.toFixed(0)}%`,
+	});
+}
+
+// ── Turntable tool ────────────────────────────────────────────────
+// Two modes:
+// - subject: keyframe-based Y-spin on the selected object (9 keys at 45°).
+// - camera: PROCEDURAL orbit constraint stored on _camOrbit. sampleCameraAt
+//   returns the computed pose per frame — no keyframes, mathematically
+//   perfect circle. Radius/Height are live state so scaling the ring after
+//   generation updates the render on the next frame with no re-bake.
+const _turntable = { mode: "subject", duration: 5, direction: "cw" };
+
+// Procedural camera orbit state. active=false leaves sampleCameraAt on the
+// normal keyframe path. pivotName follows a scene object each frame; if
+// null, the frozen pivotPos captured at bake time is used.
+const _camOrbit = {
+	active: false,
+	pivotName: null,
+	pivotPos: [0, 0, 0],
+	radius: 3,
+	height: 1.5,
+	startYaw: 0,
+	direction: 1,
+	fov: 55,
+	up: [0, 1, 0],
+};
+window._camOrbit = _camOrbit;
+const _camOrbitTmpPivot = new THREE.Vector3();
+const _camOrbitTmpCam = new THREE.PerspectiveCamera(55);
+
+function _turntableRefreshHint() {
+	const hintEl = document.getElementById("tt-mode-hint");
+	if (!hintEl) return;
+	if (_turntable.mode === "subject") {
+		const sel = selected;
+		if (!sel || sel === renderCam) {
+			hintEl.textContent = "Select an object first — Turntable will rotate its Y axis 360°.";
+		} else {
+			hintEl.textContent = `Rotates "${sel.name}" 360° around its Y axis.`;
+		}
+	} else {
+		const pivot = _findCamTarget();
+		hintEl.textContent = pivot
+			? `Orbits the render camera around "${pivot.name}".`
+			: "Orbits the render camera around its current look-at point. Set a Target Object in Camera properties to lock the pivot.";
+	}
+}
+
+function _ttSetStatus(msg, kind = "") {
+	const el = document.getElementById("tt-status");
+	if (!el) return;
+	el.textContent = msg;
+	el.style.color = kind === "error" ? "#ff8a8a" : kind === "ok" ? "#8ae0a5" : "rgba(255,255,255,0.55)";
+}
+
+// Wire Turntable pane pill-toggles + Generate button. Runs once on load;
+// picks up handlers even if the pane is currently hidden. Orbit mode
+// auto-activates on Mode-pill click — no separate Generate click needed —
+// so switching to "Orbit camera" immediately spawns a live ring the user
+// can scale via Radius/Height pills. Switching back to "Rotate subject"
+// tears the ring down.
+(function wireTurntablePane() {
+	const wire = () => {
+		document.querySelectorAll('#rp-pane-turntable [data-tt-mode]').forEach(btn => {
+			btn.addEventListener("click", () => {
+				document.querySelectorAll('#rp-pane-turntable [data-tt-mode]').forEach(b => b.classList.remove("active"));
+				btn.classList.add("active");
+				const prev = _turntable.mode;
+				_turntable.mode = btn.dataset.ttMode;
+				if (_turntable.mode === "camera" && prev !== "camera") {
+					_ttActivateOrbitFromCurrent();
+				} else if (_turntable.mode !== "camera") {
+					_ttClearOrbit();
+				}
+				_turntableRefreshHint();
+				_ttSyncOrbitControls();
+				_ttSyncGenerateBtn();
+			});
+		});
+		document.querySelectorAll('#rp-pane-turntable [data-tt-dur]').forEach(btn => {
+			btn.addEventListener("click", () => {
+				document.querySelectorAll('#rp-pane-turntable [data-tt-dur]').forEach(b => b.classList.remove("active"));
+				btn.classList.add("active");
+				_turntable.duration = parseFloat(btn.dataset.ttDur);
+				// Duration applies to both modes — timeline seconds per one
+				// full revolution. In orbit mode we live-push it to the scene
+				// duration input so the ring's speed reflects the pill.
+				if (_camOrbit.active) {
+					const durInput = document.getElementById("duration");
+					if (durInput) {
+						durInput.value = String(_turntable.duration);
+						durInput.dispatchEvent(new Event("input", { bubbles: true }));
+						durInput.dispatchEvent(new Event("change", { bubbles: true }));
+					}
+				}
+			});
+		});
+		document.querySelectorAll('#rp-pane-turntable [data-tt-dir]').forEach(btn => {
+			btn.addEventListener("click", () => {
+				document.querySelectorAll('#rp-pane-turntable [data-tt-dir]').forEach(b => b.classList.remove("active"));
+				btn.classList.add("active");
+				_turntable.direction = btn.dataset.ttDir;
+				if (_camOrbit.active) {
+					_camOrbit.direction = btn.dataset.ttDir === "ccw" ? -1 : 1;
+					_ttApplyOrbit();
+					saveSceneDebounced?.();
+				}
+			});
+		});
+		// Radius / Height drag-num pills — live-scale the active ring. Values
+		// stored as raw meters; drag sensitivity matches other Transform pills.
+		for (const [id, key, min, max] of [
+			["tt-radius", "radius", 0.1, 50],
+			["tt-height", "height", -20, 20],
+		]) {
+			const el = document.getElementById(id);
+			if (!el) continue;
+			setupDragField(el, {
+				get: () => _camOrbit[key],
+				set: v => {
+					_camOrbit[key] = Math.max(min, Math.min(max, v));
+					_ttApplyOrbit();
+					saveSceneDebounced?.();
+				},
+				sens: 0.02,
+				min, max,
+				format: v => v.toFixed(2),
+			});
+		}
+		document.getElementById("tt-generate")?.addEventListener("click", () => {
+			_ttGenerate(_turntable.mode, _turntable.duration, _turntable.direction);
+		});
+	};
+	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wire, { once: true });
+	else wire();
+})();
+
+function _ttGenerate(mode, dur, dir) {
+	const dirSign = dir === "ccw" ? -1 : 1;
+	// Validate first so a failed run doesn't silently mutate the scene duration.
+	if (mode === "subject" && (!selected || selected === renderCam)) {
+		_ttSetStatus("Select an object first.", "error");
+		return;
+	}
+	// Sync scene duration + timeline trim so one full revolution == one loop.
+	const durInput = document.getElementById("duration");
+	if (durInput) {
+		durInput.value = String(dur);
+		durInput.dispatchEvent(new Event("input", { bubbles: true }));
+		durInput.dispatchEvent(new Event("change", { bubbles: true }));
+	}
+	if (mode === "subject") {
+		const obj = selected;
+		snapshotForUndo();
+		// 9 keys at 45° increments (0/45/…/360) + linear ease on every key so
+		// the full spin runs at constant angular velocity with no per-key slow-
+		// down. Fewer keys would let easeInOut wave through each segment;
+		// larger hops than 45° start to expose slerp shortest-arc ambiguity.
+		const N = 8;
+		const yAxis = new THREE.Vector3(0, 1, 0);
+		const baseQuat = obj.quaternion.clone();
+		const basePos = obj.position.clone();
+		const baseScale = obj.scale.clone();
+		const ks = [];
+		for (let i = 0; i <= N; i++) {
+			const angle = dirSign * (i * 2 * Math.PI / N);
+			const spin = new THREE.Quaternion().setFromAxisAngle(yAxis, angle);
+			ks.push({
+				t: i / N,
+				pos: basePos.clone(),
+				quat: baseQuat.clone().premultiply(spin),
+				scale: baseScale.clone(),
+				ease: "linear",
+			});
+		}
+		obj.userData.keyframes = ks;
+		applyObjectsAt(playhead);
+		renderKeyframeMarkers?.();
+		saveSceneDebounced?.();
+		_ttSetStatus(`Baked ${ks.length} keyframes on "${obj.name}" over ${dur}s.`, "ok");
+	}
+	// Camera-orbit mode isn't reached here — orbit is activated live from
+	// the Mode-pill click (_ttActivateOrbitFromCurrent) and lives as
+	// procedural state on _camOrbit rather than baked keyframes.
+}
+
+// Sync the Turntable pane pill states to the current _turntable / _camOrbit
+// values. Called on pane reopen so a save/load with orbit=camera doesn't
+// leave the "Rotate subject" pill visibly active while the state is orbit.
+function _ttSyncPillsFromState() {
+	document.querySelectorAll('#rp-pane-turntable [data-tt-mode]').forEach(b => {
+		b.classList.toggle("active", b.dataset.ttMode === _turntable.mode);
+	});
+	document.querySelectorAll('#rp-pane-turntable [data-tt-dur]').forEach(b => {
+		b.classList.toggle("active", parseFloat(b.dataset.ttDur) === _turntable.duration);
+	});
+	document.querySelectorAll('#rp-pane-turntable [data-tt-dir]').forEach(b => {
+		b.classList.toggle("active", b.dataset.ttDir === _turntable.direction);
+	});
+}
+
+// Show/hide + sync the Orbit-mode Radius/Height controls in the Turntable
+// pane. Controls only render when a ring is currently active — otherwise
+// they'd read zero and confuse the user before they've hit Generate.
+function _ttSyncOrbitControls() {
+	const wrap = document.getElementById("tt-orbit-controls");
+	if (!wrap) return;
+	const visible = _camOrbit.active && _turntable.mode === "camera";
+	wrap.style.display = visible ? "" : "none";
+	if (!visible) return;
+	document.getElementById("tt-radius")?._refresh?.();
+	document.getElementById("tt-height")?._refresh?.();
+}
+
+// Generate button label + visibility — only meaningful in subject mode
+// (orbit mode is live from the moment you pick it, no bake step). Hidden
+// entirely in orbit mode so the user doesn't stare at a dead button.
+function _ttSyncGenerateBtn() {
+	const btn = document.getElementById("tt-generate");
+	if (!btn) return;
+	btn.style.display = _turntable.mode === "camera" ? "none" : "";
+}
+
+// Auto-activate the orbit from the current camera + selection state.
+// Called on Mode → Orbit camera. Same pivot resolution order as the
+// keyframe-baked variant used to have: Target Object → selected → renderCamTarget.
+function _ttActivateOrbitFromCurrent() {
+	const dirSign = _turntable.direction === "ccw" ? -1 : 1;
+	const pivot = new THREE.Vector3();
+	let pivotObj = _findCamTarget();
+	if (!pivotObj && selected && selected !== renderCam) {
+		pivotObj = selected;
+		_camTargetName = pivotObj.name;
+		const sel = document.getElementById("cam-target-select");
+		if (sel) sel.value = pivotObj.name;
+	}
+	if (pivotObj) pivotObj.getWorldPosition(pivot);
+	else pivot.copy(renderCamTarget);
+	const offset = new THREE.Vector3().subVectors(renderCam.position, pivot);
+	const radius = Math.hypot(offset.x, offset.z);
+	const height = offset.y;
+	if (radius < 0.01) {
+		_ttSetStatus("Camera is on top of the pivot — move it back first.", "error");
+		return;
+	}
+	snapshotForUndo();
+	// Wipe any old camera keyframes — orbit constraint now owns the render
+	// camera; leftover keyframes would clutter the timeline with dead diamonds.
+	keyframes = [];
+	_camOrbit.active = true;
+	_camOrbit.pivotName = pivotObj ? pivotObj.name : null;
+	_camOrbit.pivotPos = pivot.toArray();
+	_camOrbit.radius = radius;
+	_camOrbit.height = height;
+	_camOrbit.startYaw = Math.atan2(offset.z, offset.x);
+	_camOrbit.direction = dirSign;
+	_camOrbit.fov = renderCam.fov;
+	_camOrbit.up = renderCam.up.toArray();
+	// Sync scene duration to the pill so playhead 0..1 covers exactly one turn.
+	const durInput = document.getElementById("duration");
+	if (durInput) {
+		durInput.value = String(_turntable.duration);
+		durInput.dispatchEvent(new Event("input", { bubbles: true }));
+		durInput.dispatchEvent(new Event("change", { bubbles: true }));
+	}
+	_ttApplyOrbit();
+	renderKeyframeMarkers?.();
+	saveSceneDebounced?.();
+	const lockNote = pivotObj ? ` · aimed at "${pivotObj.name}"` : "";
+	_ttSetStatus(`Ring orbit${lockNote}. Scale below.`, "ok");
+}
+
+// Push current _camOrbit state through to the render camera + the visual
+// ring helper. Called whenever radius/height/direction/pivot changes so
+// the scene reflects live edits without waiting for a scrub.
+function _ttApplyOrbit() {
+	if (!_camOrbit.active) return;
+	_ttRebuildOrbitRing();
+	const s = sampleCameraAt(playhead);
+	if (s) applyCameraState(s);
+}
+
+// Visual ring helper — a 128-segment LineLoop that traces the orbit path
+// in the scene. Amber tint to match the app's active-tool color; depthTest
+// off so the ring stays legible even when part of it is inside other geometry.
+let _camOrbitRing = null;
+function _ttRebuildOrbitRing() {
+	if (!_camOrbit.active) return;
+	if (_camOrbitRing) {
+		_camOrbitRing.geometry?.dispose();
+		_camOrbitRing.material?.dispose();
+		scene.remove(_camOrbitRing);
+		_camOrbitRing = null;
+	}
+	const SEG = 128;
+	const pts = [];
+	const pivot = new THREE.Vector3().fromArray(_camOrbit.pivotPos);
+	const linked = _camOrbit.pivotName ? objects.find(o => o.name === _camOrbit.pivotName) : null;
+	if (linked) linked.getWorldPosition(pivot);
+	for (let i = 0; i <= SEG; i++) {
+		const yaw = (i / SEG) * 2 * Math.PI;
+		pts.push(new THREE.Vector3(
+			pivot.x + Math.cos(yaw) * _camOrbit.radius,
+			pivot.y + _camOrbit.height,
+			pivot.z + Math.sin(yaw) * _camOrbit.radius,
+		));
+	}
+	const geo = new THREE.BufferGeometry().setFromPoints(pts);
+	const mat = new THREE.LineBasicMaterial({
+		color: 0xffb454,
+		transparent: true,
+		opacity: 0.55,
+		depthTest: false,
+	});
+	_camOrbitRing = new THREE.LineLoop(geo, mat);
+	_camOrbitRing.name = "_camOrbitRing";
+	_camOrbitRing.renderOrder = 999;
+	_camOrbitRing.frustumCulled = false;
+	scene.add(_camOrbitRing);
+}
+
+// Follow a moving pivot object per frame — if pivotName is set and the
+// object's world position drifts, the ring geometry gets rebuilt to keep
+// the visual in sync. Cheap: geometry rebuild is 128 points; only runs
+// when the pivot object has actually moved.
+const _camOrbitLastPivot = new THREE.Vector3();
+function _tickCamOrbitRing() {
+	if (!_camOrbit.active || !_camOrbitRing || !_camOrbit.pivotName) return;
+	const linked = objects.find(o => o.name === _camOrbit.pivotName);
+	if (!linked) return;
+	const cur = new THREE.Vector3();
+	linked.getWorldPosition(cur);
+	if (cur.distanceToSquared(_camOrbitLastPivot) > 0.0001) {
+		_camOrbitLastPivot.copy(cur);
+		_ttRebuildOrbitRing();
+	}
+}
+
+// Clear the ring — used when the user switches to subject mode or clears
+// the orbit any other way. Restores normal keyframe-driven camera behavior.
+function _ttClearOrbit() {
+	if (!_camOrbit.active) return;
+	_camOrbit.active = false;
+	if (_camOrbitRing) {
+		_camOrbitRing.geometry?.dispose();
+		_camOrbitRing.material?.dispose();
+		scene.remove(_camOrbitRing);
+		_camOrbitRing = null;
+	}
+	_ttSyncOrbitControls();
+	saveSceneDebounced?.();
+}
 
 
 // ── Keyframes / timeline ──────────────────────────────────────────
@@ -20203,6 +20775,40 @@ function setPlayhead(t) {
 }
 
 function sampleCameraAt(t) {
+	// Procedural orbit constraint (Turntable's Orbit-camera mode) takes
+	// precedence over camera keyframes — a full 360° revolution is a pure
+	// function of t, so no keyframes are needed. Radius/Height are live
+	// state so scaling the ring updates the render on next frame with zero
+	// re-baking. Pivot follows the linked object each frame if one's set;
+	// otherwise the frozen world-space pivot captured at bake time is used.
+	if (_camOrbit.active) {
+		const pivot = _camOrbitTmpPivot;
+		const linked = _camOrbit.pivotName ? objects.find(o => o.name === _camOrbit.pivotName) : null;
+		if (linked) linked.getWorldPosition(pivot);
+		else pivot.fromArray(_camOrbit.pivotPos);
+		const yaw = _camOrbit.startYaw + _camOrbit.direction * t * 2 * Math.PI;
+		const p = new THREE.Vector3(
+			pivot.x + Math.cos(yaw) * _camOrbit.radius,
+			pivot.y + _camOrbit.height,
+			pivot.z + Math.sin(yaw) * _camOrbit.radius,
+		);
+		// Compute a look-at quaternion so applyCameraState's quat branch
+		// aims the camera cleanly at the pivot regardless of any later
+		// Target Object override (which would also aim at pivot, so no
+		// competition — this is the fallback path for scenes without a
+		// separate target lock set).
+		const upVec = _camOrbit.up ? new THREE.Vector3().fromArray(_camOrbit.up) : new THREE.Vector3(0, 1, 0);
+		_camOrbitTmpCam.up.copy(upVec);
+		_camOrbitTmpCam.position.copy(p);
+		_camOrbitTmpCam.lookAt(pivot);
+		return {
+			pos: p,
+			target: pivot.clone(),
+			up: upVec,
+			fov: _camOrbit.fov,
+			quat: _camOrbitTmpCam.quaternion.clone(),
+		};
+	}
 	// "through" keys bypass timing — for camera (linear lerp) they effectively act as
 	// disabled keys that don't anchor the interpolation. Useful for muting a key without
 	// deleting it.
@@ -20706,7 +21312,10 @@ let loopPlayback = false;
 
 async function playPreview() {
 	if (isPlayingPreview) return;
-	const hasCameraTween = keyframes.length >= 2;
+	// Camera samples every frame if we've got ≥2 keyframes OR the procedural
+	// turntable orbit is active — orbit has no keyframes but sampleCameraAt
+	// short-circuits on _camOrbit.active and returns the ring pose per t.
+	const hasCameraTween = keyframes.length >= 2 || _camOrbit.active;
 	isPlayingPreview = true;
 	// Kick off BG video playback in sync with the preview transport.
 	if (bgMode === "video" && bgVideo) {
@@ -20731,9 +21340,10 @@ async function playPreview() {
 	// looks through the shot. applyCameraState always mutates renderCam so keyframes
 	// drive the wireframe pose in Scene view without disturbing sceneCam's orbit.
 	tlPlay.classList.add("active");
-	// Swap the transport glyph to a pause icon while playing so a second
-	// click reads as "stop this" not "start another one".
-	tlPlay.textContent = tlPlay.dataset.pauseGlyph || "⏸";
+	// Button labels the CURRENT state (not the next action) — play glyph
+	// while playing, pause glyph while paused. User prefers this over the
+	// standard media-player convention.
+	tlPlay.textContent = tlPlay.dataset.playGlyph || "▶";
 	const dur = currentDuration() * 1000;
 	// Inset the play range by the same visual gap used for the resting playhead so the
 	// yellow line never overlaps the orange trim handles at either end.
@@ -20782,7 +21392,7 @@ async function playPreview() {
 	}
 	isPlayingPreview = false;
 	tlPlay.classList.remove("active");
-	tlPlay.textContent = tlPlay.dataset.playGlyph || "▶";
+	tlPlay.textContent = tlPlay.dataset.pauseGlyph || "⏸";
 	setMixersPlaying(false);
 	if (bgMode === "video" && bgVideo) canvasBgVideo.pause?.();
 	// Persist playhead so closing + reopening the editor lands on the pause frame.
@@ -20790,7 +21400,7 @@ async function playPreview() {
 }
 function stopPreview() {
 	isPlayingPreview = false;
-	tlPlay.textContent = tlPlay.dataset.playGlyph || "▶";
+	tlPlay.textContent = tlPlay.dataset.pauseGlyph || "⏸";
 	setMixersPlaying(false);
 	if (bgMode === "video" && bgVideo) canvasBgVideo.pause?.();
 	if ((resultMode === "render" || resultMode === "blockout")
@@ -20942,7 +21552,10 @@ async function startRecording() {
 	// (no camera/object keys) want the timeline sweeping so the user sees progress.
 	// Camera + object states are sampled per-frame only when their respective tracks
 	// have ≥2 keys, so a static camera stays put but the playhead still moves.
-	const anyCameraKeys = keyframes.length >= 2;
+	// Turntable orbit lives on _camOrbit not keyframes — treat active orbit
+	// as a camera track so recording samples it every frame (otherwise the
+	// exported video freezes at the first-frame pose despite a live ring).
+	const anyCameraKeys = keyframes.length >= 2 || _camOrbit.active;
 	const anyObjectKeys = objects.some(o => Array.isArray(o.userData?.keyframes) && o.userData.keyframes.length >= 2);
 	const recStartT = performance.now();
 	let tweenRunning = true;
@@ -21298,7 +21911,6 @@ function serializeScene() {
 		})),
 		mannequins: objects.filter(o => o.userData.primKind === "mannequin").map(o => ({
 			name: o.name,
-			kind: o.userData.mannequinKind || "Adult",
 			poseName: o.userData.mannequinPoseName || undefined,
 			poseJoints: (o.userData.mannequinPoseJoints && Object.keys(o.userData.mannequinPoseJoints).length)
 				? o.userData.mannequinPoseJoints
@@ -21327,6 +21939,29 @@ function serializeScene() {
 			target: (activeView === "camera" ? orbit.target : renderCamTarget).toArray(),
 			up: renderCam.up.toArray(),
 			fov: renderCam.fov,
+			// Outliner Camera-row user prefs — persisted so a hidden wireframe /
+			// locked camera survives save/load. Omit falsey values to keep the
+			// serialized JSON tight.
+			locked: renderCam.userData.locked || undefined,
+			wireframeHidden: renderCam.userData.wireframeHidden || undefined,
+			// Target Object lock — persisted by object name so the reference
+			// survives save/load. Cleared on load if the named object is gone.
+			targetName: _camTargetName || undefined,
+			handheld: (_camHandheld.speed || _camHandheld.noise)
+				? { speed: _camHandheld.speed, noise: _camHandheld.noise }
+				: undefined,
+			// Turntable procedural orbit constraint — a full copy so the ring
+			// (pivot, radius, height, direction, startYaw) survives save/load.
+			orbit: _camOrbit.active ? {
+				pivotName: _camOrbit.pivotName || undefined,
+				pivotPos: _camOrbit.pivotPos.slice(),
+				radius: _camOrbit.radius,
+				height: _camOrbit.height,
+				startYaw: _camOrbit.startYaw,
+				direction: _camOrbit.direction,
+				fov: _camOrbit.fov,
+				up: _camOrbit.up.slice(),
+			} : undefined,
 		},
 		activeView,
 		aspect: aspectSelect.value,
@@ -21382,6 +22017,12 @@ async function deserializeScene(state, opts = {}) {
 	// Renders aren't part of the saved project — clear the post-render toolbar UI so
 	// loading a fresh project doesn't leave a stale Save button from the previous one.
 	resetResultUI?.();
+	// Turntable orbit is not part of every scene — clear any live ring
+	// upfront so a New Project (EMPTY_SCENE has no renderCamera key at all,
+	// so the orbit-restore branch below never fires and the previous
+	// project's ring would otherwise persist as a ghost). Scenes that DO
+	// carry an orbit will re-activate it in the renderCamera restore block.
+	if (typeof _ttClearOrbit === "function") _ttClearOrbit();
 	while (objects.length) deleteObject(objects[0]);
 
 	for (const p of (state.primitives || [])) {
@@ -21528,7 +22169,6 @@ async function deserializeScene(state, opts = {}) {
 	// the rest of the scene restore.
 	for (const mn of (state.mannequins || [])) {
 		spawnMannequin({
-			kind: mn.kind || "Adult",
 			poseName: mn.poseName === "tpose" ? "T-Pose" : (mn.poseName || "T-Pose"),
 			poseJoints: mn.poseJoints,
 			position: mn.position ? new THREE.Vector3().fromArray(mn.position) : undefined,
@@ -21583,6 +22223,41 @@ async function deserializeScene(state, opts = {}) {
 		renderCam.lookAt(renderCamTarget);
 		renderCam.updateProjectionMatrix();
 		if (activeView === "camera") orbit.target.copy(renderCamTarget);
+		// Outliner Camera-row prefs. Default to false so an old save without
+		// these keys unlocks the camera + shows the wireframe as before.
+		renderCam.userData.locked = !!state.renderCamera.locked;
+		renderCam.userData.wireframeHidden = !!state.renderCamera.wireframeHidden;
+		// Target Object + Handheld state. The lock resolves by object name at
+		// runtime — refreshCamTargetOptions (fired by refreshOutliner after
+		// object restore) will clear it if the named object never showed up.
+		_camTargetName = state.renderCamera.targetName || null;
+		_camHandheld.speed = state.renderCamera.handheld?.speed || 0;
+		_camHandheld.noise = state.renderCamera.handheld?.noise || 0;
+		for (const el of [document.getElementById("cam-handheld-speed"), document.getElementById("cam-handheld-noise")]) {
+			el?._refresh?.();
+		}
+		// Turntable procedural orbit — restore the constraint AND rebuild
+		// the visible ring helper. Guard on presence so non-orbit scenes
+		// don't accidentally light up the ring.
+		if (state.renderCamera.orbit) {
+			const o = state.renderCamera.orbit;
+			_camOrbit.active = true;
+			_camOrbit.pivotName = o.pivotName || null;
+			_camOrbit.pivotPos = Array.isArray(o.pivotPos) ? o.pivotPos.slice() : [0, 0, 0];
+			_camOrbit.radius = Number(o.radius) || 3;
+			_camOrbit.height = Number(o.height) || 0;
+			_camOrbit.startYaw = Number(o.startYaw) || 0;
+			_camOrbit.direction = o.direction === -1 ? -1 : 1;
+			_camOrbit.fov = Number(o.fov) || 55;
+			_camOrbit.up = Array.isArray(o.up) ? o.up.slice() : [0, 1, 0];
+			_turntable.mode = "camera";
+			_turntable.direction = _camOrbit.direction === -1 ? "ccw" : "cw";
+			_ttRebuildOrbitRing?.();
+			_ttSyncOrbitControls?.();
+			_ttSyncGenerateBtn?.();
+		} else {
+			_ttClearOrbit?.();
+		}
 	}
 	// Always route through setActiveView, even when the saved value matches
 	// the current activeView — the helper starts hidden at construction and
@@ -21802,6 +22477,12 @@ function applyLightSync(state) {
 		}
 		renderCam.lookAt(renderCamTarget);
 		if (activeView === "camera") orbit.target.copy(renderCamTarget);
+		_camTargetName = state.renderCamera.targetName || null;
+		_camHandheld.speed = state.renderCamera.handheld?.speed || 0;
+		_camHandheld.noise = state.renderCamera.handheld?.noise || 0;
+		for (const el of [document.getElementById("cam-handheld-speed"), document.getElementById("cam-handheld-noise")]) {
+			el?._refresh?.();
+		}
 	}
 	if (state.aspect && state.aspect !== aspectSelect.value) {
 		aspectSelect.value = state.aspect;
@@ -22005,6 +22686,10 @@ const EMPTY_SCENE = {
 	keyframes: [],
 	imports: [],
 	trim: { start: 0, end: 1 },
+	// New scenes open through the render camera (not the free-orbit scene view) so
+	// the user starts framing the shot they'll actually export — the perspective
+	// view is more of an over-the-shoulder overview for arranging blockout objects.
+	activeView: "camera",
 };
 
 async function listProjects() {
@@ -22825,6 +23510,10 @@ async function autoSnapshot() {
 		// Snapshot with clean silhouettes; restore visibility after.
 		const rimStates = _rimOverlays.map(({ mesh }) => [mesh, mesh.visible]);
 		for (const { mesh } of _rimOverlays) mesh.visible = false;
+		// Turntable orbit ring — same story: hide the amber circle so it
+		// doesn't render into the blockout PNG and leak downstream.
+		const orbitRingWasVisible = _camOrbitRing?.visible;
+		if (_camOrbitRing) _camOrbitRing.visible = false;
 		// FX helper wireframes (scatter blue box, particle emitter box/sphere) —
 		// also editor-only overlays that leak into the blockout unless hidden.
 		// Collect + restore in one pass so we don't have to know the full FX
@@ -22862,6 +23551,7 @@ async function autoSnapshot() {
 			if (animPathsGroup) animPathsGroup.visible = !!animPathsWereVisible;
 			for (const [h, prev] of fxHelperStates) h.visible = prev;
 			for (const [mesh, prev] of rimStates) mesh.visible = prev;
+			if (_camOrbitRing) _camOrbitRing.visible = !!orbitRingWasVisible;
 		}
 
 		renderer.readRenderTargetPixels(snapshotTarget, 0, 0, w, h, snapshotPixels);
@@ -22974,7 +23664,7 @@ async function loadPrompt() {
 		renderCam.up.set(0, 1, 0);
 		renderCam.lookAt(renderCamTarget);
 		frameSceneCamOnShot();
-		renderCamHelper.visible = activeView === "scene";
+		renderCamHelper.visible = activeView === "scene" && !renderCam.userData.wireframeHidden;
 	}
 	await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 	autoSnapshot().catch(() => {});
@@ -23110,7 +23800,7 @@ if (IS_PREVIEW) {
 		const t = displayNorm * dur;
 		const fmt = (v) => (Math.abs(v - Math.round(v)) < 0.05 ? `${Math.round(v)}s` : `${v.toFixed(1)}s`);
 		pvTime.textContent = `${fmt(t)} / ${fmt(dur)}`;
-		const want = `/extensions/ComfyBlockout/icons/${isPlayingPreview ? "pause" : "play"}.svg`;
+		const want = `/extensions/ComfyBlockout/icons/${isPlayingPreview ? "play" : "pause"}.svg`;
 		if (!pvPlayIcon.src.endsWith(want)) pvPlayIcon.src = want;
 	}, 100);
 
