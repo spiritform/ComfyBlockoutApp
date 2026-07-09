@@ -363,8 +363,11 @@
 	   halves read as distinct panes. Only shown while _splitView is on (parent
 	   gets .split-active class). pointer-events:none so it never eats input. */
 	#split-divider {
-		position: absolute; top: 0; bottom: 0; left: 50%; width: 1px;
-		background: rgba(255,180,84,0.35);
+		position: absolute; top: 0; bottom: 0; left: 50%; width: 2px;
+		/* Match the workspace-wrap gradient's darkest end so the divider
+		   reads as a subtle break rather than a bright accent line. */
+		background: #07080b;
+		transform: translateX(-1px);
 		pointer-events: none; z-index: 3; display: none;
 	}
 	#canvas-wrap.split-active #split-divider { display: block; }
@@ -734,7 +737,7 @@
 
 	#panel {
 		position: relative; z-index: 100;
-		flex: 0 0 320px; height: 100%;
+		flex: 0 0 300px; height: 100%;
 		background: #131318;
 		overflow-y: auto; overflow-x: hidden; padding: 0 20px 28px;
 		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
@@ -2074,10 +2077,10 @@
 		color: rgba(255,255,255,0.45);
 	}
 	.vpm-btn:hover { background: rgba(0,0,0,0.55); color: rgba(255,255,255,0.85); }
-	/* Active state uses neutral white — matches the dim-by-default / bright-
-	   when-active language on the viewport toolbar buttons, avoids reading
-	   as a permanent amber alert. */
-	.vpm-btn.active { color: #fff; }
+	/* Active state uses neutral white with an amber outline — matches the
+	   dim-by-default / bright-when-active language on the viewport toolbar
+	   buttons, and the outline reads as "on" without needing a fill. */
+	.vpm-btn.active { color: #fff; box-shadow: inset 0 0 0 1px rgba(255,180,84,0.5); }
 	.vpm-btn svg { width: 14px; height: 14px; display: block; }
 	/* Suppress the click-focus ring but keep keyboard focus visible. */
 	.vpm-btn:focus { outline: none; }
@@ -2662,7 +2665,7 @@
 	/* Right properties panel */
 	#right-panel {
 		position: relative; z-index: 100;
-		flex: 0 0 320px; height: 100%;
+		flex: 0 0 300px; height: 100%;
 		background: #131318;
 		overflow: hidden; display: flex; flex-direction: column;
 		/* --rp-top-basis is set by the split-handle drag logic and persisted
@@ -3254,10 +3257,17 @@
 					     toggle so they read as one cluster: pick a single view
 					     OR split. -->
 					<button class="vpm-btn" id="mode-split-toggle" title="Toggle split view — perspective on the left, camera on the right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 19H5c-1 0-2-1-2-2V7c0-1 1-2 2-2h3"/><path d="M16 5h3c1 0 2 1 2 2v10c0 1-1 2-2 2h-3"/><line x1="12" x2="12" y1="4" y2="20"/></svg></button>
+					<!-- Left-half view-toggle — only visible in split mode. Icon
+					     shows which view is currently on the LEFT half. Click to
+					     swap the two halves (since split must show two DIFFERENT
+					     views, flipping one implicitly flips the other). -->
+					<button class="vpm-btn" id="mode-view-toggle-left" title="Left-half view — click to swap left/right halves" hidden></button>
 					<!-- Single view-toggle: flips between camera view (look through the
 					     framed render camera) and perspective/scene view (orbit around
 					     the shot). The SVG is swapped by updateViewToggleIcon() so the
-					     button always shows the ACTIVE view. -->
+					     button always shows the ACTIVE view. In split mode this button
+					     represents the RIGHT-half view and clicking it swaps the two
+					     halves. -->
 					<button class="vpm-btn active" id="mode-view-toggle" title="Switch between camera view and perspective view"></button>
 				</div>
 			</div>
@@ -5524,6 +5534,11 @@ let activeView = "scene";
 // of activeView (which one gets the OrbitControls + input). Toggled by the
 // split-view button in the top-right of the viewport.
 let _splitView = false;
+// When _splitView is on, _splitSwapped controls which camera goes on which
+// half. false (default) = perspective on left, camera on right. true = swap.
+// The two view-toggle buttons in the corner both flip this so the user can
+// think of "the left button" or "the right button" — either action swaps.
+let _splitSwapped = false;
 // When swapping to Scene view, reposition sceneCam so the render camera and what it's
 // pointed at are both in frame — user gets an over-the-shoulder overview instead of
 // wherever sceneCam happened to be parked.
@@ -17752,6 +17767,14 @@ window.updateViewToggleIcon = updateViewToggleIcon;
 // matching the old dedicated Camera-pill behavior. The Camera / Scene property
 // panes stay accessible via the right-panel header.
 document.getElementById("mode-view-toggle")?.addEventListener("click", () => {
+	// In split mode this button represents the RIGHT half — click to flip
+	// which view goes where. No setActiveView call needed; the render loop
+	// picks up _splitSwapped directly and pointerdown routes input.
+	if (_splitView) {
+		_splitSwapped = !_splitSwapped;
+		_refreshSplitToggleIcons();
+		return;
+	}
 	const next = (typeof activeView !== "undefined" && activeView === "camera") ? "scene" : "camera";
 	setActiveView(next);
 	if (next === "camera") select(null);
@@ -17760,11 +17783,55 @@ document.getElementById("mode-view-toggle")?.addEventListener("click", () => {
 // Split view toggle — flips _splitView on/off. Adds/removes the .active
 // class on the button so users can see the current state at a glance. Also
 // toggles the canvas-wrap's .split-active class so the vertical divider
-// shows up between the two halves.
+// shows up between the two halves + reveals the left-half view-toggle.
 document.getElementById("mode-split-toggle")?.addEventListener("click", () => {
 	_splitView = !_splitView;
 	document.getElementById("mode-split-toggle")?.classList.toggle("active", _splitView);
 	document.getElementById("canvas-wrap")?.classList.toggle("split-active", _splitView);
+	// Show/hide the left-half view-toggle button — only meaningful in split.
+	const leftBtn = document.getElementById("mode-view-toggle-left");
+	if (leftBtn) leftBtn.hidden = !_splitView;
+	_refreshSplitToggleIcons();
+});
+// Left + right half view-toggles both flip _splitSwapped. Either button
+// represents "swap the two halves" from the user's mental model — since
+// split must show two DIFFERENT views (otherwise pointless), flipping one
+// half implicitly flips the other.
+function _refreshSplitToggleIcons() {
+	if (typeof updateViewToggleIcon !== "function") return;
+	if (!_splitView) {
+		updateViewToggleIcon(typeof activeView !== "undefined" ? activeView : "scene");
+		return;
+	}
+	// In split: right button shows right-half view, left button shows left-half.
+	const leftView = _splitSwapped ? "camera" : "scene";
+	const rightView = _splitSwapped ? "scene" : "camera";
+	updateViewToggleIcon(rightView); // paints #mode-view-toggle (the right)
+	// Paint the left one by temporarily aiming updateViewToggleIcon at it.
+	const leftBtn = document.getElementById("mode-view-toggle-left");
+	if (leftBtn) {
+		// Reuse the same SVG mapping — pull from _VIEW_TOGGLE_ICONS if exposed,
+		// otherwise use a compact inline set matching the right button's.
+		const rightBtn = document.getElementById("mode-view-toggle");
+		const rightSvg = rightBtn?.innerHTML || "";
+		// Swap: the left button's icon is the OPPOSITE of the right button's.
+		// Cheapest reliable way — clone right, then invoke updateViewToggleIcon
+		// on left by temporarily assigning it the same id, or duplicate the
+		// icon catalog. Simplest: swap id, paint, swap back.
+		const rightId = rightBtn.id;
+		rightBtn.id = "__temp_right";
+		leftBtn.id = "mode-view-toggle";
+		updateViewToggleIcon(leftView);
+		leftBtn.id = "mode-view-toggle-left";
+		rightBtn.id = rightId;
+		// Restore right icon (updateViewToggleIcon earlier painted right).
+		updateViewToggleIcon(rightView);
+	}
+}
+document.getElementById("mode-view-toggle-left")?.addEventListener("click", () => {
+	if (!_splitView) return;
+	_splitSwapped = !_splitSwapped;
+	_refreshSplitToggleIcons();
 });
 // Pointer-in-half detection — when the user clicks anywhere in the canvas
 // during split view, route input to the half they clicked. Left half = scene
@@ -17777,10 +17844,14 @@ canvas.addEventListener("pointerdown", e => {
 	if (!_splitView) return;
 	const rect = canvas.getBoundingClientRect();
 	const inLeft = e.clientX < rect.left + rect.width / 2;
-	const targetView = inLeft ? "scene" : "camera";
+	// Respect _splitSwapped so clicking a half always targets the camera
+	// currently rendering there, regardless of which side is scene vs camera.
+	const leftView = _splitSwapped ? "camera" : "scene";
+	const rightView = _splitSwapped ? "scene" : "camera";
+	const targetView = inLeft ? leftView : rightView;
 	if (typeof activeView !== "undefined" && activeView !== targetView) {
 		setActiveView(targetView);
-		if (typeof updateViewToggleIcon === "function") updateViewToggleIcon(targetView);
+		_refreshSplitToggleIcons();
 	}
 }, true);
 // Boot state: whichever view is active when the DOM parses runs through
@@ -21757,10 +21828,11 @@ function loop() {
 				aoComposer.render();
 				renderer.outputColorSpace = prevCS;
 			} else if (_splitView) {
-				// Split view — sceneCam on the left, renderCam on the right.
-				// Enable scissor test so each half renders into its own rect
-				// with an independent clear. Each camera's aspect is halved
-				// while the split is active; restored below after the pass.
+				// Split view — perspective + camera each on their own half.
+				// _splitSwapped flips which camera goes where. Enable scissor
+				// test so each half renders into its own rect with an
+				// independent clear. Each camera's aspect is halved for the
+				// pass then restored so single-view mode is untouched.
 				const size = renderer.getSize(new THREE.Vector2());
 				const halfW = Math.floor(size.x / 2);
 				const prevAutoClear = renderer.autoClear;
@@ -21768,27 +21840,29 @@ function loop() {
 				renderer.setScissorTest(true);
 				const prevSceneAsp = sceneCam.aspect;
 				const prevRenderAsp = renderCam.aspect;
+				const leftCam = _splitSwapped ? renderCam : sceneCam;
+				const rightCam = _splitSwapped ? sceneCam : renderCam;
 				try {
 					sceneCam.aspect = halfW / size.y;
 					sceneCam.updateProjectionMatrix();
 					renderCam.aspect = (size.x - halfW) / size.y;
 					renderCam.updateProjectionMatrix();
-					// Left half — perspective (sceneCam). Hide the render-cam
-					// wireframe on the right's own render pass but keep it on
-					// the left so the user still sees the framing box.
+					// Left half — hide the renderCam wireframe when the LEFT
+					// half is showing the camera view (would overlay its own
+					// POV); keep it visible when the left half is scene/persp.
+					const prevHelperVisible = renderCamHelper.visible;
+					if (leftCam === renderCam) renderCamHelper.visible = false;
 					renderer.setViewport(0, 0, halfW, size.y);
 					renderer.setScissor(0, 0, halfW, size.y);
 					renderer.clear();
-					renderer.render(scene, sceneCam);
-					// Right half — camera view (renderCam). renderCamHelper
-					// invisibility avoids drawing the wireframe on top of its
-					// own POV; restored right after the pass.
-					const prevHelperVisible = renderCamHelper.visible;
-					renderCamHelper.visible = false;
+					renderer.render(scene, leftCam);
+					renderCamHelper.visible = prevHelperVisible;
+					// Right half — same helper-hide gate.
+					if (rightCam === renderCam) renderCamHelper.visible = false;
 					renderer.setViewport(halfW, 0, size.x - halfW, size.y);
 					renderer.setScissor(halfW, 0, size.x - halfW, size.y);
 					renderer.clear();
-					renderer.render(scene, renderCam);
+					renderer.render(scene, rightCam);
 					renderCamHelper.visible = prevHelperVisible;
 				} finally {
 					renderer.setScissorTest(false);
