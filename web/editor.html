@@ -17316,10 +17316,15 @@ assistantInput.addEventListener("keydown", e => {
 // class_type + inputs to build the meta.json patches automatically. Size cap
 // (~1MB) so a stray large JSON doesn't blow past the LLM context.
 const _IMPORT_MAX_BYTES = 1024 * 1024;
-const importBtn = document.getElementById("assistant-import-btn");
-const importFile = document.getElementById("assistant-import-file");
-importBtn?.addEventListener("click", () => importFile?.click());
-importFile?.addEventListener("change", async e => {
+// Renamed from importBtn / importFile to wfImportBtn / wfImportFile to avoid
+// a `SyntaxError: Identifier 'importBtn' has already been declared` — the
+// top-toolbar Import GLB/FBX button at line ~21466 owns that name. Double-
+// const at module scope kills the entire script parse and the app hangs on
+// the boot init overlay.
+const wfImportBtn = document.getElementById("assistant-import-btn");
+const wfImportFile = document.getElementById("assistant-import-file");
+wfImportBtn?.addEventListener("click", () => wfImportFile?.click());
+wfImportFile?.addEventListener("change", async e => {
 	const file = e.target.files?.[0];
 	e.target.value = ""; // reset so re-picking the same file re-fires change
 	if (!file) return;
