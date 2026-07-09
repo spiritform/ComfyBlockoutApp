@@ -3238,6 +3238,12 @@
 				<div id="viewport-time-corner"><span id="tl-time">0.00s / 4.00s</span></div>
 				<div id="viewport-axes-corner"><span style="color:#ff5252">X</span><span style="color:#4ade80">Y</span><span style="color:#4a8aff">Z</span></div>
 				<div id="viewport-mode-corner">
+					<!-- Split-view — renders BOTH sceneCam (perspective/orbit) on
+					     the left and renderCam (framed shot) on the right using
+					     setViewport + setScissor. Toggle sits next to mode-view-
+					     toggle so they read as one cluster: pick a single view
+					     OR split. -->
+					<button class="vpm-btn" id="mode-split-toggle" title="Toggle split view — perspective on the left, camera on the right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 19H5c-1 0-2-1-2-2V7c0-1 1-2 2-2h3"/><path d="M16 5h3c1 0 2 1 2 2v10c0 1-1 2-2 2h-3"/><line x1="12" x2="12" y1="4" y2="20"/></svg></button>
 					<!-- Single view-toggle: flips between camera view (look through the
 					     framed render camera) and perspective/scene view (orbit around
 					     the shot). The SVG is swapped by updateViewToggleIcon() so the
@@ -5503,6 +5509,11 @@ renderCam.lookAt(renderCamTarget);
 // swap to camera view immediately after setActiveView is defined — new scenes open
 // through the render camera.
 let activeView = "scene";
+// Split view — when true, the viewport renders sceneCam (perspective/orbit)
+// on the left half and renderCam (framed shot) on the right half. Independent
+// of activeView (which one gets the OrbitControls + input). Toggled by the
+// split-view button in the top-right of the viewport.
+let _splitView = false;
 // When swapping to Scene view, reposition sceneCam so the render camera and what it's
 // pointed at are both in frame — user gets an over-the-shoulder overview instead of
 // wherever sceneCam happened to be parked.
@@ -17736,6 +17747,12 @@ document.getElementById("mode-view-toggle")?.addEventListener("click", () => {
 	if (next === "camera") select(null);
 	updateViewToggleIcon(next);
 });
+// Split view toggle — flips _splitView on/off. Adds/removes the .active
+// class on the button so users can see the current state at a glance.
+document.getElementById("mode-split-toggle")?.addEventListener("click", () => {
+	_splitView = !_splitView;
+	document.getElementById("mode-split-toggle")?.classList.toggle("active", _splitView);
+});
 // Boot state: whichever view is active when the DOM parses runs through
 // setActiveView after this file loads, so seed the icon from the current mode.
 updateViewToggleIcon(typeof activeView !== "undefined" ? activeView : "scene");
@@ -21709,6 +21726,49 @@ function loop() {
 				renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
 				aoComposer.render();
 				renderer.outputColorSpace = prevCS;
+			} else if (_splitView) {
+				// Split view — sceneCam on the left, renderCam on the right.
+				// Enable scissor test so each half renders into its own rect
+				// with an independent clear. Each camera's aspect is halved
+				// while the split is active; restored below after the pass.
+				const size = renderer.getSize(new THREE.Vector2());
+				const halfW = Math.floor(size.x / 2);
+				const prevAutoClear = renderer.autoClear;
+				renderer.autoClear = false;
+				renderer.setScissorTest(true);
+				const prevSceneAsp = sceneCam.aspect;
+				const prevRenderAsp = renderCam.aspect;
+				try {
+					sceneCam.aspect = halfW / size.y;
+					sceneCam.updateProjectionMatrix();
+					renderCam.aspect = (size.x - halfW) / size.y;
+					renderCam.updateProjectionMatrix();
+					// Left half — perspective (sceneCam). Hide the render-cam
+					// wireframe on the right's own render pass but keep it on
+					// the left so the user still sees the framing box.
+					renderer.setViewport(0, 0, halfW, size.y);
+					renderer.setScissor(0, 0, halfW, size.y);
+					renderer.clear();
+					renderer.render(scene, sceneCam);
+					// Right half — camera view (renderCam). renderCamHelper
+					// invisibility avoids drawing the wireframe on top of its
+					// own POV; restored right after the pass.
+					const prevHelperVisible = renderCamHelper.visible;
+					renderCamHelper.visible = false;
+					renderer.setViewport(halfW, 0, size.x - halfW, size.y);
+					renderer.setScissor(halfW, 0, size.x - halfW, size.y);
+					renderer.clear();
+					renderer.render(scene, renderCam);
+					renderCamHelper.visible = prevHelperVisible;
+				} finally {
+					renderer.setScissorTest(false);
+					renderer.setViewport(0, 0, size.x, size.y);
+					renderer.autoClear = prevAutoClear;
+					sceneCam.aspect = prevSceneAsp;
+					sceneCam.updateProjectionMatrix();
+					renderCam.aspect = prevRenderAsp;
+					renderCam.updateProjectionMatrix();
+				}
 			} else {
 				renderer.render(scene, camera);
 			}
