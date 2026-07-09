@@ -50,17 +50,51 @@ _KIND_EXTS: dict[str, list[str]] = {
 }
 
 
+def _is_api_format(workflow: dict) -> bool:
+    """Detect Comfy Cloud's API/prompt format (flat dict keyed by node id string,
+    each entry has class_type + inputs dict) vs the graph/save format (top-level
+    nodes[] array with numeric ids + widgets_values list). API format is what
+    Cloud's `Save (API Format)` toggle produces and what the runner canonicalizes
+    to internally — simpler to author against because inputs are named, not
+    positional. Graph format still supported for legacy workflows."""
+    if "nodes" in workflow and isinstance(workflow["nodes"], list):
+        return False
+    # API format: every top-level key looks like a numeric node id + its value
+    # is a dict with class_type.
+    for k, v in workflow.items():
+        if not isinstance(v, dict):
+            continue
+        if "class_type" in v:
+            return True
+    return False
+
+
 def _find_node(workflow: dict, node_id: int) -> dict | None:
+    # API format: node ids are string keys at the top level.
+    if _is_api_format(workflow):
+        return workflow.get(str(node_id))
+    # Graph/save format: walk nodes[] matching numeric id.
     for n in workflow.get("nodes", []):
         if n.get("id") == node_id:
             return n
     return None
 
 
-def _patch_widget(workflow: dict, node_id: int, widget_index: int, value: Any) -> None:
+def _patch_widget(workflow: dict, node_id: int, widget_index: int, value: Any, widget_name: str | None = None) -> None:
     node = _find_node(workflow, node_id)
     if node is None:
         raise RuntimeError(f"manifest patch: node {node_id} not found in workflow")
+    # API format: patch by named key in the node's `inputs` dict. widget_name
+    # from the manifest is authoritative here (widget_index is meaningless for
+    # a dict). Falls back to the raw widget_index string only if widget_name
+    # wasn't provided — that's a legacy manifest and the caller should really
+    # add widget_name.
+    if _is_api_format(workflow):
+        inputs = node.setdefault("inputs", {})
+        key = widget_name if widget_name else str(widget_index)
+        inputs[key] = value
+        return
+    # Graph/save format: widgets_values is positional.
     widgets = node.setdefault("widgets_values", [])
     while len(widgets) <= widget_index:
         widgets.append("")
@@ -174,6 +208,9 @@ def _make_run(workflow_path: Path, manifest: dict):
                 continue
             node_id = int(patch["node_id"])
             widget_index = int(patch.get("widget_index", 0))
+            # widget_name is the API-format patch key (Cloud names its inputs)
+            # — required for API-format workflows, harmless for graph format.
+            widget_name = patch.get("widget_name")
             input_type = spec.get("type", "text")
 
             if input_type == "scene-image":
@@ -183,14 +220,14 @@ def _make_run(workflow_path: Path, manifest: dict):
                         raise ValueError(f"{spec['name']} is required")
                     continue
                 cloud_name = await upload_image_to_cloud(Path(image_path))
-                _patch_widget(workflow, node_id, widget_index, cloud_name)
+                _patch_widget(workflow, node_id, widget_index, cloud_name, widget_name)
             else:
                 value = kwargs.get(spec["name"])
                 if value is None or (isinstance(value, str) and not value.strip()):
                     if spec.get("required"):
                         raise ValueError(f"{spec['name']} is required")
                     continue
-                _patch_widget(workflow, node_id, widget_index, value)
+                _patch_widget(workflow, node_id, widget_index, value, widget_name)
 
         return await _submit_wait_download(workflow, module_id, output_exts, data_dir)
 
