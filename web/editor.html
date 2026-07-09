@@ -14962,6 +14962,24 @@ function assistantSceneContext() {
 			notes: o.userData.notes || null,
 			hasRef: !!o.userData.refImage?.signedUrl,
 		})),
+		// Render-camera state — target lock, hand-held, procedural orbit. Emitted
+		// so the agent knows an orbit is already running (don't re-activate) or
+		// which object the aim is currently glued to (agents can compose "orbit
+		// the same subject" without re-asking the user).
+		camera: {
+			targetName: (typeof _camTargetName !== "undefined" && _camTargetName) || null,
+			handheld: (typeof _camHandheld !== "undefined") ? {
+				speed: _camHandheld.speed || 0,
+				noise: _camHandheld.noise || 0,
+			} : null,
+			orbit: (typeof _camOrbit !== "undefined" && _camOrbit.active) ? {
+				active: true,
+				pivotName: _camOrbit.pivotName || null,
+				radius: _camOrbit.radius,
+				height: _camOrbit.height,
+				direction: _camOrbit.direction,
+			} : null,
+		},
 		activeGenCellId,
 		genCells: genCells.map(c => ({ model: c.model, prompt: c.prompt })),
 		activeWorkflowModuleId: activeWorkflowMod ? activeWorkflowMod.id : null,
@@ -15064,7 +15082,7 @@ function findObjByName(name) {
 const ASSISTANT_TOOLS = {
 	add_primitive({ kind, color, position }) {
 		if (!kind) return "error: kind is required";
-		const allowed = ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "particles"];
+		const allowed = ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "text", "particles", "clouds"];
 		if (!allowed.includes(kind)) return `error: unknown kind '${kind}'`;
 		const obj = addPrimitive(kind);
 		if (!obj) return "error: addPrimitive returned null";
@@ -15083,7 +15101,7 @@ const ASSISTANT_TOOLS = {
 
 	batch_add_primitives({ items }) {
 		if (!Array.isArray(items) || items.length === 0) return "error: items[] is required";
-		const allowed = ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "particles"];
+		const allowed = ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "text", "particles", "clouds"];
 		const added = [];
 		const errors = [];
 		for (let i = 0; i < items.length; i++) {
@@ -15556,6 +15574,166 @@ const ASSISTANT_TOOLS = {
 			}
 			const out = await r.json();
 			return JSON.stringify(out);
+		} catch (e) {
+			return `error: ${e.message || e}`;
+		}
+	},
+
+	// ── Compound-object spawns ───────────────────────────────────────
+	async spawn_mannequin({ position } = {}) {
+		const wrapper = await spawnMannequin();
+		if (!wrapper) return "error: spawnMannequin returned null";
+		if (Array.isArray(position) && position.length === 3) {
+			wrapper.position.set(+position[0] || 0, +position[1] || 0, +position[2] || 0);
+		}
+		refreshOutliner();
+		saveScene?.();
+		return `spawned ${wrapper.name} at (${wrapper.position.x.toFixed(2)}, ${wrapper.position.y.toFixed(2)}, ${wrapper.position.z.toFixed(2)})`;
+	},
+
+	spawn_skybox() {
+		const mesh = spawnSkybox();
+		if (!mesh) return "error: spawnSkybox returned null";
+		refreshOutliner();
+		saveScene?.();
+		return `spawned ${mesh.name} — user can now upload or generate a 360° panorama onto it via the object inspector`;
+	},
+
+	// ── Camera control ──────────────────────────────────────────────
+	set_camera_target({ name }) {
+		if (!name) return "error: name is required";
+		const obj = findObjByName(name);
+		if (!obj) return `error: no object named '${name}'`;
+		_camTargetName = obj.name;
+		const sel = document.getElementById("cam-target-select");
+		if (sel) sel.value = obj.name;
+		saveScene?.();
+		return `camera aim locked on [${obj.name}]`;
+	},
+
+	clear_camera_target() {
+		const prev = _camTargetName;
+		_camTargetName = null;
+		const sel = document.getElementById("cam-target-select");
+		if (sel) sel.value = "";
+		saveScene?.();
+		return prev ? `cleared camera target (was [${prev}])` : "camera target was already clear";
+	},
+
+	set_camera_handheld({ speed, noise }) {
+		const s = Math.max(0, Math.min(1, +speed || 0));
+		const n = Math.max(0, Math.min(1, +noise || 0));
+		_camHandheld.speed = s;
+		_camHandheld.noise = n;
+		document.getElementById("cam-handheld-speed")?._refresh?.();
+		document.getElementById("cam-handheld-noise")?._refresh?.();
+		saveScene?.();
+		return n < 0.001 && s < 0.001
+			? "hand-held shake disabled"
+			: `hand-held shake: speed=${(s * 100).toFixed(0)}%, noise=${(n * 100).toFixed(0)}%`;
+	},
+
+	// ── Turntable ────────────────────────────────────────────────────
+	start_turntable({ mode, duration, direction, object_name }) {
+		if (mode !== "subject" && mode !== "camera") return "error: mode must be 'subject' or 'camera'";
+		const dur = Math.max(0.5, Math.min(60, +duration || 5));
+		const dir = direction === "ccw" ? "ccw" : "cw";
+		// Persist choice on _turntable so the pane reflects the same state if
+		// the user opens Turntable next.
+		_turntable.mode = mode;
+		_turntable.duration = dur;
+		_turntable.direction = dir;
+		if (mode === "subject") {
+			// Route through the shared _ttGenerate path (respects selection),
+			// but if object_name is given, temporarily select that object first
+			// so we don't rely on whatever the user last clicked.
+			if (object_name) {
+				const obj = findObjByName(object_name);
+				if (!obj) return `error: no object named '${object_name}'`;
+				select(obj);
+			}
+			if (!selected || selected === renderCam) return "error: subject mode needs a selected object (pass object_name)";
+			const name = selected.name;
+			_ttGenerate("subject", dur, dir);
+			return `spinning [${name}] over ${dur}s ${dir}`;
+		}
+		// Camera mode — optionally lock target first, then activate the ring.
+		if (object_name) {
+			const obj = findObjByName(object_name);
+			if (!obj) return `error: no object named '${object_name}'`;
+			_camTargetName = obj.name;
+			const sel = document.getElementById("cam-target-select");
+			if (sel) sel.value = obj.name;
+		}
+		_ttActivateOrbitFromCurrent();
+		if (!_camOrbit.active) return "error: orbit activation failed (camera on top of pivot? move the camera back first)";
+		const pivotLabel = _camOrbit.pivotName || "current lookAt";
+		return `orbiting camera around ${pivotLabel} over ${dur}s ${dir} (radius=${_camOrbit.radius.toFixed(2)}, height=${_camOrbit.height.toFixed(2)})`;
+	},
+
+	stop_turntable({ object_name } = {}) {
+		const notes = [];
+		if (_camOrbit.active) {
+			_ttClearOrbit();
+			notes.push("cleared procedural orbit");
+		}
+		if (keyframes && keyframes.length) {
+			const wipedCount = keyframes.length;
+			keyframes = [];
+			renderKeyframeMarkers?.();
+			notes.push(`wiped ${wipedCount} camera keyframes`);
+		}
+		if (object_name) {
+			const obj = findObjByName(object_name);
+			if (obj && Array.isArray(obj.userData?.keyframes) && obj.userData.keyframes.length) {
+				const n = obj.userData.keyframes.length;
+				obj.userData.keyframes = [];
+				applyObjectsAt(playhead);
+				renderKeyframeMarkers?.();
+				notes.push(`wiped ${n} keyframes on [${obj.name}]`);
+			}
+		}
+		saveScene?.();
+		return notes.length ? notes.join("; ") : "nothing to stop";
+	},
+
+	// ── AnimoFlow ────────────────────────────────────────────────────
+	async run_animoflow({ prompt, max_frames, seed }) {
+		if (!prompt || !String(prompt).trim()) return "error: prompt is required";
+		// Ensure an AF_Mannequin (or any mannequin) exists — spawn one silently
+		// if the scene has none. Agent shouldn't have to babysit spawn logic.
+		let target = selected?.userData?.primKind === "mannequin"
+			? selected
+			: objects.find(o => o?.userData?.primKind === "mannequin");
+		if (!target) {
+			target = await spawnMannequin();
+			if (!target) return "error: failed to spawn mannequin (Xbot GLB fetch may have failed — check network)";
+			// Match the UI's auto-spawn path — mark AnimoFlow-managed AND rename to
+			// AF_Mannequin.NNN so the properties inspector suppresses the pose editor
+			// (motion drives the bones) + selecting this figure routes to the
+			// AnimoFlow util pane.
+			target.userData.animoflowManaged = true;
+			const num = String((target.name || "").replace(/\D/g, "") || "001");
+			target.name = `AF_Mannequin.${num}`;
+			refreshOutliner();
+		}
+		const frames = Math.max(30, Math.min(240, Number.isFinite(+max_frames) ? +max_frames : 120));
+		const s = Number.isFinite(+seed) ? +seed : 42;
+		try {
+			const r = await fetch("/api/motion/generate", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ prompt: String(prompt), max_frames: frames, seed: s }),
+			});
+			if (!r.ok) {
+				const body = await r.text().catch(() => "");
+				const tail = body.slice(-500) || `HTTP ${r.status}`;
+				return `error: animoflow generate failed — ${tail}. Environment may not be set up — the user can install Docker + AnimoFlow via the Motion util tile.`;
+			}
+			const j = await r.json();
+			if (!Array.isArray(j.poses) || j.poses.length === 0) return "error: animoflow returned empty poses";
+			_mannequinAttachMotionPreview(target, j.poses, String(prompt));
+			return `applied ${j.num_frames || j.poses.length} frames of "${prompt}" to [${target.name}] — user can scrub the timeline to preview`;
 		} catch (e) {
 			return `error: ${e.message || e}`;
 		}

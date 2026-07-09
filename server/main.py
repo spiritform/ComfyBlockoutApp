@@ -2593,6 +2593,43 @@ ASSISTANT_SYSTEM = (
     "set_object_scale, rename_object, list_objects, set_generator_prompt). "
     "When the user asks to add/move/recolor/delete something, call the tool — "
     "don't just describe how they could do it manually.\n\n"
+    "SCENE OBJECT PALETTE: add_primitive covers plain geometry + FX (cube, "
+    "sphere, capsule, cylinder, cone, plane, text, particles, clouds). For "
+    "scene-scale figures + backdrops, use the dedicated spawn tools: "
+    "`spawn_mannequin` for a ~1.72m Xbot-rigged human reference (Mixamo bones, "
+    "poseable per-joint), `spawn_skybox` for a giant inverted 360° panorama "
+    "sphere (upload or generate an equirectangular image onto it). These live "
+    "outside add_primitive because they build compound objects, not a single "
+    "mesh from a geometry factory.\n\n"
+    "CAMERA CONTROL: three dedicated tools shape how the render camera moves "
+    "and aims. `set_camera_target({name})` locks the render camera's aim to a "
+    "specific object every frame — useful for \"focus on [Sphere.001]\" or as "
+    "the pivot for orbit shots (also referenced by start_turntable's camera "
+    "mode). `clear_camera_target()` releases the aim lock. "
+    "`set_camera_handheld({speed, noise})` adds subtle position + rotation "
+    "shake to the render camera (both 0..1; noise = amplitude, speed = shake "
+    "frequency; 0 = off). Shake is applied only during camera-view playback "
+    "and recording, so a paused shot stays still for composition.\n\n"
+    "TURNTABLE / ORBIT: `start_turntable({mode, duration, direction, "
+    "object_name?})` builds a one-revolution motion. mode=\"subject\" bakes 9 "
+    "linear-ease Y-rotation keyframes on object_name (or the current "
+    "selection) so the object spins in place across the timeline. "
+    "mode=\"camera\" activates a PROCEDURAL orbit ring — the render camera "
+    "orbits object_name at its current radius/height, position sampled per "
+    "frame from a circle (no keyframes clutter the timeline, radius/height "
+    "are live-scalable). duration seconds sets the scene duration so one "
+    "loop = one revolution. `stop_turntable()` clears an active orbit AND "
+    "wipes camera keyframes / any subject spin currently owning the timeline.\n\n"
+    "ANIMOFLOW (text-to-motion): `run_animoflow({prompt, max_frames?, seed?})` "
+    "prompts the local AnimoFlow MoMask container to synthesize a motion "
+    "clip from a text description, then retargets it onto an AF_Mannequin in "
+    "the scene (spawns one if none exist). Requires Docker Desktop running + "
+    "the AnimoFlow containers up (setup lives in the Motion tool pane — "
+    "point the user there if the call fails with an env error). Good prompts "
+    "read like short verb phrases: \"person walking forward\", \"a character "
+    "waving\", \"kick with the right leg then step back\". Frame count 30–240 "
+    "typical (20fps, so 120 = 6s). Warn the user the first run of the day "
+    "can take 30–90s of CPU inference.\n\n"
     "TO ACTUALLY GENERATE: prefer the `trigger_generate` editor tool over the "
     "raw Comfy MCP tools. trigger_generate uses the editor's own pipeline, so the "
     "result lands in the viewport overlay AND in the user's Assets pane "
@@ -2692,14 +2729,14 @@ ASSISTANT_SYSTEM = (
 EDITOR_TOOLS = [
     {
         "name": "add_primitive",
-        "description": "Add a SINGLE primitive object to the scene. For multiple at once, use batch_add_primitives instead — it's ~10x faster than calling this in a loop.",
+        "description": "Add a SINGLE primitive object to the scene. For multiple at once, use batch_add_primitives instead — it's ~10x faster than calling this in a loop. Text/particles/clouds have their own defaults; for a mannequin figure use spawn_mannequin, for a skybox backdrop use spawn_skybox.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "kind": {
                     "type": "string",
-                    "enum": ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "particles"],
-                    "description": "Primitive type to add",
+                    "enum": ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "text", "particles", "clouds"],
+                    "description": "Primitive type to add. text spawns a 3D 'Text' mesh (rename via rename_object to change the string). particles/clouds spawn stylized FX systems.",
                 },
                 "color": {"type": "string", "description": "Optional hex color like #ff5fbf"},
                 "position": {
@@ -2726,7 +2763,7 @@ EDITOR_TOOLS = [
                         "properties": {
                             "kind": {
                                 "type": "string",
-                                "enum": ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "particles"],
+                                "enum": ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "text", "particles", "clouds"],
                             },
                             "color": {"type": "string", "description": "Optional hex like #ff5fbf"},
                             "position": {
@@ -3223,6 +3260,100 @@ EDITOR_TOOLS = [
             "required": ["models"],
         },
     },
+    # ── Compound-object spawns ───────────────────────────────────────
+    # Skybox + Mannequin build assemblies (multiple meshes + userData +
+    # skinning) so they live outside add_primitive's single-geometry model.
+    {
+        "name": "spawn_mannequin",
+        "description": "Spawn a ~1.72m Xbot-rigged mannequin figure — a Mixamo skinned GLB with pose-able joints. Result becomes the current selection so a follow-up rename_object / set_object_position works on it. Only one spawn per call.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "position": {
+                    "type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3,
+                    "description": "Optional [x,y,z] world position (default [0,0,0]).",
+                },
+            },
+        },
+    },
+    {
+        "name": "spawn_skybox",
+        "description": "Spawn a giant inverted sphere as a scene backdrop. The user drops or generates a 360° equirectangular image onto it via the object inspector — this tool just adds the sphere. Idempotent-ish: re-clicking the Skybox tile in the UI reuses an existing skybox, but this tool always adds a new one; check list_objects first if you want to avoid duplicates.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    # ── Camera control ──────────────────────────────────────────────
+    # Aim lock + hand-held shake + turntable. Applied to the render camera
+    # (the one whose shot the user is composing), NOT the perspective/scene
+    # view. Persist to state.renderCamera so save/load round-trips.
+    {
+        "name": "set_camera_target",
+        "description": "Lock the render camera's aim to a specific object every frame. Overrides orbit tumble AND any keyframed rotation — position keyframes still apply, but the camera keeps facing this object. Also used as the pivot for start_turntable's camera mode. Pass a scene object name (case-insensitive match against list_objects).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name of the scene object to lock aim onto"},
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "clear_camera_target",
+        "description": "Release the camera's aim lock (from set_camera_target). Camera returns to its raw pose from keyframes / user orbit.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "set_camera_handheld",
+        "description": "Add subtle multi-freq shake to the render camera — reads as handheld filming. Speed drives the shake frequency, Noise the amplitude (both 0..1). Set both to 0 to disable. Shake is applied only during camera-view playback / recording so a paused shot stays still.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "speed": {"type": "number", "minimum": 0, "maximum": 1, "description": "Shake frequency (0 = still, 1 = fast)"},
+                "noise": {"type": "number", "minimum": 0, "maximum": 1, "description": "Shake amplitude (0 = off, 1 = ~5cm position + ~1.5° rotation)"},
+            },
+            "required": ["speed", "noise"],
+        },
+    },
+    {
+        "name": "start_turntable",
+        "description": "Bake a turntable / orbit motion. mode=\"subject\": rotates the named object 360° around its Y axis via 9 linear keyframes over duration seconds. mode=\"camera\": activates a procedural orbit ring — the render camera orbits object_name (or the current Target Object) at its current radius/height. Sets scene duration so one timeline loop = one revolution. object_name is required for subject mode; optional for camera mode (falls back to Target Object then current lookAt).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "mode": {"type": "string", "enum": ["subject", "camera"], "description": "\"subject\" spins the object in place; \"camera\" orbits the render camera around it"},
+                "duration": {"type": "number", "minimum": 0.5, "maximum": 60, "description": "Seconds per revolution (typical 3-10)"},
+                "direction": {"type": "string", "enum": ["cw", "ccw"], "description": "Rotation direction (default cw)"},
+                "object_name": {"type": "string", "description": "Which object to spin/orbit around. Required for mode=subject."},
+            },
+            "required": ["mode", "duration"],
+        },
+    },
+    {
+        "name": "stop_turntable",
+        "description": "Clear any active procedural camera orbit AND wipe all camera keyframes. Also wipes object keyframes on the named object if given (use to undo a subject-mode turntable). No-op if nothing's active.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "object_name": {"type": "string", "description": "Optional — clears keyframes on this object too (undoes subject-mode spin)."},
+            },
+        },
+    },
+    # ── AnimoFlow (text-to-motion) ──────────────────────────────────
+    # Prompts the local MoMask container to synthesize a HumanML3D motion
+    # clip and retargets it onto an AF_Mannequin in the scene. Requires
+    # Docker + AnimoFlow containers up (setup UI lives in Motion util pane).
+    {
+        "name": "run_animoflow",
+        "description": "Generate a text-to-motion animation and apply it to an AF_Mannequin in the scene. Requires Docker Desktop running + the AnimoFlow MoMask container up (setup lives in the Motion util pane). Spawns a mannequin if none exists. First run of the day takes 30-90s of CPU inference. Prompt style: short verb phrases like \"person walking forward\" or \"a character waving\".",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "Motion description — short verb phrase"},
+                "max_frames": {"type": "integer", "minimum": 30, "maximum": 240, "description": "Frame count (20fps, so 120 = 6s). Default 120."},
+                "seed": {"type": "integer", "description": "Optional seed for reproducibility. Default 42."},
+            },
+            "required": ["prompt"],
+        },
+    },
 ]
 
 
@@ -3244,6 +3375,27 @@ def _format_scene_context(ctx: dict) -> str:
             parts.append(f"  - {name} ({kind}){ref}{notes}")
     else:
         parts.append("Objects in scene (0): NONE — the scene is empty.")
+    # Camera state — target lock, hand-held shake, procedural orbit. Emitted
+    # so the agent doesn't ask "is a turntable running?" or clobber an active
+    # target with clear_camera_target it didn't know was needed.
+    cam = ctx.get("camera") or {}
+    cam_lines = []
+    if cam.get("targetName"):
+        cam_lines.append(f"  aim locked on [{cam['targetName']}]")
+    hh = cam.get("handheld") or {}
+    if hh.get("noise") or hh.get("speed"):
+        cam_lines.append(f"  hand-held shake: speed={hh.get('speed', 0):.2f}, noise={hh.get('noise', 0):.2f}")
+    orb = cam.get("orbit") or {}
+    if orb.get("active"):
+        pivot = orb.get("pivotName") or "(frozen point)"
+        cam_lines.append(
+            f"  procedural orbit ACTIVE around [{pivot}] "
+            f"(radius={orb.get('radius', 0):.2f}, height={orb.get('height', 0):.2f}, "
+            f"direction={'ccw' if orb.get('direction') == -1 else 'cw'})"
+        )
+    if cam_lines:
+        parts.append("Render camera state:")
+        parts.extend(cam_lines)
     # The UI presents partner-API generators (Nano Banana, Seedance, Tripo...)
     # and manifest-driven local ComfyUI modules together under one "Workflows"
     # panel. Both are workflows from the user's POV; here we still list them
