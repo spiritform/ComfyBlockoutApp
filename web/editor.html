@@ -3056,41 +3056,32 @@
 				     paints at boot instead of the button popping in after the
 				     /api/modules fetch resolves. -->
 				<button class="prim-btn" data-tool="util:triposplat-local" data-hardcoded="1" data-label="TripoSplat" title="TripoSplat — generate a 3D gaussian splat from a source image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.983 21.186a1 1 0 0 1-1.966 0 10 10 0 0 0-8.203-8.203 1 1 0 0 1 0-1.966 10 10 0 0 0 8.203-8.203 1 1 0 0 1 1.966 0 10 10 0 0 0 8.203 8.203 1 1 0 0 1 0 1.966 10 10 0 0 0-8.203 8.203"/></svg></button>
+				<!-- Mannequin — procedural block-figure at real-world 1.72m scale.
+				     Reference for blockouts (door frames, couches, camera height).
+				     Sits above AnimoFlow so the human-scale reference reads first
+				     in the mental order "spawn a person → then optionally drive
+				     it with motion". -->
+				<button class="prim-btn" data-tool="mannequin" data-label="Mannequin" title="Mannequin — spawn a ~1.72m human-scale block figure for reference"><svg viewBox="3 3 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6"/><path d="m6 8 6 2 6-2"/><path d="M12 10v4"/></svg></button>
 				<!-- Motion util — text-to-motion animation targeting the mannequin's
 				     Mixamo skeleton via AnimoFlow. Pane renders a requirements
 				     card (Docker + container + mannequin-in-scene) instead of
 				     the generic scene-video/image UI, so the user sees exactly
 				     what's needed before they try to generate. -->
 				<button class="prim-btn" data-tool="util:motion" data-hardcoded="1" data-label="AnimoFlow" title="AnimoFlow — text prompt → animated motion clip that drives the mannequin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z"/><path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z"/><path d="M16 17h4"/><path d="M4 13h4"/></svg></button>
-				<!-- Lighting rig — spawns a Group with 1/2/3 DirectionalLights in a
-				     classic key/fill/rim configuration. The rig acts as a single
-				     scene object (primKind="lightrig") — moves + rotates + saves
-				     as one unit, per-light knobs live in the object inspector.
-				     Preset swap adds/removes lights on the same rig without
-				     respawning. Shared target Object3D at rig-local (0,0,0) so
-				     rotating the rig re-aims every light together. -->
-				<button class="prim-btn" data-fx="light" data-label="Light" title="Light — spawn a directional / point / spot light (type picker + intensity + color + shadows in the object inspector)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5C17.7 10.2 18 9 18 8a6 6 0 1 0-12 0c0 1 .3 2.2 1.5 3.5.8.8 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg></button>
-				<!-- Turntable — bakes a full 360° Y-rotation across the timeline
-				     as keyframes. Two modes: rotate the selected object, or
-				     orbit the render camera around a pivot (target object if
-				     set, otherwise renderCamTarget). Sets scene duration to
-				     the chosen turn length so the loop covers exactly one
-				     revolution. Everything runs client-side. -->
-				<button class="prim-btn" data-tool="turntable" data-label="Turntable" title="Turntable — bake a 360° rotation on the selection or an orbit on the camera as keyframes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3.4-7.03"/><path d="M21 4v5h-5"/></svg></button>
+				<!-- Light — Directional / Point / Spot / Softbox picker in the
+				     object inspector; VSM shadows on Directional+Spot, Point +
+				     Softbox as ambient / fill options. -->
+				<button class="prim-btn" data-fx="light" data-label="Light" title="Light — spawn a directional / point / spot / softbox light (type picker + intensity + color + shadows in the object inspector)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5C17.7 10.2 18 9 18 8a6 6 0 1 0-12 0c0 1 .3 2.2 1.5 3.5.8.8 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg></button>
 				<!-- Terrain generator — spawns a 20m x 20m displaced plane with
 				     128 subdivisions. Two source modes: procedural fBM noise
 				     (preset + seed + amplitude + frequency + octaves) or an
-				     uploaded/generated grayscale heightmap sampled per vertex.
-				     Heightmap generate hits a backend endpoint that appends
-				     grayscale-topdown-orthographic guardrails to the prompt
-				     (same pattern as the skybox). -->
+				     uploaded/generated grayscale heightmap sampled per vertex. -->
 				<button class="prim-btn" data-fx="terrain" data-label="Terrain" title="Terrain — displaced plane driven by fBM noise or a grayscale heightmap you upload / generate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3l4 8 5-5 5 13H2L8 3z"/></svg></button>
-				<!-- Mannequin — procedural block-figure at real-world 1.72m scale.
-				     Reference for blockouts (door frames, couches, camera height).
-				     Group with primKind="mannequin" so a future rigged GLB slots
-				     in without changing the object-inspector / delete / selection
-				     paths — those all already treat Groups as one addressable unit. -->
-				<button class="prim-btn" data-tool="mannequin" data-label="Mannequin" title="Mannequin — spawn a ~1.72m human-scale block figure for reference"><svg viewBox="3 3 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6"/><path d="m6 8 6 2 6-2"/><path d="M12 10v4"/></svg></button>
+				<!-- Turntable — bakes a full 360° Y-rotation across the timeline
+				     as keyframes. Two modes: rotate the selected object, or
+				     orbit the render camera around a pivot (target object if
+				     set, otherwise renderCamTarget). -->
+				<button class="prim-btn" data-tool="turntable" data-label="Turntable" title="Turntable — bake a 360° rotation on the selection or an orbit on the camera as keyframes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3.4-7.03"/><path d="M21 4v5h-5"/></svg></button>
 			</div>
 			<input type="file" id="loadmedia-file" accept="image/*,video/*" hidden>
 		</div>
@@ -16871,6 +16862,27 @@ const ASSISTANT_TOOLS = {
 		refreshOutliner();
 		saveScene?.();
 		return `spawned ${wrapper.name} at (${wrapper.position.x.toFixed(2)}, ${wrapper.position.y.toFixed(2)}, ${wrapper.position.z.toFixed(2)})`;
+	},
+
+	spawn_light({ type, position, intensity, color, cast_shadows, softbox_width, softbox_height } = {}) {
+		const cfg = {};
+		if (type && ["directional", "point", "spot", "softbox"].includes(type)) cfg.type = type;
+		if (typeof intensity === "number") cfg.intensity = intensity;
+		if (typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color)) {
+			cfg.color = parseInt(color.slice(1), 16);
+		}
+		if (typeof cast_shadows === "boolean") cfg.castShadow = cast_shadows;
+		if (typeof softbox_width === "number") cfg.softboxWidth = softbox_width;
+		if (typeof softbox_height === "number") cfg.softboxHeight = softbox_height;
+		const wrapper = addLightFx(cfg);
+		if (!wrapper) return "error: addLightFx returned null";
+		if (Array.isArray(position) && position.length === 3) {
+			wrapper.position.set(+position[0] || 0, +position[1] || 0, +position[2] || 0);
+		}
+		refreshOutliner();
+		saveScene?.();
+		const t = wrapper.userData.lightConfig.type;
+		return `spawned ${wrapper.name} (type=${t}, intensity=${wrapper.userData.lightConfig.intensity}) at (${wrapper.position.x.toFixed(2)}, ${wrapper.position.y.toFixed(2)}, ${wrapper.position.z.toFixed(2)})`;
 	},
 
 	spawn_skybox() {
