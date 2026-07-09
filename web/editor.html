@@ -3986,6 +3986,16 @@
 						<div class="drag-num" id="tt-arc"><span class="drag-label">Arc</span><span class="drag-val">360°</span></div>
 						<div class="drag-num" id="tt-start"><span class="drag-label">Start</span><span class="drag-val">0°</span></div>
 					</div>
+					<!-- Ease across the sweep — same catalog the keyframe timeline uses.
+					     Linear = constant angular velocity (mechanical spin).
+					     easeInOut = soft start + soft stop (intentional camera move). -->
+					<div class="sub-label" style="margin-top:8px">Ease</div>
+					<div class="pill-toggle" id="tt-ease-toggle" style="margin-top:6px">
+						<button type="button" class="active" data-tt-ease="linear">Linear</button>
+						<button type="button" data-tt-ease="easeIn">In</button>
+						<button type="button" data-tt-ease="easeOut">Out</button>
+						<button type="button" data-tt-ease="easeInOut">In+Out</button>
+					</div>
 					<div class="hint" style="margin-top:6px">Drag to scale the orbit. Arc &lt; 360° = partial sweep (180° = half ring). Camera stays aimed at the pivot.</div>
 				</div>
 				<div class="section">
@@ -21845,7 +21855,7 @@ for (const [id, key] of [["cam-handheld-speed", "speed"], ["cam-handheld-noise",
 //   returns the computed pose per frame — no keyframes, mathematically
 //   perfect circle. Radius/Height are live state so scaling the ring after
 //   generation updates the render on the next frame with no re-bake.
-const _turntable = { mode: "subject", duration: 5, direction: "cw", arcDeg: 360, startOffsetDeg: 0 };
+const _turntable = { mode: "subject", duration: 5, direction: "cw", arcDeg: 360, startOffsetDeg: 0, ease: "linear" };
 
 // Procedural camera orbit state. active=false leaves sampleCameraAt on the
 // normal keyframe path. pivotName follows a scene object each frame; if
@@ -21867,6 +21877,11 @@ const _camOrbit = {
 	// classic full-360 turntable behavior so existing scenes look identical.
 	arcDeg: 360,
 	startOffsetDeg: 0,
+	// Timing curve across t=0..1 — same key as the easings catalog. "linear"
+	// = constant angular velocity (default, classic turntable). "easeInOut"
+	// gives the shot a soft start + soft stop, reads as an intentional camera
+	// move instead of a mechanical spin.
+	ease: "linear",
 };
 window._camOrbit = _camOrbit;
 const _camOrbitTmpPivot = new THREE.Vector3();
@@ -21971,6 +21986,21 @@ function _ttSetStatus(msg, kind = "") {
 				format: v => v.toFixed(2),
 			});
 		}
+		// Ease pill toggle — timing curve across the sweep. Writes to both
+		// _turntable (persisted UI intent) and _camOrbit (live constraint) so
+		// switching Linear→InOut re-samples the camera on the next frame.
+		document.querySelectorAll("#tt-ease-toggle [data-tt-ease]").forEach(btn => {
+			btn.addEventListener("click", () => {
+				document.querySelectorAll("#tt-ease-toggle [data-tt-ease]").forEach(b => b.classList.remove("active"));
+				btn.classList.add("active");
+				_turntable.ease = btn.dataset.ttEase;
+				if (_camOrbit.active) {
+					_camOrbit.ease = btn.dataset.ttEase;
+					_ttApplyOrbit();
+				}
+				saveSceneDebounced?.();
+			});
+		});
 		// Arc / Start pills — live-tune the partial-arc yaw range. Both write
 		// to _turntable (persisted UI intent) AND _camOrbit (live constraint)
 		// so the ring visual + sampled camera pose update on every drag tick.
@@ -22081,6 +22111,12 @@ function _ttSyncOrbitControls() {
 	document.getElementById("tt-height")?._refresh?.();
 	document.getElementById("tt-arc")?._refresh?.();
 	document.getElementById("tt-start")?._refresh?.();
+	// Ease pill toggle — sync active state from the current setting so the
+	// visible pill matches whatever the user (or a saved scene) had set.
+	const currentEase = (_camOrbit.active ? _camOrbit.ease : _turntable.ease) || "linear";
+	document.querySelectorAll("#tt-ease-toggle [data-tt-ease]").forEach(b => {
+		b.classList.toggle("active", b.dataset.ttEase === currentEase);
+	});
 }
 
 // Generate button label + visibility — only meaningful in subject mode
@@ -22129,6 +22165,7 @@ function _ttActivateOrbitFromCurrent() {
 	_camOrbit.up = renderCam.up.toArray();
 	_camOrbit.arcDeg = _turntable.arcDeg ?? 360;
 	_camOrbit.startOffsetDeg = _turntable.startOffsetDeg ?? 0;
+	_camOrbit.ease = _turntable.ease || "linear";
 	// Sync scene duration to the pill so playhead 0..1 covers exactly one turn.
 	const durInput = document.getElementById("duration");
 	if (durInput) {
@@ -22756,10 +22793,13 @@ function sampleCameraAt(t) {
 		// Partial-arc: arcDeg controls how far the camera sweeps across t=0..1
 		// (360 = full turn = original behavior, 180 = half-orbit / semi-ring shot).
 		// startOffsetDeg adjusts where along the ring the arc begins relative to
-		// where the camera is parked.
+		// where the camera is parked. Ease shapes the timing across the sweep —
+		// same catalog the keyframe timeline uses, so "easeInOut" gives the shot
+		// a soft start/stop like a manually-animated pair of start+end keys.
 		const arcRad = (_camOrbit.arcDeg ?? 360) * Math.PI / 180;
 		const startOffsetRad = (_camOrbit.startOffsetDeg ?? 0) * Math.PI / 180;
-		const yaw = _camOrbit.startYaw + startOffsetRad + _camOrbit.direction * t * arcRad;
+		const easedT = (easings[_camOrbit.ease] || easings.linear)(t);
+		const yaw = _camOrbit.startYaw + startOffsetRad + _camOrbit.direction * easedT * arcRad;
 		const p = new THREE.Vector3(
 			pivot.x + Math.cos(yaw) * _camOrbit.radius,
 			pivot.y + _camOrbit.height,
