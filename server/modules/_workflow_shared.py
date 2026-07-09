@@ -151,11 +151,16 @@ async def _submit_wait_download(
 
         scratch = Path(tempfile.mkdtemp(prefix=f"{module_id}_"))
         # Track when the job started so a fallback scan of the local `output/`
-        # folder (where Comfy CLI auto-syncs outputs during `jobs wait`) can
-        # tell fresh files from stale ones. 30s pad for clock drift.
+        # folder can tell fresh files from stale ones. 30s pad for clock drift.
         job_start = time.time() - 30
+        # Meshy + other partner-API 3D nodes fire the job-success signal from
+        # the Cloud side BEFORE their asset store finishes indexing the file —
+        # `comfy download` hits `download_no_outputs` for 30-60s after the job
+        # completes. Pre-sleep 15s to skip the first wave of doomed retries,
+        # then a longer patience budget (20 attempts × up to 30s = ~5min max).
+        await asyncio.sleep(15)
         last_env = None
-        for attempt in range(8):
+        for attempt in range(20):
             code, out, err = await run_cli([
                 comfy_bin(), "--json", "download", prompt_id,
                 "-o", str(scratch),
@@ -168,7 +173,7 @@ async def _submit_wait_download(
             if err_code != "download_no_outputs":
                 detail = (last_env or {}).get("error") if last_env else None
                 raise RuntimeError(f"comfy download failed (rc={code}): {detail or err.strip() or out.strip()[:800]}")
-            await asyncio.sleep(min(2 + attempt * 2, 12))
+            await asyncio.sleep(min(5 + attempt * 3, 30))
 
         # Look under scratch first (what `comfy download -o` was told to use).
         candidates: list[Path] = []
