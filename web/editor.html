@@ -15459,7 +15459,19 @@ function _appendWorkflowRows(container) {
 						v = "0";
 					}
 				}
-				if (v !== undefined && v !== "") inputs[spec.name] = v;
+				// scene-image cell.values are the {url, filename, kind} object we
+				// stored on upload — the server expects a scalar `image_url` string
+				// so it can resolve to a local path (for /data/...) or download and
+				// upload to Cloud. Sending the raw object landed as `inputs.image =
+				// {...}` server-side which the image_url branch never fires on, so
+				// the module fell through to using the viewport snapshot from
+				// _image_store — which is why users saw scene captures instead of
+				// their uploaded reference. Unpack here per input.
+				if (spec.type === "scene-image" && v && typeof v === "object" && v.url) {
+					inputs.image_url = v.url;
+				} else if (v !== undefined && v !== "") {
+					inputs[spec.name] = v;
+				}
 			}
 			const resultKind = m.kind === "3d" ? "3d" : m.kind;
 			if (!window.runGenerateModule) {

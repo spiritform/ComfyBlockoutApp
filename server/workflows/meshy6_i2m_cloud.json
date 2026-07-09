@@ -1,17 +1,4 @@
 {
-  "6": {
-    "inputs": {
-      "model_file": [
-        "7",
-        0
-      ],
-      "image": ""
-    },
-    "class_type": "Preview3D",
-    "_meta": {
-      "title": "Preview 3D & Animation"
-    }
-  },
   "7": {
     "inputs": {
       "model": "latest",
@@ -23,7 +10,7 @@
       "should_texture.enable_pbr": true,
       "should_texture.texture_prompt": "",
       "pose_mode": "",
-      "seed": 795649874,
+      "seed": 0,
       "image": [
         "8",
         0
@@ -50,20 +37,6 @@
       "mesh": [
         "7",
         2
-      ]
-    },
-    "class_type": "SaveGLB",
-    "_meta": {
-      "title": "Save 3D Model"
-    }
-  },
-  "12": {
-    "inputs": {
-      "filename_prefix": "3d/meshy_image2model",
-      "image": "",
-      "mesh": [
-        "7",
-        3
       ]
     },
     "class_type": "SaveGLB",
