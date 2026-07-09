@@ -1161,6 +1161,18 @@
 	}
 	.assistant-input:focus { outline: none; }
 	.assistant-input-row:focus-within { background: rgba(255,255,255,0.05); }
+	/* Icon button parked in the input row's top-right corner (Import Workflow).
+	   Absolute-positioned so the textarea keeps its full width and the icon
+	   floats on top with a small hit target. */
+	.assistant-icon-btn {
+		position: absolute; top: 6px; right: 6px;
+		width: 22px; height: 22px; padding: 0;
+		background: transparent; border: none; cursor: pointer;
+		color: rgba(255,255,255,0.45); border-radius: 4px;
+		display: inline-flex; align-items: center; justify-content: center;
+	}
+	.assistant-icon-btn:hover { color: #ffd28a; background: rgba(255,180,84,0.1); }
+	.assistant-icon-btn svg { width: 14px; height: 14px; display: block; }
 	.assistant-shell:focus-within { border-color: rgba(255,180,84,0.35); }
 
 	.prim-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; position: relative; }
@@ -3148,6 +3160,12 @@
 					<div class="assistant-input-row">
 						<span class="assistant-prompt-arrow" aria-hidden="true">&gt;</span>
 						<textarea class="assistant-input" id="assistant-input" rows="2" placeholder="Ask the AI agent… (Enter to send · Shift+Enter for new line · /clear resets)"></textarea>
+						<!-- Workflow import — reads a Comfy Cloud .json (API or graph
+						     format) and asks the agent to inspect + register it as a
+						     ComfyBlockout workflow module. Icon-only button parked in
+						     the input row's upper-right corner. -->
+						<button type="button" id="assistant-import-btn" class="assistant-icon-btn" title="Import a Comfy workflow JSON and let the agent hook it up as a module" aria-label="Import workflow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></button>
+						<input type="file" id="assistant-import-file" accept=".json,application/json" hidden>
 					</div>
 				</div>
 			</div>
@@ -17278,6 +17296,58 @@ assistantInput.addEventListener("keydown", e => {
 		e.preventDefault();
 		sendAssistant();
 	}
+});
+
+// Import Workflow button — opens a file picker for a Comfy Cloud .json (API
+// or graph format), reads it, and sends a directive to the agent asking it
+// to inspect + register as a ComfyBlockout module. Agent uses the JSON's
+// class_type + inputs to build the meta.json patches automatically. Size cap
+// (~1MB) so a stray large JSON doesn't blow past the LLM context.
+const _IMPORT_MAX_BYTES = 1024 * 1024;
+const importBtn = document.getElementById("assistant-import-btn");
+const importFile = document.getElementById("assistant-import-file");
+importBtn?.addEventListener("click", () => importFile?.click());
+importFile?.addEventListener("change", async e => {
+	const file = e.target.files?.[0];
+	e.target.value = ""; // reset so re-picking the same file re-fires change
+	if (!file) return;
+	if (file.size > _IMPORT_MAX_BYTES) {
+		pushAssistantMsg("system", `workflow file too large (${(file.size / 1024).toFixed(0)} KB, max ${_IMPORT_MAX_BYTES / 1024} KB)`);
+		return;
+	}
+	let text = "";
+	try {
+		text = await file.text();
+	} catch (err) {
+		pushAssistantMsg("system", `couldn't read file: ${err?.message || err}`);
+		return;
+	}
+	// Validate that it's actually JSON before shipping to the agent — an early
+	// error here is friendlier than "agent got confused" downstream.
+	try {
+		JSON.parse(text);
+	} catch (err) {
+		pushAssistantMsg("system", `not valid JSON: ${err?.message || err}`);
+		return;
+	}
+	const prompt = [
+		`Please import this Comfy workflow and register it as a ComfyBlockout module via \`create_workflow_module\`.`,
+		``,
+		`Filename: \`${file.name}\``,
+		``,
+		`Steps:`,
+		`1. Read the JSON below. Identify the format (API — flat dict keyed by node id — or graph/save — top-level \`nodes[]\` array).`,
+		`2. Pick a short module label (~24 chars, use \`·\` separators — see the CREATING NEW WORKFLOWS guidance).`,
+		`3. Identify the user-facing inputs (typically: image source for image-conditioned workflows, prompt for text-to-X, optional seed).`,
+		`4. Build the meta.json patches. For API format: use \`widget_name\` (the input dict key like "image" or "prompt"). For graph format: use \`widget_index\` (positional).`,
+		`5. Call \`create_workflow_module\` with the workflow + meta. If anything is ambiguous (label, which inputs to expose), ASK me before creating — don't guess.`,
+		``,
+		`Workflow JSON:`,
+		`\`\`\`json`,
+		text.trim(),
+		`\`\`\``,
+	].join("\n");
+	sendAssistant(prompt, { silent: true, systemLine: `→ imported ${file.name} · asking agent to hook it up` });
 });
 
 // Reset chat was previously wired here to the ↻ button; it's now handled by
