@@ -32,8 +32,7 @@
   },
   "11": {
     "inputs": {
-      "filename_prefix": "3d/meshy_image2model",
-      "image": "",
+      "filename_prefix": "meshy_image2model",
       "mesh": [
         "7",
         2
