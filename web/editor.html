@@ -3978,7 +3978,15 @@
 						<div class="drag-num" id="tt-radius"><span class="drag-label">Radius</span><span class="drag-val">3.00</span></div>
 						<div class="drag-num" id="tt-height"><span class="drag-label">Height</span><span class="drag-val">1.50</span></div>
 					</div>
-					<div class="hint" style="margin-top:6px">Drag to scale the orbit. Camera stays aimed at the pivot.</div>
+					<!-- Partial-arc controls — Arc = angular sweep across the timeline
+					     (360 = full turn, 180 = half orbit / semi-ring shot). Start Angle
+					     shifts where along the ring the sweep begins relative to the
+					     camera's parked position. -->
+					<div class="drag-row" style="margin-top:6px">
+						<div class="drag-num" id="tt-arc"><span class="drag-label">Arc</span><span class="drag-val">360°</span></div>
+						<div class="drag-num" id="tt-start"><span class="drag-label">Start</span><span class="drag-val">0°</span></div>
+					</div>
+					<div class="hint" style="margin-top:6px">Drag to scale the orbit. Arc &lt; 360° = partial sweep (180° = half ring). Camera stays aimed at the pivot.</div>
 				</div>
 				<div class="section">
 					<button type="button" id="tt-generate" class="mp-still-btn" style="width:100%">Generate Keyframes</button>
@@ -21837,7 +21845,7 @@ for (const [id, key] of [["cam-handheld-speed", "speed"], ["cam-handheld-noise",
 //   returns the computed pose per frame — no keyframes, mathematically
 //   perfect circle. Radius/Height are live state so scaling the ring after
 //   generation updates the render on the next frame with no re-bake.
-const _turntable = { mode: "subject", duration: 5, direction: "cw" };
+const _turntable = { mode: "subject", duration: 5, direction: "cw", arcDeg: 360, startOffsetDeg: 0 };
 
 // Procedural camera orbit state. active=false leaves sampleCameraAt on the
 // normal keyframe path. pivotName follows a scene object each frame; if
@@ -21852,6 +21860,13 @@ const _camOrbit = {
 	direction: 1,
 	fov: 55,
 	up: [0, 1, 0],
+	// Partial-arc support — arcDeg = angular sweep the camera covers over the
+	// timeline (360 = full turn, 180 = half orbit, etc.). startOffsetDeg = extra
+	// yaw added to the pivot-relative starting angle (0 = camera stays at its
+	// current position, negative = start behind, etc.). Both default to the
+	// classic full-360 turntable behavior so existing scenes look identical.
+	arcDeg: 360,
+	startOffsetDeg: 0,
 };
 window._camOrbit = _camOrbit;
 const _camOrbitTmpPivot = new THREE.Vector3();
@@ -21956,6 +21971,31 @@ function _ttSetStatus(msg, kind = "") {
 				format: v => v.toFixed(2),
 			});
 		}
+		// Arc / Start pills — live-tune the partial-arc yaw range. Both write
+		// to _turntable (persisted UI intent) AND _camOrbit (live constraint)
+		// so the ring visual + sampled camera pose update on every drag tick.
+		for (const [id, key, min, max, sens] of [
+			["tt-arc",   "arcDeg",         0,    360, 0.5],
+			["tt-start", "startOffsetDeg", -180, 180, 0.5],
+		]) {
+			const el = document.getElementById(id);
+			if (!el) continue;
+			setupDragField(el, {
+				get: () => (_camOrbit.active ? _camOrbit[key] : _turntable[key]) ?? 0,
+				set: v => {
+					const clamped = Math.max(min, Math.min(max, v));
+					_turntable[key] = clamped;
+					if (_camOrbit.active) {
+						_camOrbit[key] = clamped;
+						_ttApplyOrbit();
+					}
+					saveSceneDebounced?.();
+				},
+				sens,
+				min, max,
+				format: v => `${Math.round(v)}°`,
+			});
+		}
 		document.getElementById("tt-generate")?.addEventListener("click", () => {
 			_ttGenerate(_turntable.mode, _turntable.duration, _turntable.direction);
 		});
@@ -22039,6 +22079,8 @@ function _ttSyncOrbitControls() {
 	if (!visible) return;
 	document.getElementById("tt-radius")?._refresh?.();
 	document.getElementById("tt-height")?._refresh?.();
+	document.getElementById("tt-arc")?._refresh?.();
+	document.getElementById("tt-start")?._refresh?.();
 }
 
 // Generate button label + visibility — only meaningful in subject mode
@@ -22085,6 +22127,8 @@ function _ttActivateOrbitFromCurrent() {
 	_camOrbit.direction = dirSign;
 	_camOrbit.fov = renderCam.fov;
 	_camOrbit.up = renderCam.up.toArray();
+	_camOrbit.arcDeg = _turntable.arcDeg ?? 360;
+	_camOrbit.startOffsetDeg = _turntable.startOffsetDeg ?? 0;
 	// Sync scene duration to the pill so playhead 0..1 covers exactly one turn.
 	const durInput = document.getElementById("duration");
 	if (durInput) {
@@ -22126,8 +22170,14 @@ function _ttRebuildOrbitRing() {
 	const pivot = new THREE.Vector3().fromArray(_camOrbit.pivotPos);
 	const linked = _camOrbit.pivotName ? objects.find(o => o.name === _camOrbit.pivotName) : null;
 	if (linked) linked.getWorldPosition(pivot);
+	// Ring draws exactly the arc the camera will sweep — full circle for 360
+	// (default), a semi-ring for 180, etc. Sampled along the same yaw range
+	// sampleCameraAt uses so the visual matches the shot verbatim.
+	const arcRad = (_camOrbit.arcDeg ?? 360) * Math.PI / 180;
+	const startOffsetRad = (_camOrbit.startOffsetDeg ?? 0) * Math.PI / 180;
+	const yaw0 = _camOrbit.startYaw + startOffsetRad;
 	for (let i = 0; i <= SEG; i++) {
-		const yaw = (i / SEG) * 2 * Math.PI;
+		const yaw = yaw0 + _camOrbit.direction * (i / SEG) * arcRad;
 		pts.push(new THREE.Vector3(
 			pivot.x + Math.cos(yaw) * _camOrbit.radius,
 			pivot.y + _camOrbit.height,
@@ -22141,7 +22191,10 @@ function _ttRebuildOrbitRing() {
 		opacity: 0.55,
 		depthTest: false,
 	});
-	_camOrbitRing = new THREE.LineLoop(geo, mat);
+	// LineLoop closes the ring for full 360 (looks right); Line for partial arcs
+	// so the visual doesn't draw a stray chord across the gap.
+	const isFullRing = Math.abs((_camOrbit.arcDeg ?? 360) - 360) < 0.01;
+	_camOrbitRing = isFullRing ? new THREE.LineLoop(geo, mat) : new THREE.Line(geo, mat);
 	_camOrbitRing.name = "_camOrbitRing";
 	_camOrbitRing.renderOrder = 999;
 	_camOrbitRing.frustumCulled = false;
@@ -22700,7 +22753,13 @@ function sampleCameraAt(t) {
 		const linked = _camOrbit.pivotName ? objects.find(o => o.name === _camOrbit.pivotName) : null;
 		if (linked) linked.getWorldPosition(pivot);
 		else pivot.fromArray(_camOrbit.pivotPos);
-		const yaw = _camOrbit.startYaw + _camOrbit.direction * t * 2 * Math.PI;
+		// Partial-arc: arcDeg controls how far the camera sweeps across t=0..1
+		// (360 = full turn = original behavior, 180 = half-orbit / semi-ring shot).
+		// startOffsetDeg adjusts where along the ring the arc begins relative to
+		// where the camera is parked.
+		const arcRad = (_camOrbit.arcDeg ?? 360) * Math.PI / 180;
+		const startOffsetRad = (_camOrbit.startOffsetDeg ?? 0) * Math.PI / 180;
+		const yaw = _camOrbit.startYaw + startOffsetRad + _camOrbit.direction * t * arcRad;
 		const p = new THREE.Vector3(
 			pivot.x + Math.cos(yaw) * _camOrbit.radius,
 			pivot.y + _camOrbit.height,
