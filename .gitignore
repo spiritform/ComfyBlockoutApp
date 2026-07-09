@@ -6,8 +6,10 @@ __pycache__/
 .env
 .env.local
 
-# Runtime / user data — app re-creates on first run
+# Runtime / user output — app re-creates on first run. `data/` is the legacy
+# name (pre-2026-07-09 rename to match Comfy's `output/` convention).
 data/
+output/
 
 # Local dev tooling / IDE
 .claude/

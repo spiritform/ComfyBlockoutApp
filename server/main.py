@@ -40,7 +40,7 @@ from fastapi.staticfiles import StaticFiles
 # ---------- paths ----------
 
 APP_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = APP_DIR / "data"
+DATA_DIR = APP_DIR / "output"
 WEB_DIR = APP_DIR / "web"
 ENV_PATH = APP_DIR / ".env"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -386,7 +386,7 @@ async def save_video(
         out_filename = f"out_rec_{node_id}_{int(time.time() * 1000)}{out_ext}"
         out_path = DATA_DIR / out_filename
         shutil.copyfile(final_path, out_path)
-        out_url = f"/data/{out_filename}"
+        out_url = f"/output/{out_filename}"
     except Exception as e:
         print(f"[cb-app] recording asset copy failed: {e}")
 
@@ -418,7 +418,7 @@ async def save_image_route(
 @app.post("/comfyblockout/save_chat_image")
 async def save_chat_image_route(image: UploadFile = File(...)):
     """Save a chat-paste image under a unique name in DATA_DIR and return its
-    /data/ URL. Separate from /save_image (which is keyed by node_id and gets
+    /output/ URL. Separate from /save_image (which is keyed by node_id and gets
     overwritten each snapshot) so multiple pastes in one conversation don't
     collide. Called by the assistant textarea's paste handler."""
     import uuid
@@ -428,7 +428,7 @@ async def save_chat_image_route(image: UploadFile = File(...)):
     suffix = Path(image.filename or "").suffix.lower() or ".png"
     fname = f"chat_paste_{uuid.uuid4().hex[:12]}{suffix}"
     (DATA_DIR / fname).write_bytes(file_bytes)
-    return JSONResponse({"success": True, "url": f"/data/{fname}", "filename": fname, "bytes": len(file_bytes)})
+    return JSONResponse({"success": True, "url": f"/output/{fname}", "filename": fname, "bytes": len(file_bytes)})
 
 
 @app.post("/comfyblockout/save_prompt")
@@ -1002,7 +1002,7 @@ async def refs_upload(
     entry = {
         "id": ref_id,
         "filename": file.filename or safe_name,
-        "local_url": f"/data/refs/{local_path.name}",
+        "local_url": f"/output/refs/{local_path.name}",
         "signed_url": signed_url,
     }
     _refs_store.setdefault(node_id, []).append(entry)
@@ -1315,7 +1315,7 @@ async def skybox_generate(request: Request):
     full_prompt = f"{user_prompt}{_SKYBOX_SYSTEM_PROMPT_SUFFIX}"
     # Reuse the same asset directory pattern the other modules use so the
     # generated image lands in the user's Assets pane alongside their other
-    # renders (via /data/<filename>). Flux 2 lets us specify --width/--height
+    # renders (via /output/<filename>). Flux 2 lets us specify --width/--height
     # explicitly — we ask for 2048×1024 (a native 2:1 equirectangular aspect)
     # so the model doesn't guess and paint a square that then reads warped
     # when the client wraps it around the sphere.
@@ -2452,14 +2452,14 @@ async def run_module(module_id: str, request: Request):
 
     # Optional image_url override — the frontend's gen-cell source-image slot passes
     # this when the user picked/dragged a specific image instead of using the auto
-    # viewport snapshot. Resolve /data/... to a local file; anything else gets
+    # viewport snapshot. Resolve /output/... to a local file; anything else gets
     # fetched to a temp file for `comfy upload` to consume.
     image_url = inputs.pop("image_url", None)
     if image_url:
         import tempfile as _tempfile, urllib.request as _urlreq
         try:
-            if image_url.startswith("/data/"):
-                candidate = DATA_DIR / image_url[len("/data/"):]
+            if image_url.startswith("/output/"):
+                candidate = DATA_DIR / image_url[len("/output/"):]
                 if not candidate.exists():
                     raise HTTPException(400, f"source image not found: {image_url}")
                 inputs["image_path"] = candidate
@@ -2560,11 +2560,11 @@ async def run_module(module_id: str, request: Request):
     out_path = Path(result["path"])
     try:
         rel = out_path.relative_to(DATA_DIR).as_posix()
-        result["url"] = f"/data/{rel}"
+        result["url"] = f"/output/{rel}"
     except ValueError:
         result["url"] = None
 
-    # Convert intermediate file paths to /data/ URLs so the frontend can render
+    # Convert intermediate file paths to /output/ URLs so the frontend can render
     # them as preview tabs alongside the final render. Runners that don't
     # produce intermediates just leave the list empty.
     intermediates = result.get("intermediates")
@@ -2575,7 +2575,7 @@ async def run_module(module_id: str, request: Request):
                 continue
             try:
                 rel_i = Path(p).relative_to(DATA_DIR).as_posix()
-                inter["url"] = f"/data/{rel_i}"
+                inter["url"] = f"/output/{rel_i}"
             except ValueError:
                 inter["url"] = None
     return result
@@ -4121,7 +4121,7 @@ async def assets_list(limit: int = 200):
             continue
         st = p.stat()
         entry = {
-            "url": f"/data/{rel}",
+            "url": f"/output/{rel}",
             "filename": p.name,
             "kind": kind,
             "ext": ext,
@@ -4133,7 +4133,7 @@ async def assets_list(limit: int = 200):
         if thumb:
             try:
                 trel = thumb.relative_to(DATA_DIR).as_posix()
-                entry["thumbUrl"] = f"/data/{trel}"
+                entry["thumbUrl"] = f"/output/{trel}"
             except ValueError:
                 pass
         items.append(entry)
@@ -4160,4 +4160,4 @@ async def assets_delete(filename: str):
 
 # ---------- data static mount (must be defined after all explicit routes) ----------
 
-app.mount("/data", StaticFiles(directory=str(DATA_DIR)), name="data")
+app.mount("/output", StaticFiles(directory=str(DATA_DIR)), name="data")

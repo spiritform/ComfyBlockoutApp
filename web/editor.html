@@ -2914,7 +2914,7 @@
 			<button class="th-btn-mini" id="project-open" title="Open a saved project">Open</button>
 			<button class="th-btn-mini" id="project-save" title="Save (Ctrl+S)">Save</button>
 			<button class="th-btn-mini" id="project-save-as" title="Save as a new project">Save As</button>
-			<button class="th-btn-mini th-btn-assets" id="th-assets" title="Assets — generated images + videos">Assets</button>
+			<button class="th-btn-mini th-btn-assets" id="th-assets" title="Output — generated images, videos, meshes">Output</button>
 			<button class="th-btn-mini" id="th-assistant" title="AI Agent — chat + Comfy MCP tools">AI Agent</button>
 			<button class="th-icon-btn" id="th-settings" title="Settings">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -4961,7 +4961,7 @@
 			const bust = url.includes("?") ? `${url}&t=${ts}` : `${url}?t=${ts}`;
 			// Cache-bust intermediates the same way so a repeat generation
 			// swaps the DEPTH tab in place instead of showing the stale cached
-			// PNG under the same /data/ path.
+			// PNG under the same /output/ path.
 			const inters = Array.isArray(intermediates)
 				? intermediates.filter(x => x && x.url).map(x => ({
 					name: x.name,
@@ -8274,7 +8274,7 @@ function forceRightPane(which, label) {
 	const isFullPane = isAssets || isProjects;
 	const isBlank = which === "none";
 	if (kickerEl) {
-		kickerEl.textContent = isAssets ? "Assets" : isProjects ? "Projects" : "Properties";
+		kickerEl.textContent = isAssets ? "Output" : isProjects ? "Projects" : "Properties";
 		kickerEl.style.display = isBlank ? "none" : "";
 	}
 	if (sepEl) sepEl.style.display = (isFullPane || isBlank) ? "none" : "";
@@ -12505,7 +12505,7 @@ function renderUtilToolPane() {
 			// asset URL so it re-fetches the finalized file, not the temp
 			// path returned inline.
 			if (_activeUtilId === "util_pointcloud" && j.filename) {
-				await _replacePcPlaneWithPoints(`/data/${j.filename}`);
+				await _replacePcPlaneWithPoints(`/output/${j.filename}`);
 			}
 		} catch (err) {
 			console.error(`[util:${_activeUtilId}] run failed:`, err);
@@ -13528,7 +13528,7 @@ async function _pcGenerate() {
 		window.refreshAssets?.();
 		// One-shot: TripoSplat outputs a gaussian splat PLY, always render it
 		// as a spark.js SplatMesh at the placeholder's transform.
-		if (j.filename) await _replacePcPlaneWithSplat(`/data/${j.filename}`);
+		if (j.filename) await _replacePcPlaneWithSplat(`/output/${j.filename}`);
 	} catch (err) {
 		console.error("[triposplat] generate failed:", err);
 		_setPcStatus?.(`failed · ${String(err.message || err).slice(0, 120)}`, "error");
@@ -14702,7 +14702,7 @@ async function _skyboxGenerate() {
 		const j = await r.json();
 		_setSkyboxStatus(`done · ${j.filename || "saved to Assets"}`, "ok");
 		window.refreshAssets?.();
-		if (j.filename) _applySkyboxTexture(skybox, `/data/${j.filename}`);
+		if (j.filename) _applySkyboxTexture(skybox, `/output/${j.filename}`);
 	} catch (err) {
 		console.error("[skybox] generate failed:", err);
 		_setSkyboxStatus(`failed · ${String(err.message || err).slice(0, 120)}`, "error");
@@ -14995,7 +14995,7 @@ function _terrainSetHmStatus(text, kind) {
 				if (!r.ok) throw new Error(await r.text() || `HTTP ${r.status}`);
 				const j = await r.json();
 				if (!j.filename) throw new Error("server returned no filename");
-				t.userData.terrainConfig.heightmapUrl = `/data/${j.filename}`;
+				t.userData.terrainConfig.heightmapUrl = `/output/${j.filename}`;
 				t.userData.terrainConfig.source = "heightmap";
 				await _terrainApplyConfig(t);
 				_terrainSyncPaneFromSelection(t);
@@ -15467,7 +15467,7 @@ function _appendWorkflowRows(container) {
 				}
 				// scene-image cell.values are the {url, filename, kind} object we
 				// stored on upload — the server expects a scalar `image_url` string
-				// so it can resolve to a local path (for /data/...) or download and
+				// so it can resolve to a local path (for /output/...) or download and
 				// upload to Cloud. Sending the raw object landed as `inputs.image =
 				// {...}` server-side which the image_url branch never fires on, so
 				// the module fell through to using the viewport snapshot from
@@ -16119,7 +16119,7 @@ const assistantStatus = document.getElementById("assistant-status");
 
 // Clipboard paste — dropping an image screenshot into the chat via Ctrl+V.
 // Reads the paste event's clipboardData, uploads any image items to the new
-// /comfyblockout/save_chat_image endpoint (returns a /data/ URL), stashes the
+// /comfyblockout/save_chat_image endpoint (returns a /output/ URL), stashes the
 // URL in chatAttachments, and drops a `[image]` placeholder in the textarea —
 // same flow the drag-drop handler above uses, so the send path expands the
 // placeholder into a markdown ![...] on the wire. Non-image clipboard payloads
@@ -16979,7 +16979,7 @@ const ASSISTANT_TOOLS = {
 			}
 			const j = await r.json();
 			if (!j.filename) return "error: server returned no filename";
-			terrain.userData.terrainConfig.heightmapUrl = `/data/${j.filename}`;
+			terrain.userData.terrainConfig.heightmapUrl = `/output/${j.filename}`;
 			terrain.userData.terrainConfig.source = "heightmap";
 			await _terrainApplyConfig(terrain);
 			if (selected === terrain) _terrainSyncPaneFromSelection(terrain);
@@ -17018,7 +17018,7 @@ const ASSISTANT_TOOLS = {
 			}
 			const j = await r.json();
 			if (!j.filename) return "error: server returned no filename";
-			_applySkyboxTexture(skybox, `/data/${j.filename}`);
+			_applySkyboxTexture(skybox, `/output/${j.filename}`);
 			refreshOutliner();
 			window.refreshAssets?.();
 			saveScene?.();
@@ -18526,7 +18526,7 @@ function refreshObjectInspector() {
 	}
 	// Skybox panorama section — visible only when the selection IS a skybox.
 	// Thumb reflects the currently applied texture (blob URL from upload OR
-	// /data/ path from a Flux 2 generation).
+	// /output/ path from a Flux 2 generation).
 	const isSkybox = selected.userData?.primKind === "skybox";
 	const skyboxSection = document.getElementById("obj-skybox-section");
 	if (skyboxSection) {

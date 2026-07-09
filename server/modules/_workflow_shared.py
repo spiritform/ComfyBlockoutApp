@@ -31,6 +31,7 @@ import asyncio
 import json
 import shutil
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -149,6 +150,10 @@ async def _submit_wait_download(
             raise RuntimeError(f"comfy jobs wait failed (rc={code}): {detail or err.strip() or out.strip()[:800]}")
 
         scratch = Path(tempfile.mkdtemp(prefix=f"{module_id}_"))
+        # Track when the job started so a fallback scan of the local `output/`
+        # folder (where Comfy CLI auto-syncs outputs during `jobs wait`) can
+        # tell fresh files from stale ones. 30s pad for clock drift.
+        job_start = time.time() - 30
         last_env = None
         for attempt in range(8):
             code, out, err = await run_cli([
@@ -164,15 +169,29 @@ async def _submit_wait_download(
                 detail = (last_env or {}).get("error") if last_env else None
                 raise RuntimeError(f"comfy download failed (rc={code}): {detail or err.strip() or out.strip()[:800]}")
             await asyncio.sleep(min(2 + attempt * 2, 12))
-        else:
-            detail = (last_env or {}).get("error") if last_env else None
-            raise RuntimeError(f"comfy download kept reporting no outputs after 8 tries: {detail}")
 
+        # Look under scratch first (what `comfy download -o` was told to use).
         candidates: list[Path] = []
         for ext in output_exts:
             candidates.extend(scratch.rglob(f"*.{ext}"))
+        # Fallback: scan the local `output/` folder for files created since
+        # the job started. Comfy CLI auto-syncs cloud outputs there during
+        # `jobs wait` — happens INDEPENDENTLY of our explicit `comfy download`
+        # call, so even when `download` reports `no_outputs` (a known Cloud
+        # API race) the file may already be sitting in ./output. Meshy jobs
+        # in particular hit this because their outputs finalize AFTER the
+        # job status flips to success.
         if not candidates:
-            raise RuntimeError(f"no output matching {output_exts} found under {scratch}")
+            fallback_root = data_dir
+            for ext in output_exts:
+                for p in fallback_root.rglob(f"*.{ext}"):
+                    try:
+                        if p.stat().st_mtime >= job_start:
+                            candidates.append(p)
+                    except OSError:
+                        continue
+        if not candidates:
+            raise RuntimeError(f"no output matching {output_exts} found under {scratch} or fresh in {data_dir}")
         src = max(candidates, key=lambda p: p.stat().st_mtime)
         ext = src.suffix.lstrip(".").lower()
         dst = new_output_path(data_dir, module_id, ext)

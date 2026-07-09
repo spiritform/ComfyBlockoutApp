@@ -1,0 +1,41 @@
+{
+  "684": {
+    "inputs": {
+      "prompt": "forest knight, dynamic archery pose, drawing bow and aiming arrow, sharp facial features, streamlined armor, natural forest background, exquisite texture, realistic lighting, high detail, cinematic style, full body view",
+      "mode": "Regular",
+      "mode.tier": "Gen-2.5-High",
+      "mode.polygon_count": "Default",
+      "mode.creative": false,
+      "material": "Shaded",
+      "geometry_file_format": "glb",
+      "texture_mode": "Default",
+      "seed": 39059,
+      "TAPose": false,
+      "hd_texture": false,
+      "texture_delight": false,
+      "addon_highpack": false,
+      "bbox_width": 0,
+      "bbox_height": 0,
+      "bbox_length": 0,
+      "height_cm": 0
+    },
+    "class_type": "Rodin3D_Gen25_Text",
+    "_meta": {
+      "title": "Rodin 3D Gen-2.5 - Text to 3D"
+    }
+  },
+  "685": {
+    "inputs": {
+      "filename_prefix": "3d/Rodin3d_gen2.5",
+      "image": "",
+      "mesh": [
+        "684",
+        0
+      ]
+    },
+    "class_type": "SaveGLB",
+    "_meta": {
+      "title": "Save 3D Model"
+    }
+  }
+}
