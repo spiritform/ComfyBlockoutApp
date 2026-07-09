@@ -9453,9 +9453,13 @@ canvas.addEventListener("pointerup", e => {
 		setPlayhead(dot.key.t);
 		// "Through" keys are Catmull-Rom control points — the curve at time k.t doesn't
 		// necessarily pass through k.pos. setPlayhead's sampler would land next to the
-		// dot, not on it. Force the object to the exact stored transform so the gizmo
-		// centers on the clicked dot.
-		applyObjectState(dot.obj, dot.key);
+		// dot, not on it. Force the object (or camera) to the exact stored transform so
+		// the gizmo centers on the clicked dot.
+		if (dot.kind === "camera") {
+			applyCameraState(dot.key);
+		} else {
+			applyObjectState(dot.obj, dot.key);
+		}
 		select(dot.obj); // surface the object too so the user can edit/key further
 		return;
 	}
@@ -22510,19 +22514,49 @@ function refreshAnimPaths() {
 	}
 
 	// Camera path — only drawn in Scene view (would fill the frame in Camera view).
-	// Line only, no dots: the renderCam wireframe itself sits at each key when the
-	// playhead is parked there, so per-key dots would just add clutter.
-	// Straight segments match sampleCameraAt's linear lerp; a Catmull-Rom curve here
-	// would misrepresent where the shot actually travels.
+	// Mirrors the object-path rendering: Catmull-Rom curve through timed keys with
+	// through-keys as positional controls so a side through-key actually bends the
+	// path (was ignored before because the camera used linear lerp). Square dots at
+	// every key match the object-path style so the user can hover them to preview
+	// which frame each one belongs to — same interaction as object motion paths.
 	if (activeView === "scene" && keyframes.length >= 2) {
-		const cpts = keyframes.map(k => k.pos);
-		const clg = new THREE.BufferGeometry().setFromPoints(cpts);
-		const clm = new THREE.LineBasicMaterial({
-			color: 0xcccdd2, transparent: true, opacity: 0.6, depthTest: false,
+		const timedC = keyframes.filter(k => k.ease !== "through");
+		if (timedC.length >= 2) {
+			const cpts = [];
+			for (let i = 0; i < timedC.length - 1; i++) {
+				const startIdx = keyframes.indexOf(timedC[i]);
+				const endIdx = keyframes.indexOf(timedC[i + 1]);
+				const segPoints = keyframes.slice(startIdx, endIdx + 1).map(k => k.pos);
+				if (segPoints.length === 2) {
+					for (let s = 0; s <= SEG; s++) {
+						cpts.push(sampleKeyPosCurved(keyframes, startIdx, s / SEG));
+					}
+				} else {
+					const SAMPLES = SEG * (segPoints.length - 1);
+					for (let s = 0; s <= SAMPLES; s++) {
+						cpts.push(sampleMultiCatmullRom(segPoints, s / SAMPLES));
+					}
+				}
+			}
+			const clg = new THREE.BufferGeometry().setFromPoints(cpts);
+			const clm = new THREE.LineBasicMaterial({
+				color: 0xcccdd2, transparent: true, opacity: 0.6, depthTest: false,
+			});
+			const cline = new THREE.Line(clg, clm);
+			cline.renderOrder = 999;
+			animPathsGroup.add(cline);
+		}
+		// Dot at every key (including through) so the user can grab any of them
+		// to move them around — same neutral grey as object path dots.
+		const cpg = new THREE.BufferGeometry().setFromPoints(keyframes.map(k => k.pos));
+		const cpm = new THREE.PointsMaterial({
+			color: 0xd0d0d8, size: 7, sizeAttenuation: false,
+			transparent: true, opacity: 0.95, depthTest: false,
 		});
-		const cline = new THREE.Line(clg, clm);
-		cline.renderOrder = 999;
-		animPathsGroup.add(cline);
+		const cpoints = new THREE.Points(cpg, cpm);
+		cpoints.renderOrder = 1000;
+		cpoints.userData._cameraPath = true;
+		animPathsGroup.add(cpoints);
 	}
 }
 
@@ -22565,6 +22599,19 @@ function findPathDotHit(clientX, clientY) {
 			const dx = clientX - sx, dy = clientY - sy;
 			const d2 = dx * dx + dy * dy;
 			if (d2 < bestDist) { bestDist = d2; best = { obj, key: k }; }
+		}
+	}
+	// Camera keys — only pickable in scene view (they're rendered there too).
+	// Marked with kind:"camera" so the callers can branch to applyCameraState.
+	if (activeView === "scene" && Array.isArray(keyframes) && keyframes.length) {
+		for (const k of keyframes) {
+			p.copy(k.pos).project(camera);
+			if (p.z < -1 || p.z > 1) continue;
+			const sx = rect.left + (p.x + 1) * 0.5 * rect.width;
+			const sy = rect.top + (1 - p.y) * 0.5 * rect.height;
+			const dx = clientX - sx, dy = clientY - sy;
+			const d2 = dx * dx + dy * dy;
+			if (d2 < bestDist) { bestDist = d2; best = { obj: renderCam, key: k, kind: "camera" }; }
 		}
 	}
 	return best;
@@ -22676,9 +22723,12 @@ function sampleCameraAt(t) {
 			quat: _camOrbitTmpCam.quaternion.clone(),
 		};
 	}
-	// "through" keys bypass timing — for camera (linear lerp) they effectively act as
-	// disabled keys that don't anchor the interpolation. Useful for muting a key without
-	// deleting it.
+	// Same segmenting logic as sampleObjectAt — timed keys anchor timing, through
+	// keys bend the curve but don't get their own time slot. Camera position now
+	// samples Catmull-Rom when 3+ keys sit in the segment (so a side through-key
+	// actually pulls the shot toward it instead of getting ignored). Other camera
+	// fields (target, up, fov, quat) still linear-lerp between the two flanking
+	// timed keys — bending those would produce weird aim wobble.
 	const ks = keyframes.filter(k => k.ease !== "through");
 	if (ks.length === 0) return null;
 	if (ks.length === 1 || t <= ks[0].t) return ks[0];
@@ -22692,8 +22742,18 @@ function sampleCameraAt(t) {
 			const eased = (easings[b.ease] || easings.easeInOut)(local);
 			const upA = a.up || new THREE.Vector3(0, 1, 0);
 			const upB = b.up || new THREE.Vector3(0, 1, 0);
+			const startIdx = keyframes.indexOf(a);
+			const endIdx = keyframes.indexOf(b);
+			const segPoints = keyframes.slice(startIdx, endIdx + 1).map(k => k.pos);
+			// 2 points = no through keys in this segment — use the global-neighbor-
+			// aware curved sampler so tangents blend with the surrounding motion.
+			// 3+ points = at least one through-key waypoint — Catmull-Rom through
+			// all of them so the side control actually pulls the path.
+			const pos = (segPoints.length === 2)
+				? sampleKeyPosCurved(keyframes, startIdx, eased)
+				: sampleMultiCatmullRom(segPoints, eased);
 			const out = {
-				pos: new THREE.Vector3().lerpVectors(a.pos, b.pos, eased),
+				pos,
 				target: new THREE.Vector3().lerpVectors(a.target, b.target, eased),
 				up: new THREE.Vector3().lerpVectors(upA, upB, eased).normalize(),
 				fov: a.fov + (b.fov - a.fov) * eased,
