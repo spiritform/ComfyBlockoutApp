@@ -359,6 +359,15 @@
 			linear-gradient(180deg, #0c0d12 0%, #07080b 100%);
 	}
 	#renderCanvas { display: block; position: relative; z-index: 1; }
+	/* Split-view divider — 1px vertical line at 50% of the canvas so the two
+	   halves read as distinct panes. Only shown while _splitView is on (parent
+	   gets .split-active class). pointer-events:none so it never eats input. */
+	#split-divider {
+		position: absolute; top: 0; bottom: 0; left: 50%; width: 1px;
+		background: rgba(255,180,84,0.35);
+		pointer-events: none; z-index: 3; display: none;
+	}
+	#canvas-wrap.split-active #split-divider { display: block; }
 	/* Background-image layer sits BEHIND the canvas so we can `filter: blur()` the
 	   image without also blurring the WebGL scene. Inset -60px so the blur's soft
 	   edge is clipped by canvas-wrap's overflow:hidden instead of showing seams. */
@@ -3226,6 +3235,7 @@
 			<div id="canvas-bg-layer"></div>
 			<video id="canvas-bg-video" playsinline muted loop></video>
 			<canvas id="renderCanvas"></canvas>
+			<div id="split-divider"></div>
 			<!-- Initializing curtain — blocks pointer events during scene hydration so a
 			     mid-boot orbit/click/drop doesn't get clobbered when deserializeScene
 			     re-applies camera + objects. Removed by the boot IIFE. -->
@@ -17748,11 +17758,31 @@ document.getElementById("mode-view-toggle")?.addEventListener("click", () => {
 	updateViewToggleIcon(next);
 });
 // Split view toggle — flips _splitView on/off. Adds/removes the .active
-// class on the button so users can see the current state at a glance.
+// class on the button so users can see the current state at a glance. Also
+// toggles the canvas-wrap's .split-active class so the vertical divider
+// shows up between the two halves.
 document.getElementById("mode-split-toggle")?.addEventListener("click", () => {
 	_splitView = !_splitView;
 	document.getElementById("mode-split-toggle")?.classList.toggle("active", _splitView);
+	document.getElementById("canvas-wrap")?.classList.toggle("split-active", _splitView);
 });
+// Pointer-in-half detection — when the user clicks anywhere in the canvas
+// during split view, route input to the half they clicked. Left half = scene
+// (perspective / orbit), right half = camera (framed shot). Swaps activeView
+// which OrbitControls + the gizmo already pick up via the shared `camera`
+// alias, so drags, gizmo edits, and object selection all target the correct
+// view without any additional plumbing. Runs at capture phase so it beats
+// OrbitControls' own pointerdown handler to the punch.
+canvas.addEventListener("pointerdown", e => {
+	if (!_splitView) return;
+	const rect = canvas.getBoundingClientRect();
+	const inLeft = e.clientX < rect.left + rect.width / 2;
+	const targetView = inLeft ? "scene" : "camera";
+	if (typeof activeView !== "undefined" && activeView !== targetView) {
+		setActiveView(targetView);
+		if (typeof updateViewToggleIcon === "function") updateViewToggleIcon(targetView);
+	}
+}, true);
 // Boot state: whichever view is active when the DOM parses runs through
 // setActiveView after this file loads, so seed the icon from the current mode.
 updateViewToggleIcon(typeof activeView !== "undefined" ? activeView : "scene");
