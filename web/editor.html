@@ -1161,15 +1161,15 @@
 	}
 	.assistant-input:focus { outline: none; }
 	.assistant-input-row:focus-within { background: rgba(255,255,255,0.05); }
-	/* Icon button parked in the input row's top-right corner (Import Workflow).
-	   Absolute-positioned so the textarea keeps its full width and the icon
-	   floats on top with a small hit target. */
+	/* Icon button — sits in the AI Agent section header next to the MCP
+	   status. Same visual weight as the .head-end status chip so the header
+	   reads as one balanced cluster. */
 	.assistant-icon-btn {
-		position: absolute; top: 6px; right: 6px;
 		width: 22px; height: 22px; padding: 0;
 		background: transparent; border: none; cursor: pointer;
 		color: rgba(255,255,255,0.45); border-radius: 4px;
 		display: inline-flex; align-items: center; justify-content: center;
+		vertical-align: middle;
 	}
 	.assistant-icon-btn:hover { color: #ffd28a; background: rgba(255,180,84,0.1); }
 	.assistant-icon-btn svg { width: 14px; height: 14px; display: block; }
@@ -3140,6 +3140,12 @@
 			<div class="section-head-row">
 				<span class="section-label">AI Agent</span>
 				<span class="head-end">
+					<!-- Workflow import — reads a Comfy Cloud .json (API or graph
+					     format) and asks the agent to inspect + register it as a
+					     ComfyBlockout workflow module. Icon-only button lives in the
+					     section header next to the MCP status. -->
+					<button type="button" id="assistant-import-btn" class="assistant-icon-btn" title="Import a Comfy workflow JSON and let the agent hook it up as a module" aria-label="Import workflow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></button>
+					<input type="file" id="assistant-import-file" accept=".json,application/json" hidden>
 					<span class="assistant-status" id="assistant-status">MCP · idle</span>
 				</span>
 			</div>
@@ -3160,12 +3166,6 @@
 					<div class="assistant-input-row">
 						<span class="assistant-prompt-arrow" aria-hidden="true">&gt;</span>
 						<textarea class="assistant-input" id="assistant-input" rows="2" placeholder="Ask the AI agent… (Enter to send · Shift+Enter for new line · /clear resets)"></textarea>
-						<!-- Workflow import — reads a Comfy Cloud .json (API or graph
-						     format) and asks the agent to inspect + register it as a
-						     ComfyBlockout workflow module. Icon-only button parked in
-						     the input row's upper-right corner. -->
-						<button type="button" id="assistant-import-btn" class="assistant-icon-btn" title="Import a Comfy workflow JSON and let the agent hook it up as a module" aria-label="Import workflow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></button>
-						<input type="file" id="assistant-import-file" accept=".json,application/json" hidden>
 					</div>
 				</div>
 			</div>
@@ -5775,6 +5775,12 @@ let chatAttachments = [];
 // the user just explicitly asked "help me with this failure" — that's the
 // active conversation frame. Cleared by the ✕ chip button or /clear.
 let _inspectErrorContext = null;
+// Workflow import context — set by the Import Workflow button's file-picker
+// handler with the imported JSON's title (from _meta.title of the graph's
+// output node, or the file's name minus .json). Surfaced by
+// refreshChatContextChip so the user sees `CONTEXT : WORKFLOW · <title>`
+// while the agent is wiring it up. Cleared by the ✕ chip button or /clear.
+let _workflowImportContext = null;
 // Group-drag snapshot — captured in transform mouseDown when the set has >1
 // member, consumed in objectChange to apply the primary's delta to the rest.
 // Null outside a drag or during single-select drags.
@@ -16297,6 +16303,11 @@ function assistantSceneContext() {
 		// modules under a single "Workflows" panel — reflect that here by using
 		// kind: "workflow" for both, with source: "api" | "local" preserving
 		// the runtime distinction (partner-API call vs local ComfyUI job).
+		// Workflow the user is in the middle of importing via the Import
+		// Workflow button — surfaced here so the agent's tool calls default
+		// to it when the user says "the workflow" without naming one. Only
+		// set from the moment the button ships the JSON until /clear or ×.
+		pendingWorkflowImport: _workflowImportContext ? { title: _workflowImportContext.title } : null,
 		activeTarget: activeWorkflowMod
 			? { kind: "workflow", source: "local", id: activeWorkflowMod.id, label: activeWorkflowMod.label }
 			: (activeGen
@@ -16323,6 +16334,14 @@ function refreshChatContextChip() {
 	if (_inspectErrorContext) {
 		const { moduleId, label } = _inspectErrorContext;
 		target.textContent = `INSPECT ERROR · ${label || moduleId || "?"}`;
+		if (clearBtn) clearBtn.hidden = false;
+		return;
+	}
+	// Workflow import context — set by the Import Workflow button's handler
+	// so the user can see which JSON the agent is currently wiring up. Cleared
+	// via the × button or by /clear.
+	if (_workflowImportContext) {
+		target.textContent = `WORKFLOW · ${_workflowImportContext.title}`;
 		if (clearBtn) clearBtn.hidden = false;
 		return;
 	}
@@ -16353,6 +16372,7 @@ document.getElementById("assistant-context-clear")?.addEventListener("click", ()
 	activeWorkflowCellId = null;
 	activeGenCellId = null;
 	_inspectErrorContext = null;
+	_workflowImportContext = null;
 	refreshWorkflowCells?.();
 	refreshGenCells?.();
 	// Chat attachments are part of the context too — clear them alongside so
@@ -17174,6 +17194,7 @@ async function sendAssistant(message, opts = {}) {
 	if (text === "/clear" || text === "/reset") {
 		assistantInput.value = "";
 		_inspectErrorContext = null;
+		_workflowImportContext = null;
 		try {
 			await fetch("/api/llm/reset", {
 				method: "POST", headers: { "Content-Type": "application/json" },
@@ -17341,12 +17362,27 @@ wfImportFile?.addEventListener("change", async e => {
 	}
 	// Validate that it's actually JSON before shipping to the agent — an early
 	// error here is friendlier than "agent got confused" downstream.
+	let parsed = null;
 	try {
-		JSON.parse(text);
+		parsed = JSON.parse(text);
 	} catch (err) {
 		pushAssistantMsg("system", `not valid JSON: ${err?.message || err}`);
 		return;
 	}
+	// Derive a display title from the JSON: prefer the meaningful node's
+	// _meta.title (Meshy: Image to Model, Rodin3D..., etc.) — skip generic
+	// utility node titles like Load Image / Save * / Preview *. Falls back
+	// to the filename minus .json.
+	let title = file.name.replace(/\.json$/i, "");
+	try {
+		const nodes = Array.isArray(parsed?.nodes)
+			? parsed.nodes.map(n => n?._meta?.title || n?.type || "").filter(Boolean)
+			: Object.values(parsed || {}).map(n => n?._meta?.title || "").filter(Boolean);
+		const meaningful = nodes.find(t => !/^(Load Image|Save |Preview )/i.test(t));
+		if (meaningful) title = meaningful;
+	} catch {}
+	_workflowImportContext = { title };
+	refreshChatContextChip?.();
 	const prompt = [
 		`Please import this Comfy workflow and register it as a ComfyBlockout module via \`create_workflow_module\`.`,
 		``,
