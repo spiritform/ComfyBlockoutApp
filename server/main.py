@@ -1284,6 +1284,103 @@ async def motion_generate(request: Request):
     }
 
 
+# ── Skybox generation (T2I via Comfy Cloud partner API) ──────────────
+# The Skybox object's Generate button posts here. Backend appends a short
+# system-prompt suffix onto the user's brief so they just type the aesthetic
+# ("misty pine forest at dawn") without having to remember "equirectangular"
+# or "seamless wrap". Shells out via `comfy generate <partner>` — see the
+# CLI id below; swap to a different partner id if the CLI catalog changes.
+_SKYBOX_SYSTEM_PROMPT_SUFFIX = (
+    ". Seamless 360-degree equirectangular skybox panorama, 2:1 aspect, "
+    "no text, no watermarks, no figures."
+)
+
+
+@app.post("/api/skybox/generate")
+async def skybox_generate(request: Request):
+    """T2I skybox via Comfy Cloud's Nano Banana Pro partner API. Prepends the
+    backend skybox system prompt so the user's brief gets the equirectangular
+    guardrails without having to type them. Returns the same {filename, path,
+    ext} shape as /api/run/<module> so the frontend can reuse its existing
+    _applySkyboxTexture call."""
+    if not COMFY_BIN:
+        raise HTTPException(500, "comfy CLI not resolved — install comfy-cli in the app's venv")
+    body = await request.json()
+    node_id = str(body.get("node_id", "")).strip() or "default"
+    user_prompt = (body.get("prompt") or "").strip()
+    if not user_prompt:
+        raise HTTPException(400, "prompt is required")
+    # User's aesthetic brief FIRST so it carries the strongest token weight,
+    # then the technical constraints as a short suffix.
+    full_prompt = f"{user_prompt}{_SKYBOX_SYSTEM_PROMPT_SUFFIX}"
+    # Reuse the same asset directory pattern the other modules use so the
+    # generated image lands in the user's Assets pane alongside their other
+    # renders (via /data/<filename>). Flux 2 lets us specify --width/--height
+    # explicitly — we ask for 2048×1024 (a native 2:1 equirectangular aspect)
+    # so the model doesn't guess and paint a square that then reads warped
+    # when the client wraps it around the sphere.
+    from server.modules._base import new_output_path, run_cli
+    out = new_output_path(DATA_DIR, "skybox-flux2", "png")
+    code, stdout, stderr = await run_cli([
+        COMFY_BIN, "generate", "flux-2",
+        "--prompt", full_prompt,
+        "--width", "2048",
+        "--height", "1024",
+        "--download", str(out),
+    ], timeout=600)
+    if code != 0 or not out.exists():
+        # Surface the last chunk of stderr so the client can render something
+        # actionable — usually a partner-quota error from BFL or an unknown
+        # flag if the CLI's `flux-2` schema drifted. `comfy generate schema
+        # flux-2` from a terminal is the shortest way to check current args.
+        detail = (stderr.strip() or stdout.strip() or f"comfy generate failed (rc={code})")
+        raise HTTPException(500, detail[-800:])
+    return {"filename": out.name, "path": str(out), "ext": "png"}
+
+
+# ── Heightmap generation (T2I via Comfy Cloud) ────────────────────────
+# Terrain object's Heightmap → Generate button posts here. Same shape as
+# the skybox endpoint — user types the aesthetic ("misty pine forest at
+# dawn") and the server appends the grayscale + orthographic guardrails
+# so the resulting image samples correctly as elevation. Square aspect
+# with 1024×1024 dimensions matches the PlaneGeometry the client wraps
+# it around — the client samples R channel per vertex.
+_HEIGHTMAP_SYSTEM_PROMPT_SUFFIX = (
+    ". Grayscale heightmap, top-down orthographic view, "
+    "white areas are high elevation and black areas are low elevation, "
+    "smooth gradient between elevations, no text, no watermarks, no color."
+)
+
+
+@app.post("/api/heightmap/generate")
+async def heightmap_generate(request: Request):
+    """T2I heightmap via Comfy Cloud partner API. Same pattern as
+    /api/skybox/generate — server owns the domain-specific prompt suffix
+    (grayscale + orthographic + elevation semantics) so the client just
+    passes the user's brief."""
+    if not COMFY_BIN:
+        raise HTTPException(500, "comfy CLI not resolved — install comfy-cli in the app's venv")
+    body = await request.json()
+    node_id = str(body.get("node_id", "")).strip() or "default"
+    user_prompt = (body.get("prompt") or "").strip()
+    if not user_prompt:
+        raise HTTPException(400, "prompt is required")
+    full_prompt = f"{user_prompt}{_HEIGHTMAP_SYSTEM_PROMPT_SUFFIX}"
+    from server.modules._base import new_output_path, run_cli
+    out = new_output_path(DATA_DIR, "heightmap-flux2", "png")
+    code, stdout, stderr = await run_cli([
+        COMFY_BIN, "generate", "flux-2",
+        "--prompt", full_prompt,
+        "--width", "1024",
+        "--height", "1024",
+        "--download", str(out),
+    ], timeout=600)
+    if code != 0 or not out.exists():
+        detail = (stderr.strip() or stdout.strip() or f"comfy generate failed (rc={code})")
+        raise HTTPException(500, detail[-800:])
+    return {"filename": out.name, "path": str(out), "ext": "png"}
+
+
 @app.post("/api/motion/install")
 async def motion_install_animoflow():
     """Clone the AnimoFlow repo into APP_DIR/tools/animoflow. Runs synchronously
@@ -2595,10 +2692,30 @@ ASSISTANT_SYSTEM = (
     "don't just describe how they could do it manually.\n\n"
     "SCENE OBJECT PALETTE: add_primitive covers plain geometry + FX (cube, "
     "sphere, capsule, cylinder, cone, plane, text, particles, clouds). For "
+    "landscape-scale ground, use `spawn_terrain` (procedural fBM noise, "
+    "picks between hills/mountains/canyon presets) or the one-call "
+    "`generate_terrain({prompt})` which spawns a terrain, generates a "
+    "grayscale heightmap on Comfy Cloud with backend-owned guardrails "
+    "(grayscale, top-down orthographic, white=high, no text), and applies "
+    "the heightmap as displacement in a single call. Prompt should describe "
+    "the landscape SHAPE from above (\"mountain range with a river valley\") "
+    "not the aesthetic — think heightmap, not photograph. For "
     "scene-scale figures + backdrops, use the dedicated spawn tools: "
     "`spawn_mannequin` for a ~1.72m Xbot-rigged human reference (Mixamo bones, "
-    "poseable per-joint), `spawn_skybox` for a giant inverted 360° panorama "
-    "sphere (upload or generate an equirectangular image onto it). These live "
+    "poseable per-joint), `spawn_skybox` for an empty inverted 360° panorama "
+    "sphere (user drops or generates an equirectangular image onto it later), "
+    "OR — the one-call version — `generate_skybox({prompt})` which spawns the "
+    "sphere (or reuses an existing one) AND generates the panorama with "
+    "backend-owned equirectangular guardrails, applied DIRECTLY as the "
+    "sphere's texture in a single tool call. ALWAYS prefer generate_skybox "
+    "when the user asks for an environment (\"put me in a misty pine forest\", "
+    "\"add a warehouse backdrop\") — a plain spawn_skybox leaves them staring "
+    "at an empty amber sphere, and running a workflow-cell generator (Nano "
+    "Banana / Seedance / etc.) for a skybox produces a flat image that lands "
+    "as a rendered plane in the scene, NOT applied to the sphere. If "
+    "generate_skybox fails, surface the exact backend error to the user "
+    "rather than falling back to a workflow-cell workaround — the workaround "
+    "produces the wrong result (a plane) and confuses the intent. These live "
     "outside add_primitive because they build compound objects, not a single "
     "mesh from a geometry factory.\n\n"
     "CAMERA CONTROL: three dedicated tools shape how the render camera moves "
@@ -3280,6 +3397,40 @@ EDITOR_TOOLS = [
         "name": "spawn_skybox",
         "description": "Spawn a giant inverted sphere as a scene backdrop. The user drops or generates a 360° equirectangular image onto it via the object inspector — this tool just adds the sphere. Idempotent-ish: re-clicking the Skybox tile in the UI reuses an existing skybox, but this tool always adds a new one; check list_objects first if you want to avoid duplicates.",
         "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "spawn_terrain",
+        "description": "Spawn a procedural terrain — a 20x20m displaced plane with fBM noise. Preset picks the silhouette style: \"hills\" (rolling), \"mountains\" (jagged high amplitude), \"canyon\" (medium with plateaus). seed randomizes the specific terrain within the preset.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "preset": {"type": "string", "enum": ["hills", "mountains", "canyon"], "description": "Silhouette style (default hills)"},
+                "seed": {"type": "integer", "description": "Random seed for the specific terrain (default 42)"},
+                "position": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+            },
+        },
+    },
+    {
+        "name": "generate_terrain",
+        "description": "Generate a grayscale heightmap via Comfy Cloud and apply it DIRECTLY as a terrain object's displacement. Reuses an existing terrain if there is one, spawns a fresh one if not — so a single call fully wires the ground. The heightmap guardrails (grayscale, top-down orthographic, white=high, no text) are appended to the prompt by the server. Prompt should describe the SHAPE of the landscape from above — e.g. \"mountain range with a wide river valley\", \"eroded desert canyons\", \"gentle rolling hills with a lake in the center\". PREFER THIS over a workflow-cell path for terrain shaping — those output flat images that land as a rendered plane, NOT applied to the terrain mesh.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "Landscape shape description (top-down)"},
+            },
+            "required": ["prompt"],
+        },
+    },
+    {
+        "name": "generate_skybox",
+        "description": "Generate a 360° equirectangular panorama via Comfy Cloud and apply it DIRECTLY as the scene's skybox texture. Reuses an existing skybox if there is one, spawns a fresh sphere if not — so a single call fully wires the backdrop with no follow-up drag-and-drop. The panorama guardrails (equirectangular, 2:1 aspect, seamless wrap, no text, no figures) are appended to the prompt by the server, so you just describe the environment aesthetic — e.g. \"misty pine forest at dawn\", \"warehouse interior with skylights\", \"neon-lit tokyo street at night\". PREFER THIS over any workflow-cell path (Nano Banana / Seedance etc.) for skybox creation — those output flat images that land as a rendered plane, NOT applied to the sphere. If this tool errors, DO NOT fall back to a workflow-cell as a workaround (that produces a plane, wrong result); surface the backend error to the user so they can fix the CLI setup.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "Environment description — describe the SCENE / location / lighting, not the panorama format (the server adds those guardrails)."},
+            },
+            "required": ["prompt"],
+        },
     },
     # ── Camera control ──────────────────────────────────────────────
     # Aim lock + hand-held shake + turntable. Applied to the render camera

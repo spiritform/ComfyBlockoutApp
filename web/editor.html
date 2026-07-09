@@ -3056,6 +3056,14 @@
 				     the generic scene-video/image UI, so the user sees exactly
 				     what's needed before they try to generate. -->
 				<button class="prim-btn" data-tool="util:motion" data-hardcoded="1" data-label="AnimoFlow" title="AnimoFlow — text prompt → animated motion clip that drives the mannequin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z"/><path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z"/><path d="M16 17h4"/><path d="M4 13h4"/></svg></button>
+				<!-- Lighting rig — spawns a Group with 1/2/3 DirectionalLights in a
+				     classic key/fill/rim configuration. The rig acts as a single
+				     scene object (primKind="lightrig") — moves + rotates + saves
+				     as one unit, per-light knobs live in the object inspector.
+				     Preset swap adds/removes lights on the same rig without
+				     respawning. Shared target Object3D at rig-local (0,0,0) so
+				     rotating the rig re-aims every light together. -->
+				<button class="prim-btn" data-fx="light" data-label="Light" title="Light — spawn a directional / point / spot light (type picker + intensity + color + shadows in the object inspector)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5C17.7 10.2 18 9 18 8a6 6 0 1 0-12 0c0 1 .3 2.2 1.5 3.5.8.8 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg></button>
 				<!-- Turntable — bakes a full 360° Y-rotation across the timeline
 				     as keyframes. Two modes: rotate the selected object, or
 				     orbit the render camera around a pivot (target object if
@@ -3063,6 +3071,14 @@
 				     the chosen turn length so the loop covers exactly one
 				     revolution. Everything runs client-side. -->
 				<button class="prim-btn" data-tool="turntable" data-label="Turntable" title="Turntable — bake a 360° rotation on the selection or an orbit on the camera as keyframes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3.4-7.03"/><path d="M21 4v5h-5"/></svg></button>
+				<!-- Terrain generator — spawns a 20m x 20m displaced plane with
+				     128 subdivisions. Two source modes: procedural fBM noise
+				     (preset + seed + amplitude + frequency + octaves) or an
+				     uploaded/generated grayscale heightmap sampled per vertex.
+				     Heightmap generate hits a backend endpoint that appends
+				     grayscale-topdown-orthographic guardrails to the prompt
+				     (same pattern as the skybox). -->
+				<button class="prim-btn" data-fx="terrain" data-label="Terrain" title="Terrain — displaced plane driven by fBM noise or a grayscale heightmap you upload / generate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3l4 8 5-5 5 13H2L8 3z"/></svg></button>
 				<!-- Mannequin — procedural block-figure at real-world 1.72m scale.
 				     Reference for blockouts (door frames, couches, camera height).
 				     Group with primKind="mannequin" so a future rigged GLB slots
@@ -3394,7 +3410,102 @@
 						</div>
 					</div>
 					<div class="hint" id="obj-skybox-status" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5)">Idle</div>
-					<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Generation runs the local Flux 2 pipeline — "equirectangular 360° panorama" is added to your prompt automatically.</div>
+					<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Runs on Comfy Cloud at 2:1 equirectangular aspect. Panorama guardrails — seamless wrap, no text, no watermarks — are appended on the server so you only need to describe the environment.</div>
+				</div>
+				<!-- Terrain — procedural fBM or heightmap-driven displaced
+				     plane. Source pill-toggle picks the mode; procedural mode
+				     shows preset + fBM knobs, heightmap mode shows the image
+				     cell + prompt for backend-side generation. -->
+				<div class="section" id="obj-terrain-section" style="display:none">
+					<div class="section-label">Terrain</div>
+					<div class="sub-label">Source</div>
+					<div class="pill-toggle" style="margin-top:6px">
+						<button type="button" class="active" data-terrain-source="procedural">Procedural</button>
+						<button type="button" data-terrain-source="heightmap">Heightmap</button>
+					</div>
+					<!-- Procedural knobs — preset drop + fBM parameters. -->
+					<div id="obj-terrain-procedural">
+						<div class="sub-label" style="margin-top:10px">Preset</div>
+						<div class="select-row">
+							<select id="obj-terrain-preset">
+								<option value="hills">Rolling hills</option>
+								<option value="mountains">Mountains</option>
+								<option value="canyon">Canyon</option>
+							</select>
+						</div>
+						<div class="sub-label" style="margin-top:10px">fBM</div>
+						<div class="drag-row" style="margin-top:6px">
+							<div class="drag-num" id="obj-terrain-amplitude"><span class="drag-label">Amp</span><span class="drag-val">1.40</span></div>
+							<div class="drag-num" id="obj-terrain-frequency"><span class="drag-label">Freq</span><span class="drag-val">0.10</span></div>
+							<div class="drag-num" id="obj-terrain-octaves"><span class="drag-label">Oct</span><span class="drag-val">4</span></div>
+						</div>
+						<div style="display:grid;grid-template-columns:1fr 34px;gap:4px;margin-top:6px">
+							<div class="drag-num" id="obj-terrain-seed"><span class="drag-label">Seed</span><span class="drag-val">42</span></div>
+							<button type="button" id="obj-terrain-reroll" title="Reroll random seed"
+								style="background:rgba(255,255,255,0.04);border:none;border-radius:5px;color:rgba(255,255,255,0.75);cursor:pointer;padding:0;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center">🎲</button>
+						</div>
+					</div>
+					<!-- Heightmap panel — upload or generate a grayscale image. -->
+					<div id="obj-terrain-heightmap" style="display:none">
+						<div class="sub-label" style="margin-top:10px">Heightmap</div>
+						<div style="position:relative;margin-top:4px">
+							<div id="obj-terrain-hm-thumb" style="width:100%;aspect-ratio:2/1;background:rgba(0,0,0,0.28) center/cover no-repeat;border:1px solid rgba(255,255,255,0.06);border-radius:4px;display:flex;align-items:center;justify-content:center;color:rgba(255,180,84,0.75);font-size:10px;letter-spacing:0.04em;text-align:center;padding:8px;box-sizing:border-box">NO IMAGE — UPLOAD OR GENERATE</div>
+							<button type="button" class="remove-x" id="obj-terrain-hm-clear" title="Remove heightmap" hidden style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.55)">×</button>
+						</div>
+						<div class="drag-row" style="margin-top:6px">
+							<div class="drag-num" id="obj-terrain-hm-blur" style="flex:1"><span class="drag-label">Blur</span><span class="drag-val">0</span></div>
+						</div>
+						<input type="file" id="obj-terrain-hm-file" accept="image/*" hidden>
+						<div style="display:flex;gap:6px;margin-top:6px">
+							<button type="button" id="obj-terrain-hm-upload" class="mp-still-btn" style="flex:1;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85)">Upload</button>
+						</div>
+						<div class="sub-label" style="margin-top:10px">Prompt</div>
+						<textarea id="obj-terrain-hm-prompt" rows="2" placeholder="A misty pine forest at dawn…" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.08);border-radius:4px;color:rgba(255,255,255,0.85);padding:6px 8px;font-size:11px;font-family:inherit;resize:vertical;margin-bottom:6px"></textarea>
+						<button type="button" id="obj-terrain-hm-generate" class="mp-still-btn" style="width:100%">Generate</button>
+						<div class="sub-label" style="margin-top:10px">Amplitude</div>
+						<div class="drag-row" style="margin-top:6px">
+							<div class="drag-num" id="obj-terrain-hm-amp" style="flex:1"><span class="drag-label">Amp</span><span class="drag-val">1.40</span></div>
+						</div>
+						<div class="hint" id="obj-terrain-hm-status" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5)">Idle</div>
+					</div>
+					<div class="sub-label" style="margin-top:10px">Detail</div>
+					<div class="drag-row" style="margin-top:6px">
+						<div class="drag-num" id="obj-terrain-size" style="flex:1"><span class="drag-label">Size</span><span class="drag-val">20</span></div>
+						<div class="drag-num" id="obj-terrain-subdiv" style="flex:1"><span class="drag-label">Subdiv</span><span class="drag-val">128</span></div>
+					</div>
+				</div>
+				<!-- Light object — single directional / point / spot light.
+				     Wrapper Group sits at the light's world position so the
+				     transform gizmo lands on the light itself. Rotation
+				     re-aims via a child target for directional + spot. -->
+				<div class="section" id="obj-light-section" style="display:none">
+					<div class="section-label">Light</div>
+					<div class="sub-label">Type</div>
+					<div class="pill-toggle" style="margin-top:6px">
+						<button type="button" class="active" data-light-type="directional">Directional</button>
+						<button type="button" data-light-type="point">Point</button>
+						<button type="button" data-light-type="spot">Spot</button>
+					</div>
+					<div class="sub-label" style="margin-top:10px">Intensity &amp; Color</div>
+					<div class="drag-row" style="margin-top:6px">
+						<div class="drag-num" id="obj-light-intensity" style="flex:1"><span class="drag-label">Bright</span><span class="drag-val">2.00</span></div>
+						<button type="button" id="obj-light-color-btn" title="Light color" style="flex:0 0 auto;width:34px;padding:0;border:1px solid rgba(255,255,255,0.08);border-radius:5px;background:#ffffff;cursor:pointer;align-self:stretch"></button>
+						<input type="color" id="obj-light-color" value="#ffffff" style="position:absolute;left:-9999px;top:-9999px">
+					</div>
+					<!-- Point + Spot lights get a distance falloff drag. Set to 0
+					     for infinite range (no attenuation clamp). -->
+					<div class="drag-row" id="obj-light-distance-row" style="margin-top:6px;display:none">
+						<div class="drag-num" id="obj-light-distance" style="flex:1"><span class="drag-label">Dist</span><span class="drag-val">0</span></div>
+					</div>
+					<!-- Spot-only: cone angle + soft edge (penumbra). -->
+					<div class="drag-row" id="obj-light-spot-row" style="margin-top:6px;display:none">
+						<div class="drag-num" id="obj-light-spot-angle"><span class="drag-label">Angle</span><span class="drag-val">30°</span></div>
+						<div class="drag-num" id="obj-light-spot-penumbra"><span class="drag-label">Soft</span><span class="drag-val">0.20</span></div>
+					</div>
+					<label class="checkbox-row" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:10px;font-size:11px;color:rgba(255,255,255,0.85)">
+						<input type="checkbox" id="obj-light-shadow">
+						Cast shadows
+					</label>
 				</div>
 				<!-- TripoSplat representation toggle — appears on TripoSplat
 				     results (splat OR resampled points with the pcResult flag
@@ -6902,6 +7013,384 @@ function makeSeededRng(seed) {
 	};
 }
 
+
+// ── Terrain (procedural + heightmap displacement) ──────────────────
+// PlaneGeometry laid flat, vertices displaced by either fBM value noise
+// (procedural) or a grayscale image (heightmap). Same object shape as any
+// other primitive — participates in selection, transform, save/load — so
+// downstream systems (scatter, generator prompts) treat it as a regular
+// scene object with `primKind === "terrain"`.
+
+const TERRAIN_PRESETS = {
+	hills:     { amplitude: 1.4, frequency: 0.10, octaves: 4 },
+	mountains: { amplitude: 3.5, frequency: 0.08, octaves: 6 },
+	canyon:    { amplitude: 2.2, frequency: 0.06, octaves: 5 },
+};
+const TERRAIN_DEFAULTS = {
+	source: "procedural",
+	preset: "hills",
+	seed: 42,
+	amplitude: TERRAIN_PRESETS.hills.amplitude,
+	frequency: TERRAIN_PRESETS.hills.frequency,
+	octaves: TERRAIN_PRESETS.hills.octaves,
+	size: 20,
+	subdivisions: 128,
+	heightmapUrl: null,
+	// Box-blur radius (pixels) applied to the loaded heightmap ImageData
+	// before per-vertex sampling. 0 = raw, 20 = heavy smoothing. Softens
+	// noisy AI-generated heightmaps + JPEG artifacts without needing a
+	// separate low-pass on the sampled height field.
+	heightmapBlur: 0,
+};
+
+// Cheap hash-based value noise. Deterministic per (x, y, seed) — no shared
+// perlin permutation table needed. Good enough for terrain silhouettes; not
+// crypto-anything. Sine-hash is a well-known "good enough" trick.
+function _terrainHash2(x, y, seed) {
+	const s = Math.sin(x * 12.9898 + y * 78.233 + seed * 43758.5453) * 43758.5453;
+	return s - Math.floor(s);
+}
+function _terrainSmooth(t) { return t * t * (3 - 2 * t); }
+function _terrainValueNoise(x, y, seed) {
+	const ix = Math.floor(x), iy = Math.floor(y);
+	const fx = x - ix, fy = y - iy;
+	const a = _terrainHash2(ix, iy, seed);
+	const b = _terrainHash2(ix + 1, iy, seed);
+	const c = _terrainHash2(ix, iy + 1, seed);
+	const d = _terrainHash2(ix + 1, iy + 1, seed);
+	const u = _terrainSmooth(fx), v = _terrainSmooth(fy);
+	return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+// Fractional Brownian motion — sum octaves of value noise at doubling
+// frequencies + halving amplitudes. Result normalized to ~[-1, 1] via the
+// running amp-sum divisor so `amplitude` in TERRAIN_DEFAULTS reads as world
+// meters regardless of octave count.
+function _terrainFbm(x, y, seed, octaves, freq) {
+	let sum = 0;
+	let amp = 1;
+	let ampSum = 0;
+	let f = freq;
+	for (let i = 0; i < octaves; i++) {
+		sum += (_terrainValueNoise(x * f, y * f, seed + i * 100) * 2 - 1) * amp;
+		ampSum += amp;
+		f *= 2;
+		amp *= 0.5;
+	}
+	return sum / (ampSum || 1);
+}
+
+// Box-blur the R channel of an ImageData (we only sample R for elevation)
+// in-place. Two-pass separable box blur — O(w*h) per axis instead of the
+// naive O(w*h*r²) full kernel. Uses a moving-window sum so each output
+// pixel is (sum of R over 2r+1 pixels) / (2r+1). Guarded with r <= 0 early
+// return so noise-free heightmaps stay pixel-accurate.
+function _terrainBoxBlurR(imgData, radius) {
+	const r = Math.max(0, Math.round(radius));
+	if (r <= 0) return imgData;
+	const W = imgData.width, H = imgData.height;
+	const src = imgData.data;
+	// Horizontal pass into a scratch Uint8Array of R values (skip GBA).
+	const scratchH = new Uint8ClampedArray(W * H);
+	const kernel = 2 * r + 1;
+	for (let y = 0; y < H; y++) {
+		const rowBase = y * W;
+		let sum = 0;
+		// Prime the window with the leftmost `r` pixels + the edge value
+		// repeated for the -r..-1 samples (clamp-to-edge).
+		for (let x = -r; x <= r; x++) {
+			const clamped = Math.min(W - 1, Math.max(0, x));
+			sum += src[(rowBase + clamped) * 4];
+		}
+		scratchH[rowBase] = sum / kernel;
+		for (let x = 1; x < W; x++) {
+			const addX = Math.min(W - 1, x + r);
+			const subX = Math.max(0, x - r - 1);
+			sum += src[(rowBase + addX) * 4] - src[(rowBase + subX) * 4];
+			scratchH[rowBase + x] = sum / kernel;
+		}
+	}
+	// Vertical pass reads from scratchH into the original R channel.
+	for (let x = 0; x < W; x++) {
+		let sum = 0;
+		for (let y = -r; y <= r; y++) {
+			const clamped = Math.min(H - 1, Math.max(0, y));
+			sum += scratchH[clamped * W + x];
+		}
+		src[(0 * W + x) * 4] = sum / kernel;
+		for (let y = 1; y < H; y++) {
+			const addY = Math.min(H - 1, y + r);
+			const subY = Math.max(0, y - r - 1);
+			sum += scratchH[addY * W + x] - scratchH[subY * W + x];
+			src[(y * W + x) * 4] = sum / kernel;
+		}
+	}
+	return imgData;
+}
+
+// Load a heightmap URL into a canvas + return its ImageData so
+// _terrainRebuildGeometry can sample R channel per vertex. Cached on
+// wrapper.userData so re-rebuilds don't refetch.
+async function _terrainLoadHeightmap(url) {
+	return new Promise((resolve, reject) => {
+		const img = new Image();
+		img.crossOrigin = "anonymous";
+		img.onload = () => {
+			try {
+				const cvs = document.createElement("canvas");
+				cvs.width = img.naturalWidth;
+				cvs.height = img.naturalHeight;
+				const ctx = cvs.getContext("2d");
+				ctx.drawImage(img, 0, 0);
+				resolve(ctx.getImageData(0, 0, cvs.width, cvs.height));
+			} catch (e) { reject(e); }
+		};
+		img.onerror = (e) => reject(e);
+		img.src = url;
+	});
+}
+
+// Sample a height in [-1, 1] at UV (0..1) — dispatches to fBM (procedural)
+// or heightmap image. Heightmap treats R channel as elevation, remapped
+// from [0, 255] → [-0.5, 0.5] so the sea level sits mid-image (128) and
+// the amplitude multiplier gives the final displacement range.
+function _terrainSampleHeight(cfg, u, v, heightmapData) {
+	if (cfg.source === "heightmap" && heightmapData) {
+		const W = heightmapData.width, H = heightmapData.height;
+		const px = Math.min(W - 1, Math.max(0, Math.floor(u * W)));
+		const py = Math.min(H - 1, Math.max(0, Math.floor((1 - v) * H))); // flip Y so image top = terrain far edge
+		const r = heightmapData.data[(py * W + px) * 4];
+		return (r / 255) - 0.5;
+	}
+	// Procedural — center of plane maps to fBM origin, so `seed` alone
+	// picks a whole family of terrains without offsetting the sample point.
+	const worldX = (u - 0.5) * cfg.size;
+	const worldZ = (v - 0.5) * cfg.size;
+	return _terrainFbm(worldX, worldZ, cfg.seed, cfg.octaves, cfg.frequency);
+}
+
+// Rebuild the terrain mesh's vertex Y positions from the current config +
+// optional heightmap ImageData. Recomputes normals so lighting reads right.
+// Called by every knob change and by the initial spawn.
+function _terrainRebuildGeometry(mesh, heightmapData) {
+	const cfg = mesh.userData.terrainConfig;
+	if (!cfg) return;
+	// Rebuild plane if the subdivision count changed since last build. Cheap
+	// enough that we don't try to reuse buffers.
+	const N = Math.max(4, Math.min(512, cfg.subdivisions | 0));
+	const size = Math.max(0.1, cfg.size);
+	const oldGeom = mesh.geometry;
+	const geom = new THREE.PlaneGeometry(size, size, N, N);
+	geom.rotateX(-Math.PI / 2); // lie flat on the XZ plane
+	const pos = geom.attributes.position;
+	for (let i = 0; i < pos.count; i++) {
+		const wx = pos.getX(i);
+		const wz = pos.getZ(i);
+		const u = (wx / size) + 0.5;
+		const v = (wz / size) + 0.5;
+		const h = _terrainSampleHeight(cfg, u, v, heightmapData);
+		pos.setY(i, h * cfg.amplitude);
+	}
+	pos.needsUpdate = true;
+	geom.computeVertexNormals();
+	mesh.geometry = geom;
+	oldGeom?.dispose();
+}
+
+// Full rebuild wrapper — handles heightmap loading if the source is
+// image-based, then defers to _terrainRebuildGeometry. Public entry point
+// for the object-inspector knob handlers.
+async function _terrainApplyConfig(mesh) {
+	const cfg = mesh.userData.terrainConfig;
+	if (!cfg) return;
+	let sampleData = null;
+	if (cfg.source === "heightmap" && cfg.heightmapUrl) {
+		// Cache the raw ImageData under _heightmapDataRaw so blur re-applies
+		// against the pristine source (blur is destructive — running it on an
+		// already-blurred buffer just gets smearier). Refetch only when URL
+		// changes; separately re-blur when the blur radius changes.
+		if (!mesh.userData._heightmapDataRaw || mesh.userData._heightmapDataUrl !== cfg.heightmapUrl) {
+			try {
+				mesh.userData._heightmapDataRaw = await _terrainLoadHeightmap(cfg.heightmapUrl);
+				mesh.userData._heightmapDataUrl = cfg.heightmapUrl;
+				mesh.userData._heightmapBlurApplied = -1; // force re-blur below
+			} catch (e) {
+				console.warn("[terrain] heightmap load failed:", e);
+				mesh.userData._heightmapDataRaw = null;
+			}
+		}
+		const raw = mesh.userData._heightmapDataRaw;
+		if (raw) {
+			const blur = Math.max(0, Math.round(cfg.heightmapBlur || 0));
+			if (mesh.userData._heightmapBlurApplied !== blur) {
+				// Clone raw into a fresh ImageData so the box-blur pass mutates
+				// a copy — otherwise the next re-blur has nothing to start from.
+				const copy = new ImageData(new Uint8ClampedArray(raw.data), raw.width, raw.height);
+				_terrainBoxBlurR(copy, blur);
+				mesh.userData._heightmapData = copy;
+				mesh.userData._heightmapBlurApplied = blur;
+			}
+			sampleData = mesh.userData._heightmapData;
+		}
+	}
+	_terrainRebuildGeometry(mesh, sampleData);
+}
+
+function addTerrainFx(initialConfig) {
+	snapshotForUndo();
+	primCounters.terrain = (primCounters.terrain || 0) + 1;
+	const cfg = { ...TERRAIN_DEFAULTS, ...(initialConfig || {}) };
+	// Neutral grey default — terrain is meant to be a canvas the user
+	// paints on with generator materials / heightmaps, not a colorful
+	// blockout primitive, so the "picked" pastel from pickNamedBlockColor
+	// felt wrong. User can still recolor from the Appearance section.
+	const mat = new THREE.MeshStandardMaterial({
+		color: 0x8a8a90,
+		roughness: 0.9, metalness: 0.0,
+		side: THREE.DoubleSide,
+		flatShading: false,
+	});
+	// Placeholder geom — replaced by _terrainRebuildGeometry below with the
+	// real displaced plane at spawn time.
+	const mesh = new THREE.Mesh(new THREE.PlaneGeometry(cfg.size, cfg.size, 4, 4), mat);
+	mesh.name = `Terrain.${String(primCounters.terrain).padStart(3, "0")}`;
+	mesh.userData.primKind = "terrain";
+	mesh.userData.terrainConfig = cfg;
+	mesh.castShadow = true;
+	mesh.receiveShadow = true;
+	scene.add(mesh);
+	objects.push(mesh);
+	stashInitialTransform(mesh);
+	select(mesh);
+	refreshOutliner();
+	updateStatus();
+	// Kick the first rebuild — async because heightmap mode fetches an image.
+	_terrainApplyConfig(mesh).then(() => {
+		if (typeof saveScene === "function") saveScene();
+	});
+	return mesh;
+}
+
+
+// ── Light object (directional / point / spot) ────────────────────
+// Each Light is ONE Group carrying ONE light + a target (for
+// directional/spot) + a helper wireframe. The Group sits AT the light's
+// position so the TransformControls gizmo appears exactly on the light,
+// which matches the user's natural "grab the light and move it" mental
+// model. Rotation rotates a child target at local (0, 0, -1) so aim
+// direction re-orients with the rig.
+
+const LIGHT_TYPES = ["directional", "point", "spot"];
+const LIGHT_DEFAULTS = {
+	type: "directional",
+	intensity: 2.0,
+	color: 0xffffff,
+	castShadow: false,
+	// Spot-specific — angle in degrees for UI ergonomics, converted to
+	// radians only when writing to three's spot light.
+	spotAngle: 30,
+	spotPenumbra: 0.2,
+	// Point + spot distance (0 = unlimited range with no falloff clamp).
+	distance: 0,
+};
+
+function _lightApply(wrapper) {
+	const cfg = wrapper.userData.lightConfig;
+	if (!cfg) return;
+	// Tear down existing children (light + target + helper) so a type swap
+	// starts from a clean slate. Preserves the wrapper transform (position +
+	// rotation the user has set via gizmo) — only the internal light rebuilds.
+	for (const child of [...wrapper.children]) {
+		if (child.isLight) {
+			child.dispose?.();
+			wrapper.remove(child);
+		} else if (child.userData?._lightHelper) {
+			child.dispose?.();
+			wrapper.remove(child);
+		} else if (child.userData?._lightAimTarget) {
+			wrapper.remove(child);
+		}
+	}
+	let light;
+	if (cfg.type === "point") {
+		light = new THREE.PointLight(cfg.color, cfg.intensity, cfg.distance || 0);
+	} else if (cfg.type === "spot") {
+		light = new THREE.SpotLight(
+			cfg.color, cfg.intensity, cfg.distance || 0,
+			(cfg.spotAngle || 30) * Math.PI / 180,
+			cfg.spotPenumbra ?? 0.2,
+		);
+	} else {
+		light = new THREE.DirectionalLight(cfg.color, cfg.intensity);
+	}
+	light.name = `${wrapper.name}_light`;
+	light.position.set(0, 0, 0);
+	light.castShadow = !!cfg.castShadow;
+	if (cfg.castShadow) {
+		light.shadow.mapSize.set(1024, 1024);
+		light.shadow.camera.near = 0.1;
+		if (light.shadow.camera.isOrthographicCamera) {
+			light.shadow.camera.far = 40;
+			light.shadow.camera.left = -10;
+			light.shadow.camera.right = 10;
+			light.shadow.camera.top = 10;
+			light.shadow.camera.bottom = -10;
+		} else {
+			light.shadow.camera.far = cfg.distance > 0 ? cfg.distance : 40;
+		}
+		light.shadow.bias = -0.0005;
+	}
+	wrapper.add(light);
+	// Directional + Spot have an aim target. Point has no direction so no
+	// target needed. Target at wrapper-local (0, 0, -1) — light aims "forward"
+	// in the wrapper's frame, so rotating the wrapper re-aims the light.
+	if (cfg.type === "directional" || cfg.type === "spot") {
+		const target = new THREE.Object3D();
+		target.name = "_lightAimTarget";
+		target.position.set(0, 0, -1);
+		target.userData._lightAimTarget = true;
+		wrapper.add(target);
+		light.target = target;
+	}
+	// Wireframe helper — appears as a small pyramid (directional), sphere
+	// (point), or cone (spot). Small enough to feel like an icon, not scene
+	// clutter. Added AFTER target so DirectionalLightHelper can find it.
+	let helper;
+	if (cfg.type === "point") helper = new THREE.PointLightHelper(light, 0.35, cfg.color);
+	else if (cfg.type === "spot") helper = new THREE.SpotLightHelper(light, cfg.color);
+	else helper = new THREE.DirectionalLightHelper(light, 0.5, cfg.color);
+	helper.userData._lightHelper = true;
+	wrapper.add(helper);
+}
+
+function addLightFx(initialConfig) {
+	snapshotForUndo();
+	primCounters.light = (primCounters.light || 0) + 1;
+	const cfg = { ...LIGHT_DEFAULTS, ...(initialConfig || {}) };
+	const wrapper = new THREE.Group();
+	wrapper.name = `Light.${String(primCounters.light).padStart(3, "0")}`;
+	wrapper.userData.primKind = "light";
+	wrapper.userData.lightConfig = cfg;
+	// Drop the light at a natural key-light offset from the scene origin
+	// (upper-front-right) so a fresh spawn is visibly illuminating the
+	// origin subject rather than pointing at nothing. User can drag freely
+	// via the gizmo which appears exactly at the wrapper position = the
+	// light position.
+	wrapper.position.set(2, 4, 2);
+	// Aim the default directional light down + toward origin — rotate the
+	// wrapper so its local -Z (where the target sits) points at (0,0,0).
+	wrapper.lookAt(0, 0, 0);
+	scene.add(wrapper);
+	objects.push(wrapper);
+	stashInitialTransform(wrapper);
+	_lightApply(wrapper);
+	select(wrapper);
+	refreshOutliner();
+	updateStatus();
+	if (typeof saveScene === "function") saveScene();
+	return wrapper;
+}
+
+
 // Which objects can act as a scatter source? Anything with real polygonal
 // geometry we can hand to InstancedMesh. Excludes particles / clouds / other
 // scatters (would be a recursive nightmare) and pure Groups with no meshes.
@@ -9635,6 +10124,9 @@ document.getElementById("mp-still")?.addEventListener("click", async () => {
 function addFx(kind) {
 	if (kind === "clouds") return addCloudsFx();
 	if (kind === "scatter") return addScatterFx();
+	if (kind === "terrain") return addTerrainFx();
+	if (kind === "lightrig") return addLightFx();
+	if (kind === "light") return addLightFx();
 	// Water/smoke: not implemented yet — ping the status bar so the button
 	// still gives feedback while the shaders are being written. Fog moved to
 	// Scene properties → Environment because it's a scene-level setting, not
@@ -13723,14 +14215,18 @@ async function _skyboxGenerate() {
 	const promptEl = document.getElementById("obj-skybox-prompt");
 	const userPrompt = (promptEl?.value || "").trim();
 	if (!userPrompt) { _setSkyboxStatus("enter a prompt first", "error"); return; }
-	const fullPrompt = `equirectangular 360° panorama, seamless HDRI environment, ${userPrompt}`;
+	// Backend endpoint owns the skybox system prompt (equirectangular +
+	// seamless wrap + pole handling + no-people-by-default guardrails), so
+	// we just forward the user's raw brief. If we needed to send extra
+	// per-object guidance later, an `extra_instructions` field on this body
+	// would be the way to add it.
 	try {
 		_setSkyboxRunButton("running");
-		_setSkyboxStatus("running Flux 2…", "busy");
-		const r = await fetch(`/api/run/flux2_klein_t2i_local`, {
+		_setSkyboxStatus("generating panorama…", "busy");
+		const r = await fetch(`/api/skybox/generate`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ node_id: NODE_ID, inputs: { prompt: fullPrompt } }),
+			body: JSON.stringify({ node_id: NODE_ID, prompt: userPrompt }),
 		});
 		if (!r.ok) {
 			const err = await r.text();
@@ -13840,6 +14336,314 @@ async function _skyboxGenerate() {
 	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hook, { once: true });
 	else hook();
 })();
+
+
+// ── Terrain inspector wiring ──────────────────────────────────────
+// All knobs mutate the SELECTED terrain's userData.terrainConfig then
+// call _terrainApplyConfig which rebuilds the geometry + normals. The
+// source pill flips between the procedural + heightmap sub-panes.
+
+function _terrainSelected() {
+	return selected?.userData?.primKind === "terrain" ? selected : null;
+}
+
+function _terrainSyncPaneFromSelection(mesh) {
+	const cfg = mesh.userData?.terrainConfig;
+	if (!cfg) return;
+	// Source pill
+	document.querySelectorAll('#obj-terrain-section [data-terrain-source]').forEach(b => {
+		b.classList.toggle("active", b.dataset.terrainSource === cfg.source);
+	});
+	const procWrap = document.getElementById("obj-terrain-procedural");
+	const hmWrap = document.getElementById("obj-terrain-heightmap");
+	if (procWrap) procWrap.style.display = cfg.source === "procedural" ? "" : "none";
+	if (hmWrap) hmWrap.style.display = cfg.source === "heightmap" ? "" : "none";
+	// Procedural — inject a "Custom" option if the config was hand-tweaked so
+	// the dropdown can reflect a non-preset state without a jarring reset to
+	// hills. Idempotent: skips if the option's already in place.
+	const presetSel = document.getElementById("obj-terrain-preset");
+	if (presetSel) {
+		if (cfg.preset === "custom" && !Array.from(presetSel.options).some(o => o.value === "custom")) {
+			const opt = document.createElement("option");
+			opt.value = "custom"; opt.textContent = "Custom";
+			presetSel.appendChild(opt);
+		}
+		presetSel.value = cfg.preset || "hills";
+	}
+	// Sync drag-num readouts (fields refresh via _refresh()).
+	document.getElementById("obj-terrain-amplitude")?._refresh?.();
+	document.getElementById("obj-terrain-frequency")?._refresh?.();
+	document.getElementById("obj-terrain-octaves")?._refresh?.();
+	document.getElementById("obj-terrain-seed")?._refresh?.();
+	document.getElementById("obj-terrain-size")?._refresh?.();
+	document.getElementById("obj-terrain-subdiv")?._refresh?.();
+	document.getElementById("obj-terrain-hm-amp")?._refresh?.();
+	document.getElementById("obj-terrain-hm-blur")?._refresh?.();
+	// Heightmap thumb + clear button
+	const thumb = document.getElementById("obj-terrain-hm-thumb");
+	const clearBtn = document.getElementById("obj-terrain-hm-clear");
+	if (thumb) {
+		if (cfg.heightmapUrl) {
+			thumb.style.backgroundImage = `url('${cfg.heightmapUrl}')`;
+			thumb.textContent = "";
+			if (clearBtn) clearBtn.hidden = false;
+		} else {
+			thumb.style.backgroundImage = "";
+			thumb.textContent = "NO IMAGE — UPLOAD OR GENERATE";
+			if (clearBtn) clearBtn.hidden = true;
+		}
+	}
+}
+
+function _terrainSetHmStatus(text, kind) {
+	const el = document.getElementById("obj-terrain-hm-status");
+	if (!el) return;
+	el.textContent = text || "Idle";
+	el.style.color = kind === "error" ? "#ff8a8a"
+		: kind === "ok" ? "#8ae0a5"
+		: kind === "busy" ? "rgba(255,180,84,0.9)"
+		: "rgba(255,255,255,0.5)";
+}
+
+(function wireTerrainObjectInspectorButtons() {
+	const hook = () => {
+		// Source pill toggle
+		document.querySelectorAll('#obj-terrain-section [data-terrain-source]').forEach(btn => {
+			btn.addEventListener("click", async () => {
+				const t = _terrainSelected();
+				if (!t) return;
+				const src = btn.dataset.terrainSource;
+				t.userData.terrainConfig.source = src;
+				_terrainSyncPaneFromSelection(t);
+				await _terrainApplyConfig(t);
+				saveScene?.();
+			});
+		});
+		// Preset dropdown — applies canned {amplitude, frequency, octaves}.
+		document.getElementById("obj-terrain-preset")?.addEventListener("change", async (e) => {
+			const t = _terrainSelected();
+			if (!t) return;
+			const name = e.target.value;
+			const p = TERRAIN_PRESETS[name];
+			if (!p) return;
+			Object.assign(t.userData.terrainConfig, { preset: name, ...p });
+			_terrainSyncPaneFromSelection(t);
+			await _terrainApplyConfig(t);
+			saveScene?.();
+		});
+		// Procedural fBM knobs — every drag-num routes through the shared
+		// setupDragField helper so we get undo snapshot + save-debounce for free.
+		const cfgKey = (id, key, opts) => {
+			const el = document.getElementById(id);
+			if (!el) return;
+			setupDragField(el, {
+				get: () => _terrainSelected()?.userData?.terrainConfig?.[key] ?? opts.default,
+				set: async v => {
+					const t = _terrainSelected();
+					if (!t) return;
+					const clamped = Math.max(opts.min, Math.min(opts.max, v));
+					t.userData.terrainConfig[key] = clamped;
+					// Preset drop-list reads "custom" now that a manual knob moved off preset.
+					t.userData.terrainConfig.preset = "custom";
+					const presetSel = document.getElementById("obj-terrain-preset");
+					if (presetSel && !Array.from(presetSel.options).some(o => o.value === "custom")) {
+						const opt = document.createElement("option");
+						opt.value = "custom"; opt.textContent = "Custom";
+						presetSel.appendChild(opt);
+					}
+					if (presetSel) presetSel.value = "custom";
+					await _terrainApplyConfig(t);
+				},
+				sens: opts.sens,
+				min: opts.min,
+				max: opts.max,
+				format: opts.format,
+			});
+		};
+		cfgKey("obj-terrain-amplitude", "amplitude", { min: 0, max: 20, sens: 0.02, default: 1.4, format: v => v.toFixed(2) });
+		cfgKey("obj-terrain-frequency", "frequency", { min: 0.005, max: 1.0, sens: 0.002, default: 0.1, format: v => v.toFixed(3) });
+		cfgKey("obj-terrain-octaves",   "octaves",   { min: 1, max: 8, sens: 0.05, default: 4, format: v => String(Math.round(v)) });
+		cfgKey("obj-terrain-seed",      "seed",      { min: 0, max: 999999, sens: 1, default: 42, format: v => String(Math.round(v)) });
+		cfgKey("obj-terrain-hm-amp",    "amplitude", { min: 0, max: 20, sens: 0.02, default: 1.4, format: v => v.toFixed(2) });
+		cfgKey("obj-terrain-hm-blur",   "heightmapBlur", { min: 0, max: 30, sens: 0.1, default: 0, format: v => String(Math.round(v)) });
+		cfgKey("obj-terrain-size",      "size",      { min: 2, max: 200, sens: 0.2, default: 20, format: v => v.toFixed(0) });
+		cfgKey("obj-terrain-subdiv",    "subdivisions", { min: 8, max: 512, sens: 0.5, default: 128, format: v => String(Math.round(v)) });
+		// Seed reroll — picks a fresh int seed then re-runs.
+		document.getElementById("obj-terrain-reroll")?.addEventListener("click", async () => {
+			const t = _terrainSelected();
+			if (!t) return;
+			t.userData.terrainConfig.seed = Math.floor(Math.random() * 100000);
+			document.getElementById("obj-terrain-seed")?._refresh?.();
+			await _terrainApplyConfig(t);
+			saveScene?.();
+		});
+		// Heightmap upload — save the file server-side + swap in the URL.
+		document.getElementById("obj-terrain-hm-upload")?.addEventListener("click", () => {
+			document.getElementById("obj-terrain-hm-file")?.click();
+		});
+		document.getElementById("obj-terrain-hm-file")?.addEventListener("change", async (e) => {
+			const f = e.target.files?.[0];
+			e.target.value = "";
+			const t = _terrainSelected();
+			if (!f || !t) return;
+			_terrainSetHmStatus(`uploading ${f.name}…`, "busy");
+			try {
+				const url = URL.createObjectURL(f);
+				t.userData.terrainConfig.heightmapUrl = url;
+				t.userData.terrainConfig.source = "heightmap";
+				await _terrainApplyConfig(t);
+				_terrainSyncPaneFromSelection(t);
+				_terrainSetHmStatus(`applied · ${f.name}`, "ok");
+				saveScene?.();
+			} catch (err) {
+				console.error("[terrain] heightmap load failed:", err);
+				_terrainSetHmStatus(`load failed · ${String(err.message || err).slice(0, 120)}`, "error");
+			}
+		});
+		document.getElementById("obj-terrain-hm-clear")?.addEventListener("click", async () => {
+			const t = _terrainSelected();
+			if (!t) return;
+			t.userData.terrainConfig.heightmapUrl = null;
+			t.userData._heightmapData = null;
+			t.userData._heightmapDataUrl = null;
+			_terrainSyncPaneFromSelection(t);
+			// Switch back to a flat plane; user can either upload something new
+			// or flip back to procedural.
+			await _terrainApplyConfig(t);
+			saveScene?.();
+		});
+		document.getElementById("obj-terrain-hm-generate")?.addEventListener("click", async () => {
+			const t = _terrainSelected();
+			if (!t) return;
+			const promptEl = document.getElementById("obj-terrain-hm-prompt");
+			const userPrompt = (promptEl?.value || "").trim();
+			if (!userPrompt) { _terrainSetHmStatus("enter a prompt first", "error"); return; }
+			_terrainSetHmStatus("generating heightmap…", "busy");
+			try {
+				const r = await fetch("/api/heightmap/generate", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ node_id: NODE_ID, prompt: userPrompt }),
+				});
+				if (!r.ok) throw new Error(await r.text() || `HTTP ${r.status}`);
+				const j = await r.json();
+				if (!j.filename) throw new Error("server returned no filename");
+				t.userData.terrainConfig.heightmapUrl = `/data/${j.filename}`;
+				t.userData.terrainConfig.source = "heightmap";
+				await _terrainApplyConfig(t);
+				_terrainSyncPaneFromSelection(t);
+				_terrainSetHmStatus(`done · ${j.filename}`, "ok");
+				window.refreshAssets?.();
+				saveScene?.();
+			} catch (err) {
+				console.error("[terrain] heightmap generate failed:", err);
+				_terrainSetHmStatus(`failed · ${String(err.message || err).slice(0, 140)}`, "error");
+			}
+		});
+	};
+	// Defer hook() until AFTER module eval finishes — this IIFE lives above
+	// `const dragFields = []` (line 17160-ish) and setupDragField(), so calling
+	// hook() inline would hit dragFields in TDZ under strict-mode module
+	// semantics and block boot. queueMicrotask runs at the end of the current
+	// sync eval task, by which point the const has initialized.
+	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hook, { once: true });
+	else queueMicrotask(hook);
+})();
+
+
+// ── Light inspector wiring ────────────────────────────────────────
+function _lightSelected() {
+	return selected?.userData?.primKind === "light" ? selected : null;
+}
+
+function _lightSyncPaneFromSelection(wrapper) {
+	const cfg = wrapper.userData?.lightConfig;
+	if (!cfg) return;
+	// Type pill toggle
+	document.querySelectorAll('#obj-light-section [data-light-type]').forEach(b => {
+		b.classList.toggle("active", b.dataset.lightType === cfg.type);
+	});
+	// Show/hide type-specific rows
+	const distRow = document.getElementById("obj-light-distance-row");
+	const spotRow = document.getElementById("obj-light-spot-row");
+	if (distRow) distRow.style.display = (cfg.type === "point" || cfg.type === "spot") ? "" : "none";
+	if (spotRow) spotRow.style.display = cfg.type === "spot" ? "" : "none";
+	// Refresh drag-nums
+	document.getElementById("obj-light-intensity")?._refresh?.();
+	document.getElementById("obj-light-distance")?._refresh?.();
+	document.getElementById("obj-light-spot-angle")?._refresh?.();
+	document.getElementById("obj-light-spot-penumbra")?._refresh?.();
+	// Color swatch
+	const swatch = document.getElementById("obj-light-color-btn");
+	const colorHex = "#" + (cfg.color || 0xffffff).toString(16).padStart(6, "0");
+	if (swatch) swatch.style.background = colorHex;
+	const colorInput = document.getElementById("obj-light-color");
+	if (colorInput) colorInput.value = colorHex;
+	// Shadow toggle
+	const shadowChk = document.getElementById("obj-light-shadow");
+	if (shadowChk) shadowChk.checked = !!cfg.castShadow;
+}
+
+(function wireLightObjectInspectorButtons() {
+	const hook = () => {
+		// Type pills — swap the internal light + helper without moving the
+		// wrapper transform (so the user's placement stays put across a swap).
+		document.querySelectorAll('#obj-light-section [data-light-type]').forEach(btn => {
+			btn.addEventListener("click", () => {
+				const r = _lightSelected();
+				if (!r) return;
+				r.userData.lightConfig.type = btn.dataset.lightType;
+				_lightApply(r);
+				_lightSyncPaneFromSelection(r);
+				saveScene?.();
+			});
+		});
+		const cfgKey = (id, key, opts) => {
+			const el = document.getElementById(id);
+			if (!el) return;
+			setupDragField(el, {
+				get: () => _lightSelected()?.userData?.lightConfig?.[key] ?? opts.default,
+				set: v => {
+					const r = _lightSelected();
+					if (!r) return;
+					r.userData.lightConfig[key] = Math.max(opts.min, Math.min(opts.max, v));
+					_lightApply(r);
+				},
+				sens: opts.sens,
+				min: opts.min,
+				max: opts.max,
+				format: opts.format,
+			});
+		};
+		cfgKey("obj-light-intensity",     "intensity",   { min: 0, max: 20, sens: 0.02, default: 2.0, format: v => v.toFixed(2) });
+		cfgKey("obj-light-distance",      "distance",    { min: 0, max: 100, sens: 0.1, default: 0, format: v => v.toFixed(0) });
+		cfgKey("obj-light-spot-angle",    "spotAngle",   { min: 1, max: 89, sens: 0.15, default: 30, format: v => `${v.toFixed(0)}°` });
+		cfgKey("obj-light-spot-penumbra", "spotPenumbra",{ min: 0, max: 1, sens: 0.004, default: 0.2, format: v => v.toFixed(2) });
+		const swatch = document.getElementById("obj-light-color-btn");
+		const colorInput = document.getElementById("obj-light-color");
+		swatch?.addEventListener("click", (e) => { e.stopPropagation(); colorInput?.click(); });
+		colorInput?.addEventListener("input", (e) => {
+			const r = _lightSelected();
+			if (!r) return;
+			const hex = parseInt(e.target.value.slice(1), 16);
+			if (!Number.isFinite(hex)) return;
+			r.userData.lightConfig.color = hex;
+			if (swatch) swatch.style.background = e.target.value;
+			_lightApply(r);
+			saveScene?.();
+		});
+		document.getElementById("obj-light-shadow")?.addEventListener("change", (e) => {
+			const r = _lightSelected();
+			if (!r) return;
+			r.userData.lightConfig.castShadow = !!e.target.checked;
+			_lightApply(r);
+			saveScene?.();
+		});
+	};
+	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hook, { once: true });
+	else queueMicrotask(hook);
+})();
+
 
 // Apply an image Blob/File to the Point Cloud placeholder plane's material
 // and resize the plane geometry to the image's native aspect. Placeholder
@@ -15599,6 +16403,91 @@ const ASSISTANT_TOOLS = {
 		return `spawned ${mesh.name} — user can now upload or generate a 360° panorama onto it via the object inspector`;
 	},
 
+	spawn_terrain({ preset, seed, position } = {}) {
+		const cfg = {};
+		if (preset && TERRAIN_PRESETS[preset]) {
+			cfg.preset = preset;
+			Object.assign(cfg, TERRAIN_PRESETS[preset]);
+		}
+		if (typeof seed === "number") cfg.seed = seed;
+		const mesh = addTerrainFx(cfg);
+		if (!mesh) return "error: addTerrainFx returned null";
+		if (Array.isArray(position) && position.length === 3) {
+			mesh.position.set(+position[0] || 0, +position[1] || 0, +position[2] || 0);
+		}
+		refreshOutliner();
+		saveScene?.();
+		return `spawned ${mesh.name} (preset=${mesh.userData.terrainConfig.preset}, seed=${mesh.userData.terrainConfig.seed})`;
+	},
+
+	async generate_terrain({ prompt } = {}) {
+		if (!prompt || !String(prompt).trim()) return "error: prompt is required";
+		// Reuse existing terrain if any; otherwise spawn a fresh one so the
+		// heightmap has a place to land (mirrors generate_skybox behavior).
+		let terrain = objects.find(o => o?.userData?.primKind === "terrain");
+		if (!terrain) terrain = addTerrainFx({ source: "heightmap" });
+		if (!terrain) return "error: terrain spawn failed";
+		try {
+			const r = await fetch("/api/heightmap/generate", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ node_id: NODE_ID, prompt: String(prompt) }),
+			});
+			if (!r.ok) {
+				const body = await r.text().catch(() => "");
+				return `error: heightmap generate failed — ${(body || `HTTP ${r.status}`).slice(-400)}`;
+			}
+			const j = await r.json();
+			if (!j.filename) return "error: server returned no filename";
+			terrain.userData.terrainConfig.heightmapUrl = `/data/${j.filename}`;
+			terrain.userData.terrainConfig.source = "heightmap";
+			await _terrainApplyConfig(terrain);
+			if (selected === terrain) _terrainSyncPaneFromSelection(terrain);
+			refreshOutliner();
+			window.refreshAssets?.();
+			saveScene?.();
+			return `generated heightmap "${prompt}" → ${j.filename}, applied to [${terrain.name}]`;
+		} catch (e) {
+			return `error: ${e.message || e}`;
+		}
+	},
+
+	async generate_skybox({ prompt } = {}) {
+		if (!prompt || !String(prompt).trim()) return "error: prompt is required";
+		// Reuse an existing skybox if there is one (matches the tool-tile
+		// "one skybox per scene" convention) — otherwise spawn a fresh sphere
+		// so the generated texture has somewhere to land. The backend
+		// endpoint owns the panorama guardrails (equirectangular + seamless
+		// wrap + pole handling + no-figures), so the agent's brief just needs
+		// to describe the environment.
+		let skybox = _findActiveSkybox?.();
+		if (!skybox) {
+			skybox = spawnSkybox();
+			if (!skybox) return "error: skybox spawn failed";
+		}
+		try {
+			const r = await fetch("/api/skybox/generate", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ node_id: NODE_ID, prompt: String(prompt) }),
+			});
+			if (!r.ok) {
+				const body = await r.text().catch(() => "");
+				const tail = (body || `HTTP ${r.status}`).slice(-400);
+				return `error: skybox generate failed — ${tail}`;
+			}
+			const j = await r.json();
+			if (!j.filename) return "error: server returned no filename";
+			_applySkyboxTexture(skybox, `/data/${j.filename}`);
+			refreshOutliner();
+			window.refreshAssets?.();
+			saveScene?.();
+			return `generated skybox panorama "${prompt}" → ${j.filename}, applied to [${skybox.name}]`;
+		} catch (e) {
+			return `error: ${e.message || e}`;
+		}
+	},
+
 	// ── Camera control ──────────────────────────────────────────────
 	set_camera_target({ name }) {
 		if (!name) return "error: name is required";
@@ -17064,6 +17953,25 @@ function refreshObjectInspector() {
 				_mannequinSetAnimStatus("No clip loaded", "");
 			}
 		}
+	}
+	// Terrain section — visible when the selected object is a terrain. Syncs
+	// pane control state (source pill, preset dropdown, drag-nums, heightmap
+	// thumb) from the object's terrainConfig so re-selecting a terrain shows
+	// its own knob values rather than whatever was last edited.
+	const terrainSection = document.getElementById("obj-terrain-section");
+	if (terrainSection) {
+		const isTerrain = selected.userData?.primKind === "terrain";
+		terrainSection.style.display = isTerrain ? "" : "none";
+		if (isTerrain) _terrainSyncPaneFromSelection(selected);
+	}
+	// Light section — visible when the selection is a Group carrying
+	// primKind="light". Sync pane controls from lightConfig so knob readouts
+	// reflect THIS light's state, not the last-edited one.
+	const lightSection = document.getElementById("obj-light-section");
+	if (lightSection) {
+		const isLight = selected.userData?.primKind === "light";
+		lightSection.style.display = isLight ? "" : "none";
+		if (isLight) _lightSyncPaneFromSelection(selected);
 	}
 	// TripoSplat Mode section — visible on TripoSplat results, whether the
 	// object is currently rendered as a splat or a resampled point cloud.
@@ -22076,6 +22984,29 @@ function serializeScene() {
 			config: o.userData.cloudsFx.config,
 			keyframes: serializeObjectKeyframes(o),
 		})),
+		lights: objects.filter(o => o.userData.primKind === "light").map(o => ({
+			name: o.name,
+			position: o.position.toArray(),
+			rotation: [o.rotation.x, o.rotation.y, o.rotation.z],
+			scale: o.scale.toArray(),
+			visible: o.visible !== false,
+			locked: o.userData.locked || undefined,
+			notes: o.userData.notes || undefined,
+			config: o.userData.lightConfig,
+			keyframes: serializeObjectKeyframes(o),
+		})),
+		terrains: objects.filter(o => o.userData.primKind === "terrain").map(o => ({
+			name: o.name,
+			position: o.position.toArray(),
+			rotation: [o.rotation.x, o.rotation.y, o.rotation.z],
+			scale: o.scale.toArray(),
+			visible: o.visible !== false,
+			locked: o.userData.locked || undefined,
+			notes: o.userData.notes || undefined,
+			color: o.material?.color?.getHex(),
+			config: o.userData.terrainConfig,
+			keyframes: serializeObjectKeyframes(o),
+		})),
 		scatters: objects.filter(o => o.userData.primKind === "scatter").map(o => ({
 			name: o.name,
 			position: o.position.toArray(),
@@ -22361,6 +23292,38 @@ async function deserializeScene(state, opts = {}) {
 			if (mn.animoflowManaged) obj.userData.animoflowManaged = true;
 			if (Array.isArray(mn.keyframes)) obj.userData.keyframes = deserializeObjectKeyframes(mn.keyframes);
 		}).catch(e => console.error("[mannequin] restore failed:", e));
+	}
+
+	// Lights hydrate before scatters (no cross-dep, but same rigid order as
+	// terrain). Config replays type + intensity + color + castShadow via
+	// addLightFx which rebuilds the internal three.js Light.
+	for (const lr of (state.lights || [])) {
+		const obj = addLightFx(lr.config || {});
+		if (!obj) continue;
+		if (lr.name) obj.name = lr.name;
+		if (lr.position) obj.position.fromArray(lr.position);
+		if (lr.rotation) obj.rotation.set(lr.rotation[0], lr.rotation[1], lr.rotation[2]);
+		if (lr.scale) obj.scale.fromArray(lr.scale);
+		if (lr.visible === false) obj.visible = false;
+		if (lr.locked) obj.userData.locked = true;
+		if (lr.notes) obj.userData.notes = lr.notes;
+		if (Array.isArray(lr.keyframes)) obj.userData.keyframes = deserializeObjectKeyframes(lr.keyframes);
+	}
+
+	// Terrains hydrate before scatters (scatters may reference a terrain as
+	// their surface). Config carries source + procedural params + heightmap URL.
+	for (const tt of (state.terrains || [])) {
+		const obj = addTerrainFx(tt.config || {});
+		if (!obj) continue;
+		if (tt.name) obj.name = tt.name;
+		if (tt.position) obj.position.fromArray(tt.position);
+		if (tt.rotation) obj.rotation.set(tt.rotation[0], tt.rotation[1], tt.rotation[2]);
+		if (tt.scale) obj.scale.fromArray(tt.scale);
+		if (tt.visible === false) obj.visible = false;
+		if (tt.locked) obj.userData.locked = true;
+		if (tt.notes) obj.userData.notes = tt.notes;
+		if (typeof tt.color === "number") obj.material?.color?.setHex(tt.color);
+		if (Array.isArray(tt.keyframes)) obj.userData.keyframes = deserializeObjectKeyframes(tt.keyframes);
 	}
 
 	// Scatters hydrate LAST so their sourceName references resolve — every
