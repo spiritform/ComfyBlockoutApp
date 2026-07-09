@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shadow Test — cube + plane</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0a0a0e; color: #e6e6ea; font-family: -apple-system, "Segoe UI", sans-serif; font-size: 12px; overflow: hidden; }
+  #canvas { display: block; width: 100vw; height: 100vh; }
+  #panel {
+    position: fixed; top: 12px; left: 12px; width: 240px;
+    background: rgba(15, 15, 20, 0.92); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px;
+    backdrop-filter: blur(6px);
+  }
+  .lbl { font-size: 10px; color: rgba(255,255,255,0.5); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px; }
+  .row { display: flex; gap: 4px; }
+  .row button {
+    flex: 1; background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.8);
+    border: 1px solid rgba(255,255,255,0.06); border-radius: 5px; padding: 5px 6px;
+    font-size: 11px; cursor: pointer;
+  }
+  .row button.active { background: rgba(255,180,84,0.2); color: #ffd28a; border-color: rgba(255,180,84,0.4); }
+  .slide { display: grid; grid-template-columns: 1fr 44px; gap: 6px; align-items: center; }
+  .slide input { width: 100%; }
+  .slide span { font-family: ui-monospace, monospace; text-align: right; color: #ffd28a; }
+  hr { border: none; border-top: 1px solid rgba(255,255,255,0.06); margin: 2px 0; }
+  #hint { font-size: 10px; color: rgba(255,255,255,0.4); line-height: 1.4; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<div id="panel">
+  <div>
+    <div class="lbl">Shadow Map Type</div>
+    <div class="row" id="type-row">
+      <button data-type="Basic">Basic</button>
+      <button data-type="PCF">PCF</button>
+      <button data-type="PCFSoft" class="active">PCF Soft</button>
+      <button data-type="VSM">VSM</button>
+      <button data-type="PCSS">PCSS</button>
+    </div>
+  </div>
+
+  <div>
+    <div class="lbl">Contact shadow (fake ground shadow, post-blur)</div>
+    <div class="row" id="contact-row">
+      <button data-contact="off" class="active">Off</button>
+      <button data-contact="on">On</button>
+    </div>
+    <div class="slide" style="margin-top:6px">
+      <span class="lbl" style="margin:0">Blur <span id="contact-blur-val" style="color:#ffd28a">3.5</span></span>
+      <input type="range" id="contact-blur" min="0" max="15" step="0.1" value="3.5">
+    </div>
+    <div class="slide" style="margin-top:4px">
+      <span class="lbl" style="margin:0">Darkness <span id="contact-dark-val" style="color:#ffd28a">1.0</span></span>
+      <input type="range" id="contact-dark" min="1" max="5" step="0.1" value="1">
+    </div>
+    <div class="slide" style="margin-top:4px">
+      <span class="lbl" style="margin:0">Opacity <span id="contact-op-val" style="color:#ffd28a">1.0</span></span>
+      <input type="range" id="contact-op" min="0" max="1" step="0.01" value="1">
+    </div>
+  </div>
+
+  <div>
+    <div class="lbl">Light</div>
+    <div class="row" id="light-row">
+      <button data-light="point" class="active">Point</button>
+      <button data-light="spot">Spot</button>
+      <button data-light="directional">Directional</button>
+    </div>
+  </div>
+
+  <hr>
+
+  <div>
+    <div class="lbl">Map size <span id="mapsize-val" style="color:#ffd28a;font-family:ui-monospace,monospace">2048</span></div>
+    <div class="row" id="mapsize-row">
+      <button data-mapsize="512">512</button>
+      <button data-mapsize="1024">1024</button>
+      <button data-mapsize="2048" class="active">2048</button>
+      <button data-mapsize="4096">4096</button>
+    </div>
+  </div>
+
+  <div>
+    <div class="lbl">Radius <span id="radius-val">4</span></div>
+    <div class="slide">
+      <input type="range" id="radius" min="0" max="25" step="0.1" value="4">
+    </div>
+  </div>
+
+  <div>
+    <div class="lbl">Blur samples (VSM) <span id="samples-val">8</span></div>
+    <div class="slide">
+      <input type="range" id="samples" min="1" max="25" step="1" value="8">
+    </div>
+  </div>
+
+  <div>
+    <div class="lbl">Bias <span id="bias-val">-0.0005</span></div>
+    <div class="slide">
+      <input type="range" id="bias" min="-0.01" max="0.001" step="0.0001" value="-0.0005">
+    </div>
+  </div>
+
+  <hr>
+
+  <div>
+    <div class="lbl">Light height <span id="ly-val">4</span></div>
+    <div class="slide">
+      <input type="range" id="ly" min="1" max="12" step="0.1" value="4">
+    </div>
+  </div>
+
+  <div id="hint">
+    Drag to orbit. Cube casts, plane receives.
+    Change type + slide radius to compare.
+    PCSS only affects directional / spot — point lights
+    use a separate shader function three doesn't override.
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { HorizontalBlurShader } from "three/addons/shaders/HorizontalBlurShader.js";
+import { VerticalBlurShader } from "three/addons/shaders/VerticalBlurShader.js";
+
+// --- PCSS shader chunk override (from three.js webgl_shadowmap_pcss example) ---
+// Cache the pristine chunk so we can restore it when the user switches away.
+const ORIGINAL_SHADOWMAP_CHUNK = THREE.ShaderChunk.shadowmap_pars_fragment;
+
+function buildPcssChunk(lightWorldSize) {
+	// LIGHT_WORLD_SIZE controls softness. Smaller = sharper contact + gentler
+	// falloff. LIGHT_FRUSTUM_WIDTH + NEAR_PLANE are tuned for our scene scale
+	// (light ~5-8m from geometry). Blocker search + variable-radius PCF.
+	const pcss = `
+		#define LIGHT_WORLD_SIZE ${lightWorldSize.toFixed(4)}
+		#define LIGHT_FRUSTUM_WIDTH 3.75
+		#define LIGHT_SIZE_UV (LIGHT_WORLD_SIZE / LIGHT_FRUSTUM_WIDTH)
+		#define NEAR_PLANE 1.0
+
+		#define NUM_SAMPLES 17
+		#define NUM_RINGS 11
+		#define BLOCKER_SEARCH_NUM_SAMPLES NUM_SAMPLES
+
+		vec2 poissonDisk[NUM_SAMPLES];
+
+		void initPoissonSamples( const in vec2 randomSeed ) {
+			float ANGLE_STEP = PI2 * float( NUM_RINGS ) / float( NUM_SAMPLES );
+			float INV_NUM_SAMPLES = 1.0 / float( NUM_SAMPLES );
+			float angle = rand( randomSeed ) * PI2;
+			float radius = INV_NUM_SAMPLES;
+			float radiusStep = radius;
+			for( int i = 0; i < NUM_SAMPLES; i ++ ) {
+				poissonDisk[i] = vec2( cos( angle ), sin( angle ) ) * pow( radius, 0.75 );
+				radius += radiusStep;
+				angle += ANGLE_STEP;
+			}
+		}
+
+		float penumbraSize( const in float zReceiver, const in float zBlocker ) {
+			return (zReceiver - zBlocker) / zBlocker;
+		}
+
+		float findBlocker( sampler2D shadowMap, const in vec2 uv, const in float zReceiver ) {
+			float searchRadius = LIGHT_SIZE_UV * ( zReceiver - NEAR_PLANE ) / zReceiver;
+			float blockerDepthSum = 0.0;
+			int numBlockers = 0;
+			for( int i = 0; i < BLOCKER_SEARCH_NUM_SAMPLES; i++ ) {
+				float shadowMapDepth = texture2D(shadowMap, uv + poissonDisk[i] * searchRadius).r;
+				if ( shadowMapDepth < zReceiver ) {
+					blockerDepthSum += shadowMapDepth;
+					numBlockers ++;
+				}
+			}
+			if( numBlockers == 0 ) return -1.0;
+			return blockerDepthSum / float( numBlockers );
+		}
+
+		float PCF_Filter(sampler2D shadowMap, vec2 uv, float zReceiver, float filterRadius ) {
+			float sum = 0.0;
+			float depth;
+			#pragma unroll_loop_start
+			for( int i = 0; i < 17; i ++ ) {
+				depth = texture2D( shadowMap, uv + poissonDisk[ i ] * filterRadius ).r;
+				if( zReceiver <= depth ) sum += 1.0;
+			}
+			#pragma unroll_loop_end
+			#pragma unroll_loop_start
+			for( int i = 0; i < 17; i ++ ) {
+				depth = texture2D( shadowMap, uv + -poissonDisk[ i ].yx * filterRadius ).r;
+				if( zReceiver <= depth ) sum += 1.0;
+			}
+			#pragma unroll_loop_end
+			return sum / ( 2.0 * float( 17 ) );
+		}
+
+		float PCSS ( sampler2D shadowMap, vec4 coords ) {
+			vec2 uv = coords.xy;
+			float zReceiver = coords.z;
+			initPoissonSamples( uv );
+			float avgBlockerDepth = findBlocker( shadowMap, uv, zReceiver );
+			if( avgBlockerDepth == -1.0 ) return 1.0;
+			float penumbraRatio = penumbraSize( zReceiver, avgBlockerDepth );
+			float filterRadius = penumbraRatio * LIGHT_SIZE_UV * NEAR_PLANE / zReceiver;
+			return PCF_Filter( shadowMap, uv, zReceiver, filterRadius );
+		}
+	`;
+	// Splice PCSS declaration into the shadow-map fragment chunk, and swap the
+	// stock texture2D sample line for a PCSS() call.
+	let shader = ORIGINAL_SHADOWMAP_CHUNK;
+	shader = shader.replace(
+		'#ifdef USE_SHADOWMAP',
+		'#ifdef USE_SHADOWMAP' + pcss
+	);
+	shader = shader.replace(
+		'\t\t\tif ( frustumTest ) {\n\t\t\t\tfloat depth = texture2D( shadowMap, shadowCoord.xy ).r;',
+		'\t\t\tif ( frustumTest ) {\n\t\t\t\treturn PCSS( shadowMap, shadowCoord );\n\t\t\t\tfloat depth = texture2D( shadowMap, shadowCoord.xy ).r;'
+	);
+	return shader;
+}
+
+let pcssInstalled = false;
+function installPcss(lightWorldSize) {
+	THREE.ShaderChunk.shadowmap_pars_fragment = buildPcssChunk(lightWorldSize);
+	pcssInstalled = true;
+}
+function uninstallPcss() {
+	THREE.ShaderChunk.shadowmap_pars_fragment = ORIGINAL_SHADOWMAP_CHUNK;
+	pcssInstalled = false;
+}
+
+const canvas = document.getElementById("canvas");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a0e);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(4, 4, 6);
+camera.lookAt(0, 0.5, 0);
+
+const orbit = new OrbitControls(camera, canvas);
+orbit.target.set(0, 0.5, 0);
+orbit.update();
+
+// Very faint ambient so unlit sides aren't pure black — just enough to read shape.
+scene.add(new THREE.AmbientLight(0xffffff, 0.05));
+
+// Ground plane — FrontSide, normal +Y (up)
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x888892, roughness: 0.85, metalness: 0.0 });
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(20, 20, 4, 4), groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+ground.castShadow = false;
+scene.add(ground);
+
+// Cube (caster + receiver)
+const cubeMat = new THREE.MeshStandardMaterial({ color: 0xa8a8b0, roughness: 0.7, metalness: 0.0 });
+const cube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), cubeMat);
+cube.position.set(0, 0.5, 0);
+cube.castShadow = true;
+cube.receiveShadow = true;
+scene.add(cube);
+
+// --- Contact shadow pipeline (from three.js webgl_shadow_contact example) ---
+// Renders the scene from below-looking-up into a depth mask, blurs it two
+// passes (horizontal + vertical + a lighter cleanup pass), and pastes it as a
+// texture onto a plane parked just above the ground. Completely independent
+// of renderer.shadowMap — coexists with any of the 5 shadow-map-type buttons
+// so you can compare "real" shadow + contact shadow overlaid.
+const CONTACT_PLANE_SIZE = 6;
+const CONTACT_CAM_HEIGHT = 2;
+const contactGroup = new THREE.Group();
+contactGroup.position.y = 0.001; // sit just above the ground plane
+scene.add(contactGroup);
+
+const contactRT = new THREE.WebGLRenderTarget(512, 512);
+contactRT.texture.generateMipmaps = false;
+const contactRTBlur = new THREE.WebGLRenderTarget(512, 512);
+contactRTBlur.texture.generateMipmaps = false;
+
+const contactPlaneGeom = new THREE.PlaneGeometry(CONTACT_PLANE_SIZE, CONTACT_PLANE_SIZE).rotateX(Math.PI / 2);
+const contactPlaneMat = new THREE.MeshBasicMaterial({
+  map: contactRT.texture, opacity: 1, transparent: true, depthWrite: false,
+});
+const contactPlane = new THREE.Mesh(contactPlaneGeom, contactPlaneMat);
+contactPlane.renderOrder = 1;
+contactPlane.scale.y = -1; // depth-render Y is flipped
+contactGroup.add(contactPlane);
+
+const contactBlurPlane = new THREE.Mesh(contactPlaneGeom);
+contactBlurPlane.visible = false;
+contactGroup.add(contactBlurPlane);
+
+// Ortho camera at Y=0, aimed straight up to CONTACT_CAM_HEIGHT — captures
+// depth of anything sitting above the ground within the plane's XZ extent.
+const contactCam = new THREE.OrthographicCamera(
+  -CONTACT_PLANE_SIZE / 2, CONTACT_PLANE_SIZE / 2,
+  CONTACT_PLANE_SIZE / 2, -CONTACT_PLANE_SIZE / 2,
+  0, CONTACT_CAM_HEIGHT
+);
+contactCam.rotation.x = Math.PI / 2;
+contactGroup.add(contactCam);
+
+// Depth material — normally MeshDepthMaterial writes 1-fragCoordZ as RGB.
+// Override the fragment so it writes black at fragCoordZ=0 (close = full
+// shadow) and transparent at fragCoordZ=1 (far = no shadow), scaled by a
+// user-controlled darkness uniform.
+const contactDepthMat = new THREE.MeshDepthMaterial();
+contactDepthMat.userData.darkness = { value: 1 };
+contactDepthMat.onBeforeCompile = (shader) => {
+  shader.uniforms.darkness = contactDepthMat.userData.darkness;
+  shader.fragmentShader = `
+    uniform float darkness;
+    ${shader.fragmentShader.replace(
+      "gl_FragColor = vec4( vec3( 1.0 - fragCoordZ ), opacity );",
+      "gl_FragColor = vec4( vec3( 0.0 ), ( 1.0 - fragCoordZ ) * darkness );"
+    )}
+  `;
+};
+contactDepthMat.depthTest = false;
+contactDepthMat.depthWrite = false;
+
+const hBlurMat = new THREE.ShaderMaterial(HorizontalBlurShader);
+hBlurMat.depthTest = false;
+const vBlurMat = new THREE.ShaderMaterial(VerticalBlurShader);
+vBlurMat.depthTest = false;
+
+// Two-pass separable blur: h → renderTargetBlur, then v → back to renderTarget.
+function blurContactShadow(amount) {
+  contactBlurPlane.visible = true;
+  contactBlurPlane.material = hBlurMat;
+  hBlurMat.uniforms.tDiffuse.value = contactRT.texture;
+  hBlurMat.uniforms.h.value = amount * 1 / 256;
+  renderer.setRenderTarget(contactRTBlur);
+  renderer.render(contactBlurPlane, contactCam);
+
+  contactBlurPlane.material = vBlurMat;
+  vBlurMat.uniforms.tDiffuse.value = contactRTBlur.texture;
+  vBlurMat.uniforms.v.value = amount * 1 / 256;
+  renderer.setRenderTarget(contactRT);
+  renderer.render(contactBlurPlane, contactCam);
+  contactBlurPlane.visible = false;
+}
+
+// Called at the top of the render loop when contact shadows are enabled.
+function renderContactShadow() {
+  // Temporarily hide the ground plane + the contact plane itself so they don't
+  // occlude the depth pass — we only want dynamic objects (cube, etc) writing
+  // to the depth mask.
+  const groundWasVisible = ground.visible;
+  ground.visible = false;
+  contactPlane.visible = false;
+
+  const prevBg = scene.background;
+  scene.background = null;
+  const prevAlpha = renderer.getClearAlpha();
+  renderer.setClearAlpha(0);
+
+  scene.overrideMaterial = contactDepthMat;
+  renderer.setRenderTarget(contactRT);
+  renderer.render(scene, contactCam);
+  scene.overrideMaterial = null;
+
+  blurContactShadow(state.contact.blur);
+  // Lighter second pass to clean up ringing artifacts (per the three.js example).
+  blurContactShadow(state.contact.blur * 0.4);
+
+  renderer.setRenderTarget(null);
+  renderer.setClearAlpha(prevAlpha);
+  scene.background = prevBg;
+
+  ground.visible = groundWasVisible;
+  contactPlane.visible = true;
+}
+
+// Point light — we'll rebuild it when the type toggles change.
+let light = null;
+let helper = null;
+
+const state = {
+  type: "PCFSoft",
+  lightKind: "point",
+  mapSize: 2048,
+  radius: 4,
+  samples: 8,
+  bias: -0.0005,
+  ly: 4,
+  contact: { on: false, blur: 3.5, darkness: 1, opacity: 1 },
+};
+
+function rebuildLight() {
+  if (light) { scene.remove(light); light.dispose?.(); }
+  if (helper) { scene.remove(helper); helper.dispose?.(); helper = null; }
+
+  if (state.lightKind === "point") {
+    light = new THREE.PointLight(0xffffff, 60, 0);
+    light.position.set(2, state.ly, 2);
+    helper = new THREE.PointLightHelper(light, 0.2);
+  } else if (state.lightKind === "spot") {
+    light = new THREE.SpotLight(0xffffff, 60, 0, Math.PI / 6, 0.3, 1);
+    light.position.set(2, state.ly, 2);
+    light.target.position.set(0, 0, 0);
+    scene.add(light.target);
+    helper = new THREE.SpotLightHelper(light);
+  } else {
+    light = new THREE.DirectionalLight(0xffffff, 3);
+    light.position.set(2, state.ly, 2);
+    light.target.position.set(0, 0, 0);
+    scene.add(light.target);
+    light.shadow.camera.left = -6;
+    light.shadow.camera.right = 6;
+    light.shadow.camera.top = 6;
+    light.shadow.camera.bottom = -6;
+    helper = new THREE.DirectionalLightHelper(light, 0.5);
+  }
+  light.castShadow = true;
+  applyShadowSettings();
+  scene.add(light);
+  scene.add(helper);
+}
+
+function applyShadowSettings() {
+  if (!light) return;
+  light.shadow.mapSize.set(state.mapSize, state.mapSize);
+  light.shadow.camera.near = 0.1;
+  light.shadow.camera.far = 40;
+  light.shadow.radius = state.radius;
+  light.shadow.blurSamples = state.samples;
+  light.shadow.bias = state.bias;
+  if (light.shadow.map) {
+    light.shadow.map.dispose();
+    light.shadow.map = null;
+  }
+  if (light.shadow.camera.updateProjectionMatrix) light.shadow.camera.updateProjectionMatrix();
+}
+
+function applyRendererType() {
+  // PCSS runs on raw depth values (Basic), then does its own blocker + PCF
+  // filtering in the shader override — so it wants BasicShadowMap under the
+  // hood regardless of what button is showing.
+  if (state.type === "PCSS") {
+    renderer.shadowMap.type = THREE.BasicShadowMap;
+    installPcss(state.radius * 0.01); // radius slider maps 0..25 → LIGHT_WORLD_SIZE 0..0.25
+  } else {
+    if (pcssInstalled) uninstallPcss();
+    if (state.type === "Basic") renderer.shadowMap.type = THREE.BasicShadowMap;
+    else if (state.type === "PCF") renderer.shadowMap.type = THREE.PCFShadowMap;
+    else if (state.type === "PCFSoft") renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    else if (state.type === "VSM") renderer.shadowMap.type = THREE.VSMShadowMap;
+  }
+  // Force material recompile so the new shader chunk takes effect.
+  scene.traverse(o => {
+    if (o.isMesh && o.material) {
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) m.needsUpdate = true;
+    }
+  });
+  // Trigger fresh shadow map render.
+  if (light?.shadow?.map) { light.shadow.map.dispose(); light.shadow.map = null; }
+}
+
+// Radius slider re-patches PCSS with the new LIGHT_WORLD_SIZE + recompiles
+// materials. Expensive per drag tick but fine for a mockup.
+function reapplyPcssIfActive() {
+  if (state.type !== "PCSS") return;
+  installPcss(state.radius * 0.01);
+  scene.traverse(o => {
+    if (o.isMesh && o.material) {
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) m.needsUpdate = true;
+    }
+  });
+  if (light?.shadow?.map) { light.shadow.map.dispose(); light.shadow.map = null; }
+}
+
+rebuildLight();
+applyRendererType();
+
+// --- UI wiring ---
+const $ = id => document.getElementById(id);
+function setActive(rowId, key, value) {
+  const row = $(rowId);
+  row.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset[key] === String(value)));
+}
+$("type-row").addEventListener("click", e => {
+  const btn = e.target.closest("button"); if (!btn) return;
+  state.type = btn.dataset.type;
+  setActive("type-row", "type", state.type);
+  applyRendererType();
+});
+$("light-row").addEventListener("click", e => {
+  const btn = e.target.closest("button"); if (!btn) return;
+  state.lightKind = btn.dataset.light;
+  setActive("light-row", "light", state.lightKind);
+  rebuildLight();
+});
+$("mapsize-row").addEventListener("click", e => {
+  const btn = e.target.closest("button"); if (!btn) return;
+  state.mapSize = parseInt(btn.dataset.mapsize, 10);
+  $("mapsize-val").textContent = state.mapSize;
+  setActive("mapsize-row", "mapsize", state.mapSize);
+  applyShadowSettings();
+});
+$("radius").addEventListener("input", e => {
+  state.radius = parseFloat(e.target.value);
+  $("radius-val").textContent = state.radius.toFixed(1);
+  applyShadowSettings();
+  reapplyPcssIfActive();
+});
+$("samples").addEventListener("input", e => {
+  state.samples = parseInt(e.target.value, 10);
+  $("samples-val").textContent = state.samples;
+  applyShadowSettings();
+});
+$("bias").addEventListener("input", e => {
+  state.bias = parseFloat(e.target.value);
+  $("bias-val").textContent = state.bias.toFixed(4);
+  applyShadowSettings();
+});
+$("ly").addEventListener("input", e => {
+  state.ly = parseFloat(e.target.value);
+  $("ly-val").textContent = state.ly.toFixed(1);
+  if (light) {
+    light.position.y = state.ly;
+    if (light.isSpotLight || light.isDirectionalLight) light.target.updateMatrixWorld();
+    helper?.update?.();
+  }
+});
+$("contact-row").addEventListener("click", e => {
+  const btn = e.target.closest("button"); if (!btn) return;
+  state.contact.on = btn.dataset.contact === "on";
+  setActive("contact-row", "contact", btn.dataset.contact);
+  contactGroup.visible = state.contact.on;
+});
+$("contact-blur").addEventListener("input", e => {
+  state.contact.blur = parseFloat(e.target.value);
+  $("contact-blur-val").textContent = state.contact.blur.toFixed(1);
+});
+$("contact-dark").addEventListener("input", e => {
+  state.contact.darkness = parseFloat(e.target.value);
+  $("contact-dark-val").textContent = state.contact.darkness.toFixed(1);
+  contactDepthMat.userData.darkness.value = state.contact.darkness;
+});
+$("contact-op").addEventListener("input", e => {
+  state.contact.opacity = parseFloat(e.target.value);
+  $("contact-op-val").textContent = state.contact.opacity.toFixed(2);
+  contactPlaneMat.opacity = state.contact.opacity;
+});
+
+// Contact shadow group is off by default; toggle On to activate.
+contactGroup.visible = false;
+
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+function loop() {
+  helper?.update?.();
+  orbit.update();
+  if (state.contact.on) renderContactShadow();
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

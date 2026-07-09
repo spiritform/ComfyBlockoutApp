@@ -2409,11 +2409,17 @@
 		padding: 8px 10px; border-radius: 5px;
 		background: rgba(255,255,255,0.04);
 		color: rgba(255,255,255,0.75); font-size: 11px; cursor: pointer;
+		/* Kill <button>'s default 2px bevel border + focus outline so a
+		   button-based rp-bg-row (Checker) reads flat like the label-based
+		   Color swatch next to it. font: inherit ensures button text uses the
+		   panel's font stack instead of the browser default. */
+		border: none; outline: none; font: inherit;
 	}
 	/* inline-flex above overrides the HTML `hidden` attribute's default `display:none`,
 	   so obj-texture-btn kept showing on primitives. Restore proper hiding. */
 	.rp-bg-row[hidden] { display: none; }
 	.rp-bg-row:hover { background: rgba(255,255,255,0.07); color: #fff; }
+	.rp-bg-row.active { background: rgba(255,255,255,0.11); color: #fff; }
 	.rp-bg-row input[type="color"] {
 		width: 26px; height: 26px; padding: 0; border: none;
 		background: none; cursor: pointer; outline: none;
@@ -3482,30 +3488,40 @@
 					<div class="section-label">Light</div>
 					<div class="sub-label">Type</div>
 					<div class="pill-toggle" style="margin-top:6px">
-						<button type="button" class="active" data-light-type="directional">Directional</button>
-						<button type="button" data-light-type="point">Point</button>
+						<button type="button" data-light-type="directional">Directional</button>
+						<button type="button" class="active" data-light-type="point">Point</button>
 						<button type="button" data-light-type="spot">Spot</button>
+						<button type="button" data-light-type="softbox">Softbox</button>
 					</div>
 					<div class="sub-label" style="margin-top:10px">Intensity &amp; Color</div>
-					<div class="drag-row" style="margin-top:6px">
-						<div class="drag-num" id="obj-light-intensity" style="flex:1"><span class="drag-label">Bright</span><span class="drag-val">2.00</span></div>
-						<button type="button" id="obj-light-color-btn" title="Light color" style="flex:0 0 auto;width:34px;padding:0;border:1px solid rgba(255,255,255,0.08);border-radius:5px;background:#ffffff;cursor:pointer;align-self:stretch"></button>
-						<input type="color" id="obj-light-color" value="#ffffff" style="position:absolute;left:-9999px;top:-9999px">
+					<div class="drag-row" style="margin-top:6px;position:relative">
+						<label for="obj-light-color" id="obj-light-color-btn" title="Light color" style="flex:0 0 auto;width:34px;padding:0;border:1px solid rgba(255,255,255,0.08);border-radius:5px;background:#ffffff;cursor:pointer;align-self:stretch;display:block"></label>
+						<input type="color" id="obj-light-color" value="#ffffff" style="position:absolute;left:0;top:0;width:34px;height:100%;opacity:0;pointer-events:none">
+						<div class="drag-num" id="obj-light-intensity" style="flex:1"><span class="drag-label">Bright</span><span class="drag-val">50.00</span></div>
 					</div>
 					<!-- Point + Spot lights get a distance falloff drag. Set to 0
 					     for infinite range (no attenuation clamp). -->
 					<div class="drag-row" id="obj-light-distance-row" style="margin-top:6px;display:none">
-						<div class="drag-num" id="obj-light-distance" style="flex:1"><span class="drag-label">Dist</span><span class="drag-val">0</span></div>
+						<div class="drag-num" id="obj-light-distance" style="flex:1"><span class="drag-label">Distance</span><span class="drag-val">6</span></div>
 					</div>
 					<!-- Spot-only: cone angle + soft edge (penumbra). -->
 					<div class="drag-row" id="obj-light-spot-row" style="margin-top:6px;display:none">
 						<div class="drag-num" id="obj-light-spot-angle"><span class="drag-label">Angle</span><span class="drag-val">30°</span></div>
 						<div class="drag-num" id="obj-light-spot-penumbra"><span class="drag-label">Soft</span><span class="drag-val">0.20</span></div>
 					</div>
-					<label class="checkbox-row" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:10px;font-size:11px;color:rgba(255,255,255,0.85)">
-						<input type="checkbox" id="obj-light-shadow">
-						Cast shadows
-					</label>
+					<!-- Softbox-only: rectangle dimensions in meters. -->
+					<div class="drag-row" id="obj-light-softbox-row" style="margin-top:6px;display:none">
+						<div class="drag-num" id="obj-light-softbox-width"><span class="drag-label">Width</span><span class="drag-val">2.0</span></div>
+						<div class="drag-num" id="obj-light-softbox-height"><span class="drag-label">Height</span><span class="drag-val">2.0</span></div>
+					</div>
+					<div class="sub-label" id="obj-light-shadows-label" style="margin-top:10px">Shadows</div>
+					<div class="pill-toggle" id="obj-light-shadow-toggle" style="margin-top:6px">
+						<button type="button" class="active" data-shadow="off">Off</button>
+						<button type="button" data-shadow="on">On</button>
+					</div>
+					<div class="drag-row" id="obj-light-shadow-soft-row" style="margin-top:6px;display:none">
+						<div class="drag-num" id="obj-light-shadow-soft" style="flex:1"><span class="drag-label">Softness</span><span class="drag-val">8.0</span></div>
+					</div>
 				</div>
 				<!-- TripoSplat representation toggle — appears on TripoSplat
 				     results (splat OR resampled points with the pcResult flag
@@ -3612,6 +3628,10 @@
 							<input type="color" id="obj-color" value="#ffffff">
 							<span class="rp-bg-label">Color</span>
 						</label>
+						<button type="button" class="rp-bg-row" id="obj-checker-btn" title="Toggle checkerboard reference pattern — classic blockout floor" hidden>
+							<span class="rp-bg-icon" style="width:26px;height:26px;border-radius:4px;background-image:linear-gradient(45deg,#8a8a92 25%,transparent 25%),linear-gradient(-45deg,#8a8a92 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#8a8a92 75%),linear-gradient(-45deg,transparent 75%,#8a8a92 75%);background-color:#e8e8ec;background-size:10px 10px;background-position:0 0,0 5px,5px -5px,-5px 0;flex:0 0 auto"></span>
+							<span class="rp-bg-label">Checker</span>
+						</button>
 						<button type="button" class="rp-bg-row rp-bg-img-btn" id="obj-texture-btn" title="Show / hide texture (color underneath still applies)" hidden>
 							<span class="rp-bg-icon" id="obj-texture-icon"></span>
 							<span class="rp-bg-label" id="obj-texture-label">Texture</span>
@@ -4137,6 +4157,24 @@
 						</div>
 					</div>
 					<div class="hint">Linear fog fades everything past Near toward the color at Far.</div>
+				</div>
+
+				<div class="section" id="contact-shadow-section">
+					<div class="section-label">Contact Shadow</div>
+					<div class="pill-toggle" id="cs-toggle" style="margin-top:6px">
+						<button type="button" class="active" data-cs="off">Off</button>
+						<button type="button" data-cs="on">On</button>
+					</div>
+					<div id="cs-controls" style="margin-top:8px;display:none">
+						<div class="drag-row">
+							<div class="drag-num" id="cs-blur" style="flex:1"><span class="drag-label">Blur</span><span class="drag-val">3.5</span></div>
+							<div class="drag-num" id="cs-dark" style="flex:1"><span class="drag-label">Dark</span><span class="drag-val">1.0</span></div>
+						</div>
+						<div class="drag-row" style="margin-top:6px">
+							<div class="drag-num" id="cs-op" style="flex:1"><span class="drag-label">Opacity</span><span class="drag-val">1.0</span></div>
+						</div>
+					</div>
+					<div class="hint">Fake soft ground shadow beneath objects — independent of any Light. Works when other shadow techniques fail.</div>
 				</div>
 
 				<div class="section" id="postfx-section">
@@ -5121,6 +5159,14 @@ import { PLYLoader } from "three/addons/loaders/PLYLoader.js";
 import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
+import { HorizontalBlurShader } from "three/addons/shaders/HorizontalBlurShader.js";
+import { VerticalBlurShader } from "three/addons/shaders/VerticalBlurShader.js";
+import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
+import { RectAreaLightHelper } from "three/addons/helpers/RectAreaLightHelper.js";
+// RectAreaLight needs its LTC (linearly transformed cosines) lookup textures
+// initialized once before any RectAreaLight participates in the scene. Cheap
+// one-shot — no reason to defer.
+RectAreaLightUniformsLib.init();
 import { marked } from "https://esm.sh/marked@12";
 import DOMPurify from "https://esm.sh/dompurify@3";
 
@@ -5145,6 +5191,16 @@ function viewportSize() {
 // selects the splat, since splats have no triangle geometry to raycast against.
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(window.devicePixelRatio);
+// Shadow maps — off by default on WebGLRenderer, so the per-light Cast shadows
+// toggle would be a no-op without this. VSMShadowMap does a gaussian blur on
+// the shadow depth map itself (essentially "post blur on the shadow projection")
+// — the projection stays correctly positioned per the light direction while
+// getting the soft-edge look. Works cleanly for Directional + Spot lights.
+// Trade-off: point lights use cube shadow maps that VSM blurs per-face and
+// can bleed across face boundaries — recommend directional/spot as the primary
+// shadow-caster when you want the soft look. Point stays sharp regardless.
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.VSMShadowMap;
 
 // Post-processing pipeline — three's EffectComposer + n8ao's N8AOPass. Built
 // lazily on first toggle so cold boot pays nothing. N8AOPass reads depth from
@@ -5274,6 +5330,15 @@ let gizmoSpace = (() => {
 	catch { return "local"; }
 })();
 transform.setSpace(gizmoSpace);
+// Point lights emit omnidirectionally, so a local-frame gizmo (aligned to
+// whatever residual rotation the wrapper happens to hold) reads as arbitrary.
+// Force world space when the selection is a point light so the gizmo handles
+// always show as straight-up-and-down world axes; directional/spot lights and
+// meshes fall through to the user's persisted gizmoSpace preference.
+function _applyGizmoSpaceForSelection() {
+	const isPointLight = selected?.userData?.primKind === "light" && selected.userData.lightConfig?.type === "point";
+	transform.setSpace(isPointLight ? "world" : gizmoSpace);
+}
 transform.addEventListener("dragging-changed", (e) => {
 	// Re-enable orbit after a gizmo drag ENDS — but only when renderCam isn't the
 	// selection, since selecting renderCam pins the viewport for shot-adjustment.
@@ -5474,6 +5539,152 @@ scene.add(hemi);
 const dir = new THREE.DirectionalLight(0xffffff, 0.45);
 dir.position.set(5, 10, 4);
 scene.add(dir);
+
+// ── Contact shadow (direct port of three.js webgl_shadow_contact) ─────
+// Renders every mesh through an "override" depth material into a small
+// off-screen RT from an ortho camera looking straight up. The captured depth
+// (nearer = darker, blackens the top-down silhouette of anything above the
+// ground). Two blur passes soften it into a gaussian. Result is textured onto
+// a plane parked just above the grid so it grounds objects visually — no
+// Light, no shadow-map machinery needed. Independent of any renderer.shadowMap
+// setup; can coexist with normal shadows or run alone.
+const CS_PLANE_SIZE = 40;    // covers typical blockout scenes (grid is 20×20)
+const CS_CAM_HEIGHT = 5;     // objects within 5m of Y=0 contribute
+const contactShadow = {
+	enabled: false,
+	blur: 3.5,
+	darkness: 1.0,
+	opacity: 1.0,
+	group: null,
+	plane: null,
+	blurPlane: null,
+	rt: null,
+	rtBlur: null,
+	cam: null,
+	depthMat: null,
+	hBlurMat: null,
+	vBlurMat: null,
+};
+(function setupContactShadow() {
+	const g = new THREE.Group();
+	g.position.y = 0.001; // sit just above the grid so no z-fight
+	g.visible = false;
+	scene.add(g);
+	contactShadow.group = g;
+
+	contactShadow.rt = new THREE.WebGLRenderTarget(1024, 1024);
+	contactShadow.rt.texture.generateMipmaps = false;
+	contactShadow.rtBlur = new THREE.WebGLRenderTarget(1024, 1024);
+	contactShadow.rtBlur.texture.generateMipmaps = false;
+
+	const planeGeom = new THREE.PlaneGeometry(CS_PLANE_SIZE, CS_PLANE_SIZE).rotateX(Math.PI / 2);
+	const planeMat = new THREE.MeshBasicMaterial({
+		map: contactShadow.rt.texture,
+		opacity: 1, transparent: true, depthWrite: false,
+	});
+	contactShadow.plane = new THREE.Mesh(planeGeom, planeMat);
+	contactShadow.plane.renderOrder = 1;
+	contactShadow.plane.scale.y = -1; // depth-render is Y-flipped
+	g.add(contactShadow.plane);
+
+	contactShadow.blurPlane = new THREE.Mesh(planeGeom);
+	contactShadow.blurPlane.visible = false;
+	g.add(contactShadow.blurPlane);
+
+	// Ortho camera at group origin, looking straight up. FAR = CS_CAM_HEIGHT
+	// caps how tall an object can be before it stops contributing.
+	contactShadow.cam = new THREE.OrthographicCamera(
+		-CS_PLANE_SIZE / 2, CS_PLANE_SIZE / 2,
+		CS_PLANE_SIZE / 2, -CS_PLANE_SIZE / 2,
+		0, CS_CAM_HEIGHT
+	);
+	contactShadow.cam.rotation.x = Math.PI / 2;
+	g.add(contactShadow.cam);
+
+	// MeshDepthMaterial patched to write (0, 0, 0, (1-Z) * darkness) so nearer =
+	// more opaque black. Original writes greyscale RGB which we don't want.
+	contactShadow.depthMat = new THREE.MeshDepthMaterial();
+	contactShadow.depthMat.userData.darkness = { value: contactShadow.darkness };
+	contactShadow.depthMat.onBeforeCompile = (shader) => {
+		shader.uniforms.darkness = contactShadow.depthMat.userData.darkness;
+		shader.fragmentShader = `
+			uniform float darkness;
+			${shader.fragmentShader.replace(
+				"gl_FragColor = vec4( vec3( 1.0 - fragCoordZ ), opacity );",
+				"gl_FragColor = vec4( vec3( 0.0 ), ( 1.0 - fragCoordZ ) * darkness );"
+			)}
+		`;
+	};
+	contactShadow.depthMat.depthTest = false;
+	contactShadow.depthMat.depthWrite = false;
+
+	contactShadow.hBlurMat = new THREE.ShaderMaterial(HorizontalBlurShader);
+	contactShadow.hBlurMat.depthTest = false;
+	contactShadow.vBlurMat = new THREE.ShaderMaterial(VerticalBlurShader);
+	contactShadow.vBlurMat.depthTest = false;
+})();
+
+function _csBlurPass(amount) {
+	contactShadow.blurPlane.visible = true;
+	// Horizontal pass → rtBlur
+	contactShadow.blurPlane.material = contactShadow.hBlurMat;
+	contactShadow.hBlurMat.uniforms.tDiffuse.value = contactShadow.rt.texture;
+	contactShadow.hBlurMat.uniforms.h.value = amount * 1 / 256;
+	renderer.setRenderTarget(contactShadow.rtBlur);
+	renderer.render(contactShadow.blurPlane, contactShadow.cam);
+	// Vertical pass → rt
+	contactShadow.blurPlane.material = contactShadow.vBlurMat;
+	contactShadow.vBlurMat.uniforms.tDiffuse.value = contactShadow.rtBlur.texture;
+	contactShadow.vBlurMat.uniforms.v.value = amount * 1 / 256;
+	renderer.setRenderTarget(contactShadow.rt);
+	renderer.render(contactShadow.blurPlane, contactShadow.cam);
+	contactShadow.blurPlane.visible = false;
+}
+
+// Called every frame just before the main render when contact shadow is on.
+// Hides the grid + own plane (so they don't self-shadow), overrides all
+// materials to the depth-black material, renders scene into contactShadow.rt,
+// then blurs twice (main + softer cleanup). Restores state on the way out via
+// try/finally so a mid-render throw can't strand the scene mid-swap.
+function renderContactShadow() {
+	if (!contactShadow.enabled) return;
+	const prevBg = scene.background;
+	const prevAlpha = renderer.getClearAlpha();
+	const prevOverride = scene.overrideMaterial;
+	const gridWasVisible = grid.visible;
+	const planeWasVisible = contactShadow.plane.visible;
+	// Wireframes/helpers/selection cages shouldn't cast contact shadow — they're
+	// 1-pixel-wide lines that, once blurred, become halos and streaks around
+	// their host objects. Simpler than maintaining a hand-list: walk the whole
+	// scene tree and hide anything that's Line-based OR marked as a helper.
+	// Restored in the finally so a mid-render throw can't leave them invisible.
+	const hideDuringPass = [];
+	scene.traverse(o => {
+		if (o === contactShadow.plane || o === contactShadow.blurPlane) return;
+		if (o.isLine || o.isLineSegments || o.isLineLoop) hideDuringPass.push(o);
+	});
+	const prevVis = hideDuringPass.map(h => h.visible);
+	try {
+		scene.background = null;
+		renderer.setClearAlpha(0);
+		grid.visible = false;
+		contactShadow.plane.visible = false;
+		hideDuringPass.forEach(h => (h.visible = false));
+		scene.overrideMaterial = contactShadow.depthMat;
+		renderer.setRenderTarget(contactShadow.rt);
+		renderer.render(scene, contactShadow.cam);
+		_csBlurPass(contactShadow.blur);
+		_csBlurPass(contactShadow.blur * 0.4);
+	} finally {
+		scene.overrideMaterial = prevOverride;
+		scene.background = prevBg;
+		renderer.setClearAlpha(prevAlpha);
+		renderer.setRenderTarget(null);
+		grid.visible = gridWasVisible;
+		contactShadow.plane.visible = planeWasVisible;
+		hideDuringPass.forEach((h, i) => (h.visible = prevVis[i]));
+	}
+}
 
 const pmrem = new THREE.PMREMGenerator(renderer);
 pmrem.compileEquirectangularShader();
@@ -6091,6 +6302,18 @@ function registerImported(obj, kind, filename) {
 	// Cache the load-time transform so Reset can restore the auto-fit scale
 	// (e.g., 0.01 for a large FBX rig) rather than snapping to identity scale.
 	stashInitialTransform(obj);
+	// Enable shadow participation on every mesh in the imported tree so user
+	// lights cast onto imports and imports occlude each other. Splats don't
+	// participate in three's shadow system (spark handles them separately) so
+	// the flag flip is a no-op for that kind.
+	if (kind !== "splat") {
+		obj.traverse?.(c => {
+			if (c.isMesh) {
+				c.castShadow = true;
+				c.receiveShadow = true;
+			}
+		});
+	}
 	objects.push(obj);
 	if (kind !== "splat") select(obj);
 	refreshOutliner();
@@ -6724,6 +6947,14 @@ function deleteObject(obj) {
 		// LineSegments ghost.
 		if (typeof _mannequinDetachMotionPreview === "function") _mannequinDetachMotionPreview(obj);
 	}
+	if (obj.userData.primKind === "light" && obj.userData._helper) {
+		// Helper lives at scene root for point/spot/directional or under the
+		// light for softbox — remove from whichever parent currently holds it.
+		const h = obj.userData._helper;
+		if (h.parent) h.parent.remove(h);
+		h.dispose?.();
+		obj.userData._helper = null;
+	}
 	if (obj.userData.primKind === "splat") {
 		scene.remove(obj);
 		obj.userData.splatMesh?.dispose?.();
@@ -6739,6 +6970,7 @@ function deleteObject(obj) {
 	}
 	const idx = objects.indexOf(obj);
 	if (idx >= 0) objects.splice(idx, 1);
+	if (obj.userData?.primKind === "light") _syncBuiltinLightsForUserLights();
 	// Drop the deleted object from the multi-selection set — otherwise the
 	// context chip's "+N more" count and refreshOutliner's amber highlights
 	// keep pointing at a phantom.
@@ -7281,29 +7513,163 @@ function addTerrainFx(initialConfig) {
 
 const LIGHT_TYPES = ["directional", "point", "spot"];
 const LIGHT_DEFAULTS = {
-	type: "directional",
-	intensity: 2.0,
+	type: "point",
+	intensity: 50,
 	color: 0xffffff,
 	castShadow: false,
+	// VSM blur radius (light.shadow.radius in pixels). 0 = sharp, higher = more
+	// soft-projected. Paired with a fixed light.shadow.blurSamples = 25 in
+	// _lightApply — samples above ~15 look identical at 1024² map size, so no
+	// need to expose it as a knob.
+	shadowSoftness: 8,
 	// Spot-specific — angle in degrees for UI ergonomics, converted to
 	// radians only when writing to three's spot light.
 	spotAngle: 30,
 	spotPenumbra: 0.2,
 	// Point + spot distance (0 = unlimited range with no falloff clamp).
-	distance: 0,
+	distance: 6,
+	// Softbox (RectAreaLight) dimensions — width × height of the emitter
+	// rectangle in world meters. Only read when type === "softbox".
+	softboxWidth: 2,
+	softboxHeight: 2,
 };
+
+// Custom point-light glyph — small billboard sunburst (ring + 8 radial rays
+// that always face the camera) PLUS an optional low-opacity horizontal ring in
+// the world XZ plane at radius = light.distance to show the falloff boundary
+// when distance > 0. Distance = 0 (unlimited) skips the boundary ring since
+// there's no meaningful edge to draw.
+class _PointLightGlyph extends THREE.Group {
+	constructor(light, color) {
+		super();
+		this.light = light;
+		this._mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9, depthTest: false });
+		this._ringMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.22, depthTest: false });
+		// Sunburst sub-group — billboarded to camera. Kept as a child so we can
+		// rotate it independently of the radius ring (which stays world-aligned
+		// horizontal).
+		this.sunburst = new THREE.Group();
+		this.sunburst.renderOrder = 999;
+		const R = 0.1;
+		const segs = 32;
+		const ringPts = [];
+		for (let i = 0; i <= segs; i++) {
+			const a = (i / segs) * Math.PI * 2;
+			ringPts.push(new THREE.Vector3(Math.cos(a) * R, Math.sin(a) * R, 0));
+		}
+		this.sunburst.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(ringPts), this._mat));
+		const RAY_INNER = R * 1.5;
+		const RAY_OUTER = R * 2.5;
+		const rays = [];
+		for (let i = 0; i < 8; i++) {
+			const a = (i / 8) * Math.PI * 2;
+			const c = Math.cos(a), s = Math.sin(a);
+			rays.push(new THREE.Vector3(c * RAY_INNER, s * RAY_INNER, 0));
+			rays.push(new THREE.Vector3(c * RAY_OUTER, s * RAY_OUTER, 0));
+		}
+		this.sunburst.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(rays), this._mat));
+		this.add(this.sunburst);
+		// Camera-facing falloff-radius ring — geometry lives in local XY plane
+		// and rides the sunburst sub-group (which billboards to camera each
+		// frame), so the ring reads as a flat circle from any viewing angle.
+		if (light.distance > 0) {
+			const rr = light.distance;
+			const ringPts2 = [];
+			const rs = 64;
+			for (let i = 0; i <= rs; i++) {
+				const a = (i / rs) * Math.PI * 2;
+				ringPts2.push(new THREE.Vector3(Math.cos(a) * rr, Math.sin(a) * rr, 0));
+			}
+			this.radiusRing = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(ringPts2), this._ringMat);
+			this.radiusRing.renderOrder = 998;
+			this.sunburst.add(this.radiusRing);
+		}
+		// Prevent frustum culling so the glyph stays visible regardless of the
+		// billboard rotation set per-frame (bounding sphere would go stale).
+		this.frustumCulled = false;
+		this.traverse(c => { c.frustumCulled = false; });
+	}
+	// Called from the main render loop each frame — snap position to the light's
+	// world pos, rotate ONLY the sunburst sub-group to face the camera so the
+	// ring + rays read flat. Radius ring stays world-horizontal.
+	updateBillboard(camera) {
+		if (!this.light) return;
+		this.light.getWorldPosition(this.position);
+		this.sunburst.quaternion.copy(camera.quaternion);
+	}
+	dispose() {
+		this.traverse(c => { c.geometry?.dispose?.(); });
+		this._mat?.dispose?.();
+		this._ringMat?.dispose?.();
+	}
+}
+
+// Custom spot-light glyph — draws a wireframe cone where LENGTH tracks the
+// light's distance and the tip-opening radius tracks ONLY the angle (via
+// tan(angle)), so dragging Distance stretches the cone lengthwise without
+// widening it. Three's stock SpotLightHelper uses radius = distance*tan(angle)
+// which conflates the two knobs visually — the user reads a "wider light" when
+// they only meant "reaches farther". Matches the LightHelper contract: binds
+// matrix to light.matrixWorld and disables autoUpdate so the cone rides the
+// light's world pose through the scene-root parent chain.
+class _SpotLightGlyph extends THREE.Group {
+	constructor(light, color) {
+		super();
+		this.light = light;
+		this._mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9, depthTest: false });
+		const d = light.distance > 0 ? light.distance : 5;
+		const rBase = Math.tan(light.angle);
+		const segs = 32;
+		const basePts = [];
+		for (let i = 0; i <= segs; i++) {
+			const t = (i / segs) * Math.PI * 2;
+			basePts.push(new THREE.Vector3(Math.cos(t) * rBase, Math.sin(t) * rBase, -d));
+		}
+		this.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(basePts), this._mat));
+		const axial = [];
+		for (let i = 0; i < 4; i++) {
+			const t = (i / 4) * Math.PI * 2;
+			axial.push(new THREE.Vector3(0, 0, 0));
+			axial.push(new THREE.Vector3(Math.cos(t) * rBase, Math.sin(t) * rBase, -d));
+		}
+		this.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(axial), this._mat));
+		this.renderOrder = 999;
+		this.frustumCulled = false;
+		this.traverse(c => { c.frustumCulled = false; });
+		// Bind to light world matrix so wrapper transforms propagate through
+		// light.matrixWorld → this.matrix (reference) → helper.matrixWorld via
+		// the scene-root parent (identity), matching three's PointLightHelper /
+		// DirectionalLightHelper convention.
+		this.matrix = light.matrixWorld;
+		this.matrixAutoUpdate = false;
+	}
+	dispose() {
+		this.traverse(c => { c.geometry?.dispose?.(); });
+		this._mat?.dispose?.();
+	}
+}
 
 function _lightApply(wrapper) {
 	const cfg = wrapper.userData.lightConfig;
 	if (!cfg) return;
-	// Tear down existing children (light + target + helper) so a type swap
-	// starts from a clean slate. Preserves the wrapper transform (position +
-	// rotation the user has set via gizmo) — only the internal light rebuilds.
+	// Tear down existing children (light + target) so a type swap starts from
+	// a clean slate. Preserves the wrapper transform (position + rotation the
+	// user has set via gizmo) — only the internal light rebuilds. The helper
+	// lives at the SCENE ROOT (not as a wrapper child) because three's built-in
+	// LightHelpers bind their matrix to light.matrixWorld — nesting them under
+	// the wrapper double-transforms them, so the helper drifts away from the
+	// gizmo. We remove/dispose the old helper here via the stored wrapper ref.
+	if (wrapper.userData._helper) {
+		// Helper lives at scene root for point/spot/directional (matrix bound
+		// to light.matrixWorld) but under the light for softbox (uses standard
+		// child transform). Remove from whatever parent currently holds it.
+		const h = wrapper.userData._helper;
+		if (h.parent) h.parent.remove(h);
+		h.dispose?.();
+		wrapper.userData._helper = null;
+	}
 	for (const child of [...wrapper.children]) {
 		if (child.isLight) {
-			child.dispose?.();
-			wrapper.remove(child);
-		} else if (child.userData?._lightHelper) {
 			child.dispose?.();
 			wrapper.remove(child);
 		} else if (child.userData?._lightAimTarget) {
@@ -7319,14 +7685,27 @@ function _lightApply(wrapper) {
 			(cfg.spotAngle || 30) * Math.PI / 180,
 			cfg.spotPenumbra ?? 0.2,
 		);
+	} else if (cfg.type === "softbox") {
+		// RectAreaLight — physically-motivated rectangle emitter. Uses LTC
+		// (initialized at boot via RectAreaLightUniformsLib.init) for accurate
+		// diffuse + specular response. Can't cast shadows (three limitation),
+		// which fits the "softbox = fill light" mental model.
+		light = new THREE.RectAreaLight(cfg.color, cfg.intensity, cfg.softboxWidth ?? 2, cfg.softboxHeight ?? 2);
 	} else {
 		light = new THREE.DirectionalLight(cfg.color, cfg.intensity);
 	}
 	light.name = `${wrapper.name}_light`;
 	light.position.set(0, 0, 0);
-	light.castShadow = !!cfg.castShadow;
-	if (cfg.castShadow) {
-		light.shadow.mapSize.set(1024, 1024);
+	// Softbox (RectAreaLight) has no .shadow — skip the whole shadow branch.
+	// three throws if you set .castShadow on a light that doesn't support it.
+	if (cfg.type !== "softbox") light.castShadow = !!cfg.castShadow;
+	if (cfg.type !== "softbox" && cfg.castShadow) {
+		// 2048² map (up from 1024²) — the PCF filter takes each sample from the
+		// shadow map, so more pixels feeding the softness kernel = finer noise
+		// pattern. At radius > 3 with a 1024 map you can clearly see individual
+		// tap positions as dithered banding; 2048 pushes that below the visible
+		// threshold at typical viewing distances.
+		light.shadow.mapSize.set(2048, 2048);
 		light.shadow.camera.near = 0.1;
 		if (light.shadow.camera.isOrthographicCamera) {
 			light.shadow.camera.far = 40;
@@ -7338,6 +7717,12 @@ function _lightApply(wrapper) {
 			light.shadow.camera.far = cfg.distance > 0 ? cfg.distance : 40;
 		}
 		light.shadow.bias = -0.0005;
+		// VSM gaussian-blur radius in shadow-map pixels — projection stays
+		// correctly aimed by the light; softening happens via the blur pass
+		// on the depth map. blurSamples fixed at 25 (max quality plateau —
+		// higher values look identical at 1024² map size).
+		light.shadow.radius = cfg.shadowSoftness ?? 8;
+		light.shadow.blurSamples = 25;
 	}
 	wrapper.add(light);
 	// Directional + Spot have an aim target. Point has no direction so no
@@ -7351,15 +7736,52 @@ function _lightApply(wrapper) {
 		wrapper.add(target);
 		light.target = target;
 	}
-	// Wireframe helper — appears as a small pyramid (directional), sphere
-	// (point), or cone (spot). Small enough to feel like an icon, not scene
-	// clutter. Added AFTER target so DirectionalLightHelper can find it.
+	// Wireframe helper — appears as a small pyramid (directional), circle
+	// with rays (point), or cone (spot). Added to the SCENE ROOT — three's
+	// built-in helpers bind their internal matrix to light.matrixWorld, so
+	// nesting them under the wrapper double-transforms them and drifts the
+	// helper away from the gizmo. Store on wrapper.userData._helper for
+	// teardown and per-frame update passes.
 	let helper;
-	if (cfg.type === "point") helper = new THREE.PointLightHelper(light, 0.35, cfg.color);
-	else if (cfg.type === "spot") helper = new THREE.SpotLightHelper(light, cfg.color);
+	let helperAtSceneRoot = true;
+	if (cfg.type === "point") helper = new _PointLightGlyph(light, cfg.color);
+	else if (cfg.type === "spot") helper = new _SpotLightGlyph(light, cfg.color);
+	else if (cfg.type === "softbox") {
+		// RectAreaLightHelper uses standard child transform (its updateMatrixWorld
+		// just resizes based on light.width/height and defers to parent). So it
+		// needs to live UNDER the light, not at scene root where the others sit.
+		helper = new RectAreaLightHelper(light);
+		helperAtSceneRoot = false;
+	}
 	else helper = new THREE.DirectionalLightHelper(light, 0.5, cfg.color);
 	helper.userData._lightHelper = true;
-	wrapper.add(helper);
+	helper.userData._ownerWrapper = wrapper;
+	if (helperAtSceneRoot) scene.add(helper);
+	else light.add(helper);
+	wrapper.userData._helper = helper;
+}
+
+// Kill the built-in scene fill (hemi + default directional) AND the PMREM env
+// IBL contribution whenever the user has any Light object in the scene — their
+// key light should own illumination on a black slate. MeshStandardMaterial
+// samples scene.environment for indirect lighting even when direct lights are
+// off, so without stomping environmentIntensity the rest of the scene reads as
+// mid-grey from the RoomEnvironment PMREM fill. Stash the prior intensity so
+// deleting the last user light restores whatever the user had set (default
+// 0.2, or their env slider position). Called from addLightFx after push + from
+// deleteObject after a light is spliced out.
+let _stashedEnvIntensity = null;
+function _syncBuiltinLightsForUserLights() {
+	const hasUserLight = objects.some(o => o.userData?.primKind === "light");
+	if (typeof hemi !== "undefined") hemi.visible = !hasUserLight;
+	if (typeof dir !== "undefined") dir.visible = !hasUserLight;
+	if (hasUserLight) {
+		if (_stashedEnvIntensity == null) _stashedEnvIntensity = scene.environmentIntensity ?? 1.0;
+		scene.environmentIntensity = 0;
+	} else if (_stashedEnvIntensity != null) {
+		scene.environmentIntensity = _stashedEnvIntensity;
+		_stashedEnvIntensity = null;
+	}
 }
 
 function addLightFx(initialConfig) {
@@ -7376,13 +7798,23 @@ function addLightFx(initialConfig) {
 	// via the gizmo which appears exactly at the wrapper position = the
 	// light position.
 	wrapper.position.set(2, 4, 2);
-	// Aim the default directional light down + toward origin — rotate the
-	// wrapper so its local -Z (where the target sits) points at (0,0,0).
-	wrapper.lookAt(0, 0, 0);
+	// Directional + Spot get an aim: rotate the wrapper so its local -Z
+	// (where the target sits) points at world origin. Point lights emit
+	// omnidirectionally so rotation is meaningless — leave identity so the
+	// gizmo comes up axis-aligned rather than tilted from an aim vector.
+	if (cfg.type !== "point") wrapper.lookAt(0, 0, 0);
+	// Click-pick target — the wrapper Group has no mesh geometry, so the
+	// standard mesh raycast misses it entirely. Add a bounding sphere at
+	// local origin (= light position) that the existing pickSphere loop in
+	// the pointerup handler will test against. Radius slightly larger than
+	// the sunburst outer edge (RAY_OUTER = 0.25 at R=0.1) so users get a
+	// forgiving hit target without picking obvious empty space around it.
+	wrapper.userData.pickSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 0.35);
 	scene.add(wrapper);
 	objects.push(wrapper);
 	stashInitialTransform(wrapper);
 	_lightApply(wrapper);
+	_syncBuiltinLightsForUserLights();
 	select(wrapper);
 	refreshOutliner();
 	updateStatus();
@@ -7636,14 +8068,22 @@ function addPrimitive(kind) {
 	const mat = new THREE.MeshStandardMaterial({
 		color: new THREE.Color(pickNamedBlockColor()),
 		roughness: 0.7, metalness: 0.0,
-		// Planes are almost always meant to be visible from both sides — the
-		// checkbox in Appearance lets any other primitive opt in later.
-		side: kind === "plane" ? THREE.DoubleSide : THREE.FrontSide,
+		// All primitives default to FrontSide. PlaneGeometry.rotateX(-π/2) in
+		// PRIM_DEFS puts the front-face normal at +Y so the plane reads visible
+		// from above (its natural "top" as a floor/table surface); looking up
+		// from below shows nothing, matching how a real single-sided card would
+		// behave. Users can still flip to DoubleSide via the Appearance toggle.
+		side: THREE.FrontSide,
 	});
 	const mesh = new THREE.Mesh(geom, mat);
 	mesh.name = `${kind[0].toUpperCase()}${kind.slice(1)}.${String(primCounters[kind]).padStart(3,"0")}`;
 	mesh.position.set(0, 0, 0);
 	mesh.userData.primKind = kind;
+	// Both cast + receive so user lights with Cast shadows on land on every
+	// primitive in the scene, and primitives block each other. Cheap flag flip
+	// — the shadow map cost only kicks in for lights with castShadow enabled.
+	mesh.castShadow = true;
+	mesh.receiveShadow = true;
 	// Text primitives seed a config and swap in real TextGeometry once the
 	// font resolves. The initial placeholder BoxGeometry is disposed inside
 	// rebuildTextGeometry.
@@ -7749,6 +8189,16 @@ function duplicateObject(obj) {
 	if (!obj) return;
 	snapshotForUndo();
 	const kind = obj.userData.primKind || "cube";
+	// Lights route through addLightFx (a wrapper Group with lightConfig, no
+	// mesh material). Offset the dup so it doesn't sit inside the source.
+	if (kind === "light" && obj.userData.lightConfig) {
+		const dup = addLightFx({ ...obj.userData.lightConfig });
+		dup.position.copy(obj.position).add(new THREE.Vector3(0.5, 0, 0.5));
+		dup.rotation.copy(obj.rotation);
+		dup.scale.copy(obj.scale);
+		dup.visible = obj.visible !== false;
+		return;
+	}
 	const dup = addPrimitive(kind);
 	dup.position.copy(obj.position).add(new THREE.Vector3(0.5, 0, 0.5));
 	dup.rotation.copy(obj.rotation);
@@ -8289,6 +8739,7 @@ function select(obj, opts = {}) {
 		// outliner-click, but transform edits are gated behind unlocking first.
 		if (selected.userData.locked) transform.detach();
 		else transform.attach(selected);
+		_applyGizmoSpaceForSelection();
 		if (anchorMode) tintGizmo(0xffb454);
 		orbit.enabled = true;
 		// AnimoFlow-managed mannequins have no user-editable properties (pose is
@@ -13288,6 +13739,7 @@ function _mannequinReplaceMaterials(root, wrapper) {
 				color: MANNEQUIN_BODY_COLOR, roughness: 0.85, metalness: 0.0,
 			});
 			o.castShadow = true;
+			o.receiveShadow = true;
 		}
 	});
 }
@@ -14566,22 +15018,38 @@ function _lightSyncPaneFromSelection(wrapper) {
 	// Show/hide type-specific rows
 	const distRow = document.getElementById("obj-light-distance-row");
 	const spotRow = document.getElementById("obj-light-spot-row");
+	const softboxRow = document.getElementById("obj-light-softbox-row");
 	if (distRow) distRow.style.display = (cfg.type === "point" || cfg.type === "spot") ? "" : "none";
 	if (spotRow) spotRow.style.display = cfg.type === "spot" ? "" : "none";
+	if (softboxRow) softboxRow.style.display = cfg.type === "softbox" ? "" : "none";
+	// Softboxes can't cast shadows in three (RectAreaLight limitation) — that
+	// matches the "fill light, no shadows" mental model, so we hide the whole
+	// Shadows sub-section for this type rather than showing a disabled toggle.
+	const shadowsLabel = document.getElementById("obj-light-shadows-label");
+	const shadowsToggle = document.getElementById("obj-light-shadow-toggle");
+	const hideShadows = cfg.type === "softbox";
+	if (shadowsLabel) shadowsLabel.style.display = hideShadows ? "none" : "";
+	if (shadowsToggle) shadowsToggle.style.display = hideShadows ? "none" : "";
 	// Refresh drag-nums
 	document.getElementById("obj-light-intensity")?._refresh?.();
 	document.getElementById("obj-light-distance")?._refresh?.();
 	document.getElementById("obj-light-spot-angle")?._refresh?.();
 	document.getElementById("obj-light-spot-penumbra")?._refresh?.();
+	document.getElementById("obj-light-softbox-width")?._refresh?.();
+	document.getElementById("obj-light-softbox-height")?._refresh?.();
 	// Color swatch
 	const swatch = document.getElementById("obj-light-color-btn");
 	const colorHex = "#" + (cfg.color || 0xffffff).toString(16).padStart(6, "0");
 	if (swatch) swatch.style.background = colorHex;
 	const colorInput = document.getElementById("obj-light-color");
 	if (colorInput) colorInput.value = colorHex;
-	// Shadow toggle
-	const shadowChk = document.getElementById("obj-light-shadow");
-	if (shadowChk) shadowChk.checked = !!cfg.castShadow;
+	// Shadow pill-toggle + Softness pill
+	document.querySelectorAll('#obj-light-shadow-toggle [data-shadow]').forEach(b => {
+		b.classList.toggle("active", (b.dataset.shadow === "on") === !!cfg.castShadow);
+	});
+	const softRow = document.getElementById("obj-light-shadow-soft-row");
+	if (softRow) softRow.style.display = (cfg.castShadow && !hideShadows) ? "" : "none";
+	document.getElementById("obj-light-shadow-soft")?._refresh?.();
 }
 
 (function wireLightObjectInspectorButtons() {
@@ -14595,6 +15063,7 @@ function _lightSyncPaneFromSelection(wrapper) {
 				r.userData.lightConfig.type = btn.dataset.lightType;
 				_lightApply(r);
 				_lightSyncPaneFromSelection(r);
+				_applyGizmoSpaceForSelection();
 				saveScene?.();
 			});
 		});
@@ -14615,13 +15084,19 @@ function _lightSyncPaneFromSelection(wrapper) {
 				format: opts.format,
 			});
 		};
-		cfgKey("obj-light-intensity",     "intensity",   { min: 0, max: 20, sens: 0.02, default: 2.0, format: v => v.toFixed(2) });
+		cfgKey("obj-light-intensity",     "intensity",   { min: 0, max: 500, sens: 0.3, default: 50, format: v => v.toFixed(2) });
 		cfgKey("obj-light-distance",      "distance",    { min: 0, max: 100, sens: 0.1, default: 0, format: v => v.toFixed(0) });
 		cfgKey("obj-light-spot-angle",    "spotAngle",   { min: 1, max: 89, sens: 0.15, default: 30, format: v => `${v.toFixed(0)}°` });
 		cfgKey("obj-light-spot-penumbra", "spotPenumbra",{ min: 0, max: 1, sens: 0.004, default: 0.2, format: v => v.toFixed(2) });
+		cfgKey("obj-light-shadow-soft",   "shadowSoftness", { min: 0, max: 25, sens: 0.08, default: 8, format: v => v.toFixed(1) });
+		cfgKey("obj-light-softbox-width", "softboxWidth",  { min: 0.1, max: 20, sens: 0.02, default: 2, format: v => v.toFixed(1) });
+		cfgKey("obj-light-softbox-height","softboxHeight", { min: 0.1, max: 20, sens: 0.02, default: 2, format: v => v.toFixed(1) });
 		const swatch = document.getElementById("obj-light-color-btn");
 		const colorInput = document.getElementById("obj-light-color");
-		swatch?.addEventListener("click", (e) => { e.stopPropagation(); colorInput?.click(); });
+		// Swatch is now a <label for="obj-light-color"> — clicking it fires the
+		// native color picker via the label→input association, no JS forwarding
+		// needed. Removed the manual `colorInput.click()` bridge that was firing
+		// twice (label→input + JS→input) and could cause the picker to reopen.
 		colorInput?.addEventListener("input", (e) => {
 			const r = _lightSelected();
 			if (!r) return;
@@ -14632,12 +15107,15 @@ function _lightSyncPaneFromSelection(wrapper) {
 			_lightApply(r);
 			saveScene?.();
 		});
-		document.getElementById("obj-light-shadow")?.addEventListener("change", (e) => {
-			const r = _lightSelected();
-			if (!r) return;
-			r.userData.lightConfig.castShadow = !!e.target.checked;
-			_lightApply(r);
-			saveScene?.();
+		document.querySelectorAll('#obj-light-shadow-toggle [data-shadow]').forEach(btn => {
+			btn.addEventListener("click", () => {
+				const r = _lightSelected();
+				if (!r) return;
+				r.userData.lightConfig.castShadow = btn.dataset.shadow === "on";
+				_lightApply(r);
+				_lightSyncPaneFromSelection(r);
+				saveScene?.();
+			});
 		});
 	};
 	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hook, { once: true });
@@ -17037,7 +17515,11 @@ function setActiveMode(mode) {
 // Local/World toggle — cycles gizmoSpace between "local" and "world",
 // updates the transform, refreshes the button label, and persists.
 function applyGizmoSpace() {
-	transform.setSpace(gizmoSpace);
+	// Route through the selection-aware helper so a point light that's currently
+	// selected keeps its forced world-space gizmo even if the user re-toggles
+	// the persisted preference to "local" via the toolbar button.
+	if (typeof _applyGizmoSpaceForSelection === "function") _applyGizmoSpaceForSelection();
+	else transform.setSpace(gizmoSpace);
 	const btn = document.getElementById("mode-space");
 	if (btn) btn.textContent = gizmoSpace === "world" ? "World" : "Local";
 	try { localStorage.setItem(GIZMO_SPACE_KEY, gizmoSpace); } catch {}
@@ -18055,8 +18537,25 @@ function refreshObjectInspector() {
 	// Input sections — they render their own dedicated sections above and the
 	// generic controls aren't meaningful pre-Generate.
 	const isPlaceholder = isPcPlaceholder;
-	objAppearance.style.display = isPlaceholder ? "none" : "";
-	objColorBtn.style.display = hasColor && !isPlaceholder ? "" : "none";
+	// Lights get their own Intensity & Color section with a dedicated color
+	// swatch that drives the actual light + helper appearance — the generic
+	// Appearance section here would pick up the helper-line material's color
+	// (via collectColorMaterials walking wrapper children) which is misleading,
+	// and Double-sided has no meaning for a Light wrapper. Hide the whole thing.
+	const isLightObj = selected.userData?.primKind === "light";
+	const hideAppearance = isPlaceholder || isLightObj;
+	objAppearance.style.display = hideAppearance ? "none" : "";
+	objColorBtn.style.display = hasColor && !hideAppearance ? "" : "none";
+	// Checkerboard pill — only visible on plane primitives for now (that's the
+	// classic Blender-style blockout use case); syncs its `.active` class from
+	// the mesh's persisted state so re-selecting a checkered plane shows the
+	// button lit instead of default off.
+	const checkerBtn = document.getElementById("obj-checker-btn");
+	if (checkerBtn) {
+		const isPlanePrim = selected.userData?.primKind === "plane";
+		checkerBtn.hidden = !isPlanePrim || hideAppearance;
+		checkerBtn.classList.toggle("active", !!selected.userData?._checkerOn);
+	}
 	const transformSection = document.getElementById("obj-transform-section");
 	if (transformSection) transformSection.style.display = isPlaceholder ? "none" : "";
 	const inputSection = document.getElementById("obj-input-section");
@@ -18066,7 +18565,7 @@ function refreshObjectInspector() {
 	// meshes. Excluded for splats, particles, clouds, and Points (their `side`
 	// property exists but has no visible effect — a Points cloud has no
 	// polygons to flip).
-	const sidedMats = (isSplatObj || isPoints || selected.userData?.primKind === "particles" || selected.userData?.primKind === "clouds")
+	const sidedMats = (isSplatObj || isPoints || isLightObj || selected.userData?.primKind === "particles" || selected.userData?.primKind === "clouds")
 		? []
 		: collectSidedMaterials(selected);
 	if (sidedMats.length) {
@@ -18270,6 +18769,60 @@ objColorInput.addEventListener("input", e => {
 	refreshOutliner();
 });
 objColorInput.addEventListener("change", () => saveScene?.());
+
+// ── Checkerboard reference texture ──────────────────────────────
+// Classic Blender-style blockout floor — grey + white 8×8 checker tiled
+// across the mesh. Generated once, cached on the module so successive
+// toggles reuse the same texture instance (no GPU churn per click).
+let _checkerTex = null;
+function _getCheckerTexture() {
+	if (_checkerTex) return _checkerTex;
+	const c = document.createElement("canvas");
+	c.width = c.height = 512;
+	const ctx = c.getContext("2d");
+	const cells = 8;
+	const size = c.width / cells;
+	for (let i = 0; i < cells; i++) {
+		for (let j = 0; j < cells; j++) {
+			ctx.fillStyle = (i + j) % 2 === 0 ? "#e8e8ec" : "#8a8a92";
+			ctx.fillRect(i * size, j * size, size, size);
+		}
+	}
+	_checkerTex = new THREE.CanvasTexture(c);
+	_checkerTex.wrapS = _checkerTex.wrapT = THREE.RepeatWrapping;
+	// Blender-style floor tiles once per world unit — planes with scale > 1
+	// or larger geometry get more tiles automatically. anisotropy caps at
+	// renderer's supported max so grazing angles stay crisp.
+	_checkerTex.repeat.set(4, 4);
+	_checkerTex.anisotropy = renderer.capabilities.getMaxAnisotropy?.() || 1;
+	_checkerTex.colorSpace = THREE.SRGBColorSpace;
+	return _checkerTex;
+}
+function _applyChecker(obj, on) {
+	if (!obj?.isMesh || !obj.material) return;
+	if (on) {
+		obj.material.map = _getCheckerTexture();
+		// Keep the color swatch usable as a tint over the checker — leaving
+		// color at white passes the texture through unmodified.
+		obj.material.needsUpdate = true;
+		obj.userData._checkerOn = true;
+	} else {
+		obj.material.map = null;
+		obj.material.needsUpdate = true;
+		obj.userData._checkerOn = false;
+	}
+}
+const objCheckerBtn = document.getElementById("obj-checker-btn");
+objCheckerBtn?.addEventListener("click", () => {
+	if (!selected) return;
+	const targets = selectionSet.size > 1 ? Array.from(selectionSet) : [selected];
+	// Toggle based on primary's current state so a mixed selection ends up
+	// consistent (all-on) rather than each mesh flipping independently.
+	const nextOn = !selected.userData?._checkerOn;
+	for (const obj of targets) _applyChecker(obj, nextOn);
+	objCheckerBtn.classList.toggle("active", nextOn);
+	saveScene?.();
+});
 
 objDoubleSided.addEventListener("change", () => {
 	if (!selected) return;
@@ -19797,6 +20350,56 @@ fogFar.addEventListener("input", e => {
 });
 fogFar.addEventListener("change", () => saveSceneDebounced?.());
 
+// ── Contact shadow ──────────────────────────────────────────────────
+// Pill toggle + Blur/Dark/Opacity drag-nums. Flipping On/Off swaps the shadow
+// group's visibility + the render-loop early-out flag. Slider changes live-
+// mutate the material uniforms so drags feel instant without a rebuild.
+function _csRefreshUI() {
+	document.querySelectorAll('#cs-toggle [data-cs]').forEach(b => {
+		b.classList.toggle("active", (b.dataset.cs === "on") === contactShadow.enabled);
+	});
+	const controls = document.getElementById("cs-controls");
+	if (controls) controls.style.display = contactShadow.enabled ? "" : "none";
+	document.getElementById("cs-blur")?._refresh?.();
+	document.getElementById("cs-dark")?._refresh?.();
+	document.getElementById("cs-op")?._refresh?.();
+}
+(function wireContactShadowInspector() {
+	const hook = () => {
+		document.querySelectorAll('#cs-toggle [data-cs]').forEach(btn => {
+			btn.addEventListener("click", () => {
+				contactShadow.enabled = btn.dataset.cs === "on";
+				contactShadow.group.visible = contactShadow.enabled;
+				_csRefreshUI();
+				saveScene?.();
+			});
+		});
+		const csKey = (id, key, opts) => {
+			const el = document.getElementById(id);
+			if (!el) return;
+			setupDragField(el, {
+				get: () => contactShadow[key] ?? opts.default,
+				set: v => {
+					contactShadow[key] = Math.max(opts.min, Math.min(opts.max, v));
+					if (key === "darkness") contactShadow.depthMat.userData.darkness.value = contactShadow.darkness;
+					if (key === "opacity") contactShadow.plane.material.opacity = contactShadow.opacity;
+					// Blur is read fresh from contactShadow.blur every frame in
+					// renderContactShadow, so no material sync needed here.
+				},
+				sens: opts.sens,
+				min: opts.min,
+				max: opts.max,
+				format: opts.format,
+			});
+		};
+		csKey("cs-blur", "blur",     { min: 0, max: 15, sens: 0.05, default: 3.5, format: v => v.toFixed(1) });
+		csKey("cs-dark", "darkness", { min: 1, max: 5,  sens: 0.02, default: 1,   format: v => v.toFixed(1) });
+		csKey("cs-op",   "opacity",  { min: 0, max: 1,  sens: 0.004, default: 1,  format: v => v.toFixed(2) });
+	};
+	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hook, { once: true });
+	else queueMicrotask(hook);
+})();
+
 // SSAO shading section — toggle rebuilds the composer lazily; sliders live-tune
 // n8ao's configuration so the effect updates in real time.
 const aoToggle = document.getElementById("ao-toggle");
@@ -20548,6 +21151,19 @@ window.addEventListener("keydown", (e) => {
 let objectClipboard = null;
 function snapshotPrimitiveFor(obj) {
 	const kind = obj?.userData?.primKind;
+	// Lights are wrapper Groups (not mesh primitives) — snapshot the full
+	// lightConfig so paste can rebuild them via addLightFx with matching type
+	// + intensity + color + distance + spot params.
+	if (kind === "light" && obj.userData?.lightConfig) {
+		return {
+			kind: "light",
+			position: obj.position.toArray(),
+			rotation: [obj.rotation.x, obj.rotation.y, obj.rotation.z],
+			scale: obj.scale.toArray(),
+			lightConfig: { ...obj.userData.lightConfig },
+			visible: obj.visible !== false,
+		};
+	}
 	if (!kind || !(kind in PRIM_DEFS)) return null;
 	return {
 		kind,
@@ -20578,6 +21194,18 @@ function pasteFromClipboard() {
 	// as a group (multi-select drag handling elsewhere moves the set together).
 	const created = [];
 	for (const snap of objectClipboard) {
+		let obj;
+		if (snap.kind === "light" && snap.lightConfig) {
+			// Route lights through addLightFx so the wrapper Group + child light
+			// + helper are all rebuilt with the source's type/intensity/color/etc.
+			obj = addLightFx(snap.lightConfig);
+			obj.position.fromArray(snap.position);
+			obj.rotation.set(snap.rotation[0], snap.rotation[1], snap.rotation[2]);
+			obj.scale.fromArray(snap.scale);
+			obj.visible = snap.visible;
+			created.push(obj);
+			continue;
+		}
 		const mesh = addPrimitive(snap.kind);
 		if (!mesh) continue;
 		mesh.position.fromArray(snap.position);
@@ -20867,6 +21495,19 @@ function loop() {
 		// the exported video (same pattern as the scatter helper boxes).
 		if (frameCounter > 0 && typeof _tickCamOrbitRing === "function") _tickCamOrbitRing();
 		if (_camOrbitRing) _camOrbitRing.visible = !recording;
+		// Light helper per-frame sync — SpotLightHelper + DirectionalLightHelper
+		// need .update() so the cone / pyramid follows the wrapper's aim after
+		// a gizmo drag; _PointLightGlyph needs the camera to billboard the ring
+		// + rays flat toward the viewer. Helpers live at scene root (see the
+		// _lightApply comment), so their pose tracks light.matrixWorld via the
+		// helper's own matrix binding — we only nudge internal state here.
+		for (const o of objects) {
+			if (o.userData?.primKind !== "light") continue;
+			const h = o.userData._helper;
+			if (!h) continue;
+			if (h.updateBillboard) h.updateBillboard(camera);
+			else if (typeof h.update === "function") h.update();
+		}
 		if (anchorMode) updatePivotMarker();
 		// Hand-held shake — cache pre-shake pose then apply an additive
 		// position + rotation delta so shake reads on the final image without
@@ -20884,6 +21525,11 @@ function loop() {
 		// wireframe follows keyframe tweens / user edits / handheld shake in real time.
 		if (renderCamHelper.visible) renderCamHelper.update();
 		try {
+			// Contact shadow depth pass runs BEFORE the main render — it writes to
+			// its own RT, so the ordering here doesn't affect the visible frame,
+			// but keeping it first means the shadow texture is fresh for whichever
+			// composition path (AO composer or plain renderer.render) draws next.
+			if (contactShadow.enabled) renderContactShadow();
 			// SSAO post pipeline runs when enabled AND we're not recording (recorded
 			// mp4s stay clean for use as motion references downstream). N8AOPass keeps
 			// its own scene/camera refs — but we need to point it at the current
@@ -22912,6 +23558,7 @@ function serializeScene() {
 			scale: o.scale.toArray(),
 			color: o.material?.color?.getHex?.() ?? 0xffffff,
 			doubleSided: o.material?.side === THREE.DoubleSide ? true : undefined,
+			checker: o.userData._checkerOn ? true : undefined,
 			visible: o.visible !== false,
 			locked: o.userData.locked || undefined,
 			notes: o.userData.notes || undefined,
@@ -23146,6 +23793,7 @@ async function deserializeScene(state, opts = {}) {
 			mesh.material.side = THREE.DoubleSide;
 			mesh.material.needsUpdate = true;
 		}
+		if (p.checker) _applyChecker(mesh, true);
 		if (p.visible === false) mesh.visible = false;
 		if (p.locked) mesh.userData.locked = true;
 		if (p.notes) mesh.userData.notes = p.notes;
