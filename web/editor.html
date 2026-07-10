@@ -817,9 +817,10 @@
 		padding: 0 20px;
 		display: flex; align-items: center; gap: 6px;
 		white-space: nowrap;
-		cursor: ns-resize; user-select: none;
+		cursor: grab; user-select: none;
 		background: #22222c;
 	}
+	#lp-zone-bottom-header:active { cursor: grabbing; }
 	#lp-zone-bottom-body {
 		flex: 1 1 auto; min-height: 0;
 		display: flex; flex-direction: column;
@@ -3006,7 +3007,7 @@
 	}
 	#rp-split-handle {
 		flex: 0 0 5px;
-		cursor: row-resize;
+		cursor: grab;
 		/* Amber-tinted at rest too — doubles as a visual divider between the
 		   AI Agent zone and the property switcher below, so the two panels
 		   read as clearly separate surfaces even when the mouse isn't near
@@ -3015,6 +3016,7 @@
 		transition: background 0.12s;
 	}
 	#rp-split-handle:hover, #rp-split-handle.dragging { background: rgba(255,180,84,0.6); }
+	#rp-split-handle.dragging, #rp-split-handle:active { cursor: grabbing; }
 	/* New-message pulse — a soft slow amber pulse to signal "check the chat"
 	   when the agent replies while its zone is collapsed. Only active when the
 	   panel is collapsed AND the handle carries the `.has-new` marker (set by
@@ -3031,8 +3033,9 @@
 		padding: 0 20px;
 		display: flex; align-items: center; gap: 6px;
 		white-space: nowrap; overflow: hidden;
-		cursor: ns-resize; user-select: none;
+		cursor: grab; user-select: none;
 	}
+	#rp-header:active { cursor: grabbing; }
 	/* End-slot right-aligned; holds per-pane controls (currently the assistant's
 	   reset + MCP status). Hidden until a pane opts in via #rp-header-end[hidden]. */
 	.rp-header-end {
@@ -8786,7 +8789,7 @@ applyAssistantEnablement();
 		const startRpDrag = () => {
 			dragging = true;
 			rpHandle.classList.add("dragging");
-			document.body.style.cursor = "row-resize";
+			document.body.style.cursor = "grabbing";
 			document.body.style.userSelect = "none";
 		};
 		// Amber handle starts drag immediately (dedicated drag surface).
@@ -8859,7 +8862,7 @@ applyAssistantEnablement();
 		const startDrag = () => {
 			dragging = true;
 			lpAgentHandle?.classList.add("dragging");
-			document.body.style.cursor = "ns-resize";
+			document.body.style.cursor = "grabbing";
 			document.body.style.userSelect = "none";
 		};
 		// Grabbing the amber handle starts a drag immediately (it's a
@@ -23105,11 +23108,18 @@ function sampleObjectAt(obj, t) {
 			const startIdx = ks.indexOf(a);
 			const endIdx = ks.indexOf(c);
 			const segPoints = ks.slice(startIdx, endIdx + 1).map(k => k.pos);
-			// 2 points = no through keys — use the global-neighbor-aware curved sampler so
-			// motion outside the segment still influences the tangent at a/c.
-			const pos = (segPoints.length === 2)
-				? sampleKeyPosCurved(ks, startIdx, eased)
-				: sampleMultiCatmullRom(segPoints, eased);
+			// 2 points + linear ease → true straight line (lerp). Prevents the
+			// Catmull-Rom sampler from pulling in a curve/overshoot toward the
+			// neighboring keys' tangents, which reads as the object "backing up"
+			// before moving. Other eases keep the curved path so smooth motion
+			// still gets tangent continuity across segments.
+			// 2 points + non-linear = global-neighbor-aware curved sampler.
+			// 3+ points = a through key waypoint bends the path deliberately.
+			const pos = (segPoints.length === 2 && c.ease === "linear")
+				? new THREE.Vector3().lerpVectors(a.pos, c.pos, eased)
+				: (segPoints.length === 2)
+					? sampleKeyPosCurved(ks, startIdx, eased)
+					: sampleMultiCatmullRom(segPoints, eased);
 			return {
 				pos,
 				quat: new THREE.Quaternion().slerpQuaternions(a.quat, c.quat, eased),
@@ -23456,13 +23466,15 @@ function sampleCameraAt(t) {
 			const startIdx = keyframes.indexOf(a);
 			const endIdx = keyframes.indexOf(b);
 			const segPoints = keyframes.slice(startIdx, endIdx + 1).map(k => k.pos);
-			// 2 points = no through keys in this segment — use the global-neighbor-
-			// aware curved sampler so tangents blend with the surrounding motion.
-			// 3+ points = at least one through-key waypoint — Catmull-Rom through
-			// all of them so the side control actually pulls the path.
-			const pos = (segPoints.length === 2)
-				? sampleKeyPosCurved(keyframes, startIdx, eased)
-				: sampleMultiCatmullRom(segPoints, eased);
+			// 2 points + linear ease → straight lerp so the shot doesn't back up
+			// before moving (Catmull-Rom's tangent extrapolation can loop when
+			// neighbor keys sit at odd angles). Other eases keep the curved path.
+			// 3+ points = a through-key waypoint pulls the path deliberately.
+			const pos = (segPoints.length === 2 && b.ease === "linear")
+				? new THREE.Vector3().lerpVectors(a.pos, b.pos, eased)
+				: (segPoints.length === 2)
+					? sampleKeyPosCurved(keyframes, startIdx, eased)
+					: sampleMultiCatmullRom(segPoints, eased);
 			const out = {
 				pos,
 				target: new THREE.Vector3().lerpVectors(a.target, b.target, eased),
@@ -23631,7 +23643,7 @@ function renderTrackOnTimeline({ keys, parent, container, lineCls, dotCls, apply
 			e.stopPropagation();
 			try { snapshotForUndo(); } catch {}
 			stopPreview();
-			if (e.shiftKey) {
+			if (e.shiftKey || e.ctrlKey || e.metaKey) {
 				if (selectedKeys.has(k)) selectedKeys.delete(k);
 				else selectedKeys.add(k);
 			} else if (!selectedKeys.has(k)) {
@@ -23889,6 +23901,49 @@ document.addEventListener("pointerdown", e => {
 
 tlScrub.addEventListener("pointerdown", e => {
 	if (e.button !== 0) return;
+	// Empty-area drag → marquee-select every keyframe whose t falls inside
+	// the horizontal range. Modifier held (Shift/Ctrl) → add to the current
+	// selection; no modifier → replace. Draws a translucent amber band the
+	// full timeline height during the drag.
+	const onKey = e.target.closest(".tl-key, .pv-key");
+	if (!onKey && !(e.target === tlPlayhead || tlPlayhead.contains(e.target))) {
+		const rect = tlScrub.getBoundingClientRect();
+		const t0Raw = (e.clientX - rect.left) / rect.width;
+		if (t0Raw < 0 || t0Raw > 1) return;
+		e.preventDefault();
+		e.stopPropagation();
+		const additive = e.shiftKey || e.ctrlKey || e.metaKey;
+		const preserved = additive ? new Set(selectedKeys) : new Set();
+		const band = document.createElement("div");
+		band.style.cssText = "position:absolute;top:0;bottom:0;background:rgba(255,180,84,0.18);border:1px solid rgba(255,180,84,0.55);pointer-events:none;z-index:5;";
+		tlScrub.appendChild(band);
+		let curT = t0Raw;
+		const applyRange = () => {
+			const lo = Math.min(t0Raw, curT), hi = Math.max(t0Raw, curT);
+			band.style.left = (lo * 100) + "%";
+			band.style.width = ((hi - lo) * 100) + "%";
+			selectedKeys.clear();
+			for (const k of preserved) selectedKeys.add(k);
+			const inRange = (keys) => { for (const k of keys) if (k.t >= lo && k.t <= hi) selectedKeys.add(k); };
+			inRange(keyframes);
+			for (const obj of objects) if (Array.isArray(obj.userData?.keyframes)) inRange(obj.userData.keyframes);
+			renderKeyframeMarkers();
+		};
+		applyRange();
+		const move = ev => {
+			const r = tlScrub.getBoundingClientRect();
+			curT = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+			applyRange();
+		};
+		const up = () => {
+			window.removeEventListener("pointermove", move);
+			window.removeEventListener("pointerup", up);
+			band.remove();
+		};
+		window.addEventListener("pointermove", move);
+		window.addEventListener("pointerup", up);
+		return;
+	}
 	// Only drag the playhead — click on empty bar bg does nothing (no snap-scrub).
 	const playheadHead = tlPlayhead.querySelector(".head");
 	const grabbingPlayhead = e.target === tlPlayhead || tlPlayhead.contains(e.target) || e.target === playheadHead;
