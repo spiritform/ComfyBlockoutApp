@@ -359,22 +359,6 @@
 			linear-gradient(180deg, #0c0d12 0%, #07080b 100%);
 	}
 	#renderCanvas { display: block; position: relative; z-index: 1; }
-	/* Split-view divider — 1px vertical line at 50% of the RENDER CANVAS (not
-	   the outer canvas-wrap) so it never spills into the letterbox/workspace
-	   area outside the 16:9 render rect. --canvas-top / --canvas-left /
-	   --canvas-w / --canvas-h are set in JS by handleResize and track the
-	   actual canvas element's rect within #canvas-wrap. */
-	#split-divider {
-		position: absolute;
-		top: var(--canvas-top, 0);
-		height: var(--canvas-h, 100%);
-		left: calc(var(--canvas-left, 0px) + var(--canvas-w, 100%) / 2);
-		width: 2px;
-		background: #07080b;
-		transform: translateX(-1px);
-		pointer-events: none; z-index: 3; display: none;
-	}
-	#canvas-wrap.split-active #split-divider { display: block; }
 	/* Background-image layer sits BEHIND the canvas so we can `filter: blur()` the
 	   image without also blurring the WebGL scene. Inset -60px so the blur's soft
 	   edge is clipped by canvas-wrap's overflow:hidden instead of showing seams. */
@@ -2218,26 +2202,6 @@
 	   the right half's toggle position so each half's toggle lives in its own
 	   top-right corner, just inside the divider. Only visible in split mode
 	   (the button inside is hidden otherwise). */
-	#viewport-mode-corner-left {
-		position: absolute; top: 8px; right: calc(50% + 8px);
-		display: flex; gap: 4px; z-index: 6;
-		pointer-events: auto;
-	}
-	/* Active-half highlight — a subtle lighter-grey inset border on whichever
-	   half the user is currently interacting with. Constrained to the actual
-	   render canvas rect via the same --canvas-* vars as the divider so it
-	   never extends into the workspace outside the 16:9 area. Left offset is
-	   set by _updateSplitActiveHalfHighlight (0 or half canvas width).
-	   pointer-events:none so it never intercepts clicks meant for the canvas. */
-	#split-active-half {
-		position: absolute;
-		top: var(--canvas-top, 0);
-		height: var(--canvas-h, 100%);
-		width: calc(var(--canvas-w, 100%) / 2);
-		box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
-		pointer-events: none; z-index: 4; display: none;
-	}
-	#canvas-wrap.split-active #split-active-half { display: block; }
 	/* Static RGB "XYZ" reference — three colored letters, no camera-tracking.
 	   The Scene properties button used to sit here; now that it lives in the
 	   viewport toolbar, XYZ occupies the top-left corner directly. */
@@ -3478,8 +3442,6 @@
 			<div id="canvas-bg-layer"></div>
 			<video id="canvas-bg-video" playsinline muted loop></video>
 			<canvas id="renderCanvas"></canvas>
-			<div id="split-divider"></div>
-			<div id="split-active-half"></div>
 			<!-- Initializing curtain — blocks pointer events during scene hydration so a
 			     mid-boot orbit/click/drop doesn't get clobbered when deserializeScene
 			     re-applies camera + objects. Removed by the boot IIFE. -->
@@ -3491,26 +3453,12 @@
 				<span class="v1"></span><span class="v2"></span>
 				<div id="viewport-time-corner"><span id="tl-time">0.00s / 4.00s</span></div>
 				<div id="viewport-axes-corner"><span style="color:#ff5252">X</span><span style="color:#4ade80">Y</span><span style="color:#4a8aff">Z</span></div>
-				<!-- Left-half view-toggle lives in its own top-left cluster so each
-				     split half has a toggle in its own corner. Hidden outside split. -->
-				<div id="viewport-mode-corner-left">
-					<button class="vpm-btn" id="mode-view-toggle-left" title="Left-half view — click to swap left/right halves" hidden></button>
-				</div>
 				<div id="viewport-mode-corner">
 					<!-- Single view-toggle: flips between camera view (look through the
 					     framed render camera) and perspective/scene view (orbit around
 					     the shot). The SVG is swapped by updateViewToggleIcon() so the
-					     button always shows the ACTIVE view. In split mode this button
-					     represents the RIGHT-half view and clicking it swaps the two
-					     halves. Sits on TOP of the stack so each split half's toggle
-					     lives in that half's top corner (left corner has the mirror). -->
+					     button always shows the ACTIVE view. -->
 					<button class="vpm-btn active" id="mode-view-toggle" title="Switch between camera view and perspective view"></button>
-					<!-- Split-view — renders BOTH sceneCam (perspective/orbit) on
-					     the left and renderCam (framed shot) on the right using
-					     setViewport + setScissor. Sits BELOW the view-toggle so the
-					     right-half toggle reads as belonging to the right half, and
-					     the split control tucks under it. -->
-					<button class="vpm-btn" id="mode-split-toggle" title="Toggle split view — perspective on the left, camera on the right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 19H5c-1 0-2-1-2-2V7c0-1 1-2 2-2h3"/><path d="M16 5h3c1 0 2 1 2 2v10c0 1-1 2-2 2h-3"/><line x1="12" x2="12" y1="4" y2="20"/></svg></button>
 				</div>
 			</div>
 			<!-- Load Media overlay — a static image or looping video shown in
@@ -5788,19 +5736,6 @@ renderCam.lookAt(renderCamTarget);
 // swap to camera view immediately after setActiveView is defined — new scenes open
 // through the render camera.
 let activeView = "scene";
-// Split view — when true, the viewport renders sceneCam (perspective/orbit)
-// on the left half and renderCam (framed shot) on the right half. Independent
-// of activeView (which one gets the OrbitControls + input). Toggled by the
-// split-view button in the top-right of the viewport.
-let _splitView = false;
-// Per-half view state — each half independently shows "scene" (sceneCam,
-// perspective/orbit) or "camera" (renderCam, framed shot). The top-corner
-// toggle button on each half only flips its OWN side's state (previous
-// behavior swapped both halves; user asked for independent control). Both
-// halves can show the same view — it just renders the same camera twice
-// and OrbitControls targets that camera regardless of which half is clicked.
-let _splitLeftView = "scene";
-let _splitRightView = "camera";
 // When swapping to Scene view, reposition sceneCam so the render camera and what it's
 // pointed at are both in frame — user gets an over-the-shoulder overview instead of
 // wherever sceneCam happened to be parked.
@@ -9815,30 +9750,9 @@ canvas.addEventListener("pointerup", e => {
 		return;
 	}
 	const rect = canvas.getBoundingClientRect();
-	// Split view: each half renders with a HALF-aspect projection (halfW/height),
-	// not the full-canvas aspect the camera is normally restored to. Picking has
-	// to match — remap the click's x to the half's local NDC and temporarily set
-	// the camera's aspect to the half's aspect before the raycast, else the ray
-	// direction bends off from the pixel the user actually clicked on.
-	let _splitPickPrevAsp = null;
-	if (_splitView) {
-		const halfW = rect.width / 2;
-		const inLeft = e.clientX < rect.left + halfW;
-		const localX = inLeft ? (e.clientX - rect.left) : (e.clientX - rect.left - halfW);
-		ndc.x = (localX / halfW) * 2 - 1;
-		ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-		_splitPickPrevAsp = camera.aspect;
-		camera.aspect = halfW / rect.height;
-		camera.updateProjectionMatrix();
-	} else {
-		ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-		ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-	}
+	ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+	ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 	raycaster.setFromCamera(ndc, camera);
-	if (_splitPickPrevAsp !== null) {
-		camera.aspect = _splitPickPrevAsp;
-		camera.updateProjectionMatrix();
-	}
 	// Click the render-camera wireframe in Scene view → select renderCam so its
 	// transform gizmo comes up. Checked first so the wireframe wins over any object
 	// that happens to be behind it.
@@ -18110,106 +18024,11 @@ window.updateViewToggleIcon = updateViewToggleIcon;
 // matching the old dedicated Camera-pill behavior. The Camera / Scene property
 // panes stay accessible via the right-panel header.
 document.getElementById("mode-view-toggle")?.addEventListener("click", () => {
-	// In split mode this button ONLY controls the RIGHT half — flip its view
-	// without touching the left.
-	if (_splitView) {
-		const prev = _splitRightView;
-		_splitRightView = _splitRightView === "scene" ? "camera" : "scene";
-		// If pointer focus was on the right half, retarget activeView so
-		// OrbitControls + gizmo follow the button's action.
-		if (activeView === prev) setActiveView(_splitRightView);
-		_refreshSplitToggleIcons();
-		_updateSplitActiveHalfHighlight();
-		return;
-	}
 	const next = (typeof activeView !== "undefined" && activeView === "camera") ? "scene" : "camera";
 	setActiveView(next);
 	if (next === "camera") select(null);
 	updateViewToggleIcon(next);
 });
-// Split view toggle — flips _splitView on/off. Adds/removes the .active
-// class on the button so users can see the current state at a glance. Also
-// toggles the canvas-wrap's .split-active class so the vertical divider
-// shows up between the two halves + reveals the left-half view-toggle.
-document.getElementById("mode-split-toggle")?.addEventListener("click", () => {
-	_splitView = !_splitView;
-	document.getElementById("mode-split-toggle")?.classList.toggle("active", _splitView);
-	document.getElementById("canvas-wrap")?.classList.toggle("split-active", _splitView);
-	// Show/hide the left-half view-toggle button — only meaningful in split.
-	const leftBtn = document.getElementById("mode-view-toggle-left");
-	if (leftBtn) leftBtn.hidden = !_splitView;
-	_refreshSplitToggleIcons();
-	_updateSplitActiveHalfHighlight();
-});
-// Each split-half toggle now controls ONLY its own half — the button glyph
-// mirrors that half's rendered view; click flips that side without touching
-// the other. Both halves may render the same view (redundant but allowed).
-function _refreshSplitToggleIcons() {
-	if (typeof updateViewToggleIcon !== "function") return;
-	if (!_splitView) {
-		updateViewToggleIcon(typeof activeView !== "undefined" ? activeView : "scene");
-		return;
-	}
-	updateViewToggleIcon(_splitRightView); // paints #mode-view-toggle (right corner)
-	// Left button — swap ids temporarily so updateViewToggleIcon paints the left one.
-	const leftBtn = document.getElementById("mode-view-toggle-left");
-	const rightBtn = document.getElementById("mode-view-toggle");
-	if (leftBtn && rightBtn) {
-		const rightId = rightBtn.id;
-		rightBtn.id = "__temp_right";
-		leftBtn.id = "mode-view-toggle";
-		updateViewToggleIcon(_splitLeftView);
-		leftBtn.id = "mode-view-toggle-left";
-		rightBtn.id = rightId;
-		updateViewToggleIcon(_splitRightView); // restore right paint
-	}
-}
-document.getElementById("mode-view-toggle-left")?.addEventListener("click", () => {
-	if (!_splitView) return;
-	// Only flips the LEFT half — right stays put.
-	const prev = _splitLeftView;
-	_splitLeftView = _splitLeftView === "scene" ? "camera" : "scene";
-	// If pointer focus was on the left half, retarget activeView so
-	// OrbitControls follows the button.
-	if (activeView === prev) setActiveView(_splitLeftView);
-	_refreshSplitToggleIcons();
-	_updateSplitActiveHalfHighlight();
-});
-// Highlight the half that currently owns pointer input — a light-grey inset
-// border on the ACTIVE side. When per-half views differ, active side = whichever
-// matches activeView. When both halves show the same view, the ambiguity is
-// resolved by _splitActiveHalfSide (updated on pointerdown / toggle click).
-let _splitActiveHalfSide = "left";
-function _updateSplitActiveHalfHighlight() {
-	const el = document.getElementById("split-active-half");
-	if (!el) return;
-	if (!_splitView) { el.style.left = ""; return; }
-	let side;
-	if (_splitLeftView === _splitRightView) side = _splitActiveHalfSide;
-	else side = (activeView === _splitLeftView) ? "left" : "right";
-	// Left half = canvas's own left edge; right half = canvas midpoint. Uses
-	// the same --canvas-* vars as the divider so the highlight lands inside
-	// the 16:9 render rect (never in the letterbox surround).
-	el.style.left = side === "left"
-		? "var(--canvas-left, 0px)"
-		: "calc(var(--canvas-left, 0px) + var(--canvas-w, 100%) / 2)";
-}
-// Pointer-in-half detection — during split, clicking a half retargets
-// activeView to whatever camera that half is currently rendering, so
-// OrbitControls + gizmo + selection all operate on that half's camera.
-// Capture-phase so it beats OrbitControls' own pointerdown handler.
-canvas.addEventListener("pointerdown", e => {
-	if (!_splitView) return;
-	const rect = canvas.getBoundingClientRect();
-	const inLeft = e.clientX < rect.left + rect.width / 2;
-	_splitActiveHalfSide = inLeft ? "left" : "right";
-	const targetView = inLeft ? _splitLeftView : _splitRightView;
-	if (typeof activeView !== "undefined" && activeView !== targetView) {
-		setActiveView(targetView);
-		_refreshSplitToggleIcons();
-	}
-	_updateSplitActiveHalfHighlight();
-}, true);
 // Boot state: whichever view is active when the DOM parses runs through
 // setActiveView after this file loads, so seed the icon from the current mode.
 updateViewToggleIcon(typeof activeView !== "undefined" ? activeView : "scene");
@@ -22251,118 +22070,6 @@ function loop() {
 				renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
 				aoComposer.render();
 				renderer.outputColorSpace = prevCS;
-			} else if (_splitView) {
-				// Split view — each half independently renders whichever camera
-				// its per-half view state (_splitLeftView / _splitRightView) points
-				// to. Two rendering modes per half:
-				//   • Scene (orbital) view — sceneCam has no natural aspect, so we
-				//     temporarily set its aspect to the half viewport's own aspect
-				//     and fill the whole half. No letterbox.
-				//   • Camera (framed) view — renderCam's aspect is the shot's aspect
-				//     (matches the full canvas). We fit that aspect ratio inside the
-				//     half viewport, black-clear the surrounding area to letterbox,
-				//     and render only into the fit rect. This preserves the shot's
-				//     framing so what the user sees in the split matches the actual
-				//     recorded output.
-				// After each render pass we restore the original projection so
-				// TransformControls picking (which uses camera.projectionMatrix +
-				// full-canvas NDC) stays consistent between frames.
-				const size = renderer.getSize(new THREE.Vector2());
-				const halfW = Math.floor(size.x / 2);
-				const rightW = size.x - halfW;
-				const prevAutoClear = renderer.autoClear;
-				renderer.autoClear = false;
-				renderer.setScissorTest(true);
-				const prevSceneAsp = sceneCam.aspect;
-				const prevRenderAsp = renderCam.aspect;
-				const leftCam = _splitLeftView === "camera" ? renderCam : sceneCam;
-				const rightCam = _splitRightView === "camera" ? renderCam : sceneCam;
-				// Billboard every point-light glyph toward the camera we're about
-				// to render — otherwise the inactive half's glyph appears to spin
-				// as the user orbits the other half.
-				const _billboardForCam = (cam) => {
-					for (const o of objects) {
-						if (o.userData?.primKind !== "light") continue;
-						const h = o.userData._helper;
-						if (!h) continue;
-						if (h.updateBillboard) h.updateBillboard(cam);
-					}
-				};
-				// Per-half render — either fill (scene) or letterbox (camera).
-				const _renderHalf = (viewKind, cam, hx, hy, hw, hh) => {
-					_billboardForCam(cam);
-					if (viewKind === "scene") {
-						cam.aspect = hw / hh;
-						cam.updateProjectionMatrix();
-						renderer.setViewport(hx, hy, hw, hh);
-						renderer.setScissor(hx, hy, hw, hh);
-						renderer.clear();
-						renderer.render(scene, cam);
-					} else {
-						const camAsp = cam.aspect || 1;
-						const halfAsp = hw / hh;
-						let fitW, fitH;
-						if (camAsp > halfAsp) {
-							fitW = hw;
-							fitH = hw / camAsp;
-						} else {
-							fitH = hh;
-							fitW = hh * camAsp;
-						}
-						const offX = Math.round((hw - fitW) / 2);
-						const offY = Math.round((hh - fitH) / 2);
-						// Snapshot the scene's clear color — that's the user's bg
-						// pick. We paint the letterbox bars BLACK regardless of the
-						// bg, but the fit rect uses the scene bg so the framed
-						// shot still reflects the color / image / video the user
-						// set on the scene.
-						const prevClear = new THREE.Color();
-						renderer.getClearColor(prevClear);
-						const prevAlpha = renderer.getClearAlpha();
-						// Letterbox bars — force black over the whole half.
-						renderer.setViewport(hx, hy, hw, hh);
-						renderer.setScissor(hx, hy, hw, hh);
-						renderer.setClearColor(0x000000, 1);
-						renderer.clear();
-						// Restore the scene bg for the fit rect + subsequent frames.
-						renderer.setClearColor(prevClear, prevAlpha);
-						// Clear the fit rect to the scene bg so it shows through
-						// wherever the camera doesn't draw geometry.
-						renderer.setViewport(hx + offX, hy + offY, Math.round(fitW), Math.round(fitH));
-						renderer.setScissor(hx + offX, hy + offY, Math.round(fitW), Math.round(fitH));
-						renderer.clear();
-						renderer.render(scene, cam);
-					}
-				};
-				try {
-					// Helper to re-billboard every point-light glyph toward the
-					// camera we're ABOUT to render — otherwise both halves would
-					// show the sunburst rotated toward whichever cam ran the
-					// single per-frame updateBillboard() above, and the inactive
-					// Left half — hide the renderCam wireframe when the LEFT
-					// half is showing the camera view (would overlay its own
-					// POV); keep it visible when the left half is scene/persp.
-					const prevHelperVisible = renderCamHelper.visible;
-					if (leftCam === renderCam) renderCamHelper.visible = false;
-					_renderHalf(_splitLeftView, leftCam, 0, 0, halfW, size.y);
-					renderCamHelper.visible = prevHelperVisible;
-					// Right half.
-					if (rightCam === renderCam) renderCamHelper.visible = false;
-					_renderHalf(_splitRightView, rightCam, halfW, 0, rightW, size.y);
-					renderCamHelper.visible = prevHelperVisible;
-				} finally {
-					renderer.setScissorTest(false);
-					renderer.setViewport(0, 0, size.x, size.y);
-					renderer.autoClear = prevAutoClear;
-					// Restore the between-frames aspect so TransformControls
-					// picking + single-view rendering behave normally on the next
-					// tick. Scene-view render temporarily reassigned aspect to the
-					// half viewport's own aspect; letterbox render didn't touch it.
-					sceneCam.aspect = prevSceneAsp;
-					sceneCam.updateProjectionMatrix();
-					renderCam.aspect = prevRenderAsp;
-					renderCam.updateProjectionMatrix();
-				}
 			} else {
 				renderer.render(scene, camera);
 			}
