@@ -354,11 +354,21 @@
 		position: relative; flex: 1; min-height: 0;
 		overflow: hidden;
 		display: flex; align-items: center; justify-content: center;
-		background:
-			radial-gradient(ellipse 80% 60% at 50% 35%, rgba(60,80,110,0.18), transparent 70%),
-			linear-gradient(180deg, #0c0d12 0%, #07080b 100%);
+		background: #000;
 	}
 	#renderCanvas { display: block; position: relative; z-index: 1; }
+	/* Blockout view border overlay — a bare positioning box on top of the main
+	   canvas. Fixed 220px wide, height derived from the current render aspect
+	   via JS. The actual pixels are drawn by the main renderer into a scissored
+	   rect beneath — this element supplies the border decoration only. */
+	#viewport-inset {
+		position: absolute; z-index: 6;
+		border: 1px solid rgba(255,255,255,0.18);
+		box-shadow: 0 2px 10px rgba(0,0,0,0.55);
+		pointer-events: none;
+		background: transparent;
+	}
+	#viewport-inset[hidden] { display: none; }
 	/* Background-image layer sits BEHIND the canvas so we can `filter: blur()` the
 	   image without also blurring the WebGL scene. Inset -60px so the blur's soft
 	   edge is clipped by canvas-wrap's overflow:hidden instead of showing seams. */
@@ -708,8 +718,6 @@
 		position: absolute; bottom: 8px; left: 8px;
 		z-index: 6; pointer-events: none;
 		display: inline-flex; align-items: center;
-		background: rgba(0,0,0,0.25); backdrop-filter: blur(4px);
-		border-radius: 4px; padding: 4px 8px;
 		font-size: 10px; letter-spacing: 0.08em;
 		color: rgba(255,255,255,0.32);
 		font-variant-numeric: tabular-nums;
@@ -728,7 +736,7 @@
 
 	#panel {
 		position: relative; z-index: 100;
-		flex: 0 0 300px; height: 100%;
+		flex: 0 0 295px; height: 100%;
 		background: #131318;
 		overflow: hidden;
 		display: flex; flex-direction: column;
@@ -2151,8 +2159,6 @@
 	#result-clear-overlay.visible { display: inline-flex; }
 	#aspect-frame {
 		position: absolute; z-index: 5; pointer-events: none;
-		border: 1px solid rgba(255,255,255,0.12);
-		box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
 		display: none;
 	}
 	#aspect-frame::before, #aspect-frame::after,
@@ -2214,19 +2220,18 @@
 	}
 	.vpm-btn {
 		width: 24px; height: 24px; padding: 0; border: none; cursor: pointer;
-		background: rgba(0,0,0,0.35); backdrop-filter: blur(4px);
-		border-radius: 4px;
+		background: transparent;
 		display: inline-flex; align-items: center; justify-content: center;
-		color: rgba(255,255,255,0.45);
+		color: rgba(255,255,255,0.28);
 	}
 	/* Author-CSS display:inline-flex on .vpm-btn overrides the user-agent
 	   [hidden]{display:none}. Force it back so hidden left-half toggle in
 	   single view actually disappears. */
 	.vpm-btn[hidden] { display: none; }
-	.vpm-btn:hover { background: rgba(0,0,0,0.55); color: rgba(255,255,255,0.85); }
+	.vpm-btn:hover { color: rgba(255,255,255,0.7); }
 	/* Active state = brightened glyph only. No outline; dim vs light color
 	   alone carries the on/off read. */
-	.vpm-btn.active { color: #fff; }
+	.vpm-btn.active { color: rgba(255,255,255,0.85); }
 	.vpm-btn svg { width: 14px; height: 14px; display: block; }
 	/* Suppress the click-focus ring entirely — no amber flash on click/tab. */
 	.vpm-btn:focus, .vpm-btn:focus-visible { outline: none; }
@@ -2812,7 +2817,7 @@
 	/* Right properties panel */
 	#right-panel {
 		position: relative; z-index: 100;
-		flex: 0 0 300px; height: 100%;
+		flex: 0 0 295px; height: 100%;
 		background: #131318;
 		overflow: hidden; display: flex; flex-direction: column;
 		/* --rp-top-basis is set by the split-handle drag logic and persisted
@@ -3442,6 +3447,12 @@
 			<div id="canvas-bg-layer"></div>
 			<video id="canvas-bg-video" playsinline muted loop></video>
 			<canvas id="renderCanvas"></canvas>
+			<!-- Blockout view — read-only preview overlay. No separate canvas: the
+			     main renderer draws into a scissored rect at this element's position
+			     each frame, so env-map lighting, shadows, and post-effects match the
+			     main viewport exactly (single WebGL context). This div is just the
+			     border/positioning box. -->
+			<div id="viewport-inset" hidden></div>
 			<!-- Initializing curtain — blocks pointer events during scene hydration so a
 			     mid-boot orbit/click/drop doesn't get clobbered when deserializeScene
 			     re-applies camera + objects. Removed by the boot IIFE. -->
@@ -3452,13 +3463,20 @@
 			<div id="aspect-frame" class="no-guides">
 				<span class="v1"></span><span class="v2"></span>
 				<div id="viewport-time-corner"><span id="tl-time">0.00s / 4.00s</span></div>
-				<div id="viewport-axes-corner"><span style="color:#ff5252">X</span><span style="color:#4ade80">Y</span><span style="color:#4a8aff">Z</span></div>
 				<div id="viewport-mode-corner">
 					<!-- Single view-toggle: flips between camera view (look through the
 					     framed render camera) and perspective/scene view (orbit around
 					     the shot). The SVG is swapped by updateViewToggleIcon() so the
 					     button always shows the ACTIVE view. -->
 					<button class="vpm-btn active" id="mode-view-toggle" title="Switch between camera view and perspective view"></button>
+					<!-- Blockout view toggle: opens a small camera-POV preview in the
+					     top-left corner. Second renderer sharing the scene, drawn through
+					     renderCam. Editor overlays (transform gizmo, renderCam wireframe)
+					     are hidden during its render pass so it only shows what the shot
+					     would actually capture. -->
+					<button class="vpm-btn" id="mode-inset-toggle" title="Toggle blockout view">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 9V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h4"/><rect width="10" height="7" x="12" y="13" rx="2"/></svg>
+					</button>
 				</div>
 			</div>
 			<!-- Load Media overlay — a static image or looping video shown in
@@ -5555,7 +5573,10 @@ const scene = new THREE.Scene();
 // alias pointing at whichever one the viewport is currently rendering through, so
 // existing sites that read `camera.xxx` keep working. setActiveCam() swaps it.
 let camera = new THREE.PerspectiveCamera(55, vs0.w / vs0.h, 0.1, 1000);
-camera.position.set(2.2, 1.6, 2.8);
+// SceneCam sits opposite renderCam so the render camera wireframe is visible
+// in the default perspective view — user can see "the shot" as a framing box
+// in the scene without having to orbit around to find it.
+camera.position.set(-4, 3, -5);
 camera.name = "SceneCam";
 const sceneCam = camera;
 const renderCam = new THREE.PerspectiveCamera(55, vs0.w / vs0.h, 0.1, 1000);
@@ -5568,7 +5589,7 @@ scene.add(renderCam);
 
 const orbit = new OrbitControls(camera, canvas);
 orbit.enableDamping = true;
-orbit.target.set(0, 0, 0);
+orbit.target.set(0, 0.5, 0);
 // Middle-click pans (Maya/Blender muscle memory); left-click still orbits.
 // Right-click is intercepted elsewhere for fly-mode, so leave it unmapped here.
 orbit.mouseButtons = {
@@ -5794,11 +5815,10 @@ grid.material.transparent = true;
 grid.material.opacity = 0.11;
 scene.add(grid);
 
-const hemi = new THREE.HemisphereLight(0xb0c4ff, 0x202020, 0.35);
-scene.add(hemi);
-const dir = new THREE.DirectionalLight(0xffffff, 0.45);
-dir.position.set(5, 10, 4);
-scene.add(dir);
+// Default fill lights removed — the scene relies on explicit user-added lights
+// and scene.environment for illumination. This keeps the main viewport and the
+// blockout preview consistent (no hidden light contribution), and makes the
+// blockout tool behave like a real DCC where you set up your own lighting.
 
 // ── Contact shadow (direct port of three.js webgl_shadow_contact) ─────
 // Renders every mesh through an "override" depth material into a small
@@ -6867,8 +6887,8 @@ function frameSplat(splatMesh) {
 	const rotatedCenter = rawCenter.clone().applyQuaternion(splatMesh.quaternion).multiplyScalar(baseScale);
 	splatMesh.position.set(-rotatedCenter.x, -rotatedCenter.y, -rotatedCenter.z);
 
-	camera.position.set(2.2, 1.6, 2.8);
-	orbit.target.set(0, 0, 0);
+	camera.position.set(-4, 3, -5);
+	orbit.target.set(0, 0.5, 0);
 	camera.updateProjectionMatrix();
 	orbit.enabled = true;
 }
@@ -18032,6 +18052,103 @@ document.getElementById("mode-view-toggle")?.addEventListener("click", () => {
 // Boot state: whichever view is active when the DOM parses runs through
 // setActiveView after this file loads, so seed the icon from the current mode.
 updateViewToggleIcon(typeof activeView !== "undefined" ? activeView : "scene");
+
+// Blockout view — read-only preview drawn by the SAME renderer into a small
+// scissored rect on the main canvas. Single WebGL context = same env textures,
+// same lights, same shading, same tone mapping. Editor overlays (transform
+// gizmo, renderCam wireframe) are hidden during its render pass so the
+// preview shows only what the shot would actually capture. Overlay div is
+// just border decoration + click-swallow (pointer-events already none).
+(() => {
+	const CB_INSET_KEY = "cb.viewport.insetOn";
+	const insetWrap = document.getElementById("viewport-inset");
+	const insetBtn = document.getElementById("mode-inset-toggle");
+	if (!insetWrap || !insetBtn) return;
+	const INSET_W = 220;
+	const INSET_MARGIN = 12;
+	function positionInset() {
+		// Anchor to the CANVAS top-left (not canvas-wrap) so the scissor rect —
+		// which is in canvas-framebuffer space — lands under the border overlay
+		// exactly regardless of letterbox thickness.
+		const fit = (typeof fitDimensions === "function") ? fitDimensions() : { w: 16, h: 9 };
+		const asp = fit.w / fit.h;
+		const h = Math.max(1, Math.round(INSET_W / asp));
+		const wr = canvasWrap.getBoundingClientRect();
+		const cv = canvas.getBoundingClientRect();
+		insetWrap.style.width = INSET_W + "px";
+		insetWrap.style.height = h + "px";
+		insetWrap.style.left = (cv.left - wr.left + INSET_MARGIN) + "px";
+		insetWrap.style.top = (cv.top - wr.top + INSET_MARGIN) + "px";
+	}
+	function setInsetOn(on) {
+		insetWrap.hidden = !on;
+		insetBtn.classList.toggle("active", on);
+		if (on) positionInset();
+		try { localStorage.setItem(CB_INSET_KEY, on ? "1" : "0"); } catch {}
+	}
+	insetBtn.addEventListener("click", () => setInsetOn(insetWrap.hidden));
+	// Per-frame hook called from the animate loop AFTER the main render.
+	// Uses setScissor + setViewport to draw the blockout preview into a small
+	// rect of the SAME canvas. Y is flipped in WebGL (bottom-left origin) so
+	// we compute py from cssH - top - h.
+	const _prevViewport = new THREE.Vector4();
+	const _prevScissor = new THREE.Vector4();
+	const _prevClearColor = new THREE.Color();
+	window._renderInsetFrame = () => {
+		if (insetWrap.hidden) return;
+		positionInset();
+		const cssH = canvas.clientHeight;
+		const rectW = parseFloat(insetWrap.style.width) || INSET_W;
+		const rectH = parseFloat(insetWrap.style.height) || (INSET_W * 9 / 16);
+		// setViewport/setScissor take CSS pixels — THREE multiplies by
+		// pixelRatio internally. Y is flipped (WebGL origin bottom-left).
+		const px = INSET_MARGIN;
+		const py = cssH - INSET_MARGIN - rectH;
+		const pw = rectW;
+		const ph = rectH;
+		// Save GL + camera state
+		renderer.getViewport(_prevViewport);
+		renderer.getScissor(_prevScissor);
+		const prevScissorTest = renderer.getScissorTest();
+		renderer.getClearColor(_prevClearColor);
+		const prevClearAlpha = renderer.getClearAlpha();
+		const prevAspect = renderCam.aspect;
+		const camH = (typeof renderCamHelper !== "undefined") ? renderCamHelper : null;
+		const gizmo = (typeof transformHelper !== "undefined") ? transformHelper : null;
+		const prevCamHVis = camH ? camH.visible : null;
+		const prevGizmoVis = gizmo ? gizmo.visible : null;
+		if (camH) camH.visible = false;
+		if (gizmo) gizmo.visible = false;
+		// Set inset render state
+		renderCam.aspect = rectW / rectH;
+		renderCam.updateProjectionMatrix();
+		renderer.setViewport(px, py, pw, ph);
+		renderer.setScissor(px, py, pw, ph);
+		renderer.setScissorTest(true);
+		// When main bg is transparent (image/video mode), the inset would show
+		// canvas-bg-layer bleed. Force opaque black so the inset is a self-
+		// contained preview of the scene through renderCam.
+		if (prevClearAlpha < 1) renderer.setClearColor(0x000000, 1);
+		try { renderer.render(scene, renderCam); }
+		finally {
+			// Restore
+			renderer.setScissorTest(prevScissorTest);
+			renderer.setScissor(_prevScissor);
+			renderer.setViewport(_prevViewport);
+			renderer.setClearColor(_prevClearColor, prevClearAlpha);
+			renderCam.aspect = prevAspect;
+			renderCam.updateProjectionMatrix();
+			if (camH) camH.visible = prevCamHVis;
+			if (gizmo) gizmo.visible = prevGizmoVis;
+		}
+	};
+	// Restore last state. Deferred via queueMicrotask because positionInset()
+	// reads canvas/canvasWrap layout — safer once the initial resize has run.
+	let boot = false;
+	try { boot = localStorage.getItem(CB_INSET_KEY) === "1"; } catch {}
+	if (boot) queueMicrotask(() => setInsetOn(true));
+})();
+
 // Top-left Scene-properties button — opens/closes the Scene pane without
 // touching the viewport view. Second click closes back to the default pane
 // (Object if something is selected, else nothing).
@@ -19837,8 +19954,8 @@ document.getElementById("cam-reset").addEventListener("click", () => {
 	try { snapshotForUndo(); } catch {}
 	suppressSliderSync = true;
 	try {
-		camera.position.set(2.2, 1.6, 2.8);
-		orbit.target.set(0, 0, 0);
+		camera.position.set(-4, 3, -5);
+		orbit.target.set(0, 0.5, 0);
 		camera.up.set(0, 1, 0);
 		camera.fov = 55;
 		camera.updateProjectionMatrix();
@@ -20035,8 +20152,11 @@ const DEFAULT_BG_GRADIENT =
 
 function applyBgColor(hex) {
 	renderer.setClearColor(hex, 1);
+	// Letterbox around the 16:9 canvas stays black regardless of shot bg —
+	// only the aspect-fit render area picks up the color. The blockout view
+	// inherits the clear color automatically (single renderer + scissor).
 	canvasWrap.style.backgroundImage = "none";
-	canvasWrap.style.backgroundColor = hex;
+	canvasWrap.style.backgroundColor = "#000";
 	canvasBgLayer.classList.remove("active");
 	canvasBgLayer.style.backgroundImage = "";
 	canvasBgLayer.style.filter = "";
@@ -20052,6 +20172,9 @@ function applyBgImage(url) {
 	// Canvas becomes transparent so the layer shows through; the layer takes the
 	// image + blur so we can filter it without also blurring the WebGL scene.
 	renderer.setClearColor(0x000000, 0);
+	// Image/video BG uses DOM layers behind a transparent canvas. The blockout
+	// view forces its own opaque black clear (in _renderInsetFrame) so the DOM
+	// layer doesn't bleed through the preview.
 	canvasWrap.style.backgroundImage = "none";
 	canvasWrap.style.backgroundColor = "#000";
 	// Make sure the video layer isn't fighting for the same slot.
@@ -20075,6 +20198,9 @@ function applyBgImage(url) {
 
 function applyBgVideo(url) {
 	renderer.setClearColor(0x000000, 0);
+	// Image/video BG uses DOM layers behind a transparent canvas. The blockout
+	// view forces its own opaque black clear (in _renderInsetFrame) so the DOM
+	// layer doesn't bleed through the preview.
 	canvasWrap.style.backgroundImage = "none";
 	canvasWrap.style.backgroundColor = "#000";
 	// Image layer off so the two backgrounds don't stack.
@@ -21047,6 +21173,7 @@ function updateAspectFrame() {
 let _userTouchedAspect = false;
 aspectSelect.addEventListener("change", (e) => {
 	if (e.isTrusted) _userTouchedAspect = true;
+	if (typeof syncPanelWidthsToAspect === "function") syncPanelWidthsToAspect();
 	handleResize();
 	updateAspectFrame();
 	updateResultOverlayPos();
@@ -21575,7 +21702,7 @@ window.addEventListener("keydown", (e) => {
 		else addKeyframe();
 	}
 	else if (e.key === "f" || e.key === "F") frameScene();
-	else if (e.key === "Home") { camera.position.set(2.2, 1.6, 2.8); orbit.target.set(0, 0, 0); camera.up.set(0, 1, 0); camera.updateProjectionMatrix(); }
+	else if (e.key === "Home") { camera.position.set(-4, 3, -5); orbit.target.set(0, 0.5, 0); camera.up.set(0, 1, 0); camera.updateProjectionMatrix(); }
 	else if (e.key === "Delete" || e.key === "Backspace") {
 		// Workflow row focused? Remove it and don't touch scene selection. Row
 		// is tab-focusable and grabs focus on mousedown (unless the click landed
@@ -21732,12 +21859,16 @@ function pasteFromClipboard() {
 function fitDimensions() {
 	const vs = viewportSize();
 	const asp = currentAspect();
-	const margin = IS_PREVIEW ? 0 : 16;
+	const margin = IS_PREVIEW ? 0 : 12;
 	if (!asp) return { w: vs.w, h: vs.h };
+	// Standard aspect-fit: canvas grows to whichever dimension limits first,
+	// letterbox on the other axis. Small margin keeps the render off the
+	// panel edges without eating pixels.
+	const r = asp.ratio;
 	const maxW = Math.max(1, vs.w - margin * 2);
 	const maxH = Math.max(1, vs.h - margin * 2);
-	let w = maxW, h = w / asp.ratio;
-	if (h > maxH) { h = maxH; w = h * asp.ratio; }
+	let w = maxW, h = w / r;
+	if (h > maxH) { h = maxH; w = h * r; }
 	return { w: Math.max(1, Math.round(w)), h: Math.max(1, Math.round(h)) };
 }
 
@@ -21779,6 +21910,42 @@ function handleResize() {
 	});
 }
 new ResizeObserver(handleResize).observe(canvasWrap);
+
+// Dynamically size the side panels so the 16:9 canvas sits centered in the
+// viewport-area with EQUAL letterbox on all four sides. Math:
+//   canvas_h = viewport_h - 2*margin
+//   canvas_w = canvas_h * targetRatio
+//   ideal viewport_w = canvas_w + 2*margin
+//   panel_w = (window_w - ideal viewport_w) / 2
+// Clamped to a usable range so the panels never disappear or eat the workspace.
+// Runs on window resize + aspect-select change; canvasWrap height is stable
+// under panel-width changes (flex row: panel widths don't affect viewport height),
+// so no feedback loop with handleResize.
+const _leftPanelEl = document.getElementById("panel");
+const _rightPanelEl = document.getElementById("right-panel");
+const FIT_MARGIN = 12;  // must match fitDimensions margin
+const PANEL_MIN = 240, PANEL_MAX = 480;
+function syncPanelWidthsToAspect() {
+	if (!_leftPanelEl || !_rightPanelEl) return;
+	const asp = (typeof currentAspect === "function") ? currentAspect() : null;
+	if (!asp) return;
+	const vh = canvasWrap.clientHeight;
+	if (vh < 100) return;  // layout not settled
+	const idealViewportW = (vh - 2 * FIT_MARGIN) * asp.ratio + 2 * FIT_MARGIN;
+	let panelW = (window.innerWidth - idealViewportW) / 2;
+	panelW = Math.max(PANEL_MIN, Math.min(PANEL_MAX, Math.round(panelW)));
+	_leftPanelEl.style.flexBasis = panelW + "px";
+	_rightPanelEl.style.flexBasis = panelW + "px";
+}
+window.addEventListener("resize", () => {
+	syncPanelWidthsToAspect();
+	// handleResize is already fired by the ResizeObserver on canvasWrap when
+	// panel widths change, but call it directly too for cases where the layout
+	// doesn't tick (aspect select changed with same window size).
+	handleResize();
+});
+// Kick once on boot, after layout has settled.
+queueMicrotask(() => { syncPanelWidthsToAspect(); handleResize(); });
 
 const dropOverlay = document.getElementById("drop-overlay");
 let dragDepth = 0;
@@ -22073,6 +22240,11 @@ function loop() {
 			} else {
 				renderer.render(scene, camera);
 			}
+			// Camera preview inset — second renderer drawing the same scene through
+			// renderCam. Hook is a no-op when the toggle is off, and lazily-created
+			// when first enabled. Runs AFTER the main render so bloom/AO on the
+			// main viewport aren't affected by the inset pass.
+			window._renderInsetFrame?.();
 		} finally {
 			if (_shakeRestore) _shakeRestore();
 		}
