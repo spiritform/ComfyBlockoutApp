@@ -715,7 +715,7 @@
 	/* Timecode pinned inside the aspect frame's bottom-left corner — mirrors the
 	   scene/camera toggles at top-left. Hidden with the AR overlay. */
 	#viewport-time-corner {
-		position: absolute; bottom: 8px; left: 8px;
+		position: absolute; bottom: 12px; left: 12px;
 		z-index: 6; pointer-events: none;
 		display: inline-flex; align-items: center;
 		font-size: 10px; letter-spacing: 0.08em;
@@ -2204,6 +2204,11 @@
 		display: flex; flex-direction: column; gap: 4px; z-index: 6;
 		pointer-events: auto;
 	}
+	#viewport-mode-corner-left {
+		position: absolute; top: 8px; left: 8px;
+		display: flex; flex-direction: column; gap: 4px; z-index: 6;
+		pointer-events: auto;
+	}
 	/* Left-half view-toggle sits at the TOP-RIGHT of the LEFT half — mirroring
 	   the right half's toggle position so each half's toggle lives in its own
 	   top-right corner, just inside the divider. Only visible in split mode
@@ -3463,17 +3468,11 @@
 			<div id="aspect-frame" class="no-guides">
 				<span class="v1"></span><span class="v2"></span>
 				<div id="viewport-time-corner"><span id="tl-time">0.00s / 4.00s</span></div>
-				<div id="viewport-mode-corner">
-					<!-- Single view-toggle: flips between camera view (look through the
-					     framed render camera) and perspective/scene view (orbit around
-					     the shot). The SVG is swapped by updateViewToggleIcon() so the
-					     button always shows the ACTIVE view. -->
+				<!-- Both viewport toggles stack top-LEFT: view-toggle (camera POV vs
+				     perspective) on top, blockout-view toggle underneath. The blockout
+				     preview overlay itself spawns at top-RIGHT (see positionInset). -->
+				<div id="viewport-mode-corner-left">
 					<button class="vpm-btn active" id="mode-view-toggle" title="Switch between camera view and perspective view"></button>
-					<!-- Blockout view toggle: opens a small camera-POV preview in the
-					     top-left corner. Second renderer sharing the scene, drawn through
-					     renderCam. Editor overlays (transform gizmo, renderCam wireframe)
-					     are hidden during its render pass so it only shows what the shot
-					     would actually capture. -->
 					<button class="vpm-btn" id="mode-inset-toggle" title="Toggle blockout view">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 9V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h4"/><rect width="10" height="7" x="12" y="13" rx="2"/></svg>
 					</button>
@@ -18067,9 +18066,10 @@ updateViewToggleIcon(typeof activeView !== "undefined" ? activeView : "scene");
 	const INSET_W = 220;
 	const INSET_MARGIN = 12;
 	function positionInset() {
-		// Anchor to the CANVAS top-left (not canvas-wrap) so the scissor rect —
+		// Anchor to the CANVAS top-RIGHT (not canvas-wrap) so the scissor rect —
 		// which is in canvas-framebuffer space — lands under the border overlay
-		// exactly regardless of letterbox thickness.
+		// exactly regardless of letterbox thickness. The view-toggle stack sits
+		// top-LEFT so top-right stays free for the preview.
 		const fit = (typeof fitDimensions === "function") ? fitDimensions() : { w: 16, h: 9 };
 		const asp = fit.w / fit.h;
 		const h = Math.max(1, Math.round(INSET_W / asp));
@@ -18077,7 +18077,7 @@ updateViewToggleIcon(typeof activeView !== "undefined" ? activeView : "scene");
 		const cv = canvas.getBoundingClientRect();
 		insetWrap.style.width = INSET_W + "px";
 		insetWrap.style.height = h + "px";
-		insetWrap.style.left = (cv.left - wr.left + INSET_MARGIN) + "px";
+		insetWrap.style.left = (cv.left - wr.left + cv.width - INSET_W - INSET_MARGIN) + "px";
 		insetWrap.style.top = (cv.top - wr.top + INSET_MARGIN) + "px";
 	}
 	function setInsetOn(on) {
@@ -18102,7 +18102,9 @@ updateViewToggleIcon(typeof activeView !== "undefined" ? activeView : "scene");
 		const rectH = parseFloat(insetWrap.style.height) || (INSET_W * 9 / 16);
 		// setViewport/setScissor take CSS pixels — THREE multiplies by
 		// pixelRatio internally. Y is flipped (WebGL origin bottom-left).
-		const px = INSET_MARGIN;
+		// Rect is anchored top-right of the canvas.
+		const cssW = canvas.clientWidth;
+		const px = cssW - INSET_MARGIN - rectW;
 		const py = cssH - INSET_MARGIN - rectH;
 		const pw = rectW;
 		const ph = rectH;
@@ -21525,6 +21527,10 @@ function wireResultDrag(el) {
 			e.dataTransfer.setData("application/x-cb-asset", JSON.stringify(payload));
 			e.dataTransfer.effectAllowed = "copy";
 			document.body.classList.add("dragging-asset");
+			// Mark drags that originated FROM this viewport's result overlay so
+			// the viewport's own drop handler can reject them — dropping the
+			// blockout image back onto its own scene shouldn't spawn a plane.
+			document.body.classList.add("dragging-result-overlay");
 			// Custom drag ghost — small amber-framed chip matching the assets-pane
 			// tiles. Overrides the browser's default drag image (which is the
 			// full-size blockout, big and awkward) and blocks the file-drop
@@ -21541,6 +21547,7 @@ function wireResultDrag(el) {
 	});
 	el.addEventListener("dragend", () => {
 		document.body.classList.remove("dragging-asset");
+		document.body.classList.remove("dragging-result-overlay");
 		if (el._dragGhost) { el._dragGhost.remove(); el._dragGhost = null; }
 	});
 }
@@ -22006,6 +22013,10 @@ window.addEventListener("drop", async e => {
 		if (!acceptable(e)) return;
 		e.preventDefault();
 		e.stopPropagation();
+		// Reject drops that originated from this viewport's own result overlay —
+		// dropping the blockout image back onto its own scene as a plane isn't a
+		// useful action and just clutters the outliner.
+		if (document.body.classList.contains("dragging-result-overlay")) return;
 		let payload;
 		try { payload = JSON.parse(e.dataTransfer.getData("application/x-cb-asset")); }
 		catch { return; }
