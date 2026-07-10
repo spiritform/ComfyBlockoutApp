@@ -359,13 +359,17 @@
 			linear-gradient(180deg, #0c0d12 0%, #07080b 100%);
 	}
 	#renderCanvas { display: block; position: relative; z-index: 1; }
-	/* Split-view divider — 1px vertical line at 50% of the canvas so the two
-	   halves read as distinct panes. Only shown while _splitView is on (parent
-	   gets .split-active class). pointer-events:none so it never eats input. */
+	/* Split-view divider — 1px vertical line at 50% of the RENDER CANVAS (not
+	   the outer canvas-wrap) so it never spills into the letterbox/workspace
+	   area outside the 16:9 render rect. --canvas-top / --canvas-left /
+	   --canvas-w / --canvas-h are set in JS by handleResize and track the
+	   actual canvas element's rect within #canvas-wrap. */
 	#split-divider {
-		position: absolute; top: 0; bottom: 0; left: 50%; width: 2px;
-		/* Match the workspace-wrap gradient's darkest end so the divider
-		   reads as a subtle break rather than a bright accent line. */
+		position: absolute;
+		top: var(--canvas-top, 0);
+		height: var(--canvas-h, 100%);
+		left: calc(var(--canvas-left, 0px) + var(--canvas-w, 100%) / 2);
+		width: 2px;
 		background: #07080b;
 		transform: translateX(-1px);
 		pointer-events: none; z-index: 3; display: none;
@@ -429,7 +433,10 @@
 
 	#timeline {
 		flex: 0 0 auto; height: 78px;
-		background: #0a0a10;
+		/* Nudged brighter from #0a0a10 → #1a1a22 so the transport strip reads
+		   as a distinct band above the viewport instead of merging into the
+		   near-black canvas surround. */
+		background: #0f0f14;
 		display: flex; align-items: flex-end; gap: 3px; padding: 14px 24px 14px 14px;
 		font-family: inherit; user-select: none;
 	}
@@ -739,33 +746,173 @@
 		position: relative; z-index: 100;
 		flex: 0 0 300px; height: 100%;
 		background: #131318;
-		overflow-y: auto; overflow-x: hidden; padding: 0 20px 28px;
+		overflow: hidden;
+		display: flex; flex-direction: column;
+		/* --lp-agent-h controls the AI Agent OVERLAY's height (pixels). The
+		   overlay sits absolutely at the panel bottom and floats on top of the
+		   Objects layout underneath — dragging its header up/down grows or
+		   shrinks the overlay without ever reflowing the Objects zone (so no
+		   scrollbar appears on Objects just because the AI Agent grew). Default
+		   145px = handle (5) + header (40) + context chip (~22) + input row (78)
+		   — smallest useful state where the log surface is 0px. */
+		--lp-agent-h: 145px;
+	}
+	/* Objects / Tools / Workflows fill the panel in normal flex flow. The AI
+	   Agent overlay below is absolutely positioned so it doesn't take flex
+	   space here — this zone always gets the FULL panel height. Bottom
+	   padding = overlay height + 28 so the scrollable range extends past the
+	   overlay's top edge; the user can scroll content that would otherwise be
+	   hidden underneath the overlay up into the visible viewport above it. */
+	#lp-zone-top-body {
+		flex: 1 1 auto; min-height: 0;
+		overflow-y: auto; overflow-x: hidden;
+		padding: 0 20px calc(var(--lp-agent-h) + 28px);
 		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
 	}
-	/* First section's head-row is 40px tall to match the right panel's
-	   #rp-header (also 40px), so OBJECTS and AI AGENT labels sit on the same
-	   vertical line. The head-row centers the label vertically, which places
-	   the label at ~y=14px from the section top — same as the right pane. */
-	#panel > .section:first-of-type > .section-head-row {
-		min-height: 40px; align-items: center;
+	#lp-zone-top-body::-webkit-scrollbar { width: 4px; }
+	#lp-zone-top-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+	/* Amber split handle — sits at the very top of the AI Agent overlay
+	   (inside the overlay as its first child). Visually marks the resizable
+	   boundary between Objects underneath and the overlay above. Same visual
+	   language as #rp-split-handle on the right panel. */
+	#lp-split-handle {
+		flex: 0 0 5px;
+		cursor: row-resize;
+		background: rgba(255,180,84,0.35);
+		transition: background 0.12s;
 	}
-	#panel > .section:first-of-type > .section-head-row > .section-label {
-		font-size: 11px;
+	#lp-split-handle:hover, #lp-split-handle.dragging { background: rgba(255,180,84,0.6); }
+	/* AI Agent OVERLAY — absolutely positioned floating panel that sits ON TOP
+	   of the Objects layout underneath. Its BOTTOM edge is glued to the panel
+	   bottom (context + input never move). Its TOP edge slides up/down as the
+	   user drags the header, growing/shrinking the chat log without disturbing
+	   the Objects layout in any way — no scrollbar ever appears on Objects as
+	   a side effect of resizing the agent. */
+	#lp-zone-bottom {
+		position: absolute;
+		left: 0; right: 0; bottom: 0;
+		height: var(--lp-agent-h);
+		min-height: 145px;
+		z-index: 5;
+		display: flex; flex-direction: column;
+		overflow: hidden;
+		background: #191922;
 	}
-	#panel::-webkit-scrollbar { width: 4px; }
-	#panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+	#panel.no-agent #lp-zone-bottom { display: none; }
+	/* Fixed bottom band — CONTEXT chip + CHAT INPUT stay pinned inside the
+	   overlay at its bottom edge. Since the overlay's bottom edge is glued to
+	   the panel bottom, these controls never move regardless of how the
+	   overlay's top edge is dragged. */
+	#lp-fixed-bottom {
+		flex: 0 0 auto;
+		display: flex; flex-direction: column;
+	}
+	/* Match the #lp-pane-assistant overrides so the fixed band looks identical
+	   to how the input row looked when it lived inside the assistant pane. */
+	#lp-fixed-bottom .assistant-input-row {
+		background: transparent;
+		flex: 0 0 78px; height: 78px;
+		box-sizing: border-box;
+		display: flex; align-items: stretch;
+		padding: 0;
+	}
+	#lp-fixed-bottom .assistant-input {
+		height: 100%; padding: 17px 12px 12px 32px;
+	}
+	#lp-fixed-bottom .assistant-prompt-arrow { top: 15px; left: 18px; }
+	#lp-zone-bottom-header {
+		flex: 0 0 40px;
+		padding: 0 20px;
+		display: flex; align-items: center; gap: 6px;
+		white-space: nowrap;
+		cursor: ns-resize; user-select: none;
+		background: #22222c;
+	}
+	#lp-zone-bottom-body {
+		flex: 1 1 auto; min-height: 0;
+		display: flex; flex-direction: column;
+		overflow: hidden;
+	}
+	#lp-zone-bottom-body > .rp-pane { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+	/* Hide the assistant-section while it's still a direct child of #panel at
+	   initial paint — the boot IIFE hoists it into #lp-pane-assistant almost
+	   immediately, but without this rule it would flash a full-height chat
+	   log at the tail of the left column before the move. */
+	#panel > #assistant-section { display: none; }
+	/* The assistant pane inherits its right-panel styling when hoisted into
+	   the left column — reuse the same rules by aliasing the id selectors. */
+	#lp-pane-assistant { padding: 0; margin: 0; }
+	#lp-pane-assistant #assistant-section {
+		margin: 0; padding: 0; border: none;
+		flex: 1 1 auto; min-height: 0;
+		display: flex; flex-direction: column;
+	}
+	#lp-pane-assistant .section-head-row { display: none; }
+	#lp-pane-assistant .assistant-shell {
+		flex: 1 1 auto; min-height: 0;
+		display: flex; flex-direction: column;
+		border: none; border-radius: 0;
+	}
+	#lp-pane-assistant .assistant-log {
+		flex: 1 1 auto; min-height: 0;
+		padding: 12px 20px;
+		background: transparent;
+		/* Base .assistant-log has `resize: vertical` for the standalone form
+		   used elsewhere; kill it here so the browser's ↘ resize glyph doesn't
+		   sit in the bottom-right of the chat log. */
+		resize: none;
+	}
+	#lp-pane-assistant .assistant-log > *:first-child { margin-top: auto; }
+	#lp-pane-assistant .assistant-msg.system { background: transparent; padding: 0 0 4px; }
+	#lp-pane-assistant .assistant-bottom-band { flex: 0 0 auto; margin-top: auto; }
+	#lp-pane-assistant .assistant-input-row {
+		background: transparent;
+		/* Fixed 78px matches the timeline row height so the chat input's
+		   bottom AND top edges line up 1:1 with the transport bar. CONTEXT
+		   chip sits ABOVE this box (in the bottom-band, floating over the log
+		   area's tail) so the input always anchors to the transport. */
+		flex: 0 0 78px; height: 78px;
+		box-sizing: border-box;
+		display: flex; align-items: stretch;
+		padding: 0;
+	}
+	#lp-pane-assistant .assistant-input {
+		height: 100%; padding: 17px 12px 12px 32px;
+	}
+	#lp-pane-assistant .assistant-prompt-arrow { top: 15px; left: 18px; }
+	/* OBJECTS section's own head-row is redundant now that #lp-zone-top-header
+	   labels the zone. Hide it so the grid butts up against the fixed header. */
+	#lp-zone-top-body > .section:first-of-type > .section-head-row {
+		display: none;
+	}
+	#lp-zone-top-body > .section:first-of-type {
+		padding-top: 12px;
+	}
+	/* Left-panel top-zone header — mirrors #rp-zone-top-header. Fixed 40px
+	   band that sits OUTSIDE the scroll area so the scrollbar starts under
+	   it, not through it. */
+	#lp-zone-top-header {
+		/* Fixed 40px band — always visible, matches the viewport toolbar
+		   height. AI Agent drag stops right under this header (top zone can
+		   shrink to just this header) so OBJECTS label stays put. */
+		flex: 0 0 40px;
+		padding: 0 20px;
+		display: flex; align-items: center; gap: 6px;
+		white-space: nowrap;
+		user-select: none;
+		background: #131318;
+	}
 
 	.section { margin-bottom: 32px; }
 	.section:last-child { margin-bottom: 0; }
-	/* Left-panel sections behave as collapsible "modules" with full-width dividers.
-	   Bleed past the panel's 20px horizontal padding so the line spans the column. */
-	#panel .section {
+	/* Left-panel sections stack without horizontal dividers — the section
+	   headers (OBJECTS / TOOLS / WORKFLOWS) alone carry the visual separation. */
+	#lp-zone-top-body .section {
 		margin: 0 -20px 0;
 		padding: 12px 20px;
-		border-bottom: 1px solid rgba(255,255,255,0.06);
 	}
-	#panel .section:first-of-type { padding-top: 0; }
-	#panel .section:last-child { border-bottom: none; padding-bottom: 28px; }
+	#lp-zone-top-body .section:first-of-type { padding-top: 0; }
+	#lp-zone-top-body .section:last-child { padding-bottom: 28px; }
 
 	/* Collapsible sections — click the head-row to fold the body */
 	.section.collapsible .section-head-row {
@@ -1597,14 +1744,22 @@
 	}
 	.out-row {
 		display: flex; flex-direction: column;
-		padding: 4px 8px; border-radius: 5px;
+		padding: 6px 8px; border-radius: 0;
 		cursor: pointer;
-		background: rgba(255,255,255,0.04);
+		background: transparent;
+		/* Thin divider between rows — reads as a list, not stacked cards. */
+		border-bottom: 1px solid rgba(255,255,255,0.05);
 		/* Kill browser text-selection on shift-click — otherwise Sphere.001
 		   gets highlighted blue every time you extend the selection. The
 		   rename input re-enables select via .out-name-edit below. */
 		user-select: none; -webkit-user-select: none;
 	}
+	/* Trailing row keeps a bottom border only if the list has more content
+	   below it (group children etc.); the very last item drops its border so
+	   the list doesn't end on a stray line above blank pane space. */
+	.out-row:last-child { border-bottom: none; }
+	/* Kill the parent .outliner's gap — dividers replace the visual gap. */
+	.outliner { gap: 0; }
 	.out-name-edit { user-select: text; -webkit-user-select: text; }
 	/* Text-highlight in the rename input — override the browser's default
 	   blue with a soft amber tint that matches the app's accent language,
@@ -1673,7 +1828,7 @@
 	.out-img svg { width: 12px; height: 12px; }
 	.out-img.has-image svg { display: none; }
 	.out-row:hover { background: rgba(255,255,255,0.07); }
-	.out-row.selected { background: rgba(255,180,84,0.12); box-shadow: inset 0 0 0 1px rgba(255,180,84,0.35); }
+	.out-row.selected { background: rgba(255,180,84,0.12); }
 	.out-row.selected .out-name { color: #ffb454; }
 	/* Hidden — dim the whole row uniformly. No strikethrough; the eye glyph +
 	   reduced opacity are the signal. */
@@ -2056,9 +2211,33 @@
 	   when the AR overlay is visible. */
 	#viewport-mode-corner {
 		position: absolute; top: 8px; right: 8px;
+		display: flex; flex-direction: column; gap: 4px; z-index: 6;
+		pointer-events: auto;
+	}
+	/* Left-half view-toggle sits at the TOP-RIGHT of the LEFT half — mirroring
+	   the right half's toggle position so each half's toggle lives in its own
+	   top-right corner, just inside the divider. Only visible in split mode
+	   (the button inside is hidden otherwise). */
+	#viewport-mode-corner-left {
+		position: absolute; top: 8px; right: calc(50% + 8px);
 		display: flex; gap: 4px; z-index: 6;
 		pointer-events: auto;
 	}
+	/* Active-half highlight — a subtle lighter-grey inset border on whichever
+	   half the user is currently interacting with. Constrained to the actual
+	   render canvas rect via the same --canvas-* vars as the divider so it
+	   never extends into the workspace outside the 16:9 area. Left offset is
+	   set by _updateSplitActiveHalfHighlight (0 or half canvas width).
+	   pointer-events:none so it never intercepts clicks meant for the canvas. */
+	#split-active-half {
+		position: absolute;
+		top: var(--canvas-top, 0);
+		height: var(--canvas-h, 100%);
+		width: calc(var(--canvas-w, 100%) / 2);
+		box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
+		pointer-events: none; z-index: 4; display: none;
+	}
+	#canvas-wrap.split-active #split-active-half { display: block; }
 	/* Static RGB "XYZ" reference — three colored letters, no camera-tracking.
 	   The Scene properties button used to sit here; now that it lives in the
 	   viewport toolbar, XYZ occupies the top-left corner directly. */
@@ -2076,15 +2255,17 @@
 		display: inline-flex; align-items: center; justify-content: center;
 		color: rgba(255,255,255,0.45);
 	}
+	/* Author-CSS display:inline-flex on .vpm-btn overrides the user-agent
+	   [hidden]{display:none}. Force it back so hidden left-half toggle in
+	   single view actually disappears. */
+	.vpm-btn[hidden] { display: none; }
 	.vpm-btn:hover { background: rgba(0,0,0,0.55); color: rgba(255,255,255,0.85); }
-	/* Active state uses neutral white with an amber outline — matches the
-	   dim-by-default / bright-when-active language on the viewport toolbar
-	   buttons, and the outline reads as "on" without needing a fill. */
-	.vpm-btn.active { color: #fff; box-shadow: inset 0 0 0 1px rgba(255,180,84,0.5); }
+	/* Active state = brightened glyph only. No outline; dim vs light color
+	   alone carries the on/off read. */
+	.vpm-btn.active { color: #fff; }
 	.vpm-btn svg { width: 14px; height: 14px; display: block; }
-	/* Suppress the click-focus ring but keep keyboard focus visible. */
-	.vpm-btn:focus { outline: none; }
-	.vpm-btn:focus-visible { outline: 2px solid rgba(255,180,84,0.6); outline-offset: 1px; }
+	/* Suppress the click-focus ring entirely — no amber flash on click/tab. */
+	.vpm-btn:focus, .vpm-btn:focus-visible { outline: none; }
 
 	#drop-overlay {
 		position: fixed; inset: 0; z-index: 200;
@@ -2165,7 +2346,9 @@
 		flex: 0 0 40px;
 		display: flex; align-items: center; gap: 4px;
 		padding: 0 6px;
-		background: #0a0a10;
+		/* Same nudge as the timeline (#0a0a10 → #1a1a22) so both strips line
+		   up as visible bands framing the viewport. */
+		background: #0f0f14;
 	}
 	.vt-group { display: flex; align-items: center; gap: 2px; }
 	.vt-group + .vt-group { margin-left: 18px; }
@@ -2669,9 +2852,10 @@
 		background: #131318;
 		overflow: hidden; display: flex; flex-direction: column;
 		/* --rp-top-basis is set by the split-handle drag logic and persisted
-		   to localStorage. Default 48% keeps the agent and property switcher
-		   roughly balanced on first run. */
-		--rp-top-basis: 48%;
+		   to localStorage. Default 35% gives the Outliner a compact height so
+		   Properties (which usually needs more room for controls) fills the
+		   larger share below. */
+		--rp-top-basis: 35%;
 	}
 	#right-panel[hidden] { display: none; }
 	/* Two-zone layout — visually: property/asset switcher on TOP, AI Agent
@@ -2682,18 +2866,14 @@
 	   fills the column (via #right-panel.no-agent). */
 	#rp-zone-top {
 		flex: 0 0 var(--rp-top-basis);
-		/* Header (40) + optional context chip (~24) + input row (78).
-		   Sized for the worst case where the context chip is showing so it
-		   doesn't clip the input; when context is hidden there's just some
-		   extra breathing room above the input. */
-		min-height: 142px;
+		/* Just the header row so the drag handle can shrink the outliner
+		   entirely if the user wants Properties to fill the whole column. */
+		min-height: 40px;
 		display: flex; flex-direction: column;
 		overflow: hidden;
-		/* Slightly lighter tone than the switcher zone (#131318) so the AI
-		   Agent surface visually separates from the Properties panel above. */
 		background: #191922;
-		border-top: 1px solid rgba(255,255,255,0.06);
-		order: 3;
+		border-bottom: 1px solid rgba(255,255,255,0.06);
+		order: 1;
 	}
 	/* Bottom-pinned band inside the assistant shell — CONTEXT chip stacked
 	   on top of the fixed 78px INPUT row. margin-top:auto pushes the whole
@@ -2705,22 +2885,50 @@
 		display: flex; flex-direction: column;
 	}
 	#rp-split-handle { order: 2; }
-	#rp-zone-bottom { order: 1; }
-	#right-panel.no-agent #rp-zone-top,
-	#right-panel.no-agent #rp-split-handle { display: none; }
-	#right-panel.no-agent #rp-zone-bottom { flex: 1 1 auto; }
+	#rp-zone-bottom { order: 3; }
+	/* Outliner pane styling — it inherits the outliner-section HTML from the
+	   LEFT panel via the boot-time hoist. The section's own head-row is hidden
+	   (the top zone's header already labels it "Outliner"); the hide-all +
+	   clear buttons get hoisted into #rp-zone-top-controls instead. */
+	#rp-pane-outliner { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 0; }
+	#rp-pane-outliner #outliner {
+		flex: 1 1 auto; min-height: 0; overflow-y: auto;
+		/* Container padding pulled in from 20px → 12px on each side so the
+		   selected-row amber tint (which fills each row's own box) extends
+		   further out past the content. The row's own padding (8px each side)
+		   re-inflates the content position so the Camera icon still lines up
+		   with the "OUTLINER" header text at 20px from the pane edge, and the
+		   trailing lock/vis/expand icons sit 8px in from the right edge —
+		   giving them the same amber halo as the color box on the other side.
+		   Top padding reduced 16 → 10 to lift the rows closer to the header. */
+		padding: 10px 12px 12px;
+		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+	}
+	#rp-pane-outliner .out-row {
+		padding-left: 8px;
+		padding-right: 8px;
+	}
+	#rp-pane-outliner #outliner::-webkit-scrollbar { width: 4px; }
+	#rp-pane-outliner #outliner::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+	#rp-pane-outliner .section {
+		margin: 0; padding: 0; border: none;
+		flex: 1 1 auto; min-height: 0;
+		display: flex; flex-direction: column;
+	}
+	#rp-pane-outliner .section-head-row { display: none; }
+	/* Right-panel top zone (Outliner) is independent of assistant-enablement —
+	   only the LEFT panel's AI Agent zone reacts to the .no-agent class. */
 	#rp-zone-top-header {
 		flex: 0 0 40px;
 		padding: 0 20px;
 		display: flex; align-items: center; gap: 6px;
 		white-space: nowrap;
-		/* ns-resize signals "drag me up/down" — clicking still toggles
-		   collapse (drag vs click is disambiguated by mousemove threshold),
-		   so the cursor hints at the more common gesture on this bar. */
-		cursor: ns-resize; user-select: none;
-		/* Slightly brighter than the pane body so the header reads as its
-		   own band even though the log below shares the pane bg now. */
-		background: #22222c;
+		user-select: none;
+		/* Match the panel bg — dark #131318 with a hair-line divider under it,
+		   so both top headers (LEFT: OBJECTS, RIGHT: OUTLINER) read as the
+		   same dark strip lined up with the 40px viewport toolbar. */
+		background: #131318;
+		border-bottom: 1px solid rgba(255,255,255,0.06);
 	}
 	.rp-zone-caret {
 		font-size: 10px; color: rgba(255,255,255,0.35);
@@ -2730,11 +2938,9 @@
 	/* Collapsed state — chat log hidden, zone shrinks to header + context
 	   chip + input row (~content height). Split handle stays visible so
 	   the user can also drag up to uncollapse. Caret flips from ▾ → ▸. */
-	#right-panel.rp-agent-collapsed #rp-zone-top { flex: 0 0 auto; }
-	#right-panel.rp-agent-collapsed #rp-zone-top-body { flex: 0 0 auto; }
-	#right-panel.rp-agent-collapsed .assistant-log { display: none; }
-	#right-panel.rp-agent-collapsed #rp-pane-assistant .assistant-shell { flex: 0 0 auto; }
-	#right-panel.rp-agent-collapsed .rp-zone-caret { transform: rotate(-90deg); }
+	/* Old rp-agent-collapsed CSS retired — the right-panel top zone is now
+	   Outliner (no click-to-collapse behavior). Left-panel AI Agent uses
+	   lp-agent-collapsed instead (see #panel.lp-agent-collapsed rules). */
 	/* Workflow-cell custom dropdown (COMBO picker) — replaces the native
 	   <select> so the open option list can be fully styled. Layout is
 	   [label above / trigger below], trigger opens an absolutely-positioned
@@ -2769,7 +2975,7 @@
 	.wf-dropdown-menu {
 		position: absolute; left: 0; right: 0; top: calc(100% + 3px);
 		z-index: 60;
-		background: #14141a;
+		background: #0f0f14;
 		border: 1px solid rgba(255,255,255,0.08);
 		border-radius: 4px;
 		padding: 3px;
@@ -2843,7 +3049,7 @@
 		0%, 100% { background: rgba(255,180,84,0.35); }
 		50%      { background: rgba(255,180,84,0.85); }
 	}
-	#right-panel.rp-agent-collapsed #rp-split-handle.has-new {
+	#panel.lp-agent-collapsed #lp-split-handle.has-new {
 		animation: cb-split-pulse 2.2s ease-in-out infinite;
 	}
 	#rp-header {
@@ -2851,6 +3057,7 @@
 		padding: 0 20px;
 		display: flex; align-items: center; gap: 6px;
 		white-space: nowrap; overflow: hidden;
+		cursor: ns-resize; user-select: none;
 	}
 	/* End-slot right-aligned; holds per-pane controls (currently the assistant's
 	   reset + MCP status). Hidden until a pane opts in via #rp-header-end[hidden]. */
@@ -2867,7 +3074,7 @@
 	   left-panel .section-label brightness — 60% white when the zone is
 	   active/expanded, dimmed to 32% when the AI Agent zone is collapsed. */
 	.rp-kicker { color: rgba(255,255,255,0.6); }
-	#right-panel.rp-agent-collapsed #rp-zone-top-header .rp-kicker { color: rgba(255,255,255,0.32); }
+	#panel.lp-agent-collapsed #lp-zone-bottom-header .rp-kicker { color: rgba(255,255,255,0.32); }
 	.rp-sep    { color: rgba(255,255,255,0.25); }
 	#rp-title  { color: #e6e6ea; overflow: hidden; text-overflow: ellipsis; }
 	#rp-body {
@@ -3031,6 +3238,18 @@
 
 		<input type="file" id="import-file" accept=".glb,.gltf,.fbx,.obj,.ply,.splat,.ksplat,.spz,image/*,video/*" hidden multiple>
 
+		<!-- LEFT panel is now a two-zone split, mirroring the right panel:
+		     Objects / Tools / Workflows fill the scrollable top zone; AI Agent
+		     lives in a fixed-basis bottom zone with a drag handle between.
+		     Outliner used to sit here — hoisted to the right panel at boot. -->
+		<!-- Fixed 40px header band sits ABOVE the scroll area so the scrollbar
+		     starts under it rather than running through the "OBJECTS" label
+		     (matches the right panel's OUTLINER header pattern). -->
+		<div id="lp-zone-top-header">
+			<span class="rp-kicker">Objects</span>
+		</div>
+		<div id="lp-zone-top-body">
+
 		<div class="section collapsible" data-section="objects">
 			<div class="section-head-row">
 				<span class="section-label">Objects</span>
@@ -3115,7 +3334,7 @@
 				<span class="section-label">Outliner</span>
 				<span class="head-end">
 					<button class="mini-btn outliner-eye-btn" id="outliner-hide-all" title="Hide/show every object at once — handy before a recording when you want to isolate what the camera sees" hidden></button>
-					<button class="mini-btn" id="clear-btn" title="Clear all objects" hidden>Clear</button>
+					<button class="mini-btn outliner-eye-btn" id="clear-btn" title="Clear all objects" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
 				</span>
 			</div>
 			<div class="outliner" id="outliner"></div>
@@ -3146,6 +3365,27 @@
 			     sets display:flex which would override the [hidden] attribute. -->
 			<button class="gen-btn primary" id="gen-nb" data-gen="nano-banana" disabled style="display:none"></button>
 			<button class="gen-btn" id="gen-sd" data-gen="seedance" disabled style="display:none"></button>
+		</div>
+
+		</div><!-- /#lp-zone-top-body -->
+		<!-- AI Agent overlay — absolutely positioned floating panel sitting on
+		     top of the Objects layout underneath. Dragging its header up/down
+		     grows/shrinks the log surface WITHOUT reflowing Objects, so no
+		     scrollbar ever appears on Objects as a side effect. -->
+		<div id="lp-zone-bottom">
+			<div id="lp-split-handle" title="Drag to resize" role="separator" aria-orientation="horizontal"></div>
+			<div id="lp-zone-bottom-header" title="Drag to resize">
+				<span class="rp-kicker">AI Agent</span>
+				<span class="rp-header-end" id="lp-zone-bottom-controls"></span>
+			</div>
+			<div id="lp-zone-bottom-body">
+				<div class="rp-pane" id="lp-pane-assistant"></div>
+			</div>
+			<!-- CONTEXT chip + CHAT INPUT are hoisted here at boot from inside
+			     the assistant-shell. Since the overlay's bottom edge is glued
+			     to the panel bottom, these controls never move regardless of
+			     how the overlay's top edge is dragged. -->
+			<div id="lp-fixed-bottom"></div>
 		</div>
 
 		<div class="section collapsible" id="assistant-section" data-section="assistant">
@@ -3239,6 +3479,7 @@
 			<video id="canvas-bg-video" playsinline muted loop></video>
 			<canvas id="renderCanvas"></canvas>
 			<div id="split-divider"></div>
+			<div id="split-active-half"></div>
 			<!-- Initializing curtain — blocks pointer events during scene hydration so a
 			     mid-boot orbit/click/drop doesn't get clobbered when deserializeScene
 			     re-applies camera + objects. Removed by the boot IIFE. -->
@@ -3250,25 +3491,26 @@
 				<span class="v1"></span><span class="v2"></span>
 				<div id="viewport-time-corner"><span id="tl-time">0.00s / 4.00s</span></div>
 				<div id="viewport-axes-corner"><span style="color:#ff5252">X</span><span style="color:#4ade80">Y</span><span style="color:#4a8aff">Z</span></div>
-				<div id="viewport-mode-corner">
-					<!-- Split-view — renders BOTH sceneCam (perspective/orbit) on
-					     the left and renderCam (framed shot) on the right using
-					     setViewport + setScissor. Toggle sits next to mode-view-
-					     toggle so they read as one cluster: pick a single view
-					     OR split. -->
-					<button class="vpm-btn" id="mode-split-toggle" title="Toggle split view — perspective on the left, camera on the right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 19H5c-1 0-2-1-2-2V7c0-1 1-2 2-2h3"/><path d="M16 5h3c1 0 2 1 2 2v10c0 1-1 2-2 2h-3"/><line x1="12" x2="12" y1="4" y2="20"/></svg></button>
-					<!-- Left-half view-toggle — only visible in split mode. Icon
-					     shows which view is currently on the LEFT half. Click to
-					     swap the two halves (since split must show two DIFFERENT
-					     views, flipping one implicitly flips the other). -->
+				<!-- Left-half view-toggle lives in its own top-left cluster so each
+				     split half has a toggle in its own corner. Hidden outside split. -->
+				<div id="viewport-mode-corner-left">
 					<button class="vpm-btn" id="mode-view-toggle-left" title="Left-half view — click to swap left/right halves" hidden></button>
+				</div>
+				<div id="viewport-mode-corner">
 					<!-- Single view-toggle: flips between camera view (look through the
 					     framed render camera) and perspective/scene view (orbit around
 					     the shot). The SVG is swapped by updateViewToggleIcon() so the
 					     button always shows the ACTIVE view. In split mode this button
 					     represents the RIGHT-half view and clicking it swaps the two
-					     halves. -->
+					     halves. Sits on TOP of the stack so each split half's toggle
+					     lives in that half's top corner (left corner has the mirror). -->
 					<button class="vpm-btn active" id="mode-view-toggle" title="Switch between camera view and perspective view"></button>
+					<!-- Split-view — renders BOTH sceneCam (perspective/orbit) on
+					     the left and renderCam (framed shot) on the right using
+					     setViewport + setScissor. Sits BELOW the view-toggle so the
+					     right-half toggle reads as belonging to the right half, and
+					     the split control tucks under it. -->
+					<button class="vpm-btn" id="mode-split-toggle" title="Toggle split view — perspective on the left, camera on the right"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 19H5c-1 0-2-1-2-2V7c0-1 1-2 2-2h3"/><path d="M16 5h3c1 0 2 1 2 2v10c0 1-1 2-2 2h-3"/><line x1="12" x2="12" y1="4" y2="20"/></svg></button>
 				</div>
 			</div>
 			<!-- Load Media overlay — a static image or looping video shown in
@@ -3357,21 +3599,21 @@
 	</div>
 
 	<aside id="right-panel">
-		<!-- TOP ZONE — dedicated AI Agent surface. Always visible when the
-		     agent is enabled (Settings). Split from the bottom switcher zone
-		     by #rp-split-handle so users can drag to resize. Below the top
-		     zone lives #rp-zone-bottom which owns the property/asset/scene
-		     switcher (the original single-panel layout, now scoped to a zone). -->
+		<!-- TOP ZONE — Outliner surface. Sits ABOVE the property switcher so
+		     the user's eye can hop [scene list → object properties] top-down
+		     within the same column, matching Blender's convention (avoids the
+		     left↔right eye jog that the previous layout forced). Split from
+		     the properties zone by #rp-split-handle so users can drag to
+		     resize. The Outliner section itself is declared in the LEFT panel
+		     HTML and hoisted here at boot so the existing event wiring keeps
+		     working unchanged. -->
 		<div id="rp-zone-top">
 			<div id="rp-zone-top-header" title="Click to collapse / expand">
-				<span class="rp-kicker">AI Agent</span>
+				<span class="rp-kicker">Outliner</span>
 				<span class="rp-header-end" id="rp-zone-top-controls"></span>
 			</div>
 			<div id="rp-zone-top-body">
-				<!-- Assistant pane lives here permanently now. The boot IIFE
-				     hoists #assistant-section into it, same as before — only
-				     the parent has changed. -->
-				<div class="rp-pane" id="rp-pane-assistant"></div>
+				<div class="rp-pane" id="rp-pane-outliner"></div>
 			</div>
 		</div>
 		<div id="rp-split-handle" title="Drag to resize" role="separator" aria-orientation="horizontal"></div>
@@ -3960,6 +4202,23 @@
 						<div class="drag-num" id="cam-handheld-noise"><span class="drag-label">Noise</span><span class="drag-val">0%</span></div>
 					</div>
 					<div class="hint" style="margin-top:6px">Adds subtle position + rotation shake to the render camera. 0% = off.</div>
+				</div>
+				<!-- Motion Path — chip that only appears while the camera has a path
+				     (keyframes OR active turntable orbit). Click jumps straight to the
+				     Turntable pane so the user can tweak Arc / Start / Ease / Radius
+				     without hunting through the tools grid. -->
+				<div class="section" id="cam-path-section" hidden>
+					<div class="section-label">Motion Path</div>
+					<div style="display:flex; gap:6px; margin-top:6px; align-items:stretch">
+						<button type="button" id="cam-path-open" class="mp-still-btn" style="flex:1; text-align:left">
+							<span id="cam-path-open-label">Turntable — edit arc, start, ease…</span>
+						</button>
+						<!-- Clear button — wipes the procedural orbit + any camera
+						     keyframes so the user can start over without hunting
+						     for the Turntable pane's own clear control. -->
+						<button type="button" id="cam-path-clear" title="Clear this camera path (removes orbit + keyframes)" style="flex:0 0 32px; padding:0; border:none; background:rgba(255,80,80,0.10); color:rgba(255,120,120,0.85); border-radius:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px; line-height:1">×</button>
+					</div>
+					<div class="hint" style="margin-top:6px">Opens the Turntable settings for this camera path.</div>
 				</div>
 			</div>
 
@@ -5534,11 +5793,14 @@ let activeView = "scene";
 // of activeView (which one gets the OrbitControls + input). Toggled by the
 // split-view button in the top-right of the viewport.
 let _splitView = false;
-// When _splitView is on, _splitSwapped controls which camera goes on which
-// half. false (default) = perspective on left, camera on right. true = swap.
-// The two view-toggle buttons in the corner both flip this so the user can
-// think of "the left button" or "the right button" — either action swaps.
-let _splitSwapped = false;
+// Per-half view state — each half independently shows "scene" (sceneCam,
+// perspective/orbit) or "camera" (renderCam, framed shot). The top-corner
+// toggle button on each half only flips its OWN side's state (previous
+// behavior swapped both halves; user asked for independent control). Both
+// halves can show the same view — it just renders the same camera twice
+// and OrbitControls targets that camera regardless of which half is clicked.
+let _splitLeftView = "scene";
+let _splitRightView = "camera";
 // When swapping to Scene view, reposition sceneCam so the render camera and what it's
 // pointed at are both in frame — user gets an over-the-shoulder overview instead of
 // wherever sceneCam happened to be parked.
@@ -7651,6 +7913,10 @@ class _PointLightGlyph extends THREE.Group {
 			}
 			this.radiusRing = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(ringPts2), this._ringMat);
 			this.radiusRing.renderOrder = 998;
+			// Hidden until the wrapper is selected — the falloff boundary is a
+			// selection-time handle, not a permanent scene ornament (matches the
+			// camera orbit ring pattern).
+			this.radiusRing.visible = false;
 			this.sunburst.add(this.radiusRing);
 		}
 		// Prevent frustum culling so the glyph stays visible regardless of the
@@ -8311,7 +8577,10 @@ function forceRightPane(which, label) {
 	const sepEl = document.getElementById("rp-sep");
 	if (objPane) objPane.hidden = which !== "object";
 	if (scnPane) scnPane.hidden = which !== "scene";
-	if (camPane) camPane.hidden = which !== "camera";
+	if (camPane) {
+		camPane.hidden = which !== "camera";
+		if (which === "camera" && typeof _refreshCameraPathIndicator === "function") _refreshCameraPathIndicator();
+	}
 	if (astPane) astPane.hidden = which !== "assets";
 	if (genPane) genPane.hidden = which !== "gencell";
 	if (wfPane)  wfPane.hidden  = which !== "workflowcell";
@@ -8421,12 +8690,9 @@ function isAssistantEnabled() {
 function applyAssistantEnablement() {
 	const on = isAssistantEnabled();
 	document.body.classList.toggle("assistant-off", !on);
-	// If the assistant pane is currently active and the user just turned it off,
-	// blank the panel so it's not showing hidden content.
-	if (!on) {
-		const pane = document.getElementById("rp-pane-assistant");
-		if (pane && !pane.hidden) forceRightPane("none");
-	}
+	// Left-panel bottom zone visibility is driven by the .no-agent class on
+	// #panel (see the split-handle IIFE); no per-pane action needed here now
+	// that the assistant lives in a dedicated zone instead of the switcher.
 }
 window.isAssistantEnabled = isAssistantEnabled;
 // Toggle wiring: change instantly persists and re-applies. No reload needed.
@@ -8439,188 +8705,210 @@ document.getElementById("assistant-toggle")?.addEventListener("change", (e) => {
 });
 applyAssistantEnablement();
 
-// Move the assistant section from the left sidebar into the right-panel Assistant
-// pane at boot. Keeping the same DOM node means all `#assistant-*` listeners wired
-// elsewhere in the file (send/reset/log append/etc.) keep working — we just changed
-// where the element renders.
+// Layout hoist at boot: Outliner → right-panel top zone, Assistant → left-
+// panel bottom zone. Both sections are declared in the left #panel HTML (with
+// #assistant-section as a stray tail element) — moving the DOM nodes keeps
+// every existing `#assistant-*` / `#outliner*` listener working, we just
+// changed where the elements render.
 (() => {
+	// Outliner → right panel top zone.
+	const outlinerSection = document.querySelector('[data-section="outliner"]');
+	const outlinerDst = document.getElementById("rp-pane-outliner");
+	if (outlinerSection && outlinerDst && outlinerSection.parentElement !== outlinerDst) {
+		outlinerDst.appendChild(outlinerSection);
+	}
+	// Hoist the Outliner's hide-all + clear buttons into the right-panel
+	// top-zone header slot so they sit alongside the "Outliner" kicker (its
+	// own section-head-row is hidden by CSS to avoid a duplicate label).
+	const rpTopControls = document.getElementById("rp-zone-top-controls");
+	const hideAllBtn = document.getElementById("outliner-hide-all");
+	const clearBtn = document.getElementById("clear-btn");
+	if (rpTopControls) {
+		if (hideAllBtn) rpTopControls.appendChild(hideAllBtn);
+		if (clearBtn) rpTopControls.appendChild(clearBtn);
+	}
+
+	// Assistant → left-panel bottom zone.
 	const src = document.getElementById("assistant-section");
-	const dst = document.getElementById("rp-pane-assistant");
+	const dst = document.getElementById("lp-pane-assistant");
 	if (src && dst && src.parentElement !== dst) dst.appendChild(src);
 
-	// Hoist the MCP status pill up to the TOP zone's own header slot so it
-	// sits on the same baseline as the AI AGENT kicker.
-	const headerEnd = document.getElementById("rp-zone-top-controls");
-	const status = document.getElementById("assistant-status");
-	if (headerEnd && status) headerEnd.appendChild(status);
+	// Pull the CONTEXT chip + CHAT INPUT out of the assistant-shell and dock
+	// them into #lp-fixed-bottom (a sibling of the resizable AI Agent zone).
+	// Living outside the resizable zone means they stay glued to the panel's
+	// bottom edge and never move as the user drags the split handle. The band
+	// keeps its .assistant-bottom-band class so existing event wiring keeps
+	// working; only the parent changed.
+	const band = src?.querySelector(".assistant-bottom-band");
+	const fixedBottom = document.getElementById("lp-fixed-bottom");
+	if (band && fixedBottom && band.parentElement !== fixedBottom) {
+		fixedBottom.appendChild(band);
+	}
 
-	// Split-handle drag — resizes the top zone height by pushing the value
-	// into --rp-top-basis on #right-panel. Persisted to localStorage so the
-	// user's workspace layout carries across sessions and projects.
+	// Hoist the MCP status pill + workflow-import button into the left-panel
+	// bottom-zone header slot so they sit on the same baseline as the AI AGENT
+	// kicker (the section's own head-row is hidden by CSS to avoid a duplicate).
+	const headerEnd = document.getElementById("lp-zone-bottom-controls");
+	const status = document.getElementById("assistant-status");
+	const importBtn = document.getElementById("assistant-import-btn");
+	if (headerEnd) {
+		// Order: status pill first (left), then the import button (right) — reads
+		// as "[MCP · idle]  [↑]" so the import affordance sits at the far right
+		// where trailing actions usually land.
+		if (status) headerEnd.appendChild(status);
+		if (importBtn) headerEnd.appendChild(importBtn);
+	}
+
+	// ── Right-panel split (Outliner ↑ / Properties ↓) ────────────────
+	// Handle drags to resize the Outliner zone; --rp-top-basis on #right-panel
+	// controls #rp-zone-top height directly (it now sits at visual TOP after
+	// the flex-order swap that moved Properties below). Persisted to
+	// localStorage so the layout survives sessions.
 	const RP_TOP_KEY = "cb.rightPanel.topBasis";
-	const panel = document.getElementById("right-panel");
-	const handle = document.getElementById("rp-split-handle");
-	const savedBasis = (() => { try { return localStorage.getItem(RP_TOP_KEY); } catch { return null; } })();
-	if (panel && savedBasis) panel.style.setProperty("--rp-top-basis", savedBasis);
-	// Constants shared between the drag handle and the click-to-collapse
-	// handler — hoisted here so both closures can read them.
-	// Minimum agent zone height while drag-sizing. Accounts for:
-	//   zone border-top (1) + header (40) + header border-bottom (1) +
-	//   context chip (~32) + input row (78) = 152.
-	// Anything smaller clips the bottom of the input row so it no longer
-	// visually equals the transport bar's height next to it. The agent
-	// panel can never be closed by the drag handle.
-	const AGENT_MIN_PX = 142;
-	// Once the agent zone is within this many pixels of its minimum, snap
-	// into the "collapsed" class so the chat log hides and dragging feels
-	// like a smooth handoff into the click-collapse layout.
-	const AGENT_COLLAPSE_SNAP_PX = 12;
-	// Switcher only needs to keep the top header row (PROPERTIES · <object>)
-	// legible — anything below is padding/section-label the user can happily
-	// scroll away when they want the agent zone maxed. 40px = exactly the
-	// #rp-header row, so at the minimum the body has 0px and no scrollbar
-	// or APPEARANCE section leaks through.
-	const SWITCHER_MIN_PX = 40;
-	// Default expanded height for the agent zone when the user click-expands
-	// after a previous drag/click-collapse left the basis near the minimum.
-	// Without this, expanding from a min-sized zone leaves the log with 0px
-	// of usable space above the context + input rows.
-	const AGENT_DEFAULT_EXPAND_PX = 360;
-	if (handle && panel) {
+	const rpPanel = document.getElementById("right-panel");
+	const rpHandle = document.getElementById("rp-split-handle");
+	const rpSaved = (() => { try { return localStorage.getItem(RP_TOP_KEY); } catch { return null; } })();
+	if (rpPanel && rpSaved) rpPanel.style.setProperty("--rp-top-basis", rpSaved);
+	// Outliner shrinks to just its 40px header row so the user can drag the
+	// handle all the way to the top and give Properties the full column
+	// (matches the AI Agent zone's drag-collapse-to-header behavior).
+	const OUTLINER_MIN_PX = 40;
+	const PROPS_MIN_PX = 40;
+	if (rpHandle && rpPanel) {
 		let dragging = false;
-		// Shared handlers so both the thin 5px handle AND the AI Agent header
-		// bar (larger target, easier to grab) route through the same drag
-		// logic. The header also handles click-to-collapse; a "did the pointer
-		// move more than DRAG_THRESHOLD_PX" check distinguishes drag from click.
-		const DRAG_THRESHOLD_PX = 3;
-		let pendingDown = null; // { y, source } while below threshold
-		const startDrag = (source) => {
+		let pendingDown = null;
+		const RP_DRAG_THRESHOLD_PX = 3;
+		const startRpDrag = () => {
 			dragging = true;
-			handle.classList.add("dragging");
+			rpHandle.classList.add("dragging");
 			document.body.style.cursor = "row-resize";
 			document.body.style.userSelect = "none";
-			if (panel.classList.contains("rp-agent-collapsed")) {
-				panel.classList.remove("rp-agent-collapsed");
-				try { localStorage.setItem(RP_AGENT_COLLAPSED_KEY, "0"); } catch {}
-			}
 		};
-		handle.addEventListener("mousedown", (e) => {
-			startDrag("handle");
+		// Amber handle starts drag immediately (dedicated drag surface).
+		rpHandle.addEventListener("mousedown", (e) => {
+			startRpDrag();
 			e.preventDefault();
 		});
-		// Also let the AI Agent header bar act as a drag handle. Pressing on it
-		// arms the drag; if the pointer moves past the threshold before mouseup,
-		// we upgrade to drag mode (and suppress the collapse-click handler).
-		document.getElementById("rp-zone-top-header")?.addEventListener("mousedown", (e) => {
-			// Ignore mousedown that starts on interactive header controls
-			// (MCP pill, etc.) so those keep their own behavior.
-			if (e.target.closest("button, input, .assistant-status")) return;
+		// The PROPERTIES header band also acts as a drag surface — grab
+		// anywhere on it (except interactive controls in the end-slot) and
+		// drag up/down to resize. Small threshold disambiguates drag from
+		// stray clicks on the label.
+		document.getElementById("rp-header")?.addEventListener("mousedown", (e) => {
+			if (e.target.closest("button, input, select, textarea, #rp-header-end, .assets-filter, .assistant-status")) return;
 			pendingDown = { y: e.clientY };
 		});
 		window.addEventListener("mousemove", (e) => {
 			if (pendingDown && !dragging) {
-				if (Math.abs(e.clientY - pendingDown.y) >= DRAG_THRESHOLD_PX) {
-					startDrag("header");
-				} else {
-					return;
-				}
+				if (Math.abs(e.clientY - pendingDown.y) >= RP_DRAG_THRESHOLD_PX) startRpDrag();
+				else return;
 			}
 			if (!dragging) return;
-			const rect = panel.getBoundingClientRect();
+			const rect = rpPanel.getBoundingClientRect();
 			const y = e.clientY - rect.top;
-			const clamped = Math.max(SWITCHER_MIN_PX, Math.min(rect.height - AGENT_MIN_PX, y));
-			const agentPx = rect.height - clamped;
-			// Snap into the collapsed class near the min so drag-to-bottom and
-			// click-to-collapse produce an identical final state (chat log
-			// hidden, header + context + input visible).
-			const wantCollapsed = agentPx <= AGENT_MIN_PX + AGENT_COLLAPSE_SNAP_PX;
-			panel.classList.toggle("rp-agent-collapsed", wantCollapsed);
-			try {
-				localStorage.setItem(RP_AGENT_COLLAPSED_KEY, wantCollapsed ? "1" : "0");
-			} catch {}
-			const pct = ((agentPx / rect.height) * 100).toFixed(2) + "%";
-			panel.style.setProperty("--rp-top-basis", pct);
+			const outlinerPx = Math.max(OUTLINER_MIN_PX, Math.min(rect.height - PROPS_MIN_PX, y));
+			const pct = ((outlinerPx / rect.height) * 100).toFixed(2) + "%";
+			rpPanel.style.setProperty("--rp-top-basis", pct);
 		});
 		window.addEventListener("mouseup", () => {
 			pendingDown = null;
 			if (!dragging) return;
 			dragging = false;
-			handle.classList.remove("dragging");
+			rpHandle.classList.remove("dragging");
 			document.body.style.cursor = "";
 			document.body.style.userSelect = "";
-			// Swallow the imminent click event so header drag doesn't ALSO
-			// trigger collapse-toggle. capture-phase listener on header + a
-			// one-shot flag.
-			_suppressHeaderClickOnce = true;
 			try {
-				const current = panel.style.getPropertyValue("--rp-top-basis").trim();
+				const current = rpPanel.style.getPropertyValue("--rp-top-basis").trim();
 				if (current) localStorage.setItem(RP_TOP_KEY, current);
 			} catch {}
 		});
 	}
-	// Set + read by the drag/click handlers so a mouseup-that-ended-a-drag
-	// doesn't fall through to the collapse-toggle click.
-	let _suppressHeaderClickOnce = false;
 
-	// Reflect assistant-enabled setting: when off, hide the whole top zone
-	// (and its handle) so the switcher takes the full column. Rerun whenever
-	// the user flips the toggle in Settings.
+	// ── Left-panel AI Agent overlay drag ─────────────────────────────
+	// The AI Agent is an absolutely-positioned floating overlay pinned to the
+	// panel bottom. Dragging its header up/down changes --lp-agent-h (pixels),
+	// which sets the overlay's height. Objects underneath is untouched by the
+	// drag — no reflow, no scrollbar side-effect. Height is stored in pixels
+	// (not %) so the overlay's absolute size is deterministic across resizes.
+	const LP_AGENT_H_KEY = "cb.leftPanel.agentH";
+	const lpPanel = document.getElementById("panel");
+	const lpAgentHeader = document.getElementById("lp-zone-bottom-header");
+	const lpAgentHandle = document.getElementById("lp-split-handle");
+	// Min height = handle (5) + header (40) + context chip (~22) + input row (78) = 145.
+	const AGENT_MIN_PX = 145;
+	// Cap the overlay's max height so the OBJECTS header always stays visible
+	// at the top of the panel — the user asked for this floor so they can
+	// always tap the OBJECTS band to jump back regardless of chat size.
+	const OBJECTS_HEADER_PX = 40;
+	const DRAG_THRESHOLD_PX = 3;
+	const setAgentHeight = (px) => {
+		lpPanel?.style.setProperty("--lp-agent-h", `${px}px`);
+	};
+	const lpSaved = (() => { try { return localStorage.getItem(LP_AGENT_H_KEY); } catch { return null; } })();
+	if (lpPanel && lpSaved) {
+		const px = parseFloat(lpSaved);
+		if (Number.isFinite(px) && px > 0) setAgentHeight(px);
+	}
+	if (lpPanel) {
+		let dragging = false;
+		let pendingDown = null;
+		const startDrag = () => {
+			dragging = true;
+			lpAgentHandle?.classList.add("dragging");
+			document.body.style.cursor = "ns-resize";
+			document.body.style.userSelect = "none";
+		};
+		// Grabbing the amber handle starts a drag immediately (it's a
+		// dedicated drag surface, no click ambiguity). The header uses a small
+		// movement threshold so a stray click on the AI AGENT band doesn't
+		// register as a resize.
+		lpAgentHandle?.addEventListener("mousedown", (e) => {
+			startDrag();
+			e.preventDefault();
+		});
+		lpAgentHeader?.addEventListener("mousedown", (e) => {
+			if (e.target.closest("button, input, .assistant-status")) return;
+			pendingDown = { y: e.clientY };
+		});
+		window.addEventListener("mousemove", (e) => {
+			if (pendingDown && !dragging) {
+				if (Math.abs(e.clientY - pendingDown.y) >= DRAG_THRESHOLD_PX) startDrag();
+				else return;
+			}
+			if (!dragging) return;
+			const rect = lpPanel.getBoundingClientRect();
+			// cursor y from the panel bottom → overlay height. Dragging up
+			// (cursor higher = smaller e.clientY - rect.top) grows the overlay.
+			const y = e.clientY - rect.top;
+			const desiredHeight = rect.height - y;
+			const maxHeight = rect.height - OBJECTS_HEADER_PX;
+			const clamped = Math.max(AGENT_MIN_PX, Math.min(maxHeight, desiredHeight));
+			setAgentHeight(clamped);
+		});
+		window.addEventListener("mouseup", () => {
+			pendingDown = null;
+			if (!dragging) return;
+			dragging = false;
+			lpAgentHandle?.classList.remove("dragging");
+			document.body.style.cursor = "";
+			document.body.style.userSelect = "";
+			try {
+				const current = lpPanel.style.getPropertyValue("--lp-agent-h").trim();
+				if (current) localStorage.setItem(LP_AGENT_H_KEY, current);
+			} catch {}
+		});
+	}
+	// Reflect assistant-enabled setting: when off, hide the whole bottom zone
+	// + handle so Objects/Tools/Workflows take the full left column.
 	function syncAgentZoneVisibility() {
-		if (!panel) return;
+		if (!lpPanel) return;
 		const on = !!isAssistantEnabled?.();
-		panel.classList.toggle("no-agent", !on);
+		lpPanel.classList.toggle("no-agent", !on);
 	}
 	syncAgentZoneVisibility();
 	window.__syncAgentZoneVisibility = syncAgentZoneVisibility;
 
-	// Collapse toggle — click the AI Agent zone header to fold the chat log
-	// away, leaving just the header + context chip + input row (~80-90px).
-	// Click again to expand back to the last drag-sized height. State
-	// persisted so the user's preference sticks across sessions.
-	const RP_AGENT_COLLAPSED_KEY = "cb.rightPanel.agentCollapsed";
-	const savedCollapsed = (() => { try { return localStorage.getItem(RP_AGENT_COLLAPSED_KEY) === "1"; } catch { return false; } })();
-	if (panel && savedCollapsed) panel.classList.add("rp-agent-collapsed");
-	document.getElementById("rp-zone-top-header")?.addEventListener("click", (e) => {
-		// If this "click" is the tail end of a drag on the header (mouseup
-		// after moving past the drag threshold), skip the collapse-toggle —
-		// otherwise every resize also flips the collapse state.
-		if (_suppressHeaderClickOnce) {
-			_suppressHeaderClickOnce = false;
-			return;
-		}
-		// Ignore clicks on the status pill so it doesn't trigger collapse
-		// when the user is just glancing at the MCP status.
-		if (e.target.closest("#assistant-status, #rp-zone-top-controls")) return;
-		if (!panel) return;
-		const wasCollapsed = panel.classList.contains("rp-agent-collapsed");
-		panel.classList.toggle("rp-agent-collapsed");
-		const nowCollapsed = panel.classList.contains("rp-agent-collapsed");
-		try {
-			localStorage.setItem(RP_AGENT_COLLAPSED_KEY, nowCollapsed ? "1" : "0");
-		} catch {}
-		// If the user just expanded, make sure --rp-top-basis gives the log
-		// enough room. If a prior drag/collapse left the basis at the min,
-		// expanding would leave the log with 0px of usable space — restore a
-		// comfortable default so the panel actually grows on click.
-		if (wasCollapsed && !nowCollapsed) {
-			const rect = panel.getBoundingClientRect();
-			const rawBasis = panel.style.getPropertyValue("--rp-top-basis").trim();
-			const currentPct = parseFloat(rawBasis) || 0;
-			const currentPx = currentPct * rect.height / 100;
-			if (currentPx < AGENT_DEFAULT_EXPAND_PX) {
-				const targetPx = Math.min(AGENT_DEFAULT_EXPAND_PX, rect.height - SWITCHER_MIN_PX);
-				const pct = ((targetPx / rect.height) * 100).toFixed(2) + "%";
-				panel.style.setProperty("--rp-top-basis", pct);
-				try { localStorage.setItem(RP_TOP_KEY, pct); } catch {}
-			}
-		}
-	});
-
 	const btn = document.getElementById("th-assistant");
 	if (!btn) return;
-	// Assistant lives in the permanent top zone now — the top-header button
-	// just focuses the chat input as a quick "jump to agent" gesture instead
-	// of swapping the switcher pane.
 	btn.addEventListener("click", () => {
 		document.getElementById("assistant-input")?.focus();
 	});
@@ -8760,6 +9048,8 @@ function select(obj, opts = {}) {
 		orbit.enabled = false;
 		forceRightPane("camera", "Camera");
 		refreshOutliner();
+		if (typeof _updateCamOrbitRingVisibility === "function") _updateCamOrbitRingVisibility();
+		if (typeof refreshAnimPaths === "function") refreshAnimPaths();
 		return;
 	}
 	if (!obj) {
@@ -8779,6 +9069,8 @@ function select(obj, opts = {}) {
 		// up acting on nothing (or worse, on stale selection state).
 		if (typeof refreshChatContextChip === "function") refreshChatContextChip();
 	if (typeof _refreshBoolPane === "function") _refreshBoolPane();
+		if (typeof _updateCamOrbitRingVisibility === "function") _updateCamOrbitRingVisibility();
+		if (typeof refreshAnimPaths === "function") refreshAnimPaths();
 		return;
 	}
 	if (additive) {
@@ -8833,6 +9125,10 @@ function select(obj, opts = {}) {
 	// address it by name without the user having to type it.
 	if (typeof refreshChatContextChip === "function") refreshChatContextChip();
 	if (typeof _refreshBoolPane === "function") _refreshBoolPane();
+	// Camera-only overlays (motion path + orbit ring) are gated on renderCam
+	// being selected — refresh whenever selection transitions.
+	if (typeof _updateCamOrbitRingVisibility === "function") _updateCamOrbitRingVisibility();
+	if (typeof refreshAnimPaths === "function") refreshAnimPaths();
 }
 
 function toggleVisibility(obj) {
@@ -9202,12 +9498,13 @@ function refreshOutliner() {
 			saveScene?.();
 		});
 		camRow.addEventListener("click", () => {
-			// Toggle — second click on the row closes the Camera pane back to
-			// the default (Object if something's selected, else nothing). Same
-			// behavior as the top-toolbar cam-props-btn.
+			// Toggle — second click on the row closes the Camera pane AND drops
+			// the selection so nothing stays highlighted. First click routes
+			// through select(renderCam), which clears the selection set + opens
+			// the Camera pane, so any previously-selected object gets deselected.
 			const pane = document.getElementById("rp-pane-camera");
-			if (pane && !pane.hidden) forceRightPane(defaultRightPane());
-			else forceRightPane("camera", "Camera");
+			if (pane && !pane.hidden) select(null);
+			else select(renderCam);
 		});
 		outlinerEl.appendChild(camRow);
 	}
@@ -9518,9 +9815,30 @@ canvas.addEventListener("pointerup", e => {
 		return;
 	}
 	const rect = canvas.getBoundingClientRect();
-	ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-	ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+	// Split view: each half renders with a HALF-aspect projection (halfW/height),
+	// not the full-canvas aspect the camera is normally restored to. Picking has
+	// to match — remap the click's x to the half's local NDC and temporarily set
+	// the camera's aspect to the half's aspect before the raycast, else the ray
+	// direction bends off from the pixel the user actually clicked on.
+	let _splitPickPrevAsp = null;
+	if (_splitView) {
+		const halfW = rect.width / 2;
+		const inLeft = e.clientX < rect.left + halfW;
+		const localX = inLeft ? (e.clientX - rect.left) : (e.clientX - rect.left - halfW);
+		ndc.x = (localX / halfW) * 2 - 1;
+		ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+		_splitPickPrevAsp = camera.aspect;
+		camera.aspect = halfW / rect.height;
+		camera.updateProjectionMatrix();
+	} else {
+		ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+		ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+	}
 	raycaster.setFromCamera(ndc, camera);
+	if (_splitPickPrevAsp !== null) {
+		camera.aspect = _splitPickPrevAsp;
+		camera.updateProjectionMatrix();
+	}
 	// Click the render-camera wireframe in Scene view → select renderCam so its
 	// transform gizmo comes up. Checked first so the wireframe wins over any object
 	// that happens to be behind it.
@@ -16106,6 +16424,31 @@ for (const section of document.querySelectorAll("#panel .section.collapsible")) 
 		}
 	});
 }
+// The OBJECTS section's own head-row is now hidden (its label lives in the
+// dedicated #lp-zone-top-header band above). Wire that band to toggle the
+// section instead — and force-uncollapse on boot in case a stale
+// persisted-collapsed state would leave the grid hidden with no way to reopen.
+(() => {
+	const objSection = document.querySelector('#lp-zone-top-body [data-section="objects"]');
+	const header = document.getElementById("lp-zone-top-header");
+	if (!objSection) return;
+	// Purge any lingering collapsed state so the OBJECTS grid is always visible
+	// after the head-row hide — the persisted key had no fallback opener before.
+	objSection.classList.remove("collapsed");
+	if (collapsedSections.has("objects")) {
+		collapsedSections.delete("objects");
+		saveCollapsedSections();
+	}
+	if (!header) return;
+	header.style.cursor = "pointer";
+	header.addEventListener("click", (e) => {
+		if (e.target.closest("button, input, textarea, select")) return;
+		objSection.classList.toggle("collapsed");
+		if (objSection.classList.contains("collapsed")) collapsedSections.add("objects");
+		else collapsedSections.delete("objects");
+		saveCollapsedSections();
+	});
+})();
 
 // ── Assistant (LLM + Comfy MCP) ───────────────────────────────────
 const assistantLog = document.getElementById("assistant-log");
@@ -16119,7 +16462,7 @@ const assistantStatus = document.getElementById("assistant-status");
 // as every other drop target in the app, so behavior stays consistent.
 (() => {
 	const targets = [
-		document.querySelector("#rp-pane-assistant .assistant-input-row"),
+		document.querySelector("#lp-fixed-bottom .assistant-input-row"),
 		document.getElementById("assistant-log"),
 	].filter(Boolean);
 	for (const el of targets) {
@@ -16266,9 +16609,9 @@ function pushAssistantMsg(kind, text, opts = {}) {
 	// already read them in the previous session, and re-adding .has-new every
 	// reload leaves the handle pulsing until the log is cleared.
 	if (kind === "bot" && !opts.silent) {
-		const panel = document.getElementById("right-panel");
-		const handle = document.getElementById("rp-split-handle");
-		if (panel?.classList.contains("rp-agent-collapsed") && handle) {
+		const panel = document.getElementById("panel");
+		const handle = document.getElementById("lp-split-handle");
+		if (panel?.classList.contains("lp-agent-collapsed") && handle) {
 			handle.classList.add("has-new");
 		}
 	}
@@ -16280,12 +16623,12 @@ function pushAssistantMsg(kind, text, opts = {}) {
 // Attached once at boot; the observer node persists for the app lifetime.
 (function wireAgentNewMessagePulseClear() {
 	const attach = () => {
-		const panel = document.getElementById("right-panel");
-		const handle = document.getElementById("rp-split-handle");
+		const panel = document.getElementById("panel");
+		const handle = document.getElementById("lp-split-handle");
 		if (!panel || !handle) return;
-		let wasCollapsed = panel.classList.contains("rp-agent-collapsed");
+		let wasCollapsed = panel.classList.contains("lp-agent-collapsed");
 		new MutationObserver(() => {
-			const nowCollapsed = panel.classList.contains("rp-agent-collapsed");
+			const nowCollapsed = panel.classList.contains("lp-agent-collapsed");
 			if (wasCollapsed && !nowCollapsed) handle.classList.remove("has-new");
 			wasCollapsed = nowCollapsed;
 		}).observe(panel, { attributes: true, attributeFilter: ["class"] });
@@ -17767,12 +18110,16 @@ window.updateViewToggleIcon = updateViewToggleIcon;
 // matching the old dedicated Camera-pill behavior. The Camera / Scene property
 // panes stay accessible via the right-panel header.
 document.getElementById("mode-view-toggle")?.addEventListener("click", () => {
-	// In split mode this button represents the RIGHT half — click to flip
-	// which view goes where. No setActiveView call needed; the render loop
-	// picks up _splitSwapped directly and pointerdown routes input.
+	// In split mode this button ONLY controls the RIGHT half — flip its view
+	// without touching the left.
 	if (_splitView) {
-		_splitSwapped = !_splitSwapped;
+		const prev = _splitRightView;
+		_splitRightView = _splitRightView === "scene" ? "camera" : "scene";
+		// If pointer focus was on the right half, retarget activeView so
+		// OrbitControls + gizmo follow the button's action.
+		if (activeView === prev) setActiveView(_splitRightView);
 		_refreshSplitToggleIcons();
+		_updateSplitActiveHalfHighlight();
 		return;
 	}
 	const next = (typeof activeView !== "undefined" && activeView === "camera") ? "scene" : "camera";
@@ -17792,67 +18139,76 @@ document.getElementById("mode-split-toggle")?.addEventListener("click", () => {
 	const leftBtn = document.getElementById("mode-view-toggle-left");
 	if (leftBtn) leftBtn.hidden = !_splitView;
 	_refreshSplitToggleIcons();
+	_updateSplitActiveHalfHighlight();
 });
-// Left + right half view-toggles both flip _splitSwapped. Either button
-// represents "swap the two halves" from the user's mental model — since
-// split must show two DIFFERENT views (otherwise pointless), flipping one
-// half implicitly flips the other.
+// Each split-half toggle now controls ONLY its own half — the button glyph
+// mirrors that half's rendered view; click flips that side without touching
+// the other. Both halves may render the same view (redundant but allowed).
 function _refreshSplitToggleIcons() {
 	if (typeof updateViewToggleIcon !== "function") return;
 	if (!_splitView) {
 		updateViewToggleIcon(typeof activeView !== "undefined" ? activeView : "scene");
 		return;
 	}
-	// In split: right button shows right-half view, left button shows left-half.
-	const leftView = _splitSwapped ? "camera" : "scene";
-	const rightView = _splitSwapped ? "scene" : "camera";
-	updateViewToggleIcon(rightView); // paints #mode-view-toggle (the right)
-	// Paint the left one by temporarily aiming updateViewToggleIcon at it.
+	updateViewToggleIcon(_splitRightView); // paints #mode-view-toggle (right corner)
+	// Left button — swap ids temporarily so updateViewToggleIcon paints the left one.
 	const leftBtn = document.getElementById("mode-view-toggle-left");
-	if (leftBtn) {
-		// Reuse the same SVG mapping — pull from _VIEW_TOGGLE_ICONS if exposed,
-		// otherwise use a compact inline set matching the right button's.
-		const rightBtn = document.getElementById("mode-view-toggle");
-		const rightSvg = rightBtn?.innerHTML || "";
-		// Swap: the left button's icon is the OPPOSITE of the right button's.
-		// Cheapest reliable way — clone right, then invoke updateViewToggleIcon
-		// on left by temporarily assigning it the same id, or duplicate the
-		// icon catalog. Simplest: swap id, paint, swap back.
+	const rightBtn = document.getElementById("mode-view-toggle");
+	if (leftBtn && rightBtn) {
 		const rightId = rightBtn.id;
 		rightBtn.id = "__temp_right";
 		leftBtn.id = "mode-view-toggle";
-		updateViewToggleIcon(leftView);
+		updateViewToggleIcon(_splitLeftView);
 		leftBtn.id = "mode-view-toggle-left";
 		rightBtn.id = rightId;
-		// Restore right icon (updateViewToggleIcon earlier painted right).
-		updateViewToggleIcon(rightView);
+		updateViewToggleIcon(_splitRightView); // restore right paint
 	}
 }
 document.getElementById("mode-view-toggle-left")?.addEventListener("click", () => {
 	if (!_splitView) return;
-	_splitSwapped = !_splitSwapped;
+	// Only flips the LEFT half — right stays put.
+	const prev = _splitLeftView;
+	_splitLeftView = _splitLeftView === "scene" ? "camera" : "scene";
+	// If pointer focus was on the left half, retarget activeView so
+	// OrbitControls follows the button.
+	if (activeView === prev) setActiveView(_splitLeftView);
 	_refreshSplitToggleIcons();
+	_updateSplitActiveHalfHighlight();
 });
-// Pointer-in-half detection — when the user clicks anywhere in the canvas
-// during split view, route input to the half they clicked. Left half = scene
-// (perspective / orbit), right half = camera (framed shot). Swaps activeView
-// which OrbitControls + the gizmo already pick up via the shared `camera`
-// alias, so drags, gizmo edits, and object selection all target the correct
-// view without any additional plumbing. Runs at capture phase so it beats
-// OrbitControls' own pointerdown handler to the punch.
+// Highlight the half that currently owns pointer input — a light-grey inset
+// border on the ACTIVE side. When per-half views differ, active side = whichever
+// matches activeView. When both halves show the same view, the ambiguity is
+// resolved by _splitActiveHalfSide (updated on pointerdown / toggle click).
+let _splitActiveHalfSide = "left";
+function _updateSplitActiveHalfHighlight() {
+	const el = document.getElementById("split-active-half");
+	if (!el) return;
+	if (!_splitView) { el.style.left = ""; return; }
+	let side;
+	if (_splitLeftView === _splitRightView) side = _splitActiveHalfSide;
+	else side = (activeView === _splitLeftView) ? "left" : "right";
+	// Left half = canvas's own left edge; right half = canvas midpoint. Uses
+	// the same --canvas-* vars as the divider so the highlight lands inside
+	// the 16:9 render rect (never in the letterbox surround).
+	el.style.left = side === "left"
+		? "var(--canvas-left, 0px)"
+		: "calc(var(--canvas-left, 0px) + var(--canvas-w, 100%) / 2)";
+}
+// Pointer-in-half detection — during split, clicking a half retargets
+// activeView to whatever camera that half is currently rendering, so
+// OrbitControls + gizmo + selection all operate on that half's camera.
+// Capture-phase so it beats OrbitControls' own pointerdown handler.
 canvas.addEventListener("pointerdown", e => {
 	if (!_splitView) return;
 	const rect = canvas.getBoundingClientRect();
 	const inLeft = e.clientX < rect.left + rect.width / 2;
-	// Respect _splitSwapped so clicking a half always targets the camera
-	// currently rendering there, regardless of which side is scene vs camera.
-	const leftView = _splitSwapped ? "camera" : "scene";
-	const rightView = _splitSwapped ? "scene" : "camera";
-	const targetView = inLeft ? leftView : rightView;
+	_splitActiveHalfSide = inLeft ? "left" : "right";
+	const targetView = inLeft ? _splitLeftView : _splitRightView;
 	if (typeof activeView !== "undefined" && activeView !== targetView) {
 		setActiveView(targetView);
 		_refreshSplitToggleIcons();
 	}
+	_updateSplitActiveHalfHighlight();
 }, true);
 // Boot state: whichever view is active when the DOM parses runs through
 // setActiveView after this file loads, so seed the icon from the current mode.
@@ -18435,7 +18791,58 @@ setupDragField(document.getElementById("cam-roll"),  { get: () => getYawPitchRol
 function updateCameraSliders() {
 	if (suppressSliderSync) return;
 	for (const el of dragFields) el._refresh?.();
+	_refreshCameraPathIndicator?.();
 }
+// Show/hide the "Motion Path" chip in the Camera pane based on whether the
+// render camera has any path source — timeline keyframes OR an active
+// turntable orbit. Label reflects the source so the user knows which kind of
+// path they'll be editing when they click through.
+function _refreshCameraPathIndicator() {
+	const sec = document.getElementById("cam-path-section");
+	if (!sec) return;
+	// `keyframes` + `_camOrbit` are declared later in the module; the initial
+	// updateCameraSliders() call at boot fires this before they're initialized,
+	// so guard the access with try/catch to survive the TDZ window. Once boot
+	// finishes and this runs again, the values are visible.
+	let hasKeys = false, hasOrbit = false;
+	try {
+		hasKeys = Array.isArray(keyframes) && keyframes.length >= 2;
+		hasOrbit = typeof _camOrbit !== "undefined" && _camOrbit.active;
+	} catch { return; }
+	const show = hasKeys || hasOrbit;
+	sec.hidden = !show;
+	if (!show) return;
+	const label = document.getElementById("cam-path-open-label");
+	if (label) {
+		label.textContent = hasOrbit
+			? "Turntable — edit arc, start, ease…"
+			: `Camera keyframes (${keyframes.length}) — edit in Turntable`;
+	}
+}
+document.getElementById("cam-path-open")?.addEventListener("click", () => {
+	forceRightPane("turntable", "Turntable");
+	// Turntable pane's local sync — pill states + drag values reflect current
+	// _camOrbit / _turntable state on open.
+	if (typeof _turntableRefreshHint === "function") _turntableRefreshHint();
+});
+// Trailing X on the Motion Path chip — clears the procedural orbit AND any
+// camera keyframes, then refreshes the chip visibility (which now hides since
+// there's no path source). Mirrors stop_turntable's behavior but scoped to the
+// camera only (no per-object keyframes touched).
+document.getElementById("cam-path-clear")?.addEventListener("click", () => {
+	try {
+		if (typeof _camOrbit !== "undefined" && _camOrbit.active && typeof _ttClearOrbit === "function") {
+			_ttClearOrbit();
+		}
+		if (Array.isArray(keyframes) && keyframes.length) {
+			keyframes = [];
+			if (typeof renderKeyframeMarkers === "function") renderKeyframeMarkers();
+		}
+		if (typeof refreshAnimPaths === "function") refreshAnimPaths();
+		if (typeof _refreshCameraPathIndicator === "function") _refreshCameraPathIndicator();
+		if (typeof saveScene === "function") saveScene();
+	} catch (e) { console.warn("[cb] cam-path-clear failed:", e); }
+});
 
 // Migrate every native <input type="range"> to the drag-box surface used by the
 // Transform inputs. Each entry describes format + sensitivity; the enhance
@@ -21515,6 +21922,19 @@ function fitDimensions() {
 	return { w: Math.max(1, Math.round(w)), h: Math.max(1, Math.round(h)) };
 }
 
+// Publishes the render canvas's rect (as offsets from #canvas-wrap) into CSS
+// custom properties so absolute-positioned overlay elements (split divider,
+// active-half highlight) can constrain themselves to the actual 16:9 render
+// area instead of extending into the letterbox/workspace outside it.
+function _syncCanvasRectVars() {
+	if (!canvasWrap || !canvas) return;
+	const wr = canvasWrap.getBoundingClientRect();
+	const cr = canvas.getBoundingClientRect();
+	canvasWrap.style.setProperty("--canvas-top", `${cr.top - wr.top}px`);
+	canvasWrap.style.setProperty("--canvas-left", `${cr.left - wr.left}px`);
+	canvasWrap.style.setProperty("--canvas-w", `${cr.width}px`);
+	canvasWrap.style.setProperty("--canvas-h", `${cr.height}px`);
+}
 let resizeRaf = 0;
 let resizePending = false;
 function handleResize() {
@@ -21529,6 +21949,7 @@ function handleResize() {
 		renderer.setSize(fit.w, fit.h, true);
 		updateAOSize(fit.w, fit.h);
 		updateAspectFrame();
+		_syncCanvasRectVars();
 		// If another handleResize call came in during the RAF (eg. deserializeScene
 		// setting aspectSelect.value after ResizeObserver already queued a RAF with the
 		// stale default 16:9), re-run so the new aspect wins.
@@ -21769,7 +22190,7 @@ function loop() {
 		// Also hidden while recording so the amber path doesn't burn into
 		// the exported video (same pattern as the scatter helper boxes).
 		if (frameCounter > 0 && typeof _tickCamOrbitRing === "function") _tickCamOrbitRing();
-		if (_camOrbitRing) _camOrbitRing.visible = !recording;
+		if (_camOrbitRing) _camOrbitRing.visible = !recording && (selected === renderCam);
 		// Light helper per-frame sync — SpotLightHelper + DirectionalLightHelper
 		// need .update() so the cone / pyramid follows the wrapper's aim after
 		// a gizmo drag; _PointLightGlyph needs the camera to billboard the ring
@@ -21782,6 +22203,9 @@ function loop() {
 			if (!h) continue;
 			if (h.updateBillboard) h.updateBillboard(camera);
 			else if (typeof h.update === "function") h.update();
+			// Point-light falloff ring is a selection-time handle — visible only
+			// when the wrapper is the currently-selected object.
+			if (h.radiusRing) h.radiusRing.visible = (selected === o);
 		}
 		if (anchorMode) updatePivotMarker();
 		// Hand-held shake — cache pre-shake pose then apply an additive
@@ -21828,46 +22252,112 @@ function loop() {
 				aoComposer.render();
 				renderer.outputColorSpace = prevCS;
 			} else if (_splitView) {
-				// Split view — perspective + camera each on their own half.
-				// _splitSwapped flips which camera goes where. Enable scissor
-				// test so each half renders into its own rect with an
-				// independent clear. Each camera's aspect is halved for the
-				// pass then restored so single-view mode is untouched.
+				// Split view — each half independently renders whichever camera
+				// its per-half view state (_splitLeftView / _splitRightView) points
+				// to. Two rendering modes per half:
+				//   • Scene (orbital) view — sceneCam has no natural aspect, so we
+				//     temporarily set its aspect to the half viewport's own aspect
+				//     and fill the whole half. No letterbox.
+				//   • Camera (framed) view — renderCam's aspect is the shot's aspect
+				//     (matches the full canvas). We fit that aspect ratio inside the
+				//     half viewport, black-clear the surrounding area to letterbox,
+				//     and render only into the fit rect. This preserves the shot's
+				//     framing so what the user sees in the split matches the actual
+				//     recorded output.
+				// After each render pass we restore the original projection so
+				// TransformControls picking (which uses camera.projectionMatrix +
+				// full-canvas NDC) stays consistent between frames.
 				const size = renderer.getSize(new THREE.Vector2());
 				const halfW = Math.floor(size.x / 2);
+				const rightW = size.x - halfW;
 				const prevAutoClear = renderer.autoClear;
 				renderer.autoClear = false;
 				renderer.setScissorTest(true);
 				const prevSceneAsp = sceneCam.aspect;
 				const prevRenderAsp = renderCam.aspect;
-				const leftCam = _splitSwapped ? renderCam : sceneCam;
-				const rightCam = _splitSwapped ? sceneCam : renderCam;
+				const leftCam = _splitLeftView === "camera" ? renderCam : sceneCam;
+				const rightCam = _splitRightView === "camera" ? renderCam : sceneCam;
+				// Billboard every point-light glyph toward the camera we're about
+				// to render — otherwise the inactive half's glyph appears to spin
+				// as the user orbits the other half.
+				const _billboardForCam = (cam) => {
+					for (const o of objects) {
+						if (o.userData?.primKind !== "light") continue;
+						const h = o.userData._helper;
+						if (!h) continue;
+						if (h.updateBillboard) h.updateBillboard(cam);
+					}
+				};
+				// Per-half render — either fill (scene) or letterbox (camera).
+				const _renderHalf = (viewKind, cam, hx, hy, hw, hh) => {
+					_billboardForCam(cam);
+					if (viewKind === "scene") {
+						cam.aspect = hw / hh;
+						cam.updateProjectionMatrix();
+						renderer.setViewport(hx, hy, hw, hh);
+						renderer.setScissor(hx, hy, hw, hh);
+						renderer.clear();
+						renderer.render(scene, cam);
+					} else {
+						const camAsp = cam.aspect || 1;
+						const halfAsp = hw / hh;
+						let fitW, fitH;
+						if (camAsp > halfAsp) {
+							fitW = hw;
+							fitH = hw / camAsp;
+						} else {
+							fitH = hh;
+							fitW = hh * camAsp;
+						}
+						const offX = Math.round((hw - fitW) / 2);
+						const offY = Math.round((hh - fitH) / 2);
+						// Snapshot the scene's clear color — that's the user's bg
+						// pick. We paint the letterbox bars BLACK regardless of the
+						// bg, but the fit rect uses the scene bg so the framed
+						// shot still reflects the color / image / video the user
+						// set on the scene.
+						const prevClear = new THREE.Color();
+						renderer.getClearColor(prevClear);
+						const prevAlpha = renderer.getClearAlpha();
+						// Letterbox bars — force black over the whole half.
+						renderer.setViewport(hx, hy, hw, hh);
+						renderer.setScissor(hx, hy, hw, hh);
+						renderer.setClearColor(0x000000, 1);
+						renderer.clear();
+						// Restore the scene bg for the fit rect + subsequent frames.
+						renderer.setClearColor(prevClear, prevAlpha);
+						// Clear the fit rect to the scene bg so it shows through
+						// wherever the camera doesn't draw geometry.
+						renderer.setViewport(hx + offX, hy + offY, Math.round(fitW), Math.round(fitH));
+						renderer.setScissor(hx + offX, hy + offY, Math.round(fitW), Math.round(fitH));
+						renderer.clear();
+						renderer.render(scene, cam);
+					}
+				};
 				try {
-					sceneCam.aspect = halfW / size.y;
-					sceneCam.updateProjectionMatrix();
-					renderCam.aspect = (size.x - halfW) / size.y;
-					renderCam.updateProjectionMatrix();
+					// Helper to re-billboard every point-light glyph toward the
+					// camera we're ABOUT to render — otherwise both halves would
+					// show the sunburst rotated toward whichever cam ran the
+					// single per-frame updateBillboard() above, and the inactive
 					// Left half — hide the renderCam wireframe when the LEFT
 					// half is showing the camera view (would overlay its own
 					// POV); keep it visible when the left half is scene/persp.
 					const prevHelperVisible = renderCamHelper.visible;
 					if (leftCam === renderCam) renderCamHelper.visible = false;
-					renderer.setViewport(0, 0, halfW, size.y);
-					renderer.setScissor(0, 0, halfW, size.y);
-					renderer.clear();
-					renderer.render(scene, leftCam);
+					_renderHalf(_splitLeftView, leftCam, 0, 0, halfW, size.y);
 					renderCamHelper.visible = prevHelperVisible;
-					// Right half — same helper-hide gate.
+					// Right half.
 					if (rightCam === renderCam) renderCamHelper.visible = false;
-					renderer.setViewport(halfW, 0, size.x - halfW, size.y);
-					renderer.setScissor(halfW, 0, size.x - halfW, size.y);
-					renderer.clear();
-					renderer.render(scene, rightCam);
+					_renderHalf(_splitRightView, rightCam, halfW, 0, rightW, size.y);
 					renderCamHelper.visible = prevHelperVisible;
 				} finally {
 					renderer.setScissorTest(false);
 					renderer.setViewport(0, 0, size.x, size.y);
 					renderer.autoClear = prevAutoClear;
+					// Restore the between-frames aspect so TransformControls
+					// picking + single-view rendering behave normally on the next
+					// tick. Scene-view render temporarily reassigned aspect to the
+					// half viewport's own aspect; letterbox render didn't touch it.
 					sceneCam.aspect = prevSceneAsp;
 					sceneCam.updateProjectionMatrix();
 					renderCam.aspect = prevRenderAsp;
@@ -22399,7 +22889,16 @@ function _ttRebuildOrbitRing() {
 	_camOrbitRing.name = "_camOrbitRing";
 	_camOrbitRing.renderOrder = 999;
 	_camOrbitRing.frustumCulled = false;
+	// Hide until the user actually selects the camera — the ring is a camera-
+	// object handle, not a permanent scene ornament.
+	_camOrbitRing.visible = (typeof selected !== "undefined" && selected === renderCam);
 	scene.add(_camOrbitRing);
+}
+// Toggle the orbit ring based on selection — called from select() so the ring
+// appears/disappears when the user picks the camera vs anything else.
+function _updateCamOrbitRingVisibility() {
+	if (!_camOrbitRing) return;
+	_camOrbitRing.visible = (selected === renderCam);
 }
 
 // Follow a moving pivot object per frame — if pivotName is set and the
@@ -22714,6 +23213,9 @@ function refreshAnimPaths() {
 		c.geometry?.dispose?.();
 		c.material?.dispose?.();
 	}
+	// Camera-pane Motion Path chip mirrors keyframe/turntable state — refresh here
+	// so it appears/disappears whenever anim paths get rebuilt.
+	if (typeof _refreshCameraPathIndicator === "function") _refreshCameraPathIndicator();
 	const SEG = 24; // samples per segment — enough to feel smooth without flooding the GPU
 	for (const obj of objects) {
 		const ks = obj.userData?.keyframes;
@@ -22767,13 +23269,14 @@ function refreshAnimPaths() {
 		animPathsGroup.add(points);
 	}
 
-	// Camera path — only drawn in Scene view (would fill the frame in Camera view).
-	// Mirrors the object-path rendering: Catmull-Rom curve through timed keys with
-	// through-keys as positional controls so a side through-key actually bends the
-	// path (was ignored before because the camera used linear lerp). Square dots at
-	// every key match the object-path style so the user can hover them to preview
-	// which frame each one belongs to — same interaction as object motion paths.
-	if (activeView === "scene" && keyframes.length >= 2) {
+	// Camera path — only drawn in Scene view AND while the renderCam is selected.
+	// Users complained the ring/path cluttered the scene when they weren't editing
+	// the camera; gating on selection matches Blender/Maya "show handles when the
+	// object is selected" convention. Mirrors the object-path rendering: Catmull-
+	// Rom curve through timed keys with through-keys as positional controls so a
+	// side through-key actually bends the path. Square dots at every key match
+	// the object-path style so the user can hover them to preview each frame.
+	if (activeView === "scene" && keyframes.length >= 2 && selected === renderCam) {
 		const timedC = keyframes.filter(k => k.ease !== "through");
 		if (timedC.length >= 2) {
 			const cpts = [];
@@ -25778,20 +26281,26 @@ async function autoSnapshot() {
 				}
 			}
 		}
-		const prevAspect = camera.aspect;
+		// Blockout is the FRAMED SHOT — always render through renderCam, not
+		// whatever activeView happens to be. If the user is in split view or
+		// looking through the perspective (scene) camera, the blockout should
+		// still preview what the recorded output will look like, not the
+		// editor's current perspective.
+		const snapCam = renderCam;
+		const prevAspect = snapCam.aspect;
 		try {
 			grid.visible = false;
 			transformHelper.visible = false;
 			if (renderCamHelper) renderCamHelper.visible = false;
 			if (animPathsGroup) animPathsGroup.visible = false;
-			camera.aspect = w / h;
-			camera.updateProjectionMatrix();
+			snapCam.aspect = w / h;
+			snapCam.updateProjectionMatrix();
 			renderer.setRenderTarget(snapshotTarget);
-			renderer.render(scene, camera);
+			renderer.render(scene, snapCam);
 		} finally {
 			renderer.setRenderTarget(null);
-			camera.aspect = prevAspect;
-			camera.updateProjectionMatrix();
+			snapCam.aspect = prevAspect;
+			snapCam.updateProjectionMatrix();
 			grid.visible = gridWasVisible;
 			transformHelper.visible = helperWasVisible;
 			if (renderCamHelper) renderCamHelper.visible = !!camHelperWasVisible;
@@ -25880,6 +26389,18 @@ async function loadPrompt() {
 
 (async () => {
 	const bootStart = performance.now();
+	// Safety net — force curtain-drop after a hard timeout so a silent runtime
+	// error further down the boot chain doesn't leave the user staring at a
+	// spinner forever. If boot completes normally, the later timer beats this.
+	const _bootWatchdog = setTimeout(() => {
+		const ov = document.getElementById("init-overlay");
+		if (ov && !ov.classList.contains("hidden")) {
+			console.warn("[ComfyBlockout] init watchdog fired — forcing curtain-drop");
+			ov.classList.add("hidden");
+			setTimeout(() => ov.remove?.(), 400);
+		}
+	}, 5000);
+	try {
 	// Paint the empty-state placeholder immediately so the outliner doesn't show as a
 	// blank section while loadScene() is still flying. refreshOutliner is called again
 	// at the end of deserializeScene with the real state.
@@ -25925,6 +26446,15 @@ async function loadPrompt() {
 			initOverlay.classList.add("hidden");
 			setTimeout(() => initOverlay.remove(), 400);
 		}, wait);
+	}
+	} catch (e) {
+		console.error("[ComfyBlockout] boot failed:", e);
+		// Still drop the curtain so the user can at least interact with what
+		// rendered — the watchdog would catch this after 5s but no reason to wait.
+		const ov = document.getElementById("init-overlay");
+		if (ov) { ov.classList.add("hidden"); setTimeout(() => ov.remove?.(), 400); }
+	} finally {
+		clearTimeout(_bootWatchdog);
 	}
 })();
 
