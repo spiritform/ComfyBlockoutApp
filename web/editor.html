@@ -3911,6 +3911,33 @@
 					<div class="hint">Scale the emitter volume with Transform (below). Omni ignores Spread.</div>
 				</div>
 
+				<div class="section" id="obj-clouds-shape" hidden>
+					<div class="section-label">Shape</div>
+					<div class="drag-row">
+						<div class="drag-num" id="cf-density"><span class="drag-label">Density</span><span class="drag-val">0.50</span></div>
+						<div class="drag-num" id="cf-scale"><span class="drag-label">Scale</span><span class="drag-val">1.00</span></div>
+						<div class="drag-num" id="cf-coverage"><span class="drag-label">Mask</span><span class="drag-val">1.00</span></div>
+					</div>
+				</div>
+
+				<div class="section" id="obj-clouds-motion" hidden>
+					<div class="section-label">Motion</div>
+					<div class="drag-row">
+						<div class="drag-num" id="cf-speed" style="flex:1"><span class="drag-label">Wind</span><span class="drag-val">1.00</span></div>
+						<div class="drag-num" id="cf-evolve" style="flex:1"><span class="drag-label">Evolve</span><span class="drag-val">0.00</span></div>
+					</div>
+				</div>
+
+				<div class="section" id="obj-clouds-appearance" hidden>
+					<div class="section-label">Appearance</div>
+					<div class="rp-bg-pair">
+						<label class="rp-bg-row" id="cf-color-btn" title="Cloud color">
+							<input type="color" id="cf-color" value="#ffffff">
+							<span class="rp-bg-label">Color</span>
+						</label>
+					</div>
+				</div>
+
 				<div class="section" id="obj-transform-section">
 					<div class="section-head-row">
 						<span class="section-label">Transform</span>
@@ -4018,32 +4045,6 @@
 						<div class="drag-num" id="ps-turb"><span class="drag-label">Amount</span><span class="drag-val">0.00</span></div>
 						<div class="drag-num" id="ps-eff-speed"><span class="drag-label">Speed</span><span class="drag-val">1.00</span></div>
 						<div class="drag-num" id="ps-eff-scale"><span class="drag-label">Scale</span><span class="drag-val">1.00</span></div>
-					</div>
-				</div>
-
-				<div class="section" id="obj-clouds-appearance" hidden>
-					<div class="section-label">Appearance</div>
-					<div class="rp-bg-pair">
-						<label class="rp-bg-row" id="cf-color-btn" title="Cloud color">
-							<input type="color" id="cf-color" value="#ffffff">
-							<span class="rp-bg-label">Color</span>
-						</label>
-					</div>
-				</div>
-
-				<div class="section" id="obj-clouds-shape" hidden>
-					<div class="section-label">Shape</div>
-					<div class="drag-row">
-						<div class="drag-num" id="cf-density"><span class="drag-label">Density</span><span class="drag-val">0.50</span></div>
-						<div class="drag-num" id="cf-scale"><span class="drag-label">Scale</span><span class="drag-val">1.00</span></div>
-					</div>
-					<div class="hint">Density thickens the cloud; Scale controls noise frequency (higher = smaller puffs).</div>
-				</div>
-
-				<div class="section" id="obj-clouds-motion" hidden>
-					<div class="section-label">Motion</div>
-					<div class="drag-row">
-						<div class="drag-num" id="cf-speed" style="flex:1"><span class="drag-label">Wind speed</span><span class="drag-val">1.00</span></div>
 					</div>
 				</div>
 
@@ -7325,9 +7326,17 @@ function addParticleEmitter(initialConfig) {
 // playhead (see tickCloudsFx), matching how particles handle scrub/pause.
 const DEFAULT_CLOUDS_CONFIG = {
 	color: 0xffffff,
-	density: 0.65,  // 0..1, coverage threshold — higher = thicker cloud
+	density: 0.65,  // 0..1, per-puff opacity threshold — higher = thicker cloud
 	speed: 1.0,     // wind advection speed multiplier
 	scale: 1.0,     // noise frequency (higher = smaller puffs)
+	// 0..1, LARGE-scale coverage mask — 1 = full sky, lower carves gaps between
+	// cloud clumps. Independent of density: density controls how thick each puff
+	// is; coverage controls how much of the volume has puffs at all.
+	coverage: 1.0,
+	// >=0, non-directional shape mutation over time. Slides the noise sampling
+	// along an axis the wind doesn't touch, so puffs appear to grow, dissolve,
+	// and re-form in place rather than only drifting sideways.
+	evolve: 0.0,
 };
 const cloudsSystems = [];
 
@@ -7349,6 +7358,8 @@ const CLOUDS_FRAG = `
 	uniform float uDensity;
 	uniform float uSpeed;
 	uniform float uScale;
+	uniform float uCoverage;
+	uniform float uEvolve;
 	varying vec3 vObjectCamPos;
 	varying vec3 vObjectRay;
 
@@ -7382,6 +7393,26 @@ const CLOUDS_FRAG = `
 		}
 		return s;
 	}
+	// Evolve variant — domain warp: a low-frequency noise field bends the
+	// sampling coord for the main fbm, and the warp field itself drifts with
+	// t. Result: the MAIN cloud structure (coarse octave dominant) twists and
+	// reforms in place, so even at high density the visible surface morphs.
+	// Costs 3 extra noise3D calls per raymarch step (~15% of total).
+	float fbmEvo(vec3 p, float t) {
+		vec3 warpP = p * 0.35;
+		float w1 = noise3D(warpP + vec3(t * 0.6, 0.0, 0.0));
+		float w2 = noise3D(warpP + vec3(0.0, t * 0.6, 17.3));
+		float w3 = noise3D(warpP + vec3(41.7, 0.0, t * 0.6));
+		vec3 warp = vec3(w1, w2, w3) * (1.5 + t * 0.15);
+		vec3 wp = p + warp;
+		float s = 0.0, a = 0.5;
+		for (int i = 0; i < 4; i++) {
+			s += noise3D(wp) * a;
+			wp *= 2.0;
+			a *= 0.5;
+		}
+		return s;
+	}
 
 	void main() {
 		vec3 ro = vObjectCamPos;
@@ -7397,7 +7428,14 @@ const CLOUDS_FRAG = `
 
 		const int STEPS = 48;
 		float dt = (tExit - tEnter) / float(STEPS);
-		vec3 wind = vec3(uTime * uSpeed * 0.08, 0.0, uTime * uSpeed * 0.03);
+		// Wind translates the entire noise field along X/Z; since the noise
+		// domain is effectively infinite, puffs drift across the volume and
+		// fresh regions of noise (= new cloud formations) enter at the
+		// upwind edge. Multipliers boosted so that motion reads as "clouds
+		// being pushed" instead of a subtle overlay drift.
+		vec3 wind = vec3(uTime * uSpeed * 0.25, 0.0, uTime * uSpeed * 0.10);
+		// Per-octave time drift for the main noise — feeds into fbmEvo below.
+		float evolveT = uTime * uEvolve;
 
 		float alpha = 0.0;
 		vec3 col = vec3(0.0);
@@ -7405,8 +7443,17 @@ const CLOUDS_FRAG = `
 			if (alpha > 0.98) break;
 			float ti = tEnter + (float(i) + 0.5) * dt;
 			vec3 p = ro + rd * ti;
-			float n = fbm((p + wind) * uScale * 3.0) * 0.5 + 0.5;
+			float n = fbmEvo((p + wind) * uScale * 3.0, evolveT) * 0.5 + 0.5;
 			float d = smoothstep(1.0 - uDensity, 1.0, n);
+			// Coverage mask — low-freq fbm carves large-scale gaps between cloud
+			// clumps independent of per-puff density. Sampled at 0.4x the puff
+			// frequency so gaps are visibly bigger than the puffs themselves.
+			// Wind applies here too so clumps drift AS clumps instead of the
+			// puffs sliding through a static mask (which reads as an overlay).
+			// uCoverage=1 disables the mask entirely (full sky).
+			float m = fbm((p + wind) * uScale * 0.4) * 0.5 + 0.5;
+			float coverThresh = 1.0 - uCoverage;
+			d *= smoothstep(coverThresh, coverThresh + 0.15, m);
 			// Altitude falloff — clouds pinch at top and bottom of the box.
 			float alt = p.y + 0.5;
 			d *= smoothstep(0.0, 0.15, alt) * smoothstep(1.0, 0.75, alt);
@@ -7430,6 +7477,8 @@ function buildCloudsFx(overrides) {
 			uDensity:  { value: cfg.density },
 			uSpeed:    { value: cfg.speed },
 			uScale:    { value: cfg.scale },
+			uCoverage: { value: cfg.coverage },
+			uEvolve:   { value: cfg.evolve },
 			uInvModel: { value: new THREE.Matrix4() },
 		},
 		vertexShader: CLOUDS_VERT,
@@ -7495,6 +7544,8 @@ function syncCloudsUniforms(obj) {
 	fx.mat.uniforms.uDensity.value = fx.config.density;
 	fx.mat.uniforms.uSpeed.value = fx.config.speed;
 	fx.mat.uniforms.uScale.value = fx.config.scale;
+	fx.mat.uniforms.uCoverage.value = fx.config.coverage ?? 1.0;
+	fx.mat.uniforms.uEvolve.value = fx.config.evolve ?? 0.0;
 }
 
 // ─── Scatter FX ───────────────────────────────────────────────────────
@@ -19687,12 +19738,16 @@ function setupCFField(id, getter, setter, opts = {}) {
 		sens: opts.sens, min: opts.min, max: opts.max, format: opts.format,
 	});
 }
-setupCFField("cf-density", c => c.density, (c, v) => { c.density = Math.max(0, Math.min(1, v)); },
-	{ sens: 0.005, min: 0, max: 1, format: v => v.toFixed(2) });
+setupCFField("cf-density", c => c.density, (c, v) => { c.density = Math.max(0, Math.min(3, v)); },
+	{ sens: 0.005, min: 0, max: 3, format: v => v.toFixed(2) });
 setupCFField("cf-scale", c => c.scale, (c, v) => { c.scale = Math.max(0.05, v); },
 	{ sens: 0.01, min: 0.05, format: v => v.toFixed(2) });
 setupCFField("cf-speed", c => c.speed, (c, v) => { c.speed = v; },
 	{ sens: 0.02, format: v => v.toFixed(2) });
+setupCFField("cf-coverage", c => c.coverage ?? 1.0, (c, v) => { c.coverage = Math.max(0, Math.min(1, v)); },
+	{ sens: 0.005, min: 0, max: 1, format: v => v.toFixed(2) });
+setupCFField("cf-evolve", c => c.evolve ?? 0.0, (c, v) => { c.evolve = Math.max(0, v); },
+	{ sens: 0.02, min: 0, format: v => v.toFixed(2) });
 
 cfColorInput.addEventListener("input", e => {
 	const c = currentCloudsCfg();
@@ -26135,7 +26190,6 @@ async function autoSnapshot() {
 			snapshotPixels = new Uint8Array(w * h * 4);
 		}
 
-		const gridWasVisible = grid.visible;
 		const helperWasVisible = transformHelper.visible;
 		// The render-camera frustum wireframe and the animation motion paths
 		// are editor overlays — great in the live viewport, but they burn into
@@ -26179,7 +26233,6 @@ async function autoSnapshot() {
 		const snapCam = renderCam;
 		const prevAspect = snapCam.aspect;
 		try {
-			grid.visible = false;
 			transformHelper.visible = false;
 			if (renderCamHelper) renderCamHelper.visible = false;
 			if (animPathsGroup) animPathsGroup.visible = false;
@@ -26191,7 +26244,6 @@ async function autoSnapshot() {
 			renderer.setRenderTarget(null);
 			snapCam.aspect = prevAspect;
 			snapCam.updateProjectionMatrix();
-			grid.visible = gridWasVisible;
 			transformHelper.visible = helperWasVisible;
 			if (renderCamHelper) renderCamHelper.visible = !!camHelperWasVisible;
 			if (animPathsGroup) animPathsGroup.visible = !!animPathsWereVisible;
