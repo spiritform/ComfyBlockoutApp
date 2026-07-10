@@ -3026,7 +3026,13 @@
 		50%      { background: rgba(255,180,84,0.85); }
 	}
 	#panel.lp-agent-collapsed #lp-split-handle.has-new {
-		animation: cb-split-pulse 2.2s ease-in-out infinite;
+		animation: cb-split-pulse 1.2s ease-in-out infinite;
+	}
+	/* One-shot pulse triggered when a UI action targets the right-panel
+	   split (currently: Open project). Single slow beat — subtle attention
+	   nudge rather than a strobe. */
+	#rp-split-handle.pulse-once {
+		animation: cb-split-pulse 1.2s ease-in-out 1;
 	}
 	#rp-header {
 		flex: 0 0 40px;
@@ -23914,9 +23920,9 @@ tlScrub.addEventListener("pointerdown", e => {
 		e.stopPropagation();
 		const additive = e.shiftKey || e.ctrlKey || e.metaKey;
 		const preserved = additive ? new Set(selectedKeys) : new Set();
-		const band = document.createElement("div");
-		band.style.cssText = "position:absolute;top:0;bottom:0;background:rgba(255,180,84,0.18);border:1px solid rgba(255,180,84,0.55);pointer-events:none;z-index:5;";
-		tlScrub.appendChild(band);
+		const startX = e.clientX;
+		let band = null;
+		let didDrag = false;
 		let curT = t0Raw;
 		const applyRange = () => {
 			const lo = Math.min(t0Raw, curT), hi = Math.max(t0Raw, curT);
@@ -23929,8 +23935,14 @@ tlScrub.addEventListener("pointerdown", e => {
 			for (const obj of objects) if (Array.isArray(obj.userData?.keyframes)) inRange(obj.userData.keyframes);
 			renderKeyframeMarkers();
 		};
-		applyRange();
 		const move = ev => {
+			if (!didDrag && Math.abs(ev.clientX - startX) < 4) return;
+			if (!didDrag) {
+				didDrag = true;
+				band = document.createElement("div");
+				band.style.cssText = "position:absolute;top:0;bottom:0;background:rgba(255,180,84,0.18);border:1px solid rgba(255,180,84,0.55);pointer-events:none;z-index:5;";
+				tlScrub.appendChild(band);
+			}
 			const r = tlScrub.getBoundingClientRect();
 			curT = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
 			applyRange();
@@ -23938,7 +23950,25 @@ tlScrub.addEventListener("pointerdown", e => {
 		const up = () => {
 			window.removeEventListener("pointermove", move);
 			window.removeEventListener("pointerup", up);
-			band.remove();
+			if (didDrag) {
+				band?.remove();
+			} else {
+				// Bare click on the empty scrub area → jump the playhead to that
+				// spot. Also clears the current keyframe selection unless a
+				// modifier was held (matches DCC muscle memory — click empty to
+				// deselect + scrub).
+				if (!additive) {
+					selectedKeys.clear();
+					renderKeyframeMarkers();
+				}
+				const gap = (typeof trimGap === "function") ? trimGap() : 0;
+				const t = Math.max(trimStart + gap, Math.min(trimEnd - gap, t0Raw));
+				stopPreview?.();
+				setPlayhead(t);
+				const s = sampleCameraAt(t);
+				if (s) applyCameraState(s);
+				applyObjectsAt?.(t);
+			}
 		};
 		window.addEventListener("pointermove", move);
 		window.addEventListener("pointerup", up);
@@ -25759,6 +25789,15 @@ document.getElementById("project-open").addEventListener("click", async () => {
 	if (prjPane && !prjPane.hidden) {
 		forceRightPane(defaultRightPane());
 		return;
+	}
+	// Quick amber pulse on the right-panel split handle to draw the eye
+	// toward the projects pane that just opened.
+	const rpHandle = document.getElementById("rp-split-handle");
+	if (rpHandle) {
+		rpHandle.classList.remove("pulse-once");
+		void rpHandle.offsetWidth;  // restart animation
+		rpHandle.classList.add("pulse-once");
+		setTimeout(() => rpHandle.classList.remove("pulse-once"), 1300);
 	}
 	await refreshProjectsPane();
 	forceRightPane("projects");
