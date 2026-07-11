@@ -365,9 +365,7 @@
 		pointer-events: none; user-select: none;
 		font: 700 12px ui-monospace, monospace;
 		text-shadow: 0 1px 3px rgba(0,0,0,0.85);
-		padding: 2px 6px;
-		background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
-		border-radius: 3px;
+		color: rgba(255,255,255,0.75);
 		display: none;
 	}
 	#gizmo-axis-label.visible { display: block; }
@@ -2867,7 +2865,9 @@
 		border-radius: 4px;
 		font: 11px ui-sans-serif, system-ui;
 		color: rgba(255,255,255,0.85);
+		cursor: pointer;
 	}
+	.joint-row:hover { background: rgba(255,255,255,0.06); }
 	.joint-row .joint-thumb {
 		text-align: center; color: rgba(255,255,255,0.5);
 		font: 12px ui-monospace, monospace;
@@ -2876,6 +2876,7 @@
 	.joint-row .drag-num {
 		height: 22px; padding: 0 6px; gap: 4px;
 		font: 10px ui-monospace, SFMono-Regular, Consolas, monospace;
+		cursor: ew-resize;
 	}
 	.joint-row .drag-num .drag-label { font-size: 9px; }
 	.joint-row .drag-num.non-zero .drag-val { color: #ffd28a; }
@@ -5898,9 +5899,12 @@ function _applyGizmoSpaceForSelection() {
 	transform.setSpace(isPointLight ? "world" : gizmoSpace);
 }
 transform.addEventListener("dragging-changed", (e) => {
-	// Re-enable orbit after a gizmo drag ENDS — but only when renderCam isn't the
-	// selection, since selecting renderCam pins the viewport for shot-adjustment.
-	orbit.enabled = !e.value && selected !== renderCam;
+	// Orbit only locks while the user actively holds an axis handle mid-drag
+	// (e.value === true). Selecting renderCam no longer pins the viewport —
+	// the user asked to keep perspective orbit available until they actually
+	// grab something. Any pointerdown that DOES grab a gizmo handle routes
+	// through this event and disables orbit for the duration of the drag.
+	orbit.enabled = !e.value;
 	if (!e.value) {
 		renderCamDragDist = null;
 		scaleDragStart = null;
@@ -6000,6 +6004,24 @@ transformHelper.traverse(c => {
 		if (prev) prev.apply(this, args);
 	};
 });
+
+// Drop the plane handles (XY/YZ/XZ) entirely — user prefers the center
+// XYZ diamond (free-drag) + the individual axis arrows, and the small
+// white squares near the origin were reading as ambiguous UI clutter.
+// Remove both the visible plane meshes AND their picker meshes so hover
+// won't ghost-catch on invisible hitboxes and light up an axis letter
+// for a handle that isn't there. Collect first (mutating tree during
+// traverse is unsafe), then remove.
+const _tcPlaneRemove = [];
+transformHelper.traverse(c => {
+	if (!c.isMesh) return;
+	const nm = c.name || "";
+	if (nm === "XY" || nm === "YZ" || nm === "XZ") _tcPlaneRemove.push(c);
+});
+for (const m of _tcPlaneRemove) {
+	m.parent?.remove(m);
+	m.geometry?.dispose?.();
+}
 
 // Render-camera wireframe — a minimal body-box + light-grey frustum cone. The
 // frustum's far rectangle is sized to the currently selected aspect ratio, so
@@ -9508,9 +9530,11 @@ function select(obj, opts = {}) {
 		window.__selectedObj = renderCam;
 		transform.attach(renderCam);
 		if (anchorMode) pivotMarker.visible = false;
-		// Selecting the render camera locks the sceneCam orbit so the user's drag can't
-		// accidentally tumble the viewport while they're adjusting the shot.
-		orbit.enabled = false;
+		// Orbit stays enabled — the transform gizmo's dragging-changed handler
+		// disables it only for the duration of an active handle drag. Lets the
+		// user orbit around the render-camera wireframe to line up the shot
+		// without deselecting first.
+		orbit.enabled = true;
 		forceRightPane("camera", "Camera");
 		refreshOutliner();
 		if (typeof _updateCamOrbitRingVisibility === "function") _updateCamOrbitRingVisibility();
@@ -10226,11 +10250,13 @@ canvas.addEventListener("pointerdown", e => {
 	if (raycaster.params.Line && _prevLineTh !== undefined) raycaster.params.Line.threshold = _prevLineTh;
 	if (!hits.some(h => h.object?.userData?.pickAsRenderCam)) return;
 	select(renderCam);
-	orbit.enabled = false;
 	e.preventDefault();
 	e.stopPropagation();
-	// Orbit stays disabled as long as renderCam is the selection (see select()).
-	// No pointerup re-enable needed — deselecting is what unlocks it.
+	// stopPropagation prevents OrbitControls' bubble-phase pointerdown listener
+	// from seeing THIS click — the capture-phase timing means we intercept
+	// before it fires. Subsequent drags on empty space fall through to orbit
+	// as normal. Gizmo handles disable orbit via dragging-changed only for
+	// the active drag.
 }, true);
 
 // Hover the small path dots: cursor turns into a pointer + a bright marker snaps onto the
@@ -14709,28 +14735,32 @@ const MANNEQUIN_XBOT_URL = "https://threejs.org/examples/models/gltf/Xbot.glb";
 const MANNEQUIN_BODY_COLOR = 0x8a8a90;
 const MANNEQUIN_HIGHLIGHT_COLOR = 0xffb454;
 // Per-bone drag mapping — horizontal drag rotates axisX with sensX,
-// vertical drag rotates axisY with sensY. Signs flip so drags feel
-// natural in the bone's local frame (arm raise decreases when lifting).
+// vertical drag rotates axisY with sensY. axisZ + sensZ are engaged when
+// Shift is held during the drag (dominant drag direction rotates the third
+// axis) so every joint can be fully posed on all three local axes from
+// the viewport — key for elbows/knees/forearms where the primary drag maps
+// only cover one anatomical DOF. Signs flip so drags feel natural in the
+// bone's local frame (arm raise decreases when lifting).
 const MANNEQUIN_DRAG_MAP = {
-	mixamorigHead:          { axisX: "y", sensX: 0.5,  axisY: "x", sensY: 0.5 },
-	mixamorigNeck:          { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4 },
-	mixamorigSpine2:        { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4 },
-	mixamorigSpine1:        { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4 },
-	mixamorigSpine:         { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4 },
-	mixamorigLeftShoulder:  { axisX: "x", sensX: 0.4,  axisY: "z", sensY: -0.5 },
-	mixamorigRightShoulder: { axisX: "x", sensX: -0.4, axisY: "z", sensY: 0.5 },
-	mixamorigLeftArm:       { axisX: "x", sensX: 0.4,  axisY: "z", sensY: -0.5 },
-	mixamorigRightArm:      { axisX: "x", sensX: -0.4, axisY: "z", sensY: 0.5 },
-	mixamorigLeftForeArm:   { axisX: null, sensX: 0,   axisY: "y", sensY: 0.6 },
-	mixamorigRightForeArm:  { axisX: null, sensX: 0,   axisY: "y", sensY: -0.6 },
-	mixamorigLeftHand:      { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.5 },
-	mixamorigRightHand:     { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.5 },
-	mixamorigLeftUpLeg:     { axisX: "y", sensX: 0.3,  axisY: "x", sensY: 0.5 },
-	mixamorigRightUpLeg:    { axisX: "y", sensX: -0.3, axisY: "x", sensY: 0.5 },
-	mixamorigLeftLeg:       { axisX: null, sensX: 0,   axisY: "x", sensY: 0.6 },
-	mixamorigRightLeg:      { axisX: null, sensX: 0,   axisY: "x", sensY: 0.6 },
-	mixamorigLeftFoot:      { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.5 },
-	mixamorigRightFoot:     { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.5 },
+	mixamorigHead:          { axisX: "y", sensX: 0.5,  axisY: "x", sensY: 0.5,  axisZ: "z", sensZ: 0.5 },
+	mixamorigNeck:          { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4,  axisZ: "z", sensZ: 0.4 },
+	mixamorigSpine2:        { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4,  axisZ: "z", sensZ: 0.4 },
+	mixamorigSpine1:        { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4,  axisZ: "z", sensZ: 0.4 },
+	mixamorigSpine:         { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4,  axisZ: "z", sensZ: 0.4 },
+	mixamorigLeftShoulder:  { axisX: "x", sensX: 0.4,  axisY: "z", sensY: -0.5, axisZ: "y", sensZ: 0.5 },
+	mixamorigRightShoulder: { axisX: "x", sensX: -0.4, axisY: "z", sensY: 0.5,  axisZ: "y", sensZ: -0.5 },
+	mixamorigLeftArm:       { axisX: "x", sensX: 0.4,  axisY: "z", sensY: -0.5, axisZ: "y", sensZ: 0.5 },
+	mixamorigRightArm:      { axisX: "x", sensX: -0.4, axisY: "z", sensY: 0.5,  axisZ: "y", sensZ: -0.5 },
+	mixamorigLeftForeArm:   { axisX: null, sensX: 0,   axisY: "y", sensY: 0.6,  axisZ: "z", sensZ: 0.5 },
+	mixamorigRightForeArm:  { axisX: null, sensX: 0,   axisY: "y", sensY: -0.6, axisZ: "z", sensZ: -0.5 },
+	mixamorigLeftHand:      { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.5,  axisZ: "z", sensZ: 0.5 },
+	mixamorigRightHand:     { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.5,  axisZ: "z", sensZ: 0.5 },
+	mixamorigLeftUpLeg:     { axisX: "y", sensX: 0.3,  axisY: "x", sensY: 0.5,  axisZ: "z", sensZ: 0.4 },
+	mixamorigRightUpLeg:    { axisX: "y", sensX: -0.3, axisY: "x", sensY: 0.5,  axisZ: "z", sensZ: -0.4 },
+	mixamorigLeftLeg:       { axisX: null, sensX: 0,   axisY: "x", sensY: 0.6,  axisZ: "z", sensZ: 0.4 },
+	mixamorigRightLeg:      { axisX: null, sensX: 0,   axisY: "x", sensY: 0.6,  axisZ: "z", sensZ: -0.4 },
+	mixamorigLeftFoot:      { axisX: "y", sensX: -0.4, axisY: "x", sensY: 0.5,  axisZ: "z", sensZ: 0.4 },
+	mixamorigRightFoot:     { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.5,  axisZ: "z", sensZ: -0.4 },
 };
 const MANNEQUIN_JOINT_NAMES = Object.keys(MANNEQUIN_DRAG_MAP);
 
@@ -15037,6 +15067,22 @@ function _mannequinBuildJointCells(wrapper) {
 				if (selected === wrapper) applySelectionTint(wrapper);
 			});
 		}
+		// Row click (label OR axis pill) selects the corresponding joint gizmo
+		// — tints it orange (persistent "active") + syncs the row highlight,
+		// matching the flow of clicking the joint dot in the viewport. Lets
+		// the user pick joints from the panel without hunting the small dot
+		// in the canvas.
+		row.addEventListener("pointerdown", () => {
+			const gizmo = wrapper.userData._jointGizmos?.get(boneName);
+			if (!gizmo) return;
+			if (_mannequinLastSelected && _mannequinLastSelected !== gizmo) {
+				_mannequinSetGizmoTint(_mannequinLastSelected, "idle");
+			}
+			_mannequinSetGizmoTint(gizmo, "active");
+			_mannequinLastSelected = gizmo;
+			renderKeyframeMarkers?.();
+			_syncMannequinJointRowHighlight();
+		});
 	}
 }
 
@@ -15116,6 +15162,15 @@ function _mannequinTickGizmos() {
 			bone.getWorldPosition(_mannequinTickVec);
 			sphere.position.copy(_mannequinTickVec);
 		}
+	}
+	// Safety-net: reassert the last-selected joint's persistent orange tint
+	// each frame while it's not being dragged. Without this, any path that
+	// stomps sphere.material.color (foreign code, future refactors, animation
+	// mixer bind stomps, etc.) would leave the joint reading as idle-white
+	// even though the row in Properties still shows amber. Cheap — a single
+	// color.setHex + opacity assign per frame.
+	if (_mannequinLastSelected && _mannequinLastSelected.material && !_mannequinDrag) {
+		_mannequinSetGizmoTint(_mannequinLastSelected, "active");
 	}
 }
 
@@ -15543,12 +15598,19 @@ function _positionMannequinRingAndLabel(gizmo, liveAxis, liveDeg) {
 	}
 	const label = document.getElementById("gizmo-axis-label");
 	if (label) {
-		// Anchor at the ring's right edge with a 4px gap.
-		label.style.left = (px + ringDiameter / 2 + 4) + "px";
-		label.style.top = (py - 8) + "px";
+		// Anchor centered below the ring with a small gap. translateX(-50%)
+		// centers the label horizontally on the joint, so "X 36°" reads
+		// underneath the ring instead of drifting off to one side.
+		label.style.left = px + "px";
+		label.style.top = (py + ringDiameter / 2 + 6) + "px";
+		label.style.transform = "translateX(-50%)";
 		if (liveAxis) {
+			// Plain "visible" class only — mannequin readout stays in the
+			// default light-grey text so it reads as a soft caption, not an
+			// axis-colored chip. Axis-color CSS is reserved for the transform
+			// gizmo's hover-letter overlay (X in red / Y in green / Z in blue).
 			label.textContent = `${liveAxis} ${Math.round(liveDeg)}°`;
-			label.className = "visible axis-" + liveAxis.toLowerCase();
+			label.className = "visible";
 		}
 	}
 }
@@ -15664,6 +15726,7 @@ function _mannequinClearHover() {
 		const rest = wrapper.userData._restRotations.get(boneName);
 		const startPrimaryDeg   = map.axisY ? (bone.rotation[map.axisY] - rest[map.axisY]) * 180 / Math.PI : 0;
 		const startSecondaryDeg = map.axisX ? (bone.rotation[map.axisX] - rest[map.axisX]) * 180 / Math.PI : 0;
+		const startTertiaryDeg  = map.axisZ ? (bone.rotation[map.axisZ] - rest[map.axisZ]) * 180 / Math.PI : 0;
 		_mannequinDrag = {
 			wrapper, bone, boneName, gizmo, map, rest,
 			// Accumulated cursor delta since drag started. Pointer Lock (below)
@@ -15671,8 +15734,10 @@ function _mannequinClearHover() {
 			// we integrate the deltas here instead.
 			accumX: 0,
 			accumY: 0,
+			accumZ: 0,
 			startPrimary: startPrimaryDeg,
 			startSecondary: startSecondaryDeg,
+			startTertiary: startTertiaryDeg,
 			// One-axis lock: the first movement direction that clears a small
 			// threshold decides which axis this drag commits to. Prevents the
 			// "diagonal rotates both" mush the user flagged.
@@ -15725,13 +15790,24 @@ function _mannequinClearHover() {
 			const absX = Math.abs(mx);
 			const absY = Math.abs(my);
 			const total = absX + absY;
+			// Shift routes the drag to the joint's third axis (axisZ) so the
+			// bone can be posed on all three local axes without leaving the
+			// viewport. Dominant drag direction feeds accumZ — same 70%
+			// threshold as the plain-drag 2-axis pathway so a mostly-one-
+			// direction drag accumulates cleanly.
+			const shiftZ = e.shiftKey && _mannequinDrag.map.axisZ;
 			if (total > 0) {
 				const wX = absX / total;
 				const wY = absY / total;
 				// Only the dominant direction accumulates — 70% threshold
 				// filters out diagonals so you don't get both-axes-at-once.
-				if (wX > 0.7) _mannequinDrag.accumX += mx;
-				else if (wY > 0.7) _mannequinDrag.accumY += my;
+				if (shiftZ) {
+					if (wX > 0.7) _mannequinDrag.accumZ += mx;
+					else if (wY > 0.7) _mannequinDrag.accumZ += my;
+				} else {
+					if (wX > 0.7) _mannequinDrag.accumX += mx;
+					else if (wY > 0.7) _mannequinDrag.accumY += my;
+				}
 				// Flip to the yellow "drag" state as soon as we see real
 				// motion — signals the joint is being rotated (not just
 				// active).
@@ -15739,19 +15815,20 @@ function _mannequinClearHover() {
 			}
 			const dx = _mannequinDrag.accumX;
 			const dy = _mannequinDrag.accumY;
+			const dz = _mannequinDrag.accumZ;
 			const map = _mannequinDrag.map;
 			const rest = _mannequinDrag.rest;
 			const bone = _mannequinDrag.bone;
 			// Live axis readout for the label — whichever axis has moved MOST
 			// recently (larger accumulated distance) wins the display.
 			let liveDeg = 0, liveAxis = "";
-			// Apply both axes independently from their accumulated deltas.
-			// Since diagonals don't accumulate, each axis only rotates when
-			// the user moves in a mostly-one-direction motion.
+			// Apply the accumulated deltas independently on all three axes.
+			// Non-shift drags leave accumZ at 0 → Z rotation is untouched.
+			// Shift drags leave accumX/Y at 0 → X/Y rotation stays put.
 			if (map.axisX && map.sensX) {
 				const deg = _mannequinDrag.startSecondary + dx * map.sensX;
 				bone.rotation[map.axisX] = rest[map.axisX] + deg * Math.PI / 180;
-				if (Math.abs(dx) >= Math.abs(dy) && Math.abs(dx) > 2) {
+				if (Math.abs(dx) >= Math.abs(dy) && Math.abs(dx) > 2 && !shiftZ) {
 					liveDeg = deg;
 					liveAxis = map.axisX.toUpperCase();
 				}
@@ -15759,9 +15836,17 @@ function _mannequinClearHover() {
 			if (map.axisY && map.sensY) {
 				const deg = _mannequinDrag.startPrimary + dy * map.sensY;
 				bone.rotation[map.axisY] = rest[map.axisY] + deg * Math.PI / 180;
-				if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 2) {
+				if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 2 && !shiftZ) {
 					liveDeg = deg;
 					liveAxis = map.axisY.toUpperCase();
+				}
+			}
+			if (map.axisZ && map.sensZ) {
+				const deg = _mannequinDrag.startTertiary + dz * map.sensZ;
+				bone.rotation[map.axisZ] = rest[map.axisZ] + deg * Math.PI / 180;
+				if (shiftZ && Math.abs(dz) > 2) {
+					liveDeg = deg;
+					liveAxis = map.axisZ.toUpperCase();
 				}
 			}
 			// Reposition + resize the ring + label so they follow the joint
@@ -19425,32 +19510,71 @@ let scaleDragStart = null;
 		Z: new THREE.Vector3(0, 0, 1),
 	};
 	function update() {
+		// Mannequin joint drag owns this DOM element while a joint is being
+		// posed (writes "X 35°" etc). Don't fight it — bail so the mannequin
+		// flow's show/hide + textContent updates land untouched.
+		if (typeof _mannequinDrag !== "undefined" && _mannequinDrag) return;
 		const ax = transform.axis;
-		if (!ax || !transform.dragging || !transform.object) {
+		// Show on single-axis hover OR drag (X/Y/Z). Plane handles (XY, YZ,
+		// XZ) and screen-space axes (E, XYZE) don't get a letter — a plane
+		// label doesn't map to a single axis, and the extra glyph clutters
+		// the tight cluster of plane squares.
+		const singleAxis = ax === "X" || ax === "Y" || ax === "Z";
+		if (!singleAxis || !transform.object) {
 			if (label.classList.contains("visible")) label.classList.remove("visible");
 			return;
 		}
-		// Project a point ~0.6 units along the active axis (in world space)
-		// from the object's origin to screen. For plane-drags (XY etc), fall
-		// back to the object's own origin.
+		// Anchor the letter just past the actual arrow tip. TransformControls
+		// scales all handles by `factor * size / 4` each frame to keep a
+		// constant on-screen size (see three r180 TransformControls line 1551),
+		// so the arrow tip's world-space distance from origin varies with
+		// camera distance. Replicate the same factor here so the letter tracks
+		// the tip as the user zooms — a fixed world-space offset would drift.
 		const origin = new THREE.Vector3();
 		transform.object.getWorldPosition(origin);
-		const dir = _axisDir[ax];
-		const anchor = origin.clone();
-		if (dir) anchor.add(dir.clone().multiplyScalar(0.6));
+		const dir = _axisDir[ax].clone();
+		if (transform.space === "local") {
+			const q = new THREE.Quaternion();
+			transform.object.getWorldQuaternion(q);
+			dir.applyQuaternion(q);
+		}
+		let factor;
+		if (camera.isOrthographicCamera) {
+			factor = (camera.top - camera.bottom) / camera.zoom;
+		} else {
+			const camPos = new THREE.Vector3();
+			camera.getWorldPosition(camPos);
+			factor = origin.distanceTo(camPos) * Math.min(1.9 * Math.tan(Math.PI * camera.fov / 360) / camera.zoom, 7);
+		}
+		// arrow tip sits at 0.55 in gizmo local; +0.1 padding puts the letter
+		// just past the tip so it reads as attached to the arrow, not stuck to it.
+		const tipOffset = 0.65 * (factor * transform.size / 4);
+		const anchor = origin.clone().add(dir.multiplyScalar(tipOffset));
 		anchor.project(camera);
 		const wr = wrap.getBoundingClientRect();
 		const cv = canvas.getBoundingClientRect();
 		const sx = (anchor.x * 0.5 + 0.5) * cv.width;
 		const sy = (1 - (anchor.y * 0.5 + 0.5)) * cv.height;
-		label.style.left = (cv.left - wr.left + sx + 8) + "px";
-		label.style.top = (cv.top - wr.top + sy - 6) + "px";
+		// Center the letter on the anchor via translate(-50%, -50%) so it
+		// doesn't sit offset to one side of the tip — reads as a label
+		// attached to the arrow rather than floating alongside it. This is
+		// also what makes it "always face camera": DOM text is always aligned
+		// to the screen plane, and the anchor projects the arrow tip's world
+		// position to screen space, so the letter tracks with the tip as the
+		// scene rotates.
+		label.style.left = (cv.left - wr.left + sx) + "px";
+		label.style.top = (cv.top - wr.top + sy) + "px";
+		label.style.transform = "translate(-50%, -50%)";
 		label.textContent = ax;
 		label.className = "visible " + classFor(ax);
 	}
 	window.addEventListener("pointermove", update);
+	// Refresh the moment the hovered axis changes — pointermove alone lags
+	// one frame behind axis-changed (raycast + property flip happens inside
+	// TransformControls' own pointermove handler).
+	transform.addEventListener("axis-changed", update);
 	transform.addEventListener("dragging-changed", (ev) => {
-		if (!ev.value) label.classList.remove("visible");
+		if (!ev.value) update();
 	});
 })();
 
