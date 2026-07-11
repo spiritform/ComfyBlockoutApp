@@ -769,11 +769,15 @@
 	   language as #rp-split-handle on the right panel. */
 	#lp-split-handle {
 		flex: 0 0 5px;
-		cursor: row-resize;
+		cursor: grab;
 		background: rgba(255,180,84,0.35);
 		transition: background 0.12s;
 	}
-	#lp-split-handle:hover, #lp-split-handle.dragging { background: rgba(255,180,84,0.6); }
+	#lp-split-handle:hover { background: rgba(255,180,84,0.55); }
+	#lp-split-handle.dragging, #lp-split-handle:active {
+		background: rgba(255,180,84,0.95);
+		cursor: grabbing;
+	}
 	/* AI Agent OVERLAY — absolutely positioned floating panel that sits ON TOP
 	   of the Objects layout underneath. Its BOTTOM edge is glued to the panel
 	   bottom (context + input never move). Its TOP edge slides up/down as the
@@ -791,6 +795,10 @@
 		background: #191922;
 	}
 	#panel.no-agent #lp-zone-bottom { display: none; }
+	/* Collapsed state — click on the AI Agent header shrinks the overlay to
+	   the natural minimum (header + context chip + input row = 145px). The
+	   chat message log gets hidden; entry + context stay reachable. Drag on
+	   the handle (or another header click) restores the previous height. */
 	/* Fixed bottom band — CONTEXT chip + CHAT INPUT stay pinned inside the
 	   overlay at its bottom edge. Since the overlay's bottom edge is glued to
 	   the panel bottom, these controls never move regardless of how the
@@ -1634,11 +1642,12 @@
 	}
 	.gen-prompt {
 		position: relative; z-index: 2;
-		width: 100%; min-height: 70px;
+		width: 100%; min-height: 56px;
 		background: transparent; border: 1px solid rgba(255,255,255,0.06);
 		border-radius: 4px; padding: 6px 8px;
 		color: transparent; caret-color: #fff;
 		font: inherit; font-size: 11px;
+		resize: none; overflow: hidden;
 		resize: vertical; box-sizing: border-box;
 		-webkit-text-fill-color: transparent;
 	}
@@ -1658,6 +1667,84 @@
 		box-sizing: border-box; z-index: 1;
 	}
 	.gen-prompt-hl .ref-tag { color: var(--ref-color, #ffb454); font-weight: 500; }
+	/* Referenced-objects list — rendered under the prompt for models that
+	   forward object refImages as inputs (Nano Banana etc). Makes it obvious
+	   how many attachments will ride along with the prompt. */
+	.gen-objref-list {
+		display: flex; flex-direction: column; gap: 4px;
+		margin-top: 6px;
+	}
+	.gen-objref-row {
+		display: flex; align-items: center; gap: 8px;
+		padding: 4px 8px;
+		background: rgba(255,255,255,0.03);
+		border: 1px solid rgba(255,255,255,0.06);
+		border-radius: 4px;
+	}
+	.gen-objref-thumb {
+		width: 24px; height: 24px; flex: 0 0 24px;
+		border-radius: 3px;
+		background-size: cover; background-position: center;
+		background-color: rgba(255,255,255,0.05);
+	}
+	.gen-objref-name {
+		font-size: 11px; color: rgba(255,255,255,0.75);
+		letter-spacing: 0.02em;
+		overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+	}
+	.gen-objref-budget {
+		margin-top: 6px;
+		font-size: 10px; color: rgba(255,255,255,0.45);
+		letter-spacing: 0.04em;
+	}
+	.gen-objref-budget.over { color: #ff8a8a; }
+	.gen-objref-row.gen-objref-snap { border-color: rgba(255,180,84,0.25); }
+	.gen-objref-row.gen-objref-style { border-color: rgba(120,180,255,0.25); }
+	.gen-objref-row.gen-objref-selectable { cursor: pointer; }
+	.gen-objref-row.gen-objref-selectable:hover {
+		background: rgba(255,255,255,0.06);
+		border-color: rgba(255,180,84,0.35);
+	}
+	.gen-objref-x {
+		margin-left: auto;
+		flex: 0 0 auto;
+		width: 20px; height: 20px;
+		border: none; background: transparent;
+		color: rgba(255,255,255,0.35);
+		font-size: 14px; line-height: 1;
+		cursor: pointer; border-radius: 3px;
+		display: inline-flex; align-items: center; justify-content: center;
+	}
+	.gen-objref-x:hover { background: rgba(255,80,80,0.15); color: #ff8a8a; }
+	/* Tighter section spacing in the workflow-cell properties pane — 32px
+	   default is too roomy given how few controls each cell has. */
+	#rp-pane-gencell .section { margin-bottom: 14px; }
+	.cell-strength-slider {
+		width: 100%; -webkit-appearance: none; appearance: none;
+		height: 4px; border-radius: 2px;
+		background: rgba(255,255,255,0.08);
+		outline: none; cursor: pointer;
+	}
+	.cell-strength-slider::-webkit-slider-thumb {
+		-webkit-appearance: none; appearance: none;
+		width: 14px; height: 14px; border-radius: 50%;
+		background: #ffb454;
+		border: 2px solid #191922; cursor: pointer;
+	}
+	.cell-strength-slider::-moz-range-thumb {
+		width: 12px; height: 12px; border-radius: 50%;
+		background: #ffb454;
+		border: 2px solid #191922; cursor: pointer;
+	}
+	.gen-objref-row.gen-objref-restore {
+		cursor: pointer;
+		border-style: dashed;
+		border-color: rgba(255,255,255,0.12);
+	}
+	.gen-objref-row.gen-objref-restore:hover {
+		background: rgba(255,255,255,0.04);
+		border-color: rgba(255,180,84,0.35);
+	}
 	.gen-run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 	.gen-cell .out-expand-toggle { font-size: 14px; }
 	.gen-cell.expanded .out-expand-toggle { transform: rotate(180deg); color: #ffb454; }
@@ -2028,6 +2115,18 @@
 		color: rgba(255,255,255,0.45); font-size: 10px;
 		line-height: 1.45; white-space: pre-wrap;
 	}
+	.prompt-base-edit {
+		width: 100%; background: rgba(0,0,0,0.25);
+		border: 1px solid rgba(255,255,255,0.06);
+		border-radius: 6px; color: rgba(255,255,255,0.75);
+		font-family: inherit; font-size: 10px; line-height: 1.5;
+		padding: 8px 10px; outline: none; resize: vertical;
+		min-height: 140px;
+	}
+	.prompt-base-edit:focus {
+		border-color: rgba(255,180,84,0.4);
+		background: rgba(0,0,0,0.35);
+	}
 
 	.select-row { margin-bottom: 5px; }
 	.select-row select {
@@ -2132,17 +2231,20 @@
 	   AR box). Replaces the toolbar Save button; only visible when a real
 	   render is on-screen (render mode + not viewing viewport). */
 	#result-save-overlay {
-		position: absolute; top: 10px; right: 10px; z-index: 9;
-		width: 28px; height: 28px; padding: 0;
+		position: absolute; top: 8px; right: 16px; z-index: 9;
+		width: 24px; height: 24px; padding: 0;
 		border: none; border-radius: 4px; cursor: pointer;
-		background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
-		color: rgba(255,255,255,0.85);
+		background: transparent;
+		color: rgba(255,255,255,0.45);
 		display: none; align-items: center; justify-content: center;
 		pointer-events: auto;
 	}
-	#result-save-overlay:hover { background: rgba(0,0,0,0.75); color: #fff; }
-	#result-save-overlay svg { width: 15px; height: 15px; display: block; }
-	#result-save-overlay.visible { display: inline-flex; }
+	#result-save-overlay:hover { color: rgba(255,255,255,0.85); }
+	#result-save-overlay svg { width: 14px; height: 14px; display: block; }
+	/* Only revealed on hover of the overlay — keeps the render/blockout image
+	   uncluttered until the user actually reaches for the download. */
+	#result-save-overlay.visible { display: inline-flex; opacity: 0; transition: opacity 0.12s; }
+	#result-overlay:hover #result-save-overlay.visible { opacity: 1; }
 	/* Clear button on the Blockout overlay — mirrors the save button's
 	   corner-pill styling but sits offset to its left so both can be
 	   visible simultaneously in some overlay states. */
@@ -3015,8 +3117,11 @@
 		background: rgba(255,180,84,0.35);
 		transition: background 0.12s;
 	}
-	#rp-split-handle:hover, #rp-split-handle.dragging { background: rgba(255,180,84,0.6); }
-	#rp-split-handle.dragging, #rp-split-handle:active { cursor: grabbing; }
+	#rp-split-handle:hover { background: rgba(255,180,84,0.55); }
+	#rp-split-handle.dragging, #rp-split-handle:active {
+		background: rgba(255,180,84,0.95);
+		cursor: grabbing;
+	}
 	/* New-message pulse — a soft slow amber pulse to signal "check the chat"
 	   when the agent replies while its zone is collapsed. Only active when the
 	   panel is collapsed AND the handle carries the `.has-new` marker (set by
@@ -4532,27 +4637,26 @@
 							<option value="21:9">21:9</option>
 						</select>
 					</div>
-					<div class="slider-row">
-						<label>Duration</label>
-						<input type="range" id="duration" min="1" max="10" step="0.5" value="4">
-						<span class="slider-val" id="duration-val">4.0s</span>
+					<div class="drag-row">
+						<div class="drag-num" id="duration-drag" style="flex:1"><span class="drag-label">Duration</span><span class="drag-val" id="duration-val">4.0s</span></div>
+						<div class="drag-num" id="fps-drag" style="flex:1"><span class="drag-label">FPS</span><span class="drag-val" id="fps-val">30</span></div>
 					</div>
-					<div class="slider-row">
-						<label>FPS</label>
-						<input type="range" id="fps" min="12" max="60" step="6" value="30">
-						<span class="slider-val" id="fps-val">30</span>
-					</div>
+					<!-- Hidden inputs preserved so existing serialize/undo/read-value
+					     paths (parseFloat(document.getElementById("duration").value) …)
+					     keep working — drag fields above mirror into them + dispatch
+					     "input" so listeners on the hidden inputs still fire. -->
+					<input type="hidden" id="duration" value="4">
+					<input type="hidden" id="fps" value="30">
 				</div>
 
 				<div class="section collapsible collapsed" id="sys-prompt-section">
-					<div class="section-head-row" onclick="this.parentElement.classList.toggle('collapsed')">
-						<span class="section-label">Prompt Tweaks</span>
+					<div class="section-head-row">
+						<span class="section-label" style="cursor:pointer" onclick="this.parentElement.parentElement.classList.toggle('collapsed')">System Prompt</span>
+						<span class="head-end">
+							<button class="mini-btn" id="sys-prompt-reset" title="Restore the default base system prompt (discards your edits)">Reset</button>
+						</span>
 					</div>
-					<div class="prompt-base-preview" id="prompt-base-preview" title="Base system prompt — locked, always sent. Edit your tweaks below.">
-						<div class="prompt-base-label">Base (locked)</div>
-						<div class="prompt-base-text" id="prompt-base-text"></div>
-					</div>
-					<textarea id="prompt-text" rows="6" placeholder="Optional tweaks appended to the base — e.g. 'photoreal, dusk lighting' or scene-specific guidance."></textarea>
+					<textarea id="prompt-base-edit" class="prompt-base-edit" rows="10" placeholder="Loading base system prompt…" spellcheck="false"></textarea>
 				</div>
 			</div>
 
@@ -8898,13 +9002,45 @@ applyAssistantEnablement();
 			const clamped = Math.max(AGENT_MIN_PX, Math.min(maxHeight, desiredHeight));
 			setAgentHeight(clamped);
 		});
-		window.addEventListener("mouseup", () => {
+		// Collapsed height = the natural minimum (header + context chip + input
+		// row = AGENT_MIN_PX). User asked for this so the chat entry stays
+		// reachable without expanding — only the message log gets hidden.
+		const AGENT_COLLAPSED_H = AGENT_MIN_PX;
+		function toggleAgentCollapse() {
+			if (!lpPanel) return;
+			const isCollapsed = lpPanel.classList.contains("lp-agent-collapsed");
+			if (isCollapsed) {
+				const savedH = parseFloat(lpPanel.dataset.savedAgentH || "") || 145;
+				setAgentHeight(savedH);
+				lpPanel.classList.remove("lp-agent-collapsed");
+				try { localStorage.setItem(LP_AGENT_H_KEY, String(savedH)); } catch {}
+			} else {
+				const currentH = parseFloat(lpPanel.style.getPropertyValue("--lp-agent-h")) || 145;
+				lpPanel.dataset.savedAgentH = String(currentH);
+				setAgentHeight(AGENT_COLLAPSED_H);
+				lpPanel.classList.add("lp-agent-collapsed");
+			}
+		}
+		window.addEventListener("mouseup", (e) => {
+			const wasPending = pendingDown;
 			pendingDown = null;
-			if (!dragging) return;
+			if (!dragging) {
+				// No drag started → treat as a click on the header. Toggle
+				// collapse, unless the click landed on an interactive child
+				// (mousedown gate already excluded those from pendingDown).
+				if (wasPending && lpAgentHeader && (e.target === lpAgentHeader || lpAgentHeader.contains(e.target))) {
+					toggleAgentCollapse();
+				}
+				return;
+			}
 			dragging = false;
 			lpAgentHandle?.classList.remove("dragging");
 			document.body.style.cursor = "";
 			document.body.style.userSelect = "";
+			// Drag on a collapsed header restored its height — pop the class.
+			if (lpPanel.classList.contains("lp-agent-collapsed")) {
+				lpPanel.classList.remove("lp-agent-collapsed");
+			}
 			try {
 				const current = lpPanel.style.getPropertyValue("--lp-agent-h").trim();
 				if (current) localStorage.setItem(LP_AGENT_H_KEY, current);
@@ -11124,6 +11260,17 @@ function setViewportGenerateBusy() {
 		if (iconEl) iconEl.innerHTML = VP_SPINNER_SVG;
 		if (labelEl) labelEl.textContent = "Running…";
 		if (cancelBtn) cancelBtn.hidden = false;
+		// Mirror busy state onto any properties-pane Generate buttons currently
+		// rendered — same visual language as the main viewport chip.
+		for (const rpBtn of document.querySelectorAll(".rp-generate-btn")) {
+			const spanEl = rpBtn.querySelector("span");
+			if (spanEl) {
+				rpBtn.dataset.savedLabel = spanEl.textContent || "Generate";
+				spanEl.textContent = "Generating…";
+			}
+			rpBtn.classList.add("busy");
+			rpBtn.disabled = true;
+		}
 	}
 	_vpGenerateBusyRefs++;
 }
@@ -11141,6 +11288,14 @@ function clearViewportGenerateBusy() {
 		if (cancelBtn) cancelBtn.hidden = true;
 		_vpGenerateSaved = null;
 		refreshViewportGenerateBtn();
+		// Restore properties-pane Generate buttons.
+		for (const rpBtn of document.querySelectorAll(".rp-generate-btn")) {
+			const spanEl = rpBtn.querySelector("span");
+			if (spanEl) spanEl.textContent = rpBtn.dataset.savedLabel || "Generate";
+			delete rpBtn.dataset.savedLabel;
+			rpBtn.classList.remove("busy");
+			rpBtn.disabled = false;
+		}
 	}
 }
 
@@ -11165,6 +11320,7 @@ function addGenCell(init = {}) {
 		startFrame: init.startFrame ?? null,   // seedance: { url, filename, kind:"image" }
 		refVideo:   init.refVideo   ?? null,   // seedance: { url, filename, kind:"video" }
 		styleRef:   init.styleRef   ?? null,   // nano-banana: { url, filename, kind:"image" } — aesthetic only, not subject
+		blockoutStrength: Number.isFinite(init.blockoutStrength) ? init.blockoutStrength : 70,
 	};
 	// Enforce one cell per model (at least for now — user can delete and re-add).
 	if (genCells.some(c => c.model === cell.model)) return genCells.find(c => c.model === cell.model);
@@ -11337,6 +11493,9 @@ function buildGenPayload(promptText) {
 			// references[]; the absolute image index seen by the model is +1.
 			ref_image_index: refIdx ? refIdx + 1 : null,
 			notes: o.userData.notes || null,
+			// Checker flag → server appends the "reference grid, disregard the
+			// texture" template language when true.
+			checker: !!o.userData?._checkerOn,
 		});
 	}
 
@@ -11467,6 +11626,12 @@ function renderGenCellProperties(cell) {
 	} else if (cell.model === "nano-banana") {
 		slotsHtml = `
 			<div class="gen-slots">
+				<div class="gen-slot" data-slot="sourceImage" data-accepts="image" title="Optional source image — replaces the auto viewport blockout as image 1 (the spatial-composition reference). Leave empty to use the current viewport, or hit × on the Viewport blockout row below to skip image 1 entirely (text-to-image mode).">
+					<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
+					<div class="gen-slot-label">Source image</div>
+					<button type="button" class="gen-slot-clear" hidden>×</button>
+					<input type="file" class="gen-slot-file" accept="image/*" hidden>
+				</div>
 				<div class="gen-slot" data-slot="styleRef" data-accepts="image" title="Style reference — aesthetic only (cartoon, anime, paint, etc.) not the subject. Drag from Assets or click to upload.">
 					<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
 					<div class="gen-slot-label">Style ref</div>
@@ -11510,6 +11675,91 @@ function renderGenCellProperties(cell) {
 		? `<div class="hint" style="margin-top:8px">No inputs — this generator always runs on the current viewport snapshot. Hit ▶ to run.</div>`
 		: "";
 
+	// Object refImages are auto-forwarded as input references for prompted
+	// models (see buildGenPayload). Surface the list so the user sees exactly
+	// what's going to be sent alongside the prompt + scene snapshot. Skipped
+	// for image-in-only + tripo-t2m since those code paths don't consult
+	// object.userData.refImage.
+	const usesObjectRefs = !["depth-anything-local", "tripo-i2m", "triposplat-local", "tripo-t2m"].includes(cell.model);
+
+	// Blockout Strength — how closely the model should adhere to the blockout's
+	// composition. Low = loose interpretation (rough placement only), high =
+	// strict shape/scale fidelity. Sent to server as `blockout_strength` (0..1);
+	// server picks language matching the tier. Skipped in text-to-image mode
+	// (nothing to modulate when there's no source blockout).
+	const usesStrength = usesObjectRefs && !(cell.noBlockout);
+	const strengthPct = Number.isFinite(cell.blockoutStrength) ? cell.blockoutStrength : 70;
+	const strengthHtml = usesStrength ? `
+		<div class="section" style="padding-top:6px">
+			<div class="drag-row">
+				<div class="drag-num" id="cell-strength-drag" style="flex:1"><span class="drag-label">Blockout Strength</span><span class="drag-val">${strengthPct}%</span></div>
+			</div>
+		</div>
+	` : "";
+
+	let objRefsHtml = "";
+	if (usesObjectRefs) {
+		const withRefs = objects.filter(o => o.userData?.refImage && (o.userData.refImage.signedUrl || o.userData.refImage.localUrl));
+		// Show the section whenever we have object refs OR the cell has any
+		// image-1 state to surface (custom source, noBlockout, style ref). That
+		// way users can always see the image lineup + toggle no-blockout back.
+		const hasImageState = !!cell.sourceImage?.url || !!cell.styleRef?.url || !!cell.noBlockout;
+		if (withRefs.length || hasImageState || cell.model === "nano-banana") {
+			// Blockout snapshot is always image 1 — surface it in the list so the
+			// user sees the full lineup (snapshot + style ref + per-object refs)
+			// and can eyeball what the model will actually receive.
+			// Image-1 row — shows either the auto viewport snapshot, a
+			// user-uploaded source override (cell.sourceImage), or nothing at
+			// all when cell.noBlockout is set (pure text-to-image). × on the
+			// row cycles snapshot → skip; upload via the Source image slot
+			// above swaps to custom.
+			let snapRow = "";
+			if (!cell.noBlockout) {
+				const usingCustom = !!cell.sourceImage?.url;
+				const img1Url = usingCustom
+					? cell.sourceImage.url
+					: `/comfyblockout/image/${encodeURIComponent(NODE_ID)}?t=${Date.now()}`;
+				const img1Label = usingCustom ? "Custom source" : "Viewport blockout";
+				snapRow = `<div class="gen-objref-row gen-objref-snap"><span class="gen-objref-thumb" style="background-image:url('${img1Url}')"></span><span class="gen-objref-name">${img1Label} <span style="color:rgba(255,255,255,0.35)">(image 1)</span></span><button type="button" class="gen-objref-x" data-blockout-clear="1" title="Skip image 1 (text-to-image mode)">×</button></div>`;
+			} else {
+				// User previously hit × to skip image 1. Show a click-to-restore
+				// row so they aren't stranded in text-only mode.
+				snapRow = `<div class="gen-objref-row gen-objref-restore" data-blockout-restore="1" title="Enable viewport blockout"><span class="gen-objref-thumb" style="background:rgba(255,255,255,0.06)"></span><span class="gen-objref-name" style="color:rgba(255,255,255,0.4);font-style:italic">Enable viewport blockout</span></div>`;
+			}
+			const styleRow = cell.styleRef?.url
+				? `<div class="gen-objref-row gen-objref-style"><span class="gen-objref-thumb" style="background-image:url('${cell.styleRef.url}')"></span><span class="gen-objref-name">Style ref <span style="color:rgba(255,255,255,0.35)">(aesthetic only)</span></span><button type="button" class="gen-objref-x" data-styleref-clear="1" title="Remove style ref">×</button></div>`
+				: "";
+			const rows = snapRow + styleRow + withRefs.map(o => {
+				const url = refImageThumbUrl(o.userData.refImage) || "";
+				const name = (o.name || "").replace(/</g, "&lt;");
+				return `<div class="gen-objref-row gen-objref-selectable" data-obj-uuid="${o.uuid}" title="Click to open ${name}'s properties"><span class="gen-objref-thumb" style="background-image:url('${url}')"></span><span class="gen-objref-name">${name}</span><button type="button" class="gen-objref-x" data-objref-clear="${o.uuid}" title="Remove image ref">×</button></div>`;
+			}).join("");
+			// Nano Banana caps at 14 input images total: scene snapshot (1) +
+			// style ref (0 or 1) + per-object refs. Compute + surface a budget
+			// counter so the user can see when they're near/over the cap.
+			const NANO_MAX = 14;
+			const isNano = cell.model === "nano-banana";
+			const hasStyleRef = !!cell.styleRef?.url;
+			const hasImage1 = !cell.noBlockout;  // custom OR snapshot both count as 1
+			const total = (hasImage1 ? 1 : 0) + (hasStyleRef ? 1 : 0) + withRefs.length;
+			const over = isNano && total > NANO_MAX;
+			const budgetParts = [];
+			if (hasImage1) budgetParts.push(cell.sourceImage?.url ? "custom source" : "scene");
+			if (hasStyleRef) budgetParts.push("style ref");
+			budgetParts.push(`${withRefs.length} object ref${withRefs.length === 1 ? "" : "s"}`);
+			const budget = isNano
+				? `<div class="gen-objref-budget${over ? " over" : ""}">${total} of ${NANO_MAX} images (${budgetParts.join(" + ")})${over ? ` — remove ${total - NANO_MAX} to fit` : ""}</div>`
+				: "";
+			objRefsHtml = `
+				<div class="section">
+					<div class="section-label">Referenced objects <span style="color:rgba(255,255,255,0.35)">(${withRefs.length})</span></div>
+					<div class="gen-objref-list">${rows}</div>
+					${budget}
+				</div>
+			`;
+		}
+	}
+
 	pane.innerHTML = `
 		<div class="section">
 			<div class="section-label">Inputs</div>
@@ -11517,6 +11767,8 @@ function renderGenCellProperties(cell) {
 			${promptWrap}
 			${emptyHint}
 		</div>
+		${strengthHtml}
+		${objRefsHtml}
 		<button type="button" class="rp-generate-btn" data-run-cell="${cell.id}">
 			<span>Generate</span>
 			<svg viewBox="0 0 24 24" fill="currentColor" style="width:12px;height:12px" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
@@ -11528,6 +11780,78 @@ function renderGenCellProperties(cell) {
 	pane.querySelector(".rp-generate-btn")?.addEventListener("click", () => {
 		document.querySelector(`#workflow-cells .gen-cell[data-cell-id="${cell.id}"] .gen-run-btn`)?.click();
 	});
+
+	// Blockout Strength drag-num — same widget style as Density/Scale/Mask.
+	// Drag horizontally to scrub 0..100%; click to type. Debounced save keeps
+	// scrubbing cheap.
+	const strengthDrag = pane.querySelector("#cell-strength-drag");
+	if (strengthDrag) {
+		setupDragField(strengthDrag, {
+			get: () => Number.isFinite(cell.blockoutStrength) ? cell.blockoutStrength : 70,
+			set: v => {
+				cell.blockoutStrength = Math.max(0, Math.min(100, Math.round(v)));
+				maybeSaveDebounced?.();
+			},
+			sens: 0.5, min: 0, max: 100,
+			format: v => `${Math.round(v)}%`,
+		});
+	}
+
+	// Referenced-objects rows: main click → select the object (opens its
+	// properties, kicks the right panel back to the object switcher). X button
+	// on object rows → clear that object's refImage. X on style row → clear
+	// cell.styleRef. Both re-render this pane so the list updates immediately.
+	for (const row of pane.querySelectorAll(".gen-objref-selectable")) {
+		row.addEventListener("click", (e) => {
+			if (e.target.closest(".gen-objref-x")) return;
+			const uuid = row.dataset.objUuid;
+			const obj = objects.find(o => o.uuid === uuid);
+			if (obj) select(obj);
+		});
+	}
+	for (const x of pane.querySelectorAll(".gen-objref-x[data-objref-clear]")) {
+		x.addEventListener("click", (e) => {
+			e.stopPropagation();
+			const uuid = x.dataset.objrefClear;
+			const obj = objects.find(o => o.uuid === uuid);
+			if (obj?.userData?.refImage) {
+				obj.userData.refImage = null;
+				saveScene?.();
+				renderGenCellProperties(cell);
+				if (obj === selected) refreshObjectInspector?.();
+			}
+		});
+	}
+	const styleClearX = pane.querySelector(".gen-objref-x[data-styleref-clear]");
+	if (styleClearX) {
+		styleClearX.addEventListener("click", (e) => {
+			e.stopPropagation();
+			cell.styleRef = null;
+			maybeSaveDebounced?.();
+			renderGenCellProperties(cell);
+		});
+	}
+	// Viewport blockout ×: toggle noBlockout, drops image 1 from the request.
+	// The runtime path in vp-generate translates this to inputs.skip_source_image
+	// which the server pops before invoking the module.
+	const blockoutClearX = pane.querySelector(".gen-objref-x[data-blockout-clear]");
+	if (blockoutClearX) {
+		blockoutClearX.addEventListener("click", (e) => {
+			e.stopPropagation();
+			cell.noBlockout = true;
+			maybeSaveDebounced?.();
+			renderGenCellProperties(cell);
+		});
+	}
+	const blockoutRestoreRow = pane.querySelector("[data-blockout-restore]");
+	if (blockoutRestoreRow) {
+		blockoutRestoreRow.addEventListener("click", (e) => {
+			e.stopPropagation();
+			cell.noBlockout = false;
+			maybeSaveDebounced?.();
+			renderGenCellProperties(cell);
+		});
+	}
 
 	// Wire ref slots.
 	for (const slot of pane.querySelectorAll(".gen-slot")) {
@@ -11730,10 +12054,20 @@ function renderGenCellProperties(cell) {
 	}
 
 	promptEl.addEventListener("click", e => { e.stopPropagation(); renderSuggestions(); });
+	// Auto-height so the textarea grows with content — no scrollbar unless the
+	// user forces a manual shrink. Cap at a reasonable max so a wall of text
+	// doesn't push the Generate button off-screen.
+	function autosizePrompt() {
+		promptEl.style.height = "auto";
+		const cap = 320;
+		promptEl.style.height = Math.min(cap, promptEl.scrollHeight) + "px";
+	}
+	autosizePrompt();
 	promptEl.addEventListener("input", () => {
 		cell.prompt = promptEl.value;
 		renderHighlight();
 		renderSuggestions();
+		autosizePrompt();
 		maybeSaveDebounced();
 	});
 	promptEl.addEventListener("scroll", syncScroll);
@@ -11849,6 +12183,22 @@ document.getElementById("vp-generate")?.addEventListener("click", async () => {
 		// prompt. The server treats it differently from per-object refs (no spatial mapping).
 		if (cell.model === "nano-banana" && cell.styleRef?.url) {
 			inputs.style_reference = cell.styleRef.url;
+		}
+		// Nano custom source image — replaces the auto viewport snapshot as image 1.
+		// Server's existing image_url override in scene-image resolution consumes this.
+		if (cell.model === "nano-banana" && cell.sourceImage?.url) {
+			inputs.image_url = cell.sourceImage.url;
+		}
+		// Nano text-to-image mode — user × the viewport-blockout row. Server
+		// pops this flag and skips scene-image resolution so no image_path
+		// gets injected. Module needs to gracefully accept image_path=None.
+		if (cell.model === "nano-banana" && cell.noBlockout) {
+			inputs.skip_source_image = true;
+		}
+		// Blockout Strength (0..1) — server modulates composition-fidelity
+		// language in the prompt based on this. Omitted → server treats as 1.0.
+		if (Number.isFinite(cell.blockoutStrength)) {
+			inputs.blockout_strength = Math.max(0, Math.min(1, cell.blockoutStrength / 100));
 		}
 		inputs.references = references;
 		inputs.scene_objects = sceneObjects;
@@ -16936,6 +17286,11 @@ const ASSISTANT_TOOLS = {
 		if (g) {
 			g.prompt = String(prompt || "");
 			refreshGenCells();
+			// If this cell's properties pane is currently active, re-render it
+			// so the textarea picks up the new prompt (agent-set values don't
+			// fire "input" events, so the autosize + highlight wouldn't run
+			// otherwise).
+			if (activeGenCellId === g.id) renderGenCellProperties(g);
 			maybeSaveDebounced();
 			return `updated ${model} prompt`;
 		}
@@ -18123,7 +18478,7 @@ updateViewToggleIcon(typeof activeView !== "undefined" ? activeView : "scene");
 	const insetWrap = document.getElementById("viewport-inset");
 	const insetBtn = document.getElementById("mode-inset-toggle");
 	if (!insetWrap || !insetBtn) return;
-	const INSET_W = 220;
+	const INSET_W = 280;
 	const INSET_MARGIN = 12;
 	function positionInset() {
 		// Anchor to the CANVAS top-RIGHT (not canvas-wrap) so the scissor rect —
@@ -18177,10 +18532,26 @@ updateViewToggleIcon(typeof activeView !== "undefined" ? activeView : "scene");
 		const prevAspect = renderCam.aspect;
 		const camH = (typeof renderCamHelper !== "undefined") ? renderCamHelper : null;
 		const gizmo = (typeof transformHelper !== "undefined") ? transformHelper : null;
+		const paths = (typeof animPathsGroup !== "undefined") ? animPathsGroup : null;
 		const prevCamHVis = camH ? camH.visible : null;
 		const prevGizmoVis = gizmo ? gizmo.visible : null;
+		const prevPathsVis = paths ? paths.visible : null;
 		if (camH) camH.visible = false;
 		if (gizmo) gizmo.visible = false;
+		if (paths) paths.visible = false;
+		// Mannequin joint sphere containers — editor-only posing handles that
+		// otherwise render as bright dots on top of the character. Collected
+		// per-frame since the object list can change between frames.
+		const _insetGizmoStates = [];
+		if (typeof objects !== "undefined") {
+			for (const o of objects) {
+				const gz = o?.userData?._gizmoContainer;
+				if (gz && typeof gz.visible === "boolean") {
+					_insetGizmoStates.push([gz, gz.visible]);
+					gz.visible = false;
+				}
+			}
+		}
 		// Set inset render state
 		renderCam.aspect = rectW / rectH;
 		renderCam.updateProjectionMatrix();
@@ -18202,6 +18573,8 @@ updateViewToggleIcon(typeof activeView !== "undefined" ? activeView : "scene");
 			renderCam.updateProjectionMatrix();
 			if (camH) camH.visible = prevCamHVis;
 			if (gizmo) gizmo.visible = prevGizmoVis;
+			if (paths) paths.visible = prevPathsVis;
+			for (const [gz, prev] of _insetGizmoStates) gz.visible = prev;
 		}
 	};
 	// Restore last state. Deferred via queueMicrotask because positionInset()
@@ -19535,12 +19908,31 @@ objImageFile.addEventListener("change", async () => {
 	const f = objImageFile.files?.[0];
 	objImageFile.value = "";
 	if (!f || !selected) return;
+	// Optimistic thumbnail — show a blob-URL preview instantly so the tile
+	// fills the moment the user picks a file. Server upload runs in the
+	// background and the real refImage swaps in on completion. Target is
+	// captured so a mid-upload selection change lands on the right object.
+	const target = selected;
+	const optimisticUrl = URL.createObjectURL(f);
+	target.userData.refImage = { localUrl: optimisticUrl, filename: f.name, __pending: true };
+	if (target === selected) refreshObjectInspector();
 	try {
-		selected.userData.refImage = await uploadObjectRefImage(f);
-		refreshObjectInspector();
-		saveScene?.();
+		const real = await uploadObjectRefImage(f);
+		// Guard against the user having cleared or replaced the ref during
+		// upload — only overwrite if our optimistic entry is still there.
+		if (target.userData.refImage?.__pending && target.userData.refImage?.localUrl === optimisticUrl) {
+			target.userData.refImage = real;
+			if (target === selected) refreshObjectInspector();
+			saveScene?.();
+		}
+		URL.revokeObjectURL(optimisticUrl);
 	} catch (err) {
 		console.error("[obj-image] upload failed", err);
+		URL.revokeObjectURL(optimisticUrl);
+		if (target.userData.refImage?.__pending && target.userData.refImage?.localUrl === optimisticUrl) {
+			target.userData.refImage = null;
+			if (target === selected) refreshObjectInspector();
+		}
 		alert(`Image upload failed: ${err.message || err}`);
 	}
 });
@@ -20975,6 +21367,31 @@ document.getElementById("fps").addEventListener("input", e => {
 	document.getElementById("fps-val").textContent = e.target.value;
 	saveSceneDebounced?.();
 });
+// Drag-num widgets for Duration + FPS mirror into the hidden inputs above so
+// every consumer that reads document.getElementById("duration"|"fps").value
+// keeps working. dispatchEvent("input") re-fires the listeners just above.
+setupDragField(document.getElementById("duration-drag"), {
+	get: () => parseFloat(document.getElementById("duration").value) || 4,
+	set: v => {
+		v = Math.max(1, Math.min(10, Math.round(v * 2) / 2));
+		const el = document.getElementById("duration");
+		el.value = String(v);
+		el.dispatchEvent(new Event("input"));
+	},
+	sens: 0.05, min: 1, max: 10,
+	format: v => `${v.toFixed(1)}s`,
+});
+setupDragField(document.getElementById("fps-drag"), {
+	get: () => parseInt(document.getElementById("fps").value, 10) || 30,
+	set: v => {
+		v = Math.max(12, Math.min(60, Math.round(v / 6) * 6));
+		const el = document.getElementById("fps");
+		el.value = String(v);
+		el.dispatchEvent(new Event("input"));
+	},
+	sens: 0.5, min: 12, max: 60,
+	format: v => `${Math.round(v)}`,
+});
 
 const envSelect = document.getElementById("env-preset");
 const envIntensity = document.getElementById("env-intensity");
@@ -21470,11 +21887,15 @@ function applyResultMode() {
 		// viewport — overlay hidden, live 3D scene visible
 		resultOverlay.hidden = true;
 	}
-	// The floating save-icon in the top-right of the overlay only makes sense
-	// when a real render is on-screen — hide it for blockout / intermediate /
-	// viewport (those are ephemeral previews, not something you'd download).
+	// The floating save-icon in the top-right of the overlay shows on both
+	// Blockout (the composited PNG uploaded to the model) and Render (the
+	// generated output) — both are download-worthy artifacts. Hidden on
+	// viewport (nothing to save) + intermediates (ephemeral debug frames).
 	const saveOv = document.getElementById("result-save-overlay");
-	if (saveOv) saveOv.classList.toggle("visible", resultMode === "render" && !!lastResult);
+	if (saveOv) {
+		const canSave = (resultMode === "render" && !!lastResult) || resultMode === "blockout";
+		saveOv.classList.toggle("visible", canSave);
+	}
 	// Clear button is Blockout-only — visible when Blockout is currently
 	// showing a recorded video (resultOverlayVid has a src AND we're in
 	// blockout mode). Click drops the entry from _video_store server-side.
@@ -21546,10 +21967,20 @@ document.getElementById("result-clear-overlay")?.addEventListener("click", async
 	applyResultMode?.();
 });
 document.getElementById("result-save-overlay")?.addEventListener("click", () => {
-	if (!lastResult) return;
+	// Blockout mode → download the composited PNG snapshot (what the model
+	// received as image 1). Render mode → download the generated result.
+	let href = null, filename = null;
+	if (resultMode === "blockout") {
+		href = `/comfyblockout/image/${encodeURIComponent(NODE_ID)}?t=${Date.now()}`;
+		filename = `blockout_${NODE_ID}.png`;
+	} else if (lastResult) {
+		href = lastResult.url;
+		filename = lastResult.filename || "render.png";
+	}
+	if (!href) return;
 	const a = document.createElement("a");
-	a.href = lastResult.url;
-	a.download = lastResult.filename || "render.png";
+	a.href = href;
+	a.download = filename;
 	document.body.appendChild(a); a.click(); a.remove();
 });
 
@@ -26326,6 +26757,23 @@ async function autoSnapshot() {
 		// editor's current perspective.
 		const snapCam = renderCam;
 		const prevAspect = snapCam.aspect;
+		// Keep the checker texture visible in the snapshot — Nano's prompt now
+		// treats it explicitly as "reference grid, disregard the texture" per
+		// the working template the user landed on. Stripping at input was
+		// a workaround; the language-based approach lets the model still see
+		// the grid AS a perspective anchor.
+		// Mannequin joint spheres — editor-only handles for posing. They burn
+		// as bright white dots into the blockout snapshot otherwise, which
+		// Nano tries to reproduce as glowing orbs on the character. Collect
+		// every gizmo container and hide during the snapshot pass.
+		const mannequinGizmoStates = [];
+		for (const o of objects) {
+			const gz = o.userData?._gizmoContainer;
+			if (gz && typeof gz.visible === "boolean") {
+				mannequinGizmoStates.push([gz, gz.visible]);
+				gz.visible = false;
+			}
+		}
 		try {
 			transformHelper.visible = false;
 			if (renderCamHelper) renderCamHelper.visible = false;
@@ -26344,6 +26792,7 @@ async function autoSnapshot() {
 			for (const [h, prev] of fxHelperStates) h.visible = prev;
 			for (const [mesh, prev] of rimStates) mesh.visible = prev;
 			if (_camOrbitRing) _camOrbitRing.visible = !!orbitRingWasVisible;
+			for (const [gz, prev] of mannequinGizmoStates) gz.visible = prev;
 		}
 
 		renderer.readRenderTargetPixels(snapshotTarget, 0, 0, w, h, snapshotPixels);
@@ -26395,7 +26844,13 @@ window.addEventListener("message", async (ev) => {
 	window.parent?.postMessage({ source: "comfy3d-editor", type: "save-complete" }, "*");
 });
 
-const promptEl = document.getElementById("prompt-text");
+// System prompt — the textarea shows either the user's saved override or the
+// server-default BASE_PROMPT. Debounced save persists edits via the same
+// /save_prompt endpoint (repurposed to store a full base-override rather than
+// the old appended-tweaks payload). Reset clears the override → restores
+// default. Server picks up the override at generation time.
+const promptBaseEdit = document.getElementById("prompt-base-edit");
+let _promptBaseDefault = "";
 const savePromptDebounced = (() => {
 	let t = null;
 	return () => {
@@ -26405,23 +26860,35 @@ const savePromptDebounced = (() => {
 				await fetch("/comfyblockout/save_prompt", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ node_id: NODE_ID, prompt: promptEl.value }),
+					body: JSON.stringify({ node_id: NODE_ID, prompt: promptBaseEdit.value }),
 				});
 			} catch (e) { console.warn("[ComfyBlockout] prompt save failed:", e); }
 		}, 500);
 	};
 })();
-promptEl.addEventListener("input", savePromptDebounced);
-
+promptBaseEdit?.addEventListener("input", savePromptDebounced);
 async function loadPrompt() {
 	try {
 		const r = await fetch(`/comfyblockout/load_prompt?node_id=${encodeURIComponent(NODE_ID)}`);
 		const j = await r.json();
-		promptEl.value = j.prompt || "";
-		const baseEl = document.getElementById("prompt-base-text");
-		if (baseEl) baseEl.textContent = j.base || "";
+		_promptBaseDefault = j.base || "";
+		if (promptBaseEdit) promptBaseEdit.value = j.prompt || _promptBaseDefault;
 	} catch (e) { console.warn("[ComfyBlockout] prompt load failed:", e); }
 }
+document.getElementById("sys-prompt-reset")?.addEventListener("click", async () => {
+	if (!promptBaseEdit) return;
+	promptBaseEdit.value = _promptBaseDefault;
+	// Save empty so the server treats it as "no override, use default" — that
+	// way future BASE_PROMPT changes still flow through instead of being
+	// masked by a snapshot the user reset to today.
+	try {
+		await fetch("/comfyblockout/save_prompt", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ node_id: NODE_ID, prompt: "" }),
+		});
+	} catch (e) { console.warn("[ComfyBlockout] prompt reset save failed:", e); }
+});
 
 (async () => {
 	const bootStart = performance.now();

@@ -131,13 +131,46 @@ else:
 # UI. The editor's "Prompt Tweaks" textarea is appended on top of this, so users
 # can add scene-specific guidance without ever losing the spatial-ControlNet base.
 BASE_PROMPT = (
-    "STRICT SPATIAL REPLACEMENT TASK.\n\n"
-    "IMAGE 1 (always the first attached image) is a 3D blockout — a low-fidelity "
-    "scene render with simple colored shapes that act as stencils for the final "
-    "objects. ANY ADDITIONAL IMAGES (image 2, 3, …) are per-object MATERIAL "
-    "SWATCHES — they show the desired surface/finish/texture for a specific "
-    "colored shape in image 1; the SCENE INVENTORY below tells you which image "
-    "number maps to which named object.\n\n"
+    "COMPOSITION-GUIDED IMAGE GENERATION TASK.\n\n"
+    "**OUTPUT ASPECT RATIO — HIGHEST PRIORITY RULE.** The output image's "
+    "width and height MUST match image 1's width and height ratio EXACTLY. "
+    "Format: match image 1. Measure image 1: if width > height, output "
+    "landscape. If height > width, output portrait. If width == height, "
+    "output square. Do NOT default to 1:1 or 1024×1024. Do NOT crop, pad, "
+    "or letterbox to reshape. Aspect ratio compliance is non-negotiable.\n\n"
+    "**IMAGE 1 IS A STRUCTURAL LAYOUT REFERENCE — NOT A LOOK REFERENCE.** "
+    "Image 1 is a 3D blockout: a low-fidelity scene with primitive shapes, "
+    "flat colors, and reference geometry. Treat it exactly like a hand-drawn "
+    "sketch or wireframe used to plan a final polished image. Follow the "
+    "structure of the attached reference image exactly for:\n"
+    "  • Camera angle, perspective, and lens compression.\n"
+    "  • Composition, framing, and where the horizon sits.\n"
+    "  • Placement, position, and screen-space size of each element.\n"
+    "  • Ground plane orientation and vanishing points.\n"
+    "Keep the exact layout of every element as shown in image 1, but render "
+    "it in the style described in the user prompt. Strictly adhere to the "
+    "placement and scale from the blockout while replacing the primitive "
+    "shapes with the intended subjects.\n\n"
+    "Do NOT copy from image 1: its flat colors, primitive silhouettes, "
+    "material simplicity, low-detail surfaces, tinted shapes, checker "
+    "patterns, grid overlays, or overall 'blockout' aesthetic. The output "
+    "must look like a fully realized real image (or the style described in "
+    "the user prompt), NOT like a stylized version of the blockout.\n\n"
+    "ANY ADDITIONAL IMAGES (image 2, 3, …) are per-object REFERENCE IMAGES — "
+    "they show what each object should look like as a subject. The SCENE "
+    "INVENTORY below tells you which image number maps to which named "
+    "object in image 1's composition.\n\n"
+    "**SEAMLESS COHESION.** The output must read as a single, unified, "
+    "seamless image — one photograph or one painting, not a composite. "
+    "Where two objects meet (object touching ground, object against sky, "
+    "shadow across a surface), the transition must be physically plausible: "
+    "consistent lighting direction, matching color temperature, correct "
+    "contact shadows, and continuous surrounding materials. Do NOT leave "
+    "visible seams, cut-out edges, hard color breaks, or 'pasted-on' looks "
+    "at boundaries between elements. Every object shares the same scene "
+    "lighting, atmosphere, and depth-of-field as the environment around it. "
+    "The whole image should look like it was captured or painted in one "
+    "pass.\n\n"
     "Your job: produce a single new image that matches IMAGE 1 spatially "
     "(camera, perspective, aspect ratio, position and SCALE of every colored "
     "shape), but renders each colored shape as the subject described in the "
@@ -2422,9 +2455,53 @@ async def run_module(module_id: str, request: Request):
     node_id = str(body.get("node_id", "")).strip() or "default"
     inputs = dict(body.get("inputs") or {})
 
+    # Client flag — user hit × on the viewport-blockout row (text-to-image mode).
+    # Skips scene-image resolution below so no image_path gets injected, and
+    # the module runs with image_path=None. Pop early so it doesn't leak into
+    # the module kwargs. Nano Banana has no aspect_ratio CLI parameter, so we
+    # synthesize a blank canvas at the requested aspect further down and pass
+    # THAT as image_path — the base prompt already tells the model to match
+    # image 1's dimensions. Without this, Nano defaults to 1:1 square.
+    skip_source_image = bool(inputs.pop("skip_source_image", False))
+
+    # Blockout Strength (0.0..1.0) — how strictly the model should adhere to the
+    # blockout's composition. Injected into the prompt as a tier-appropriate
+    # instruction. Default 1.0 (strict) preserves prior behavior when the client
+    # doesn't send it.
+    try:
+        blockout_strength = float(inputs.pop("blockout_strength", 1.0))
+    except (TypeError, ValueError):
+        blockout_strength = 1.0
+    blockout_strength = max(0.0, min(1.0, blockout_strength))
+
     # Resolve scene-image / scene-video into concrete file paths from the editor's saved state.
     for spec in m.inputs:
         if spec.get("type") == "scene-image":
+            if skip_source_image:
+                # Synthesize a plain black canvas at the scene aspect so the
+                # model has an aspect anchor even in text-to-image mode. Nano
+                # Banana has no aspect CLI param — the model reads image 1's
+                # dimensions and (per BASE_PROMPT) matches them in the output.
+                cam_meta = inputs.get("camera") or {}
+                aspect_str = str(cam_meta.get("aspect") or "16:9")
+                try:
+                    a, b = aspect_str.split(":", 1)
+                    ar_w, ar_h = int(a), int(b)
+                except Exception:
+                    ar_w, ar_h = 16, 9
+                # Long side 1280 → 1280x720 for 16:9, 720x1280 for 9:16, etc.
+                LONG = 1280
+                if ar_w >= ar_h:
+                    W, H = LONG, max(1, round(LONG * ar_h / ar_w))
+                else:
+                    W, H = max(1, round(LONG * ar_w / ar_h)), LONG
+                import tempfile as _tempfile
+                from PIL import Image as _Image
+                tmp = _tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                tmp.close()
+                _Image.new("RGB", (W, H), (0, 0, 0)).save(tmp.name)
+                inputs["image_path"] = Path(tmp.name)
+                continue
             info = _image_store.get(node_id)
             if not info or not Path(info["path"]).exists():
                 raise HTTPException(400, "no scene image saved — snapshot in the editor first")
@@ -2499,6 +2576,7 @@ async def run_module(module_id: str, request: Request):
         if aspect: cam_bits.append(f"aspect ratio {aspect}")
         if cam_bits:
             lines.append("Camera: " + "; ".join(cam_bits) + ".")
+        checker_objs = []
         for o in objs:
             name = o.get("name") or "?"
             kind = o.get("kind") or "object"
@@ -2511,9 +2589,23 @@ async def run_module(module_id: str, request: Request):
             ref_note = f", surface/material drawn from swatch image {ref_idx}" if ref_idx else ""
             notes = o.get("notes")
             notes_note = f" — notes: {notes}" if notes else ""
+            checker_note = " — the checkerboard on this surface is a reference GRID (perspective / vanishing points only); completely disregard the black-and-white texture in the output" if o.get("checker") else ""
             lines.append(
                 f"- {name} ({color} {kind}): centered at x={x}% y={y}% "
-                f"of frame, occupies ~{w}%×{h}% of frame{ref_note}{notes_note}"
+                f"of frame, occupies ~{w}%×{h}% of frame{ref_note}{notes_note}{checker_note}"
+            )
+            if o.get("checker"):
+                checker_objs.append(name)
+        if checker_objs:
+            names = ", ".join(checker_objs)
+            lines.append(
+                f"CHECKERBOARD ON {names}: Use the uploaded reference grid "
+                "strictly as a structural framework for perspective, camera "
+                "angle, and vanishing points. Completely disregard the "
+                "black-and-white checkered texture. Instead of the grid, "
+                "render the scene described in the user prompt exactly "
+                "adhering to these perspective lines, proportions, and "
+                "spatial arrangements."
             )
         lines.append(
             "Use the screen-space %s above as the exact pixel footprint for each "
@@ -2535,13 +2627,71 @@ async def run_module(module_id: str, request: Request):
     # tweaks + the actual user request.
     user_prompt = (inputs.get("prompt") or "").strip()
     if user_prompt:
-        tweaks = (_prompt_store.get(node_id) or "").strip()
+        # _prompt_store now holds the user's EDITED base prompt (full replace
+        # of BASE_PROMPT), not appended tweaks. Empty / unset → server default.
+        base_override = (_prompt_store.get(node_id) or "").strip()
         inventory = _format_inventory(scene_objects, camera_meta)
-        parts = [BASE_PROMPT.strip()]
+        parts = [base_override or BASE_PROMPT.strip()]
+        # Blockout Strength language — tiered instruction that tells the model
+        # how tightly to hew to image 1's composition. 0 = pure creative
+        # freedom (image 1 is a hint), 1 = strict spatial replacement (default).
+        # Only added when we ARE using the blockout (not text-to-image mode).
+        if not skip_source_image:
+            if blockout_strength <= 0.25:
+                strength_note = (
+                    f"BLOCKOUT STRENGTH: {int(blockout_strength * 100)}% (LOOSE). "
+                    "Image 1's composition is a loose suggestion only. Use it "
+                    "for rough spatial placement of subjects in the frame, but "
+                    "feel free to reinterpret sizes, silhouettes, and exact "
+                    "positions. Prioritize the user's prompt and creative "
+                    "vision over strict adherence to the blockout shapes."
+                )
+            elif blockout_strength <= 0.6:
+                strength_note = (
+                    f"BLOCKOUT STRENGTH: {int(blockout_strength * 100)}% (MODERATE). "
+                    "Follow image 1's general placement and scale as guidance, "
+                    "but interpret the primitive shapes loosely — the final "
+                    "objects can have organic proportions that differ somewhat "
+                    "from the blockout stencils, as long as their approximate "
+                    "position and screen footprint match."
+                )
+            elif blockout_strength < 1.0:
+                strength_note = (
+                    f"BLOCKOUT STRENGTH: {int(blockout_strength * 100)}% (STRICT). "
+                    "Image 1's placement, scale, and silhouette should closely "
+                    "match in the output. Minor artistic reinterpretation of "
+                    "exact shape is allowed, but each object's screen-space "
+                    "footprint (position + size) must be very close to what "
+                    "the blockout shows."
+                )
+            else:
+                strength_note = (
+                    "BLOCKOUT STRENGTH: 100% (LOCKED). Each colored shape in "
+                    "image 1 has an EXACT screen-space footprint (position, "
+                    "size). The replacement object must occupy that same "
+                    "footprint precisely. Do not scale up or down; do not "
+                    "reposition; do not reinterpret the silhouette."
+                )
+            parts_prefix_strength = strength_note
+        else:
+            parts_prefix_strength = None
+        if skip_source_image:
+            # Text-to-image mode: image 1 is a synthesized blank canvas that
+            # exists ONLY to lock the output aspect ratio. Prevent the model
+            # from interpreting the black pixels as scene content (dark
+            # background, night, silhouette, etc.).
+            parts.append(
+                "TEXT-TO-IMAGE MODE: image 1 is a BLANK BLACK CANVAS supplied "
+                "purely as an aspect-ratio anchor. It contains NO scene "
+                "content, NO objects, NO lighting cues, and NO subject. Do "
+                "NOT let its blackness bias the output toward dark/night/"
+                "silhouette imagery. Ignore its pixel content entirely; use "
+                "it ONLY to set the output width and height."
+            )
+        if parts_prefix_strength:
+            parts.append(parts_prefix_strength)
         if inventory:
             parts.append(inventory)
-        if tweaks:
-            parts.append(f"ADDITIONAL TWEAKS:\n{tweaks}")
         parts.append(f"USER REQUEST: {user_prompt}")
         inputs["prompt"] = "\n\n".join(parts)
 
