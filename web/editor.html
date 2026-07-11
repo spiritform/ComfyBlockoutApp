@@ -3483,7 +3483,7 @@
 			<input type="file" id="loadmedia-file" accept="image/*,video/*" hidden>
 		</div>
 
-		<div class="section collapsible" data-section="outliner">
+		<div class="section collapsible" data-section="outliner" hidden>
 			<div class="section-head-row">
 				<span class="section-label">Outliner</span>
 				<span class="head-end">
@@ -6195,7 +6195,7 @@ const gridMat = new THREE.ShaderMaterial({
 		uniform vec3 uCameraPos;
 
 		// Antialiased grid line — returns 0..1 line strength for lines at
-		// integer multiples of `scale`. fwidth gives per-pixel derivative so
+		// integer multiples of 'scale'. fwidth gives per-pixel derivative so
 		// the line always stays roughly one pixel thick regardless of zoom.
 		float gridLine(vec2 p, float scale) {
 			vec2 g = abs(fract(p / scale - 0.5) - 0.5) / fwidth(p / scale);
@@ -9148,6 +9148,7 @@ applyAssistantEnablement();
 	const outlinerDst = document.getElementById("rp-pane-outliner");
 	if (outlinerSection && outlinerDst && outlinerSection.parentElement !== outlinerDst) {
 		outlinerDst.appendChild(outlinerSection);
+		outlinerSection.hidden = false;
 	}
 	// Hoist the Outliner's hide-all + clear buttons into the right-panel
 	// top-zone header slot so they sit alongside the "Outliner" kicker (its
@@ -26271,14 +26272,19 @@ async function deserializeScene(state, opts = {}) {
 		if (Array.isArray(p.keyframes)) mesh.userData.keyframes = deserializeObjectKeyframes(p.keyframes);
 	}
 
-	for (const im of (state.imports || [])) {
+	// Imports fetch + parse in parallel — each closure awaits its own network
+	// and loader but doesn't block the outer loop, so N imports take max(t)
+	// instead of sum(t). Each import calls refreshOutliner via registerImported
+	// as it lands, so the outliner fills in progressively. We DO await the
+	// allSettled below so scatters (which reference imports by name) can resolve.
+	const importPromises = (state.imports || []).map(async (im) => {
 		const ext = (im.filename?.split(".").pop() || "").toLowerCase();
 		const url = `/comfyblockout/asset/${encodeURIComponent(NODE_ID)}/${encodeURIComponent(im.assetId)}.${ext}`;
 		try {
 			const r = await fetch(url);
-			if (!r.ok) { console.warn(`[ComfyBlockout] missing asset ${im.assetId} (${r.status}) ${url}`); continue; }
+			if (!r.ok) { console.warn(`[ComfyBlockout] missing asset ${im.assetId} (${r.status}) ${url}`); return null; }
 			const buf = await r.arrayBuffer();
-			await loadFromBytes(buf, im.filename, {
+			const obj = await loadFromBytes(buf, im.filename, {
 				restoring: true,
 				assetId: im.assetId,
 				savedName: im.name,
@@ -26289,7 +26295,6 @@ async function deserializeScene(state, opts = {}) {
 					quaternion: im.quaternion,
 				},
 			});
-			const obj = objects[objects.length - 1];
 			if (obj && im.visible === false) obj.visible = false;
 			if (obj && im.locked) obj.userData.locked = true;
 			if (obj && im.notes) obj.userData.notes = im.notes;
@@ -26305,10 +26310,13 @@ async function deserializeScene(state, opts = {}) {
 				obj.userData.mixer.timeScale = 0;
 			}
 			console.log(`[ComfyBlockout] restored import ${im.kind || ext} ${im.filename} (${buf.byteLength} bytes) from ${url}`);
+			return obj;
 		} catch (e) {
 			console.error(`[ComfyBlockout] failed to restore import ${im.assetId} (${im.filename}) from ${url}:`, e);
+			return null;
 		}
-	}
+	});
+	await Promise.allSettled(importPromises);
 
 	if (Array.isArray(state.genCells)) {
 		genCells.length = 0;
@@ -26933,14 +26941,32 @@ projectNameEl?.addEventListener("click", () => {
 });
 
 const EMPTY_SCENE = {
-	primitives: [],
-	camera: { position: [2.2, 1.6, 2.8], target: [0, 0.5, 0], fov: 55 },
+	// Seed cube — sits at y=0.5 so it rests on the ground plane; the render
+	// camera in .camera below is aimed at (0, 0.5, 0). This is Blender-style
+	// "default cube" — user has something selectable + framed the moment the
+	// app opens instead of a blank stage.
+	primitives: [{
+		kind: "cube",
+		name: "Cube",
+		position: [0, 0.5, 0],
+		rotation: [0, 0, 0],
+		scale: [1, 1, 1],
+	}],
+	// Symmetric front-3/4 view — X and Z distances equal so both floor grid
+	// diagonals converge on a vanishing point directly behind the cube.
+	camera: { position: [2.5, 1.4, 2.5], target: [0, 0.5, 0], fov: 55 },
 	aspect: "16:9",
 	env: { preset: "studio", intensity: 0.4 },
 	viewport: { grid: true, guides: false, bg: "#07080b" },
 	keyframes: [],
 	imports: [],
 	trim: { start: 0, end: 1 },
+	// Default workflow cells — the two most-used generators seeded so a fresh
+	// scene is one click away from a render. Users can Clear (×) to drop them.
+	genCells: [
+		{ model: "nano-banana", prompt: "", expanded: false },
+		{ model: "seedance",    prompt: "", expanded: false },
+	],
 	// New scenes open through the render camera (not the free-orbit scene view) so
 	// the user starts framing the shot they'll actually export — the perspective
 	// view is more of an over-the-shoulder overview for arranging blockout objects.
@@ -27981,18 +28007,17 @@ document.getElementById("sys-prompt-reset")?.addEventListener("click", async () 
 		frameSceneCamOnShot();
 		renderCamHelper.visible = activeView === "scene" && !renderCam.userData.wireframeHidden;
 	}
-	await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+	await new Promise(r => requestAnimationFrame(r));
 	autoSnapshot().catch(() => {});
-	// Curtain-down: hold the overlay for at least ~250ms so quick boots don't flash it,
-	// then fade out. The .hidden class handles both opacity and pointer-events.
+	console.log(`[ComfyBlockout] boot ready in ${(performance.now() - bootStart).toFixed(0)}ms`);
+	// Curtain-down as soon as deserialize resolves. The imports loop inside
+	// deserialize now fetches + parses in parallel (Promise.allSettled) so
+	// wall time is max(imports) instead of sum. Fresh/empty scenes drop
+	// the curtain the moment the seed cube lands — no artificial hold.
 	const initOverlay = document.getElementById("init-overlay");
 	if (initOverlay) {
-		const minShown = 250;
-		const wait = Math.max(0, minShown - (performance.now() - bootStart));
-		setTimeout(() => {
-			initOverlay.classList.add("hidden");
-			setTimeout(() => initOverlay.remove(), 400);
-		}, wait);
+		initOverlay.classList.add("hidden");
+		setTimeout(() => initOverlay.remove(), 400);
 	}
 	} catch (e) {
 		console.error("[ComfyBlockout] boot failed:", e);

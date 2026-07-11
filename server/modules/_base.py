@@ -94,7 +94,21 @@ async def run_cli(cmd: list[str], cwd: Path | None = None, timeout: int = 600) -
     return await asyncio.to_thread(_run_cli_sync, cmd, cwd, timeout)
 
 
+_EXT_KIND = {
+    "png": "images", "jpg": "images", "jpeg": "images", "webp": "images",
+    "mp4": "videos", "webm": "videos", "mov": "videos",
+    "glb": "3d", "gltf": "3d", "obj": "3d", "fbx": "3d",
+    "ply": "3d", "spz": "3d", "splat": "3d", "ksplat": "3d",
+}
+
+
 def new_output_path(data_dir: Path, module_id: str, ext: str) -> Path:
-    data_dir.mkdir(parents=True, exist_ok=True)
+    # Route by extension into type-partitioned subfolders (images/videos/3d) so
+    # a fresh install has a browsable output structure and the Output panel can
+    # find everything with a single recursive scan. Unknown types fall back to
+    # data_dir root (unchanged behavior).
+    sub = _EXT_KIND.get(ext.lower().lstrip("."))
+    target_dir = (data_dir / sub) if sub else data_dir
+    target_dir.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    return data_dir / f"out_{module_id}_{stamp}_{uuid.uuid4().hex[:6]}.{ext}"
+    return target_dir / f"out_{module_id}_{stamp}_{uuid.uuid4().hex[:6]}.{ext}"

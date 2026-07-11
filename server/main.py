@@ -44,6 +44,11 @@ DATA_DIR = APP_DIR / "output"
 WEB_DIR = APP_DIR / "web"
 ENV_PATH = APP_DIR / ".env"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+# Type-partitioned output folders — created on first run so a fresh install
+# has a browsable structure. Renders route into these by kind (images/videos/3d);
+# existing flat files in output/ root stay put for backwards compat.
+for _sub in ("images", "videos", "3d"):
+    (DATA_DIR / _sub).mkdir(parents=True, exist_ok=True)
 
 
 def _load_env_file(*, override: bool = True) -> bool:
@@ -407,9 +412,9 @@ async def save_video(
 
     _video_store[node_id] = {"path": str(final_path)}
 
-    # Also drop a timestamped copy into the assets namespace so the recording shows
-    # up in the Assets modal (glob "out_*") and can be dragged into a Seedance Ref
-    # video slot. Distinct filename per recording preserves history — the primary
+    # Also drop a timestamped copy into videos/ so the recording shows up in the
+    # Output panel (rglob "out_*") and can be dragged into a Seedance Ref video
+    # slot. Distinct filename per recording preserves history — the primary
     # node_<UID>.mp4 keeps getting overwritten as before for /comfyblockout/video/<id>.
     out_url = None
     out_filename = None
@@ -417,9 +422,11 @@ async def save_video(
         import shutil, time
         out_ext = final_path.suffix.lower() or ".mp4"
         out_filename = f"out_rec_{node_id}_{int(time.time() * 1000)}{out_ext}"
-        out_path = DATA_DIR / out_filename
+        videos_dir = DATA_DIR / "videos"
+        videos_dir.mkdir(parents=True, exist_ok=True)
+        out_path = videos_dir / out_filename
         shutil.copyfile(final_path, out_path)
-        out_url = f"/output/{out_filename}"
+        out_url = f"/output/videos/{out_filename}"
     except Exception as e:
         print(f"[cb-app] recording asset copy failed: {e}")
 
@@ -4262,7 +4269,9 @@ async def assets_list(limit: int = 200):
     # itself — they're an implementation detail, not standalone assets.
     thumbs: dict[str, Path] = {}
     all_files: list[Path] = []
-    for p in DATA_DIR.glob("out_*.*"):
+    # rglob so we pick up outputs routed into type-partitioned subfolders
+    # (images/, videos/, 3d/) as well as legacy flat files in DATA_DIR root.
+    for p in DATA_DIR.rglob("out_*.*"):
         if not p.is_file():
             continue
         # Match `out_<stem>.thumb.<ext>` — .stem strips the last extension
@@ -4318,8 +4327,17 @@ async def assets_delete(filename: str):
     safe = Path(filename).name  # strip any path components
     if not safe.startswith("out_"):
         raise HTTPException(400, "filename outside the assets namespace")
-    p = DATA_DIR / safe
-    if p.exists() and p.is_file():
+    # Files now live in type-partitioned subfolders (images/videos/3d) — search
+    # them plus DATA_DIR root for legacy flat files. Take the first hit.
+    p = None
+    for candidate in (DATA_DIR / "images" / safe,
+                      DATA_DIR / "videos" / safe,
+                      DATA_DIR / "3d" / safe,
+                      DATA_DIR / safe):
+        if candidate.exists() and candidate.is_file():
+            p = candidate
+            break
+    if p:
         try:
             p.unlink()
         except Exception as e:
