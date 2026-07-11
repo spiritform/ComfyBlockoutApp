@@ -258,6 +258,128 @@
 	}
 	.modal-status.success { display: block; background: rgba(56,217,119,0.12); color: #5ce594; }
 	.modal-status.error { display: block; background: rgba(255,90,90,0.12); color: #ff8a8a; }
+
+	/* ---- first-run 3-CTA choices ---- */
+	.firstrun-choices { display: flex; flex-direction: column; gap: 8px; }
+	.fr-choice {
+		display: flex; align-items: center; gap: 12px;
+		text-align: left; width: 100%;
+		background: rgba(255,255,255,0.03);
+		border: 1px solid rgba(255,255,255,0.06);
+		border-radius: 6px;
+		padding: 12px 14px;
+		cursor: pointer; font: inherit; color: inherit;
+		transition: background 0.12s, border-color 0.12s;
+	}
+	.fr-choice:hover {
+		background: rgba(255,180,84,0.06);
+		border-color: rgba(255,180,84,0.35);
+	}
+	.fr-choice-icon {
+		flex: 0 0 32px; width: 32px; height: 32px;
+		display: flex; align-items: center; justify-content: center;
+		color: #ffb454;
+	}
+	.fr-choice-icon svg { width: 20px; height: 20px; }
+	.fr-choice-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+	.fr-choice-title { font-size: 12px; font-weight: 600; color: #e6e6ea; }
+	.fr-choice-sub   { font-size: 10px; color: rgba(255,255,255,0.5); line-height: 1.4; }
+
+	/* ---- Get Started Guide modal ---- */
+	.guide-body {
+		max-height: 60vh; overflow-y: auto;
+		padding-right: 6px;
+		font-size: 11px; color: rgba(255,255,255,0.8); line-height: 1.6;
+		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+	}
+	.guide-body::-webkit-scrollbar { width: 4px; }
+	.guide-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+	.guide-section + .guide-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); }
+	.guide-section h3 {
+		margin: 0 0 6px; font-size: 11px; font-weight: 600; color: #ffb454;
+		letter-spacing: 0.02em;
+	}
+	.guide-section p { margin: 0; }
+	.guide-section strong { color: #e6e6ea; font-weight: 600; }
+	.guide-section code {
+		background: rgba(255,255,255,0.05); padding: 1px 5px; border-radius: 3px;
+		font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px;
+	}
+	.guide-section kbd {
+		background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 3px;
+		font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px;
+		border-bottom: 1px solid rgba(0,0,0,0.4);
+	}
+
+	/* ---- Quick Tour spotlight overlay ---- */
+	#tour-root { position: fixed; inset: 0; z-index: 600; pointer-events: none; }
+	#tour-root[hidden] { display: none; }
+	#tour-backdrop {
+		position: absolute; inset: 0;
+		background: rgba(10,12,18,0.62);
+		pointer-events: auto;
+		/* Cut-out is applied via a large box-shadow inset that surrounds the
+		   spotlight rect — the rect itself is transparent, so the highlighted
+		   region stays fully visible while everything else darkens. */
+		box-shadow:
+			0 0 0 9999px rgba(10,12,18,0.62) inset;
+		transition: none;
+	}
+	/* The actual spotlight rect — sized/positioned via inline style each step.
+	   Uses a big outward box-shadow to create the dark surround, plus an
+	   amber-tinted glow at the border so the highlighted region reads clearly. */
+	#tour-spotlight {
+		position: absolute; pointer-events: none;
+		border-radius: 8px;
+		box-shadow:
+			0 0 0 9999px rgba(10,12,18,0.62),
+			0 0 0 2px rgba(255,180,84,0.85),
+			0 0 24px 4px rgba(255,180,84,0.35);
+		transition: top 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+		            left 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+		            width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+		            height 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+	#tour-tooltip {
+		position: absolute;
+		width: min(320px, 88vw);
+		background: #0e0e12;
+		border: 1px solid rgba(255,255,255,0.08);
+		border-radius: 8px;
+		padding: 14px 16px 12px;
+		box-shadow: 0 20px 50px rgba(0,0,0,0.55);
+		pointer-events: auto;
+		transition: top 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+		            left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+	#tour-tooltip .tt-step {
+		font-size: 9px; color: #ffb454; font-weight: 600;
+		letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px;
+	}
+	#tour-tooltip .tt-title {
+		font-size: 13px; font-weight: 600; color: #e6e6ea; margin-bottom: 6px;
+	}
+	#tour-tooltip .tt-body {
+		font-size: 11px; color: rgba(255,255,255,0.7); line-height: 1.55; margin-bottom: 12px;
+	}
+	#tour-tooltip .tt-actions {
+		display: flex; gap: 6px; align-items: center;
+	}
+	.tt-btn-primary {
+		padding: 6px 14px; border-radius: 5px; border: none;
+		background: #ffb454; color: #1a1208;
+		font: inherit; font-size: 10px; font-weight: 600;
+		letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
+	}
+	.tt-btn-primary:hover { background: #ffc066; }
+	.tt-btn-secondary {
+		padding: 6px 12px; border-radius: 5px; border: none;
+		background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.6);
+		font: inherit; font-size: 10px; font-weight: 500;
+		letter-spacing: 0.04em; cursor: pointer;
+	}
+	.tt-btn-secondary:hover { background: rgba(255,255,255,0.09); color: #e6e6ea; }
+	.tt-btn-secondary:disabled { opacity: 0.35; cursor: not-allowed; }
 	.th-btn {
 		padding: 6px 14px; border-radius: 6px; border: 1px solid rgba(255,180,84,0.4);
 		background: linear-gradient(180deg, rgba(255,180,84,0.18), rgba(255,122,0,0.10));
@@ -845,7 +967,37 @@
 		overflow: hidden;
 		background: #191922;
 	}
-	#panel.no-agent #lp-zone-bottom { display: none; }
+	/* When the AI Agent is disabled, keep the bottom zone visible but swap in
+	   an empty-state CTA instead of the chat surface. Hides the real assistant
+	   pane + the fixed context/input band, and reveals #lp-agent-empty. */
+	#panel.no-agent #lp-pane-assistant { display: none; }
+	#panel.no-agent #lp-fixed-bottom { display: none; }
+	#panel.no-agent #lp-agent-empty { display: flex; }
+	#lp-agent-empty { display: none; }
+	#lp-agent-empty {
+		flex: 1 1 auto; min-height: 0;
+		flex-direction: column; align-items: center; justify-content: center;
+		gap: 10px; padding: 24px 20px; text-align: center;
+	}
+	#lp-agent-empty .lae-title {
+		font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.75);
+		letter-spacing: 0.02em;
+	}
+	#lp-agent-empty .lae-body {
+		font-size: 10px; color: rgba(255,255,255,0.5); line-height: 1.55;
+	}
+	#lp-agent-empty .lae-open-settings {
+		margin-top: 4px;
+		background: rgba(255,180,84,0.14); color: #ffd28a;
+		border: 1px solid rgba(255,180,84,0.28);
+		border-radius: 5px;
+		padding: 6px 14px; font: inherit; font-size: 10px; font-weight: 600;
+		letter-spacing: 0.06em; text-transform: uppercase;
+		cursor: pointer;
+	}
+	#lp-agent-empty .lae-open-settings:hover {
+		background: rgba(255,180,84,0.22); color: #ffe1b0;
+	}
 	/* Collapsed state — click on the AI Agent header shrinks the overlay to
 	   the natural minimum (header + context chip + input row = 145px). The
 	   chat message log gets hidden; entry + context stay reachable. Drag on
@@ -3306,7 +3458,6 @@
 			<button class="th-btn-mini" id="project-save" title="Save (Ctrl+S)">Save</button>
 			<button class="th-btn-mini" id="project-save-as" title="Save as a new project">Save As</button>
 			<button class="th-btn-mini th-btn-assets" id="th-assets" title="Output — generated images, videos, meshes">Output</button>
-			<button class="th-btn-mini" id="th-assistant" title="AI Agent — chat + Comfy MCP tools">AI Agent</button>
 			<button class="th-icon-btn" id="th-settings" title="Settings">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
 					<circle cx="12" cy="12" r="3"/>
@@ -3315,6 +3466,112 @@
 			</button>
 		</div>
 	</header>
+
+	<!-- First-run welcome modal: appears once (localStorage "cb.firstRunSeen").
+	     Three paths for the new user: Install (opens Settings for API keys +
+	     ComfyUI paths), Get Started Guide (in-app doc modal), Quick Tour
+	     (interactive spotlight walkthrough). -->
+	<div class="modal-backdrop" id="firstrun-modal">
+		<div class="modal-card">
+			<div class="modal-head">
+				<span class="modal-title">Welcome to ComfyBlockout</span>
+				<button class="modal-close" id="firstrun-close" title="Skip">×</button>
+			</div>
+			<div style="font-size:11px;color:rgba(255,255,255,0.75);line-height:1.55;margin-bottom:16px">
+				A blockout-to-render editor for <strong style="color:#e6e6ea">Comfy Cloud</strong> and local <strong style="color:#e6e6ea">ComfyUI</strong>. Pick one to get going — you can always come back to the others.
+			</div>
+			<div class="firstrun-choices">
+				<button type="button" class="fr-choice" data-fr-action="install">
+					<span class="fr-choice-icon">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+					</span>
+					<span class="fr-choice-text">
+						<span class="fr-choice-title">Setup</span>
+						<span class="fr-choice-sub">Add API keys + local ComfyUI paths in Settings</span>
+					</span>
+				</button>
+				<button type="button" class="fr-choice" data-fr-action="guide">
+					<span class="fr-choice-icon">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+					</span>
+					<span class="fr-choice-text">
+						<span class="fr-choice-title">Get Started Guide</span>
+						<span class="fr-choice-sub">Read a short walkthrough of the main flows</span>
+					</span>
+				</button>
+				<button type="button" class="fr-choice" data-fr-action="tour">
+					<span class="fr-choice-icon">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+					</span>
+					<span class="fr-choice-text">
+						<span class="fr-choice-title">Quick Tour</span>
+						<span class="fr-choice-sub">Interactive highlights of every panel</span>
+					</span>
+				</button>
+			</div>
+			<div class="modal-hint" style="margin-top:14px">The gear icon in the top-right reopens Settings anytime.</div>
+		</div>
+	</div>
+
+	<!-- Get Started Guide modal: static doc content — the one-time-read
+	     "here's what everything does" reference. Opened from the first-run
+	     modal + the future help menu. -->
+	<div class="modal-backdrop" id="guide-modal">
+		<div class="modal-card wide">
+			<div class="modal-head">
+				<span class="modal-title">Get Started Guide</span>
+				<button class="modal-close" id="guide-close" title="Close">×</button>
+			</div>
+			<div class="guide-body">
+				<section class="guide-section">
+					<h3>1. Configure keys + paths</h3>
+					<p>Open <strong>Settings</strong> (gear, top-right). Enter your <strong>Comfy Cloud API key</strong> for Nano Banana / Seedance / Tripo / Rodin. Optionally enter your <strong>Anthropic API key</strong> to enable the AI Agent chat. If you want local ComfyUI workflows, point at your ComfyUI install under <strong>Local ComfyUI paths</strong>.</p>
+				</section>
+				<section class="guide-section">
+					<h3>2. Build your blockout</h3>
+					<p>Left panel: <strong>Objects</strong> spawns primitives (cube, sphere, text, etc.). Drag them in the viewport with <kbd>W</kbd>/<kbd>E</kbd>/<kbd>R</kbd> (move / rotate / scale). Drop <strong>.glb / .fbx / .ply</strong> files onto the viewport to import. Ctrl+C / Ctrl+V duplicates any object.</p>
+				</section>
+				<section class="guide-section">
+					<h3>3. Frame the shot</h3>
+					<p>The <strong>Camera</strong> row in the Outliner is the render camera. Use its <strong>Reset</strong> to snap back. Toggle between the free-orbit <strong>Scene view</strong> and the framed <strong>Camera view</strong> in the top-left corner of the viewport.</p>
+				</section>
+				<section class="guide-section">
+					<h3>4. Generate a render</h3>
+					<p><strong>Workflows</strong> (left panel) has Nano Banana (image), Seedance (video), Tripo/Rodin (3D). Click a workflow to make it active, type a prompt in Properties, then hit <strong>Generate</strong> (top-right). Renders land in the <strong>Output</strong> panel and in <code>output/images</code> / <code>output/videos</code> / <code>output/3d</code>.</p>
+				</section>
+				<section class="guide-section">
+					<h3>5. Animate with the timeline</h3>
+					<p>Playhead + keyframes at the bottom. Select an object, hit <kbd>S</kbd> (or <kbd>+</kbd>) to add a keyframe at the current time. The camera has its own always-visible track. Record a take with the red button.</p>
+				</section>
+				<section class="guide-section">
+					<h3>6. AI Agent (optional)</h3>
+					<p>Left panel bottom. Turn it on in Settings and add your Anthropic API key. It can inspect your scene, run workflows, and drive Comfy MCP tools directly.</p>
+				</section>
+			</div>
+			<div class="modal-actions" style="margin-top:20px">
+				<button class="modal-btn-secondary" id="guide-tour-btn">Start Quick Tour</button>
+				<button class="modal-btn-primary" id="guide-settings-btn">Open Settings</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- Quick Tour overlay: full-screen dim + spotlight hole punched over
+	     the current highlighted target + tooltip anchored to it. Steps
+	     defined in the JS below. -->
+	<div id="tour-root" hidden>
+		<div id="tour-backdrop"></div>
+		<div id="tour-tooltip">
+			<div class="tt-step" id="tt-step">1 / 8</div>
+			<div class="tt-title" id="tt-title"></div>
+			<div class="tt-body" id="tt-body"></div>
+			<div class="tt-actions">
+				<button type="button" class="tt-btn-secondary" id="tt-skip">Skip tour</button>
+				<div style="flex:1"></div>
+				<button type="button" class="tt-btn-secondary" id="tt-back">Back</button>
+				<button type="button" class="tt-btn-primary" id="tt-next">Next</button>
+			</div>
+		</div>
+	</div>
 
 	<!-- Assets modal: shows everything in DATA_DIR/out_*.{png,mp4,webm}.
 	     Tiles are draggable onto the per-object image cells in the outliner
@@ -3552,6 +3809,14 @@
 			</div>
 			<div id="lp-zone-bottom-body">
 				<div class="rp-pane" id="lp-pane-assistant"></div>
+				<!-- Empty-state CTA shown when the AI Agent is disabled (default for
+				     new installs). Points at Settings so the user knows where to
+				     turn it on and enter their Anthropic API key. -->
+				<div id="lp-agent-empty">
+					<div class="lae-title">AI Agent is off</div>
+					<div class="lae-body">Chat with Claude about your scene and drive Comfy MCP tools.<br>Turn it on and add your Anthropic API key in Settings.</div>
+					<button type="button" class="lae-open-settings" id="lp-agent-empty-open">Open Settings</button>
+				</div>
 			</div>
 			<!-- CONTEXT chip + CHAT INPUT are hoisted here at boot from inside
 			     the assistant-shell. Since the overlay's bottom edge is glued
@@ -5352,15 +5617,26 @@
 			if (asstToggle) asstToggle.checked = window.isAssistantEnabled?.() ?? false;
 			// Hydrate the ComfyUI paths column — pre-fill whatever the backend
 			// currently has, so the user can either edit or leave-and-detect.
-			try {
-				const r = await fetch("/api/paths");
-				if (r.ok) {
-					const p = await r.json();
-					document.getElementById("paths-nodes").value = p.custom_nodes_dir || "";
-					document.getElementById("paths-models").value = p.models_dir || "";
-					document.getElementById("paths-python").value = p.python_exe || "";
-				}
-			} catch { /* silent — user can still enter values manually */ }
+			// First-run emulator (window.__cbFirstRunEmulator, set by the
+			// ?firstrun=1 IIFE) paints empty inputs regardless of what's on
+			// disk, so the tester sees the same blank Settings a brand-new
+			// install would. Their real config only gets clobbered if they
+			// explicitly hit Save — otherwise it survives.
+			if (window.__cbFirstRunEmulator) {
+				document.getElementById("paths-nodes").value = "";
+				document.getElementById("paths-models").value = "";
+				document.getElementById("paths-python").value = "";
+			} else {
+				try {
+					const r = await fetch("/api/paths");
+					if (r.ok) {
+						const p = await r.json();
+						document.getElementById("paths-nodes").value = p.custom_nodes_dir || "";
+						document.getElementById("paths-models").value = p.models_dir || "";
+						document.getElementById("paths-python").value = p.python_exe || "";
+					}
+				} catch { /* silent — user can still enter values manually */ }
+			}
 			setTimeout(() => settingsKey.focus(), 50);
 		}
 		function closeSettings() { settingsModal.classList.remove("open"); }
@@ -9145,6 +9421,16 @@ function applyAssistantEnablement() {
 	// that the assistant lives in a dedicated zone instead of the switcher.
 }
 window.isAssistantEnabled = isAssistantEnabled;
+// Empty-state CTA — when the AI Agent is off, the bottom zone shows an
+// #lp-agent-empty card whose "Open Settings" button routes to the gear icon
+// in the top-right header (same as first-run's Open Settings action). We
+// listen at document level so this survives the boot-time DOM hoist that
+// moves #assistant-section into #lp-pane-assistant.
+document.addEventListener("click", (e) => {
+	if (e.target.closest("#lp-agent-empty-open")) {
+		document.getElementById("th-settings")?.click();
+	}
+});
 // Toggle wiring: change instantly persists and re-applies. No reload needed.
 document.getElementById("assistant-toggle")?.addEventListener("change", (e) => {
 	localStorage.setItem(ASSISTANT_ENABLED_KEY, e.target.checked ? "1" : "0");
@@ -9501,11 +9787,6 @@ applyAssistantEnablement();
 	syncAgentZoneVisibility();
 	window.__syncAgentZoneVisibility = syncAgentZoneVisibility;
 
-	const btn = document.getElementById("th-assistant");
-	if (!btn) return;
-	btn.addEventListener("click", () => {
-		document.getElementById("assistant-input")?.focus();
-	});
 })();
 
 // Selection highlight — inverted-hull silhouette. Per selected mesh we spawn
@@ -12836,17 +13117,11 @@ async function fetchWorkflowModules() {
 	} catch (e) {
 		console.warn("[workflow] module list fetch failed:", e);
 	}
-	// Every registered non-util module gets a cell so it's visible above the
-	// Add chip instead of hiding in the dropdown. Cells the user explicitly
-	// removed via ✕ during this session are held out via
-	// `_sessionRemovedWorkflowModules` so they don't ping-pong back. Reload
-	// clears that set — a fresh session shows everything registered.
-	for (const m of Object.values(workflowModules)) {
-		if (_sessionRemovedWorkflowModules.has(m.id)) continue;
-		if (!workflowCells.some(c => c.moduleId === m.id)) {
-			workflowCells.push({ id: newGenCellId(), moduleId: m.id, values: {}, expanded: false });
-		}
-	}
+	// Workflow modules stay REGISTERED (so the + Add menu can list them) but
+	// don't auto-populate the workflow list anymore — a fresh scene ships with
+	// Nano Banana + Seedance (via EMPTY_SCENE.genCells) and the user adds any
+	// other workflow they need from + Add. Prevents boot from flooding the
+	// panel with every local + cloud module a returning user has registered.
 	refreshWorkflowCells();
 	refreshUtilTools();
 }
@@ -13906,6 +14181,10 @@ function _mpWorldToHumanML3D(mpLm) {
 // heavy external deps — copy this function, rewire the requirement checks +
 // action buttons, and add a branch in renderUtilToolPane.
 function _renderMotionUtilPane(pane, m) {
+	// Seed value lives on pane state so re-renders (source-toggle, requirements
+	// refresh, mannequin spawn) don't reset it. Default 42 matches the visible
+	// starter value in the drag-num below.
+	if (pane._motionSeed == null) pane._motionSeed = 42;
 	// Local status stash so a re-render (e.g. mannequin spawned mid-flow)
 	// doesn't blow away the last fetched Docker status. Refreshed via the
 	// re-check button + on initial render.
@@ -14120,10 +14399,9 @@ function _renderMotionUtilPane(pane, m) {
 					</div>
 				</div>
 			</div>
-			<div style="display:flex;align-items:center;gap:8px;margin-top:8px">
-				<span style="flex:1;font-size:10px;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:0.06em">Seed</span>
-				<input type="number" id="motion-seed" value="42" min="0" max="2147483647" step="1" style="width:80px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85);border:1px solid rgba(255,255,255,0.08);border-radius:3px;padding:4px 8px;font:inherit;font-size:11px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace">
-				<button type="button" id="motion-seed-random" title="Random seed" style="background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.08);border-radius:3px;padding:4px 8px;font:inherit;font-size:11px;cursor:pointer">⚂</button>
+			<div style="display:grid;grid-template-columns:1fr 34px;gap:4px;margin-top:8px">
+				<div class="drag-num" id="motion-seed"><span class="drag-label">Seed</span><span class="drag-val">${pane._motionSeed}</span></div>
+				<button type="button" id="motion-seed-random" title="Random seed" style="background:rgba(255,255,255,0.04);border:none;border-radius:5px;color:rgba(255,255,255,0.75);cursor:pointer;padding:0;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center">🎲</button>
 			</div>
 			<button type="button" class="mp-still-btn" id="motion-generate" style="width:100%;margin-top:12px;${allGreen ? "" : "opacity:0.4;cursor:not-allowed"}" ${allGreen ? "" : "disabled"}>Generate motion</button>
 			<div class="hint" id="motion-status" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5)">${allGreen ? "Ready" : "Fix requirements above to enable"}</div>
@@ -14239,11 +14517,26 @@ function _renderMotionUtilPane(pane, m) {
 		pane._motionLastErrorRow = "";
 		_renderMotionUtilPane(pane, m);
 	});
-	// Random seed — small dice button drops a fresh seed into the input so
-	// the user can quickly try a different variant without touching the field.
+	// Wire the seed drag-num — same setupDragField helper the transform pills
+	// use, so the seed matches Scale X/Y/Z visually and interaction-wise
+	// (horizontal drag to scrub, click to type, Shift = fine). Seed value
+	// stashed on pane state for cross-render persistence.
+	const seedEl = pane.querySelector("#motion-seed");
+	if (seedEl && typeof setupDragField === "function") {
+		setupDragField(seedEl, {
+			get: () => pane._motionSeed,
+			set: (v) => { pane._motionSeed = Math.max(0, Math.min(2147483647, Math.round(v))); },
+			format: (v) => String(Math.round(v)),
+			sens: 1,
+			min: 0,
+			max: 2147483647,
+		});
+	}
+	// Random seed — dice writes a fresh value into the drag-num via its
+	// refresh hook, matching how terrain-reroll drives obj-terrain-seed.
 	pane.querySelector("#motion-seed-random")?.addEventListener("click", () => {
-		const seedEl = pane.querySelector("#motion-seed");
-		if (seedEl) seedEl.value = String(Math.floor(Math.random() * 2147483647));
+		pane._motionSeed = Math.floor(Math.random() * 2147483647);
+		seedEl?._refresh?.();
 	});
 	// Source-toggle pill — switch Text ↔ Video re-renders the pane so the
 	// input surface changes, but Docker/AnimoFlow status stays cached.
@@ -14433,9 +14726,8 @@ function _renderMotionUtilPane(pane, m) {
 		if (btn) { btn.disabled = true; btn.style.opacity = "0.4"; btn.style.cursor = "wait"; btn.textContent = "Generating…"; }
 		try {
 			const framesBtn = pane.querySelector('.util-dd-btn[data-name="frames"]');
-			const seedEl = pane.querySelector("#motion-seed");
 			const maxFrames = parseInt(framesBtn?.dataset.value || "120", 10) || 120;
-			const seed = parseInt(seedEl?.value || "42", 10);
+			const seed = pane._motionSeed ?? 42;
 			const r = await fetch("/api/motion/generate", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -23204,33 +23496,74 @@ window.addEventListener("keydown", (e) => {
 
 // In-editor clipboard for objects. Stores an array of snapshots — not live
 // references — so a later cut/delete of the source can't invalidate a paste.
-// Primitives round-trip via PRIM_DEFS; imports aren't covered here (would need
-// an asset-aware clone path).
+// Every object type routes through its own add* helper on paste so the
+// wrapper Group + config + helpers all rebuild the same way deserializeScene
+// hydrates them from disk. Imports (GLB/FBX/OBJ/PLY/splat, assetId-backed)
+// re-fetch the persisted asset bytes at paste time.
 let objectClipboard = null;
 function snapshotPrimitiveFor(obj) {
 	const kind = obj?.userData?.primKind;
-	// Lights are wrapper Groups (not mesh primitives) — snapshot the full
-	// lightConfig so paste can rebuild them via addLightFx with matching type
-	// + intensity + color + distance + spot params.
-	if (kind === "light" && obj.userData?.lightConfig) {
-		return {
-			kind: "light",
-			position: obj.position.toArray(),
-			rotation: [obj.rotation.x, obj.rotation.y, obj.rotation.z],
-			scale: obj.scale.toArray(),
-			lightConfig: { ...obj.userData.lightConfig },
-			visible: obj.visible !== false,
-		};
-	}
-	if (!kind || !(kind in PRIM_DEFS)) return null;
-	return {
+	if (!kind) return null;
+	const base = {
 		kind,
 		position: obj.position.toArray(),
 		rotation: [obj.rotation.x, obj.rotation.y, obj.rotation.z],
 		scale: obj.scale.toArray(),
-		color: obj.material?.color?.getHex?.() ?? 0xffffff,
 		visible: obj.visible !== false,
+		locked: obj.userData?.locked || undefined,
 	};
+	// Config-backed types — snapshot the same config the serializer persists so
+	// paste rebuilds via the exact same code path deserializeScene uses.
+	if (kind === "light" && obj.userData?.lightConfig) {
+		return { ...base, lightConfig: { ...obj.userData.lightConfig } };
+	}
+	if (kind === "particles" && obj.userData?.particleSystem?.config) {
+		return { ...base, particleConfig: { ...obj.userData.particleSystem.config } };
+	}
+	if (kind === "clouds" && obj.userData?.cloudsFx?.config) {
+		return { ...base, cloudsConfig: { ...obj.userData.cloudsFx.config } };
+	}
+	if (kind === "scatter" && obj.userData?.scatterFx?.config) {
+		return { ...base, scatterConfig: { ...obj.userData.scatterFx.config } };
+	}
+	if (kind === "terrain" && obj.userData?.terrainConfig) {
+		return {
+			...base,
+			terrainConfig: { ...obj.userData.terrainConfig },
+			color: obj.material?.color?.getHex?.(),
+		};
+	}
+	if (kind === "mannequin") {
+		return {
+			...base,
+			mannequinPoseName: obj.userData?.mannequinPoseName,
+			mannequinPoseJoints: obj.userData?.mannequinPoseJoints
+				? JSON.parse(JSON.stringify(obj.userData.mannequinPoseJoints))
+				: undefined,
+			animoflowManaged: obj.userData?.animoflowManaged || undefined,
+		};
+	}
+	// Imports (GLB/FBX/OBJ/PLY/splat) — assetId-backed. Paste re-fetches
+	// bytes via /comfyblockout/asset/ and hydrates through loadFromBytes.
+	if (obj.userData?.assetId) {
+		return {
+			...base,
+			assetId: obj.userData.assetId,
+			filename: obj.userData.filename,
+			quaternion: [obj.quaternion.x, obj.quaternion.y, obj.quaternion.z, obj.quaternion.w],
+		};
+	}
+	// Mesh primitives (PRIM_DEFS: cube, sphere, cylinder, cone, plane, text).
+	if (kind in PRIM_DEFS) {
+		return {
+			...base,
+			color: obj.material?.color?.getHex?.() ?? 0xffffff,
+			doubleSided: obj.material?.side === THREE.DoubleSide ? true : undefined,
+			checker: obj.userData?._checkerOn ? true : undefined,
+			textConfig: kind === "text" ? obj.userData?.textConfig : undefined,
+		};
+	}
+	return null;
 }
 function copySelectedToClipboard() {
 	// Prefer the full selection set so multi-select copies every member; fall
@@ -23240,38 +23573,75 @@ function copySelectedToClipboard() {
 		: (selected ? [selected] : []);
 	if (!sources.length) { updateStatus("nothing to copy"); return false; }
 	const snaps = sources.map(snapshotPrimitiveFor).filter(Boolean);
-	if (!snaps.length) { updateStatus("can only copy blocks (imports not supported)"); return false; }
+	if (!snaps.length) { updateStatus("nothing copyable in selection"); return false; }
 	objectClipboard = snaps;
 	updateStatus(snaps.length === 1 ? "copied" : `copied ${snaps.length}`);
 	return true;
 }
-function pasteFromClipboard() {
+async function pasteFromClipboard() {
 	if (!objectClipboard || !objectClipboard.length) { updateStatus("nothing in clipboard"); return; }
 	// Paste in place — each copy sits on top of its source. The whole set becomes
 	// the active selection so the translate gizmo can immediately drag them all
 	// as a group (multi-select drag handling elsewhere moves the set together).
 	const created = [];
 	for (const snap of objectClipboard) {
-		let obj;
-		if (snap.kind === "light" && snap.lightConfig) {
-			// Route lights through addLightFx so the wrapper Group + child light
-			// + helper are all rebuilt with the source's type/intensity/color/etc.
-			obj = addLightFx(snap.lightConfig);
-			obj.position.fromArray(snap.position);
-			obj.rotation.set(snap.rotation[0], snap.rotation[1], snap.rotation[2]);
-			obj.scale.fromArray(snap.scale);
-			obj.visible = snap.visible;
-			created.push(obj);
+		let obj = null;
+		try {
+			if (snap.kind === "light" && snap.lightConfig) {
+				obj = addLightFx({ ...snap.lightConfig });
+			} else if (snap.kind === "particles" && snap.particleConfig) {
+				obj = addParticleEmitter({ ...snap.particleConfig });
+			} else if (snap.kind === "clouds" && snap.cloudsConfig) {
+				obj = addCloudsFx({ ...snap.cloudsConfig });
+			} else if (snap.kind === "scatter" && snap.scatterConfig) {
+				obj = addScatterFx({ ...snap.scatterConfig });
+			} else if (snap.kind === "terrain" && snap.terrainConfig) {
+				obj = addTerrainFx({ ...snap.terrainConfig });
+				if (obj && typeof snap.color === "number") obj.material?.color?.setHex?.(snap.color);
+			} else if (snap.kind === "mannequin") {
+				obj = await spawnMannequin({
+					poseName: snap.mannequinPoseName === "tpose" ? "T-Pose" : (snap.mannequinPoseName || "T-Pose"),
+					poseJoints: snap.mannequinPoseJoints,
+				});
+				if (obj && snap.animoflowManaged) obj.userData.animoflowManaged = true;
+			} else if (snap.assetId) {
+				// Re-fetch the asset bytes and hydrate the same way deserializeScene
+				// restores imports — reuses loadFromBytes' loader dispatch for every
+				// extension (glb/fbx/obj/ply/splat/ksplat/spz).
+				const ext = (snap.filename?.split(".").pop() || "").toLowerCase();
+				const url = `/comfyblockout/asset/${encodeURIComponent(NODE_ID)}/${encodeURIComponent(snap.assetId)}.${ext}`;
+				const r = await fetch(url);
+				if (!r.ok) { console.warn(`[paste] asset fetch failed: ${url} (${r.status})`); continue; }
+				const buf = await r.arrayBuffer();
+				obj = await loadFromBytes(buf, snap.filename, {
+					restoring: true,
+					assetId: snap.assetId,
+					savedName: undefined,
+				});
+			} else if (snap.kind in PRIM_DEFS) {
+				obj = addPrimitive(snap.kind);
+				if (obj) {
+					if (typeof snap.color === "number") obj.material?.color?.setHex?.(snap.color);
+					if (snap.doubleSided) { obj.material.side = THREE.DoubleSide; obj.material.needsUpdate = true; }
+					if (snap.checker && typeof _applyChecker === "function") _applyChecker(obj, true);
+					if (snap.kind === "text" && snap.textConfig) {
+						obj.userData.textConfig = { ...snap.textConfig };
+						rebuildTextGeometry?.(obj)?.catch?.(e => console.error("[text] paste rebuild failed:", e));
+					}
+				}
+			}
+		} catch (e) {
+			console.error(`[paste] failed to clone ${snap.kind}:`, e);
 			continue;
 		}
-		const mesh = addPrimitive(snap.kind);
-		if (!mesh) continue;
-		mesh.position.fromArray(snap.position);
-		mesh.rotation.set(snap.rotation[0], snap.rotation[1], snap.rotation[2]);
-		mesh.scale.fromArray(snap.scale);
-		mesh.material.color.setHex(snap.color);
-		mesh.visible = snap.visible;
-		created.push(mesh);
+		if (!obj) continue;
+		obj.position.fromArray(snap.position);
+		if (Array.isArray(snap.quaternion)) obj.quaternion.fromArray(snap.quaternion);
+		else obj.rotation.set(snap.rotation[0], snap.rotation[1], snap.rotation[2]);
+		obj.scale.fromArray(snap.scale);
+		obj.visible = snap.visible !== false;
+		if (snap.locked) obj.userData.locked = true;
+		created.push(obj);
 	}
 	if (!created.length) return;
 	select(created[0]);
@@ -28000,6 +28370,260 @@ document.getElementById("sys-prompt-reset")?.addEventListener("click", async () 
 	} catch (e) { console.warn("[ComfyBlockout] prompt reset save failed:", e); }
 });
 
+// First-run onboarding — welcome modal, Get Started guide, and Quick Tour.
+// Welcome fires once per browser (localStorage flag "cb.firstRunSeen"). Waits
+// for the "cb:boot-ready" event so we don't stack on top of the init overlay.
+//
+// Dev/emulate hook: appending `?firstrun=1` clears the flag and forces the
+// welcome modal to reappear (firstrun.bat opens this URL so a first-time
+// experience can be walked through without editing localStorage by hand).
+(() => {
+	const FIRSTRUN_KEY = "cb.firstRunSeen";
+	const welcome = document.getElementById("firstrun-modal");
+	const guide = document.getElementById("guide-modal");
+	if (!welcome || !guide) return;
+
+	// URL-param reset (?firstrun=1) → wipe seen flag + UI layout state so a
+	// tester lands on the same canonical layout every new user gets. Also
+	// sets __cbForceFreshBoot so the boot IIFE skips loadScene and hydrates
+	// EMPTY_SCENE — otherwise the tester sees their own saved scene load
+	// briefly before the welcome modal appears. Strips the param from the
+	// URL so a plain refresh doesn't keep re-triggering it forever.
+	let forceFreshRun = false;
+	try {
+		const url = new URL(location.href);
+		if (url.searchParams.get("firstrun") === "1") {
+			forceFreshRun = true;
+			// Onboarding flag + UI shape — UI-only emulator; the real backend
+			// state (API keys, paths, saved scene on disk) stays wired so
+			// running firstrun.bat doesn't force the tester to re-enter their
+			// production setup afterwards.
+			localStorage.removeItem(FIRSTRUN_KEY);
+			localStorage.removeItem("cb.leftPanel.agentH");
+			localStorage.removeItem("cb.rightPanel.topBasis");
+			localStorage.removeItem("cb.workspace.gridOpacity");
+			localStorage.removeItem("cb.workspace.gridVisible");
+			localStorage.removeItem("cb.viewport.insetOn");
+			localStorage.removeItem("cb.viewport.snapEnabled");
+			localStorage.removeItem("cb.assistantEnabled");
+			url.searchParams.delete("firstrun");
+			history.replaceState(null, "", url.toString());
+		}
+	} catch {}
+	// Session flag consumed by the Settings modal — when set, openSettings
+	// paints empty inputs regardless of what the backend has stored. If the
+	// tester doesn't touch anything, their real config survives; if they hit
+	// Save with empty fields, that's an explicit choice.
+	if (forceFreshRun) window.__cbFirstRunEmulator = true;
+	// Consumed by the boot IIFE — when true, skip the saved-scene fetch and
+	// hydrate EMPTY_SCENE so the tester sees the same "brand new scene" a
+	// first-time user gets, not their own project's imports/settings.
+	if (forceFreshRun) window.__cbForceFreshBoot = true;
+
+	const markSeen = () => { try { localStorage.setItem(FIRSTRUN_KEY, "1"); } catch {} };
+	const openWelcome = () => welcome.classList.add("open");
+	const closeWelcome = () => { welcome.classList.remove("open"); markSeen(); };
+	const openGuide = () => guide.classList.add("open");
+	const closeGuide = () => guide.classList.remove("open");
+
+	// Welcome-modal choices — three branches out of the welcome screen.
+	welcome.addEventListener("click", (e) => {
+		// Backdrop click dismisses.
+		if (e.target === welcome) { closeWelcome(); return; }
+		if (e.target.closest("#firstrun-close")) { closeWelcome(); return; }
+		const choice = e.target.closest(".fr-choice");
+		if (!choice) return;
+		const action = choice.dataset.frAction;
+		closeWelcome();
+		if (action === "install") {
+			setTimeout(() => document.getElementById("th-settings")?.click(), 120);
+		} else if (action === "guide") {
+			setTimeout(openGuide, 120);
+		} else if (action === "tour") {
+			setTimeout(startTour, 120);
+		}
+	});
+
+	// Guide modal wiring.
+	guide.addEventListener("click", (e) => {
+		if (e.target === guide) { closeGuide(); return; }
+		if (e.target.closest("#guide-close")) { closeGuide(); return; }
+		if (e.target.closest("#guide-tour-btn")) {
+			closeGuide();
+			setTimeout(startTour, 120);
+		}
+		if (e.target.closest("#guide-settings-btn")) {
+			closeGuide();
+			setTimeout(() => document.getElementById("th-settings")?.click(), 120);
+		}
+	});
+
+	// Show welcome. When the user is force-testing firstrun (?firstrun=1), the
+	// modal opens IMMEDIATELY on top of the still-black init overlay — so the
+	// welcome is the first thing they see, not their previous scene loading in.
+	// For a regular first-time user we still wait for cb:boot-ready so the
+	// modal appears once the app is ready to interact with.
+	let seen = false;
+	try { seen = localStorage.getItem(FIRSTRUN_KEY) === "1"; } catch {}
+	if (!seen) {
+		if (forceFreshRun) openWelcome();
+		else window.addEventListener("cb:boot-ready", openWelcome, { once: true });
+	}
+
+	// Public handles so a future "Help" menu / Settings link can reopen any of these.
+	window.showFirstRunModal = openWelcome;
+	window.showGettingStartedGuide = openGuide;
+	window.startTour = startTour;
+
+	// ── Quick Tour ────────────────────────────────────────────────────
+	// Spotlight-and-tooltip walkthrough of the main regions. Steps hit whole
+	// panels, not individual buttons — first-time orientation, not exhaustive
+	// docs. If a target element isn't present at step time, that step is
+	// skipped silently (defensive for e.g. no-agent panels).
+	const TOUR_STEPS = [
+		{
+			sel: "#lp-zone-top-body",
+			title: "Objects, Tools, Workflows",
+			body: "This left panel is where you build the blockout. Click any Object icon to spawn a primitive, use Tools for capture/pose/etc., and pick a Workflow to render your scene through the cloud or local ComfyUI.",
+		},
+		{
+			sel: "#rp-pane-outliner",
+			title: "Outliner",
+			body: "Every scene object shows up here. Click a row to select, click the eye to hide, and drag the split-handle above to resize this against Properties below.",
+		},
+		{
+			sel: "#rp-body",
+			title: "Properties",
+			body: "Edit whatever's selected. Drag any value sideways to scrub, or click to type. Sections change based on what's selected — object, camera, or scene.",
+		},
+		{
+			sel: "#timeline",
+			title: "Timeline + transport",
+			body: "Scrub the playhead, add keyframes with S, and record a take with the red button. Renders using Seedance drop back onto the transport as a video overlay.",
+		},
+		{
+			sel: "#lp-zone-bottom",
+			title: "AI Agent",
+			body: "Off by default. Turn it on in Settings and add your Anthropic API key — it can inspect your scene and drive Comfy MCP tools from a chat.",
+		},
+		{
+			sel: "header",
+			title: "New · Open · Save · Output · Generate",
+			body: "Top-right runs the active workflow (Generate). Save your scene as a Project. Output opens the panel with every render you've made.",
+		},
+	];
+
+	const tourRoot = document.getElementById("tour-root");
+	const ttStep  = document.getElementById("tt-step");
+	const ttTitle = document.getElementById("tt-title");
+	const ttBody  = document.getElementById("tt-body");
+	const ttBack  = document.getElementById("tt-back");
+	const ttNext  = document.getElementById("tt-next");
+	const ttSkip  = document.getElementById("tt-skip");
+	const ttTooltip = document.getElementById("tour-tooltip");
+	let spotlight = null;
+	let tourIdx = 0;
+	let tourActive = false;
+
+	function ensureSpotlight() {
+		if (spotlight) return spotlight;
+		spotlight = document.createElement("div");
+		spotlight.id = "tour-spotlight";
+		tourRoot.appendChild(spotlight);
+		return spotlight;
+	}
+
+	function positionSpotlight(rect) {
+		const pad = 8;
+		const sl = ensureSpotlight();
+		sl.style.top = `${Math.max(0, rect.top - pad)}px`;
+		sl.style.left = `${Math.max(0, rect.left - pad)}px`;
+		sl.style.width = `${rect.width + pad * 2}px`;
+		sl.style.height = `${rect.height + pad * 2}px`;
+	}
+
+	function positionTooltip(rect) {
+		// Prefer placing the tooltip to the SIDE of the highlighted region so it
+		// doesn't cover the thing being pointed at. Fall back to below if there
+		// isn't horizontal room. Clamp inside the viewport.
+		const vw = window.innerWidth;
+		const vh = window.innerHeight;
+		const tw = ttTooltip.offsetWidth || 320;
+		const th = ttTooltip.offsetHeight || 180;
+		const gap = 16;
+		let top, left;
+		const spaceRight = vw - (rect.right + gap);
+		const spaceLeft = rect.left - gap;
+		if (spaceRight >= tw + 8) {
+			left = rect.right + gap;
+			top = Math.max(12, Math.min(vh - th - 12, rect.top + rect.height / 2 - th / 2));
+		} else if (spaceLeft >= tw + 8) {
+			left = rect.left - gap - tw;
+			top = Math.max(12, Math.min(vh - th - 12, rect.top + rect.height / 2 - th / 2));
+		} else {
+			// Fall back below the region, centered horizontally.
+			left = Math.max(12, Math.min(vw - tw - 12, rect.left + rect.width / 2 - tw / 2));
+			top = Math.min(vh - th - 12, rect.bottom + gap);
+			if (top + th > vh - 12) top = Math.max(12, rect.top - th - gap);
+		}
+		ttTooltip.style.left = `${left}px`;
+		ttTooltip.style.top = `${top}px`;
+	}
+
+	function renderStep() {
+		if (!tourActive) return;
+		// Skip any step whose target isn't in the DOM right now.
+		while (tourIdx < TOUR_STEPS.length && !document.querySelector(TOUR_STEPS[tourIdx].sel)) {
+			tourIdx++;
+		}
+		if (tourIdx >= TOUR_STEPS.length) { endTour(); return; }
+		const step = TOUR_STEPS[tourIdx];
+		const el = document.querySelector(step.sel);
+		const rect = el.getBoundingClientRect();
+		positionSpotlight(rect);
+		ttStep.textContent = `${tourIdx + 1} / ${TOUR_STEPS.length}`;
+		ttTitle.textContent = step.title;
+		ttBody.textContent = step.body;
+		ttBack.disabled = tourIdx === 0;
+		ttNext.textContent = tourIdx === TOUR_STEPS.length - 1 ? "Finish" : "Next";
+		// Wait a tick so the tooltip's own layout (title/body changed) settles
+		// before we measure its size for placement.
+		requestAnimationFrame(() => positionTooltip(rect));
+	}
+
+	function startTour() {
+		if (tourActive) return;
+		tourActive = true;
+		tourIdx = 0;
+		tourRoot.hidden = false;
+		markSeen();
+		renderStep();
+		window.addEventListener("resize", onTourResize);
+	}
+
+	function endTour() {
+		tourActive = false;
+		tourRoot.hidden = true;
+		window.removeEventListener("resize", onTourResize);
+	}
+
+	function onTourResize() { renderStep(); }
+
+	ttNext.addEventListener("click", () => {
+		tourIdx++;
+		if (tourIdx >= TOUR_STEPS.length) endTour();
+		else renderStep();
+	});
+	ttBack.addEventListener("click", () => {
+		if (tourIdx > 0) { tourIdx--; renderStep(); }
+	});
+	ttSkip.addEventListener("click", endTour);
+	// Esc exits the tour too.
+	document.addEventListener("keydown", (e) => {
+		if (tourActive && e.key === "Escape") endTour();
+	});
+})();
+
 (async () => {
 	const bootStart = performance.now();
 	// Safety net — force curtain-drop after a hard timeout so a silent runtime
@@ -28019,7 +28643,20 @@ document.getElementById("sys-prompt-reset")?.addEventListener("click", async () 
 	// at the end of deserializeScene with the real state.
 	refreshOutliner();
 	await loadPrompt();
-	const loaded = await loadScene();
+	// Force-fresh boot (?firstrun=1 URL param) — hydrate EMPTY_SCENE directly
+	// instead of pulling the tester's saved scene from disk. Gives the same
+	// clean starter state a brand-new user gets, so tour + welcome modal
+	// aren't paired with a viewport full of the tester's own imports.
+	// loaded stays false so the downstream `!loaded` branch still initializes
+	// the render camera (EMPTY_SCENE has no renderCamera key); the cube-seed
+	// branch above skips itself once EMPTY_SCENE's cube populates objects[].
+	let loaded;
+	if (window.__cbForceFreshBoot) {
+		await deserializeScene(EMPTY_SCENE, { skipSave: true });
+		loaded = false;
+	} else {
+		loaded = await loadScene();
+	}
 	// Seed a starter cube when there's nothing on disk yet so the user lands on a populated
 	// scene with something selectable in the outliner — matches what the viewport shows by
 	// default. Only fires when load_scene returned no scene at all (j.scene === null), so a
@@ -28059,6 +28696,9 @@ document.getElementById("sys-prompt-reset")?.addEventListener("click", async () 
 		initOverlay.classList.add("hidden");
 		setTimeout(() => initOverlay.remove(), 400);
 	}
+	// Signal downstream one-shot UIs (first-run onboarding modal, etc.) that
+	// the boot chain is complete and the curtain is dropping.
+	window.dispatchEvent(new CustomEvent("cb:boot-ready"));
 	} catch (e) {
 		console.error("[ComfyBlockout] boot failed:", e);
 		// Still drop the curtain so the user can at least interact with what
