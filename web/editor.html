@@ -14742,7 +14742,7 @@ const MANNEQUIN_HIGHLIGHT_COLOR = 0xffb454;
 // only cover one anatomical DOF. Signs flip so drags feel natural in the
 // bone's local frame (arm raise decreases when lifting).
 const MANNEQUIN_DRAG_MAP = {
-	mixamorigHead:          { axisX: "y", sensX: 0.5,  axisY: "x", sensY: 0.5,  axisZ: "z", sensZ: 0.5 },
+	mixamorigHead:          { axisX: "y", sensX: -0.5, axisY: "x", sensY: 0.5,  axisZ: "z", sensZ: 0.5 },
 	mixamorigNeck:          { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4,  axisZ: "z", sensZ: 0.4 },
 	mixamorigSpine2:        { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4,  axisZ: "z", sensZ: 0.4 },
 	mixamorigSpine1:        { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4,  axisZ: "z", sensZ: 0.4 },
@@ -14751,8 +14751,8 @@ const MANNEQUIN_DRAG_MAP = {
 	mixamorigRightShoulder: { axisX: "x", sensX: -0.4, axisY: "z", sensY: 0.5,  axisZ: "y", sensZ: -0.5 },
 	mixamorigLeftArm:       { axisX: "x", sensX: 0.4,  axisY: "z", sensY: -0.5, axisZ: "y", sensZ: 0.5 },
 	mixamorigRightArm:      { axisX: "x", sensX: -0.4, axisY: "z", sensY: 0.5,  axisZ: "y", sensZ: -0.5 },
-	mixamorigLeftForeArm:   { axisX: null, sensX: 0,   axisY: "y", sensY: 0.6,  axisZ: "z", sensZ: 0.5 },
-	mixamorigRightForeArm:  { axisX: null, sensX: 0,   axisY: "y", sensY: -0.6, axisZ: "z", sensZ: -0.5 },
+	mixamorigLeftForeArm:   { axisX: "y", sensX: 0.5,  axisY: "x", sensY: 0.6,  axisZ: "z", sensZ: 0.5 },
+	mixamorigRightForeArm:  { axisX: "y", sensX: -0.5, axisY: "x", sensY: -0.6, axisZ: "z", sensZ: -0.5 },
 	mixamorigLeftHand:      { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.5,  axisZ: "z", sensZ: 0.5 },
 	mixamorigRightHand:     { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.5,  axisZ: "z", sensZ: 0.5 },
 	mixamorigLeftUpLeg:     { axisX: "y", sensX: 0.3,  axisY: "x", sensY: 0.5,  axisZ: "z", sensZ: 0.4 },
@@ -15857,6 +15857,16 @@ function _mannequinClearHover() {
 			if (label && !liveAxis) {
 				label.textContent = "—";
 				label.className = "visible";
+			}
+			// Real-time sync of the Properties pane's X/Y/Z° readouts on the
+			// dragged bone's row so the numbers track the drag instead of
+			// jumping only on release. Targeted to just the row being posed —
+			// cheap enough per frame that we don't need to throttle.
+			const dragRow = document.querySelector(`.joint-row[data-bone="${_mannequinDrag.boneName}"]`);
+			if (dragRow) {
+				for (const axis of ["x", "y", "z"]) {
+					dragRow.querySelector(`.drag-num[data-axis="${axis}"]`)?._refresh?.();
+				}
 			}
 			return;
 		}
