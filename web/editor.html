@@ -753,14 +753,18 @@
 	.tl-trim-handle:hover { background: #ffb454; box-shadow: 0 0 6px rgba(255,180,80,0.7); }
 	.tl-trim-handle.dragging { background: #ffd28a; }
 
-	/* Timecode pinned inside the aspect frame's bottom-left corner — mirrors the
-	   scene/camera toggles at top-left. Hidden with the AR overlay. */
-	#viewport-time-corner {
-		position: absolute; bottom: 12px; left: 12px;
-		z-index: 6; pointer-events: none;
-		display: inline-flex; align-items: center;
+	/* Timecode chip sits ABOVE the record button in the transport strip so it
+	   stays visible when a render/blockout video overlay covers the aspect
+	   frame (was previously pinned inside the viewport bottom-left corner and
+	   got occluded the moment a video landed). Positioned absolutely against
+	   #timeline (relatively positioned) so the flex layout of the button row
+	   is untouched. */
+	#timeline { position: relative; }
+	#tl-time {
+		position: absolute; top: 6px; left: 14px;
+		z-index: 2; pointer-events: none;
 		font-size: 10px; letter-spacing: 0.08em;
-		color: rgba(255,255,255,0.32);
+		color: rgba(255,255,255,0.5);
 		font-variant-numeric: tabular-nums;
 	}
 
@@ -3661,7 +3665,6 @@
 			</div>
 			<div id="aspect-frame" class="no-guides">
 				<span class="v1"></span><span class="v2"></span>
-				<div id="viewport-time-corner"><span id="tl-time">0.00s / 4.00s</span></div>
 				<!-- Both viewport toggles stack top-LEFT: view-toggle (camera POV vs
 				     perspective) on top, blockout-view toggle underneath. The blockout
 				     preview overlay itself spawns at top-RIGHT (see positionInset). -->
@@ -3718,7 +3721,7 @@
 			<div id="preview-transport">
 				<button id="pv-edit" class="pv-btn" title="Edit Scene"><img class="pv-icon" src="/extensions/ComfyBlockout/icons/edit.png" alt="edit"></button>
 				<button class="pv-btn rec" id="pv-rec" title="Record video"><img class="pv-icon" src="/extensions/ComfyBlockout/icons/record.svg" alt="record"></button>
-				<button class="pv-btn" id="pv-play" title="Play / pause"><img class="pv-icon" src="/extensions/ComfyBlockout/icons/pause.svg" alt="pause"></button>
+				<button class="pv-btn" id="pv-play" title="Play / stop"><img class="pv-icon" src="/extensions/ComfyBlockout/icons/stop.svg" alt="stop"></button>
 				<button class="pv-btn" id="pv-rewind" title="Rewind"><img class="pv-icon" src="/extensions/ComfyBlockout/icons/rewind.svg" alt="rewind"></button>
 				<button class="pv-btn pv-glyph" id="pv-addkey" title="Add keyframe at playhead">+</button>
 				<button class="pv-btn pv-glyph" id="pv-clearkey" title="Delete selected keyframe (or all)">✕</button>
@@ -3738,8 +3741,9 @@
 		</div>
 		<div id="tl-rec-status" hidden></div>
 		<div id="timeline">
+			<span id="tl-time">0.00s / 4.00s</span>
 			<button class="tl-btn rec" id="tl-rec" title="Record (auto-tween if keyframes exist)">●</button>
-			<button class="tl-btn" id="tl-play" title="Play / pause (space)" data-play-glyph="▶" data-pause-glyph="⏸">⏸</button>
+			<button class="tl-btn" id="tl-play" title="Play / stop (space)" data-play-glyph="▶" data-pause-glyph="⏹">⏹</button>
 			<button class="tl-btn" id="tl-loop" title="Loop playback — restart at trim start when the playhead hits the end">↻</button>
 			<button class="tl-btn" id="tl-rewind" title="Rewind to start">◀◀</button>
 			<button class="tl-btn" id="tl-addkey" title="Add keyframe at playhead — keys the selected object's pos/rot/scale, or the camera if nothing is selected">+</button>
@@ -6145,13 +6149,97 @@ function setActiveView(which) {
 }
 window.setActiveView = setActiveView;
 
-// The two color args are (centerAxisColor, gridLineColor). Center axis sits
-// just a hair brighter than the field so the X/Z origin lines are legible as
-// spatial cues without reading as a stark white bar (the previous 0xdddddd
-// was too much at grazing angles; 0x888888 same-as-field wiped them out).
-let grid = new THREE.GridHelper(20, 20, 0xd0d0d8, 0x888888);
-grid.material.transparent = true;
-grid.material.opacity = 0.11;
+// Shader-based ground grid — a single large plane whose fragment shader
+// draws the grid pattern analytically with `fwidth`-based anti-aliasing.
+// GL_LINES (used by THREE.GridHelper) can't be MSAA'd on most drivers, so
+// the old GridHelper always looked pixelated even with renderer AA on.
+// This approach stays crisp at any distance/angle, matches Blender/Maya's
+// viewport grid feel, and gives us free distance fade so the horizon line
+// blends softly instead of terminating hard.
+//
+// Two frequencies: minor (every 1 unit) + major (every 10 units, slightly
+// brighter). Origin X and Z axes get a subtle emphasis so the world center
+// still reads. Everything runs at the same 0.11 base opacity as the old
+// GridHelper — user-tuned setting we don't want to change.
+const GRID_SIZE = 200; // plane extent in world units; larger = grid visible further out
+const gridGeom = new THREE.PlaneGeometry(GRID_SIZE, GRID_SIZE);
+gridGeom.rotateX(-Math.PI / 2); // horizontal, matches GridHelper orientation
+const gridMat = new THREE.ShaderMaterial({
+	transparent: true,
+	depthWrite: false,
+	// side: DoubleSide so the grid reads when the camera dips below y=0 (e.g.
+	// low-angle shots). Cheap — one plane, two-sided.
+	side: THREE.DoubleSide,
+	uniforms: {
+		uMinorColor: { value: new THREE.Color(0x888888) },
+		uMajorColor: { value: new THREE.Color(0xd0d0d8) },
+		uAxisColor:  { value: new THREE.Color(0xd0d0d8) },
+		uBaseOpacity: { value: 0.11 },
+		uCameraPos:  { value: new THREE.Vector3() },
+	},
+	vertexShader: /* glsl */`
+		varying vec3 vWorld;
+		void main() {
+			vec4 wp = modelMatrix * vec4(position, 1.0);
+			vWorld = wp.xyz;
+			gl_Position = projectionMatrix * viewMatrix * wp;
+		}
+	`,
+	fragmentShader: /* glsl */`
+		precision highp float;
+		varying vec3 vWorld;
+		uniform vec3 uMinorColor;
+		uniform vec3 uMajorColor;
+		uniform vec3 uAxisColor;
+		uniform float uBaseOpacity;
+		uniform vec3 uCameraPos;
+
+		// Antialiased grid line — returns 0..1 line strength for lines at
+		// integer multiples of `scale`. fwidth gives per-pixel derivative so
+		// the line always stays roughly one pixel thick regardless of zoom.
+		float gridLine(vec2 p, float scale) {
+			vec2 g = abs(fract(p / scale - 0.5) - 0.5) / fwidth(p / scale);
+			return 1.0 - min(min(g.x, g.y), 1.0);
+		}
+
+		// Same trick but per-axis — used to emphasize the X and Z origin lines.
+		float axisLine(float p) {
+			float w = fwidth(p);
+			return 1.0 - smoothstep(0.0, w * 1.5, abs(p));
+		}
+
+		void main() {
+			vec2 xz = vWorld.xz;
+			float minor = gridLine(xz, 1.0);
+			float major = gridLine(xz, 10.0);
+			float axisX = axisLine(vWorld.z);
+			float axisZ = axisLine(vWorld.x);
+
+			// Distance fade — softens the far edge of the plane so it doesn't
+			// terminate with a hard rectangular boundary at GRID_SIZE / 2.
+			// Wide range (5→120 units) + gamma-shaped curve gives a gradual
+			// horizon-blend feel instead of a visible fade band.
+			float dist = length(vWorld.xz - uCameraPos.xz);
+			float t = smoothstep(5.0, 120.0, dist);
+			float fade = pow(1.0 - t, 1.8);
+			if (fade <= 0.001) discard;
+
+			// Composite: axis > major > minor; each on top of the previous.
+			vec3 col = uMinorColor;
+			float a = minor * 1.0;
+			col = mix(col, uMajorColor, major);
+			a = max(a, major * 1.6);
+			col = mix(col, uAxisColor, max(axisX, axisZ));
+			a = max(a, max(axisX, axisZ) * 2.2);
+
+			gl_FragColor = vec4(col, a * uBaseOpacity * fade);
+		}
+	`,
+});
+let grid = new THREE.Mesh(gridGeom, gridMat);
+grid.name = "GroundGrid";
+grid.renderOrder = -1; // paints before scene objects so alpha-blends correctly
+grid.frustumCulled = false; // huge plane; skip cull test since it always intersects the view
 scene.add(grid);
 
 // Default fill lights removed — the scene relies on explicit user-added lights
@@ -12049,8 +12137,10 @@ function renderGenCellProperties(cell) {
 	// composition. Low = loose interpretation (rough placement only), high =
 	// strict shape/scale fidelity. Sent to server as `blockout_strength` (0..1);
 	// server picks language matching the tier. Skipped in text-to-image mode
-	// (nothing to modulate when there's no source blockout).
-	const usesStrength = usesObjectRefs && !(cell.noBlockout);
+	// (nothing to modulate when there's no source blockout). Also skipped for
+	// Seedance — it's a video model driven by start-frame + prompt, so a
+	// still-frame composition-strength knob doesn't apply.
+	const usesStrength = usesObjectRefs && !(cell.noBlockout) && cell.model !== "seedance";
 	const strengthPct = Number.isFinite(cell.blockoutStrength) ? cell.blockoutStrength : 70;
 	const strengthHtml = usesStrength ? `
 		<div class="section" style="padding-top:6px">
@@ -22695,15 +22785,12 @@ function applyResultMode() {
 		const canSave = (resultMode === "render" && !!lastResult) || resultMode === "blockout";
 		saveOv.classList.toggle("visible", canSave);
 	}
-	// Clear button is Blockout-only — visible when Blockout is currently
-	// showing a recorded video (resultOverlayVid has a src AND we're in
-	// blockout mode). Click drops the entry from _video_store server-side.
+	// Clear button suppressed for now — its "clear stale _video_store entry"
+	// role was surfacing during Seedance tests when no video-workflow was
+	// actually recording, which just read as noise. Leave the button in the
+	// DOM so the wiring survives; force `.visible` off unconditionally.
 	const clearOv = document.getElementById("result-clear-overlay");
-	if (clearOv) {
-		const showing = resultMode === "blockout" && resultOverlayVid
-			&& resultOverlayVid.style.display !== "none" && !!resultOverlayVid.src;
-		clearOv.classList.toggle("visible", showing);
-	}
+	if (clearOv) clearOv.classList.remove("visible");
 }
 
 // Wipe any dynamically-added preview pills (DEPTH, CANNY, etc.) — called
@@ -23478,6 +23565,13 @@ function loop() {
 		// noop when no mannequins exist.
 		if (typeof _mannequinTickGizmos === "function") _mannequinTickGizmos();
 		if (typeof _motionPreviewTick === "function") _motionPreviewTick();
+		// Track the camera position in the ground-grid shader so the
+		// distance fade always centers on the viewer — otherwise the grid
+		// would fade to a fixed world region and orbiting far from origin
+		// would strand the visible grid off-screen.
+		if (grid?.material?.uniforms?.uCameraPos) {
+			grid.material.uniforms.uCameraPos.value.copy(camera.position);
+		}
 		orbit.update();
 		// Camera Target Object — locks the render camera's aim to the chosen
 		// object's world position each frame. Applied AFTER orbit.update so
@@ -25113,6 +25207,19 @@ function deleteKeyframes() {
 				if (ks.length && ks[0].ease === "through") ks[0].ease = "easeInOut";
 				if (ks.length && ks[ks.length - 1].ease === "through") ks[ks.length - 1].ease = "easeInOut";
 			}
+			// Per-joint keyframes live in a separate map on the mannequin
+			// wrapper. Filter each bone's track the same way, and drop
+			// bone entries that empty out so the map doesn't accumulate stale keys.
+			const jks = obj.userData?.jointKeyframes;
+			if (jks && typeof jks === "object") {
+				for (const boneName of Object.keys(jks)) {
+					const arr = jks[boneName];
+					if (!Array.isArray(arr)) continue;
+					const filtered = arr.filter(k => !selectedKeys.has(k));
+					if (filtered.length) jks[boneName] = filtered;
+					else delete jks[boneName];
+				}
+			}
 		}
 		selectedKeys.clear();
 	} else {
@@ -25121,6 +25228,10 @@ function deleteKeyframes() {
 		keyframes = [];
 		for (const obj of objects) {
 			if (Array.isArray(obj.userData?.keyframes)) obj.userData.keyframes = [];
+			// Clear per-joint tracks too so the transport reads as fully empty
+			// after a "clear all" — otherwise the mannequin would still animate
+			// its joints while every object track is bare.
+			if (obj.userData?.jointKeyframes) obj.userData.jointKeyframes = {};
 		}
 	}
 	renderKeyframeMarkers();
@@ -25460,15 +25571,24 @@ async function playPreview() {
 	}
 	isPlayingPreview = false;
 	tlPlay.classList.remove("active");
-	tlPlay.textContent = tlPlay.dataset.pauseGlyph || "⏸";
+	tlPlay.textContent = tlPlay.dataset.pauseGlyph || "⏹";
 	setMixersPlaying(false);
 	if (bgMode === "video" && bgVideo) canvasBgVideo.pause?.();
+	// Result-overlay video keeps its own clock via <video>.play() + loop=true,
+	// so when the transport loop exits (natural end of the play window) the
+	// video would otherwise keep playing forever regardless of the playhead.
+	// Explicit pause here matches stopPreview()'s behavior so the render
+	// preview honors the transport as its master clock.
+	if ((resultMode === "render" || resultMode === "blockout")
+		&& resultOverlayVid && resultOverlayVid.style.display !== "none") {
+		resultOverlayVid.pause?.();
+	}
 	// Persist playhead so closing + reopening the editor lands on the pause frame.
 	saveSceneDebounced?.();
 }
 function stopPreview() {
 	isPlayingPreview = false;
-	tlPlay.textContent = tlPlay.dataset.pauseGlyph || "⏸";
+	tlPlay.textContent = tlPlay.dataset.pauseGlyph || "⏹";
 	setMixersPlaying(false);
 	if (bgMode === "video" && bgVideo) canvasBgVideo.pause?.();
 	if ((resultMode === "render" || resultMode === "blockout")
@@ -28004,7 +28124,7 @@ if (IS_PREVIEW) {
 		const t = displayNorm * dur;
 		const fmt = (v) => (Math.abs(v - Math.round(v)) < 0.05 ? `${Math.round(v)}s` : `${v.toFixed(1)}s`);
 		pvTime.textContent = `${fmt(t)} / ${fmt(dur)}`;
-		const want = `/extensions/ComfyBlockout/icons/${isPlayingPreview ? "play" : "pause"}.svg`;
+		const want = `/extensions/ComfyBlockout/icons/${isPlayingPreview ? "play" : "stop"}.svg`;
 		if (!pvPlayIcon.src.endsWith(want)) pvPlayIcon.src = want;
 	}, 100);
 
