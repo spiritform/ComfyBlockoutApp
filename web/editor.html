@@ -357,6 +357,49 @@
 		background: #000;
 	}
 	#renderCanvas { display: block; position: relative; z-index: 1; }
+	/* Floating axis label — appears next to the cursor while the user drags
+	   an X/Y/Z axis handle on the transform gizmo. Font-weight bold in the
+	   axis color so it reads at a glance. */
+	#gizmo-axis-label {
+		position: absolute; z-index: 20;
+		pointer-events: none; user-select: none;
+		font: 700 12px ui-monospace, monospace;
+		text-shadow: 0 1px 3px rgba(0,0,0,0.85);
+		padding: 2px 6px;
+		background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
+		border-radius: 3px;
+		display: none;
+	}
+	#gizmo-axis-label.visible { display: block; }
+	#gizmo-axis-label.axis-x { color: #ff5252; }
+	#gizmo-axis-label.axis-y { color: #4ade80; }
+	#gizmo-axis-label.axis-z { color: #4a8aff; }
+	/* Fake cursor sprite shown at the locked joint position while pointer-lock
+	   is active. Native cursor is hidden by pointer lock; this one gives the
+	   user a visible "you're grabbing here" indicator that never moves. */
+	#mannequin-cursor {
+		position: absolute; z-index: 21;
+		width: 16px; height: 16px;
+		pointer-events: none; user-select: none;
+		display: none;
+		transform: translate(-4px, -3px);
+		color: rgba(255,255,255,0.9);
+		filter: drop-shadow(0 1px 2px rgba(0,0,0,0.85));
+	}
+	#mannequin-cursor.visible { display: block; }
+	/* Thin ring shown around the joint being dragged — appears the moment
+	   the user starts moving the mouse (not gated by the axis-lock threshold)
+	   so they get instant visual feedback that a drag is happening. */
+	#mannequin-ring {
+		position: absolute; z-index: 19;
+		width: 60px; height: 60px;
+		border: 1.5px solid rgba(255,255,255,0.4);
+		border-radius: 50%;
+		pointer-events: none; user-select: none;
+		transform: translate(-30px, -30px);
+		display: none;
+	}
+	#mannequin-ring.visible { display: block; }
 	/* Blockout view border overlay — a bare positioning box on top of the main
 	   canvas. Fixed 220px wide, height derived from the current render aspect
 	   via JS. The actual pixels are drawn by the main renderer into a scissored
@@ -2508,6 +2551,16 @@
 		display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;
 		padding: 4px 2px;
 	}
+	/* Assets pane, when mounted in the top zone via the Output button, needs
+	   scroll on the pane itself — parent #rp-zone-top-body has overflow:hidden
+	   and no other scrollable ancestor exists. Section inside the pane grows
+	   naturally with tiles; setting overflow-y here on the pane lets the whole
+	   list scroll as expected. */
+	#rp-zone-top-body > #rp-pane-assets {
+		overflow-y: auto; overflow-x: hidden;
+	}
+	#rp-zone-top-body > #rp-pane-assets::-webkit-scrollbar { width: 4px; }
+	#rp-zone-top-body > #rp-pane-assets::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
 	#rp-pane-assets .assets-hint {
 		font-size: 10px; color: rgba(255,255,255,0.35);
 		margin-top: 10px; line-height: 1.5;
@@ -2826,6 +2879,14 @@
 	}
 	.joint-row .drag-num .drag-label { font-size: 9px; }
 	.joint-row .drag-num.non-zero .drag-val { color: #ffd28a; }
+	/* Amber highlight on the currently-active joint row — set by the
+	   pointerdown/end handlers when the user clicks a joint dot in the
+	   viewport so the corresponding row in the Joint Rotations list reads as
+	   the "focused" one. Also lifts the row's left edge with an amber bar. */
+	.joint-row.active {
+		background: rgba(255,180,84,0.15);
+		box-shadow: inset 3px 0 0 rgba(255,180,84,0.85);
+	}
 	.bg-cell-picker {
 		width: 100%; padding: 8px 12px;
 		background: rgba(255,255,255,0.06);
@@ -3572,6 +3633,24 @@
 			     main viewport exactly (single WebGL context). This div is just the
 			     border/positioning box. -->
 			<div id="viewport-inset" hidden></div>
+			<!-- Axis letter shown next to the cursor while the transform gizmo's
+			     X / Y / Z handle is being dragged. Updated by the pointermove
+			     handler wired below the transform-controls setup. -->
+			<div id="gizmo-axis-label"></div>
+			<!-- Custom grab-cursor sprite, shown at the joint dot during a
+			     pointer-locked mannequin drag. Native cursor is hidden by the
+			     lock; this sprite fills in a visible "you're grabbing here"
+			     indicator that never moves. Cleared on drag end. -->
+			<svg id="mannequin-cursor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+				<path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/>
+				<path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"/>
+				<path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/>
+				<path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.83L7 15"/>
+			</svg>
+			<!-- Ring around the joint being dragged — appears once the user
+			     starts moving the mouse (any direction), shown alongside the
+			     axis label. Positioned by the pointermove handler below. -->
+			<div id="mannequin-ring"></div>
 			<!-- Initializing curtain — blocks pointer events during scene hydration so a
 			     mid-boot orbit/click/drop doesn't get clobbered when deserializeScene
 			     re-applies camera + objects. Removed by the boot IIFE. -->
@@ -4753,7 +4832,6 @@
 						No generated images yet — hit Generate to create some.
 					</div>
 					<div class="assets-grid" id="assets-grid"></div>
-					<div class="assets-hint">Drag a tile onto an object's image slot in the Outliner to set it as that object's material reference.</div>
 				</div>
 			</div>
 
@@ -4840,14 +4918,100 @@
 		const astPane = document.getElementById("rp-pane-assets");
 
 		function isAssetsOpen() { return astPane && !astPane.hidden; }
+		// Output pane lives in the TOP zone (where Outliner normally sits) so
+		// the user can drag tiles from Output onto the Properties input slots
+		// below without either being hidden. When Output opens, we reparent
+		// #rp-pane-assets into #rp-zone-top and hide the Outliner pane there;
+		// closing puts everything back. Bottom zone (Properties switcher) is
+		// untouched, so workflow-cell input slots stay reachable for drops.
+		let _prevAssetsParent = null;
+		let _outlinerPane = null;
+		let _prevTopKicker = null;
+		let _prevFilterParent = null;
+		let _prevOutlinerDisplay = null;
+		let _prevHideAllDisplay = null;
+		let _prevClearBtnDisplay = null;
+		function _mountAssetsInTop() {
+			const zoneTopBody = document.getElementById("rp-zone-top-body");
+			const zoneTop = document.getElementById("rp-zone-top");
+			const topControls = document.getElementById("rp-zone-top-controls");
+			if (!zoneTopBody || !astPane) return;
+			_outlinerPane = _outlinerPane || document.getElementById("rp-pane-outliner");
+			if (astPane.parentElement !== zoneTopBody) {
+				_prevAssetsParent = astPane.parentElement;
+				zoneTopBody.appendChild(astPane);
+			}
+			astPane.hidden = false;
+			// Force-hide via inline style.display so nothing bleeds through —
+			// `.hidden` gets overridden by the CSS `display: flex / inline-flex`
+			// rules on these elements. Save the prior value so unmount restores it.
+			if (_outlinerPane) {
+				_prevOutlinerDisplay = _outlinerPane.style.display;
+				_outlinerPane.style.display = "none";
+			}
+			const kicker = zoneTop?.querySelector(".rp-kicker");
+			if (kicker) {
+				if (_prevTopKicker === null) _prevTopKicker = kicker.textContent || "Outliner";
+				kicker.textContent = "Output";
+			}
+			const hideAllBtn = document.getElementById("outliner-hide-all");
+			const clearBtn = document.getElementById("clear-btn");
+			if (hideAllBtn) {
+				_prevHideAllDisplay = hideAllBtn.style.display;
+				hideAllBtn.style.display = "none";
+			}
+			if (clearBtn) {
+				_prevClearBtnDisplay = clearBtn.style.display;
+				clearBtn.style.display = "none";
+			}
+			const filter = document.getElementById("assets-filter");
+			const topHeader = document.getElementById("rp-zone-top-header");
+			if (filter && topHeader) {
+				_prevFilterParent = filter.parentElement;
+				// Insert the pill row directly into the header (peer of the
+				// kicker) — the .rp-header-end span was too narrow to lay out
+				// the 4-button row alongside the hidden Outliner controls.
+				topHeader.appendChild(filter);
+				filter.hidden = false;
+				filter.style.display = "flex";
+			}
+			zoneTop?.classList.add("showing-assets");
+		}
+		function _unmountAssetsFromTop() {
+			const zoneTopBody = document.getElementById("rp-zone-top-body");
+			const zoneTop = document.getElementById("rp-zone-top");
+			if (_prevAssetsParent && astPane && astPane.parentElement === zoneTopBody) {
+				_prevAssetsParent.appendChild(astPane);
+			}
+			astPane.hidden = true;
+			if (_outlinerPane) {
+				_outlinerPane.style.display = _prevOutlinerDisplay || "";
+			}
+			_prevOutlinerDisplay = null;
+			const kicker = zoneTop?.querySelector(".rp-kicker");
+			if (kicker && _prevTopKicker !== null) kicker.textContent = _prevTopKicker;
+			_prevTopKicker = null;
+			const hideAllBtn = document.getElementById("outliner-hide-all");
+			const clearBtn = document.getElementById("clear-btn");
+			if (hideAllBtn) hideAllBtn.style.display = _prevHideAllDisplay || "";
+			if (clearBtn) clearBtn.style.display = _prevClearBtnDisplay || "";
+			_prevHideAllDisplay = null;
+			_prevClearBtnDisplay = null;
+			const filter = document.getElementById("assets-filter");
+			if (filter && _prevFilterParent) {
+				_prevFilterParent.appendChild(filter);
+				filter.hidden = true;
+			}
+			_prevFilterParent = null;
+			zoneTop?.classList.remove("showing-assets");
+			_prevAssetsParent = null;
+		}
 		function closeAssets() {
-			// Falls back to scene/object pane depending on current selection.
-			if (window.__selectedObj) window.forceRightPane?.("object", window.__selectedObj.name || "Object");
-			else window.forceRightPane?.("scene", "Scene");
+			_unmountAssetsFromTop();
 			assetsBtn?.classList.remove("active");
 		}
 		async function openAssets() {
-			window.forceRightPane?.("assets");
+			_mountAssetsInTop();
 			assetsBtn?.classList.add("active");
 			await refreshAssets();
 		}
@@ -5776,16 +5940,65 @@ scene.add(transformHelper);
 // stomped. Instead, install onBeforeRender on each Line/LineSegments to clamp
 // opacity BEFORE each draw — 0.22 keeps the line as a subtle spatial cue
 // without cutting the viewport with a stark bar.
+// Axis-extension lines stay dim (~20% opacity) so they don't slice the
+// viewport in half. Also demoted to a lower renderOrder than the axis
+// arrows/planes so the axis colors always paint on top instead of being
+// obscured by the white extension lines. TransformControls keeps
+// rewriting opacity to 1.0 each frame, so we clamp via onBeforeRender.
 transformHelper.traverse(c => {
 	if (!c?.material) return;
-	if (c.isLine || c.isLineSegments) {
-		c.material.transparent = true;
-		const prev = c.onBeforeRender;
-		c.onBeforeRender = function(...args) {
-			this.material.opacity = 0.22;
-			if (prev) prev.apply(this, args);
-		};
-	}
+	if (!(c.isLine || c.isLineSegments)) return;
+	c.material.transparent = true;
+	c.renderOrder = -1;  // paint before the colored axis handles
+	const prev = c.onBeforeRender;
+	c.onBeforeRender = function(...args) {
+		this.material.opacity = 0.2;
+		if (prev) prev.apply(this, args);
+	};
+});
+
+// Dim non-active axis handles + preserve axis-native colors while the user
+// is dragging (or hovering) a specific axis. TransformControls internally
+// paints the active handle yellow, which reads too close to the Y-axis
+// green. Instead we keep each handle in its own axis color (red/green/blue)
+// and just fade the OTHER handles down to ~15% opacity so the active one
+// pops purely via saturation. Applied via onBeforeRender because
+// TransformControls resets its materials every frame.
+const _AXIS_COLORS = {
+	X: 0xff5252,
+	Y: 0x4ade80,
+	Z: 0x4a8aff,
+};
+function _axisColorForName(nm) {
+	if (!nm) return null;
+	// Single-letter names → direct color. Multi-letter (plane handles like
+	// "XY") → white so the plane read as neutral instead of biasing to one
+	// axis' hue. "XYZ" center handle also white.
+	if (nm.length === 1 && _AXIS_COLORS[nm] != null) return _AXIS_COLORS[nm];
+	return 0xffffff;
+}
+transformHelper.traverse(c => {
+	if (!c?.material || !c.material.color) return;
+	if (c.isLine || c.isLineSegments) return;  // handled above
+	if (!c.name) return;
+	const nativeColor = _axisColorForName(c.name);
+	if (nativeColor == null) return;
+	const prev = c.onBeforeRender;
+	c.onBeforeRender = function(...args) {
+		const activeAxis = transform.axis;
+		const nm = this.name || "";
+		if (this.material.transparent === false) this.material.transparent = true;
+		// Force native color every frame — this overrides TransformControls'
+		// yellow-on-hover so each axis stays true to its identity.
+		this.material.color.setHex(nativeColor);
+		if (activeAxis) {
+			const active = nm && (activeAxis.includes(nm) || nm.includes(activeAxis));
+			this.material.opacity = active ? 1.0 : 0.15;
+		} else {
+			this.material.opacity = 1.0;
+		}
+		if (prev) prev.apply(this, args);
+	};
 });
 
 // Render-camera wireframe — a minimal body-box + light-grey frustum cone. The
@@ -5806,18 +6019,8 @@ const renderCamHelper = (() => {
 	);
 	body.position.set(0, 0, 0.12);
 	body.renderOrder = 999;
+	body.userData.pickAsRenderCam = true;
 	group.add(body);
-
-	// Invisible pick target — solid box matching the visual body so raycaster clicks
-	// register (LineSegments have no filled surface). Marked so the click handler can
-	// route the hit to renderCam.
-	const pickBox = new THREE.Mesh(
-		new THREE.BoxGeometry(0.36, 0.26, 0.28),
-		new THREE.MeshBasicMaterial({ visible: false }),
-	);
-	pickBox.position.set(0, 0, 0.12);
-	pickBox.userData.pickAsRenderCam = true;
-	group.add(pickBox);
 
 	// Frustum: 4 rays from the lens origin to the corners of a far-plane rectangle,
 	// plus the rectangle edges. All positions rewritten each update from FOV+aspect.
@@ -5828,6 +6031,7 @@ const renderCamHelper = (() => {
 		new THREE.LineBasicMaterial({ color: frustumColor, transparent: true, opacity: 0.55, depthTest: false }),
 	);
 	frustum.renderOrder = 998;
+	frustum.userData.pickAsRenderCam = true;
 	group.add(frustum);
 
 	function updateFrustum() {
@@ -8891,53 +9095,132 @@ applyAssistantEnablement();
 	// handle all the way to the top and give Properties the full column
 	// (matches the AI Agent zone's drag-collapse-to-header behavior).
 	const OUTLINER_MIN_PX = 40;
-	const PROPS_MIN_PX = 40;
+	// Properties has to keep enough room for header + at least a section or
+	// two — 40px (header-only) leaves it as a dead strip. 240 keeps the
+	// Appearance/Transform rows on-screen even when Outliner is fully open.
+	const PROPS_MIN_PX = 240;
+	// Release-glide inertia — track velocity during drag, animate a short
+	// easeOut glide on release if the user was moving fast. Precise slow
+	// drops (velocity ≈ 0) land exactly where the mouse was let go; quick
+	// swipes coast for ~200ms so the panel feels smooth. Shared helper
+	// below is reused by the left-panel AI Agent drag too.
+	function _cubicOut(t) { return 1 - Math.pow(1 - t, 3); }
+	function _glidePanelSize(opts) {
+		// opts: { getPx, setPx, minPx, maxPx, velocityPxPerSec, onEnd }
+		const { getPx, setPx, minPx, maxPx, onEnd } = opts;
+		const v = opts.velocityPxPerSec || 0;
+		if (Math.abs(v) < 300) { onEnd?.(); return; }
+		const startPx = getPx();
+		const rawDist = v * 0.10;
+		const dist = Math.max(-90, Math.min(90, rawDist));
+		const target = Math.max(minPx, Math.min(maxPx, startPx + dist));
+		if (Math.abs(target - startPx) < 0.5) { onEnd?.(); return; }
+		const duration = Math.min(240, Math.max(120, Math.abs(dist) * 4));
+		const t0 = performance.now();
+		let handle = 0;
+		function step(now) {
+			const t = Math.min(1, (now - t0) / duration);
+			const px = startPx + (target - startPx) * _cubicOut(t);
+			setPx(px);
+			if (t < 1) handle = requestAnimationFrame(step);
+			else onEnd?.();
+		}
+		handle = requestAnimationFrame(step);
+		return () => cancelAnimationFrame(handle);
+	}
 	if (rpHandle && rpPanel) {
 		let dragging = false;
 		let pendingDown = null;
 		const RP_DRAG_THRESHOLD_PX = 3;
-		const startRpDrag = () => {
+		// Sticky grab: record the cursor Y AND the current split position at
+		// mousedown, then move the split by the cursor delta. Prevents the
+		// "panel jumps to cursor" pop that happens when you grab the header
+		// (cursor is a few px below the split line) or click anywhere on the
+		// wider handle band.
+		let grabCursorY = 0;
+		let grabSplitPx = 0;
+		let lastMoveY = 0, lastMoveT = 0, lastVel = 0;
+		const startRpDrag = (y) => {
 			dragging = true;
 			rpHandle.classList.add("dragging");
 			document.body.style.cursor = "grabbing";
 			document.body.style.userSelect = "none";
+			grabCursorY = y;
+			lastMoveY = y;
+			lastMoveT = performance.now();
+			lastVel = 0;
+			// Read the CURRENT split position from the computed layout so we
+			// hold it exactly on grab.
+			const rect = rpPanel.getBoundingClientRect();
+			const cur = rpPanel.style.getPropertyValue("--rp-top-basis").trim();
+			grabSplitPx = cur.endsWith("%")
+				? (parseFloat(cur) / 100) * rect.height
+				: (parseFloat(cur) || rect.height * 0.35);
 		};
-		// Amber handle starts drag immediately (dedicated drag surface).
 		rpHandle.addEventListener("mousedown", (e) => {
-			startRpDrag();
+			startRpDrag(e.clientY);
 			e.preventDefault();
 		});
-		// The PROPERTIES header band also acts as a drag surface — grab
-		// anywhere on it (except interactive controls in the end-slot) and
-		// drag up/down to resize. Small threshold disambiguates drag from
-		// stray clicks on the label.
 		document.getElementById("rp-header")?.addEventListener("mousedown", (e) => {
 			if (e.target.closest("button, input, select, textarea, #rp-header-end, .assets-filter, .assistant-status")) return;
 			pendingDown = { y: e.clientY };
+			// Also light up the amber handle immediately on header press so
+			// the user sees "yes this is a drag target". Cleared on mouseup
+			// alongside the drag state. Uses the same .dragging class the
+			// handle uses when actually dragged, so hover/drag styles unify.
+			rpHandle.classList.add("dragging");
 		});
 		window.addEventListener("mousemove", (e) => {
 			if (pendingDown && !dragging) {
-				if (Math.abs(e.clientY - pendingDown.y) >= RP_DRAG_THRESHOLD_PX) startRpDrag();
+				if (Math.abs(e.clientY - pendingDown.y) >= RP_DRAG_THRESHOLD_PX) startRpDrag(pendingDown.y);
 				else return;
 			}
 			if (!dragging) return;
 			const rect = rpPanel.getBoundingClientRect();
-			const y = e.clientY - rect.top;
-			const outlinerPx = Math.max(OUTLINER_MIN_PX, Math.min(rect.height - PROPS_MIN_PX, y));
+			const dy = e.clientY - grabCursorY;
+			const outlinerPx = Math.max(OUTLINER_MIN_PX, Math.min(rect.height - PROPS_MIN_PX, grabSplitPx + dy));
 			const pct = ((outlinerPx / rect.height) * 100).toFixed(2) + "%";
 			rpPanel.style.setProperty("--rp-top-basis", pct);
+			const now = performance.now();
+			const dt = Math.max(1, now - lastMoveT);
+			lastVel = ((e.clientY - lastMoveY) / dt) * 1000;
+			lastMoveY = e.clientY;
+			lastMoveT = now;
 		});
 		window.addEventListener("mouseup", () => {
+			const hadPending = pendingDown !== null;
 			pendingDown = null;
+			// Clear the header-press amber-glow even if the user just tapped
+			// the header without moving (no drag started).
+			if (!dragging && hadPending) rpHandle.classList.remove("dragging");
 			if (!dragging) return;
 			dragging = false;
 			rpHandle.classList.remove("dragging");
 			document.body.style.cursor = "";
 			document.body.style.userSelect = "";
-			try {
-				const current = rpPanel.style.getPropertyValue("--rp-top-basis").trim();
-				if (current) localStorage.setItem(RP_TOP_KEY, current);
-			} catch {}
+			const persistPct = () => {
+				try {
+					const current = rpPanel.style.getPropertyValue("--rp-top-basis").trim();
+					if (current) localStorage.setItem(RP_TOP_KEY, current);
+				} catch {}
+			};
+			const rect = rpPanel.getBoundingClientRect();
+			_glidePanelSize({
+				getPx: () => {
+					const cur = rpPanel.style.getPropertyValue("--rp-top-basis").trim() || "35%";
+					if (cur.endsWith("%")) return (parseFloat(cur) / 100) * rect.height;
+					return parseFloat(cur) || 0;
+				},
+				setPx: (px) => {
+					const clamped = Math.max(OUTLINER_MIN_PX, Math.min(rect.height - PROPS_MIN_PX, px));
+					rpPanel.style.setProperty("--rp-top-basis", ((clamped / rect.height) * 100).toFixed(2) + "%");
+				},
+				minPx: OUTLINER_MIN_PX,
+				maxPx: rect.height - PROPS_MIN_PX,
+				velocityPxPerSec: lastVel,
+				onEnd: persistPct,
+			});
+			if (Math.abs(lastVel) < 300) persistPct();
 		});
 	}
 
@@ -8969,18 +9252,30 @@ applyAssistantEnablement();
 	if (lpPanel) {
 		let dragging = false;
 		let pendingDown = null;
-		const startDrag = () => {
+		let lpLastMoveY = 0, lpLastMoveT = 0, lpLastVel = 0;
+		// Sticky-grab: hold the overlay's current height on mousedown and
+		// move relative to the cursor delta, not to the cursor's absolute
+		// position in the panel. Otherwise grabbing the header (which sits
+		// a few px below the top of the overlay) causes a small jump.
+		let grabCursorY = 0;
+		let grabHeightPx = 0;
+		const startDrag = (y) => {
 			dragging = true;
 			lpAgentHandle?.classList.add("dragging");
 			document.body.style.cursor = "grabbing";
 			document.body.style.userSelect = "none";
+			lpLastMoveY = y;
+			lpLastMoveT = performance.now();
+			lpLastVel = 0;
+			grabCursorY = y;
+			grabHeightPx = parseFloat(lpPanel.style.getPropertyValue("--lp-agent-h")) || AGENT_MIN_PX;
 		};
 		// Grabbing the amber handle starts a drag immediately (it's a
 		// dedicated drag surface, no click ambiguity). The header uses a small
 		// movement threshold so a stray click on the AI AGENT band doesn't
 		// register as a resize.
 		lpAgentHandle?.addEventListener("mousedown", (e) => {
-			startDrag();
+			startDrag(e.clientY);
 			e.preventDefault();
 		});
 		lpAgentHeader?.addEventListener("mousedown", (e) => {
@@ -8989,18 +9284,23 @@ applyAssistantEnablement();
 		});
 		window.addEventListener("mousemove", (e) => {
 			if (pendingDown && !dragging) {
-				if (Math.abs(e.clientY - pendingDown.y) >= DRAG_THRESHOLD_PX) startDrag();
+				if (Math.abs(e.clientY - pendingDown.y) >= DRAG_THRESHOLD_PX) startDrag(pendingDown.y);
 				else return;
 			}
 			if (!dragging) return;
 			const rect = lpPanel.getBoundingClientRect();
-			// cursor y from the panel bottom → overlay height. Dragging up
-			// (cursor higher = smaller e.clientY - rect.top) grows the overlay.
-			const y = e.clientY - rect.top;
-			const desiredHeight = rect.height - y;
+			// Sticky-grab: dy is cursor delta from grab point; overlay grows
+			// as cursor moves UP (negative dy) so subtract dy from grab height.
+			const dy = e.clientY - grabCursorY;
+			const desiredHeight = grabHeightPx - dy;
 			const maxHeight = rect.height - OBJECTS_HEADER_PX;
 			const clamped = Math.max(AGENT_MIN_PX, Math.min(maxHeight, desiredHeight));
 			setAgentHeight(clamped);
+			const now = performance.now();
+			const dt = Math.max(1, now - lpLastMoveT);
+			lpLastVel = -((e.clientY - lpLastMoveY) / dt) * 1000;
+			lpLastMoveY = e.clientY;
+			lpLastMoveT = now;
 		});
 		// Collapsed height = the natural minimum (header + context chip + input
 		// row = AGENT_MIN_PX). User asked for this so the chat entry stays
@@ -9041,10 +9341,25 @@ applyAssistantEnablement();
 			if (lpPanel.classList.contains("lp-agent-collapsed")) {
 				lpPanel.classList.remove("lp-agent-collapsed");
 			}
-			try {
-				const current = lpPanel.style.getPropertyValue("--lp-agent-h").trim();
-				if (current) localStorage.setItem(LP_AGENT_H_KEY, current);
-			} catch {}
+			const persistLp = () => {
+				try {
+					const current = lpPanel.style.getPropertyValue("--lp-agent-h").trim();
+					if (current) localStorage.setItem(LP_AGENT_H_KEY, current);
+				} catch {}
+			};
+			const rect = lpPanel.getBoundingClientRect();
+			_glidePanelSize({
+				getPx: () => parseFloat(lpPanel.style.getPropertyValue("--lp-agent-h")) || AGENT_MIN_PX,
+				setPx: (px) => {
+					const maxH = rect.height - OBJECTS_HEADER_PX;
+					setAgentHeight(Math.max(AGENT_MIN_PX, Math.min(maxH, px)));
+				},
+				minPx: AGENT_MIN_PX,
+				maxPx: rect.height - OBJECTS_HEADER_PX,
+				velocityPxPerSec: lpLastVel,
+				onEnd: persistLp,
+			});
+			if (Math.abs(lpLastVel) < 300) persistLp();
 		});
 	}
 	// Reflect assistant-enabled setting: when off, hide the whole bottom zone
@@ -9903,7 +10218,12 @@ canvas.addEventListener("pointerdown", e => {
 	const ny = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 	ndc.set(nx, ny);
 	raycaster.setFromCamera(ndc, camera);
+	// Match the tighter tolerance used in pointerup — only clicks near the
+	// wireframe itself register as camera-selection.
+	const _prevLineTh = raycaster.params.Line?.threshold;
+	if (raycaster.params.Line) raycaster.params.Line.threshold = 0.06;
 	const hits = raycaster.intersectObject(renderCamHelper, true);
+	if (raycaster.params.Line && _prevLineTh !== undefined) raycaster.params.Line.threshold = _prevLineTh;
 	if (!hits.some(h => h.object?.userData?.pickAsRenderCam)) return;
 	select(renderCam);
 	orbit.enabled = false;
@@ -9972,7 +10292,13 @@ canvas.addEventListener("pointerup", e => {
 	// transform gizmo comes up. Checked first so the wireframe wins over any object
 	// that happens to be behind it.
 	if (renderCamHelper.visible) {
+		// Tighter line-pick tolerance so only clicks NEAR the wireframe
+		// itself register — the default threshold lets the whole frustum
+		// volume grab the click, blocking objects behind it.
+		const prevLineTh = raycaster.params.Line?.threshold;
+		if (raycaster.params.Line) raycaster.params.Line.threshold = 0.06;
 		const camHits = raycaster.intersectObject(renderCamHelper, true);
+		if (raycaster.params.Line && prevLineTh !== undefined) raycaster.params.Line.threshold = prevLineTh;
 		if (camHits.some(h => h.object?.userData?.pickAsRenderCam)) {
 			select(renderCam);
 			return;
@@ -10071,10 +10397,21 @@ document.querySelectorAll(".prim-btn[data-tool]").forEach(b => {
 // "TOOLS : MEDIAPIPE" in the section head. Mouseleave restores the base
 // section label. Applied broadly to every prim-btn that has a data-label.
 (() => {
+	// Objects' own section-head-row is CSS display:none (the fixed
+	// #lp-zone-top-header labels the zone instead). When hovering an OBJECTS
+	// button, retarget the swap to the zone-header kicker so the "OBJECTS :
+	// CUBE" preview actually reads. Falls back to the section's label for
+	// TOOLS / WORKFLOWS which still show their own head-row.
+	const topKicker = document.querySelector("#lp-zone-top-header .rp-kicker");
 	for (const btn of document.querySelectorAll(".prim-btn[data-label]")) {
 		const section = btn.closest(".section");
-		const labelEl = section?.querySelector(".section-label");
-		if (!labelEl) continue;
+		const localLabel = section?.querySelector(".section-label");
+		if (!localLabel) continue;
+		// If this section IS the first-of-type (Objects) whose head is
+		// hidden by CSS, drive the zone kicker instead. Otherwise the
+		// visible section-label wins.
+		const isFirstSection = section === section?.parentElement?.querySelector(".section:first-of-type");
+		const labelEl = (isFirstSection && topKicker) ? topKicker : localLabel;
 		btn.addEventListener("mouseenter", () => {
 			if (labelEl.dataset._origLabel === undefined) {
 				labelEl.dataset._origLabel = labelEl.textContent;
@@ -14380,10 +14717,10 @@ const MANNEQUIN_DRAG_MAP = {
 	mixamorigSpine2:        { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4 },
 	mixamorigSpine1:        { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4 },
 	mixamorigSpine:         { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.4 },
-	mixamorigLeftShoulder:  { axisX: "y", sensX: 0.4,  axisY: "z", sensY: -0.5 },
-	mixamorigRightShoulder: { axisX: "y", sensX: -0.4, axisY: "z", sensY: 0.5 },
-	mixamorigLeftArm:       { axisX: "y", sensX: 0.4,  axisY: "z", sensY: -0.5 },
-	mixamorigRightArm:      { axisX: "y", sensX: -0.4, axisY: "z", sensY: 0.5 },
+	mixamorigLeftShoulder:  { axisX: "x", sensX: 0.4,  axisY: "z", sensY: -0.5 },
+	mixamorigRightShoulder: { axisX: "x", sensX: -0.4, axisY: "z", sensY: 0.5 },
+	mixamorigLeftArm:       { axisX: "x", sensX: 0.4,  axisY: "z", sensY: -0.5 },
+	mixamorigRightArm:      { axisX: "x", sensX: -0.4, axisY: "z", sensY: 0.5 },
 	mixamorigLeftForeArm:   { axisX: null, sensX: 0,   axisY: "y", sensY: 0.6 },
 	mixamorigRightForeArm:  { axisX: null, sensX: 0,   axisY: "y", sensY: -0.6 },
 	mixamorigLeftHand:      { axisX: "y", sensX: 0.4,  axisY: "x", sensY: 0.5 },
@@ -14719,6 +15056,9 @@ function _mannequinRefreshJointCellsFromState(wrapper) {
 			pill.classList.toggle("non-zero", Math.abs(deg) > 0.05);
 		}
 	}
+	// Re-sync the active-row highlight when the panel repaints — otherwise
+	// switching between mannequins would leave the previous highlight stuck.
+	_syncMannequinJointRowHighlight();
 }
 
 // ── Joint gizmos ──────────────────────────────────────────────────
@@ -15157,9 +15497,79 @@ function _motionPreviewTick() {
 
 // ── Drag posing ──────────────────────────────────────────────────
 let _mannequinDrag = null;
+// The last joint the user touched — kept tinted after release so they can
+// see which joint they most recently adjusted. Cleared when they touch a
+// different joint or click empty space.
+let _mannequinLastSelected = null;
 let _mannequinHovered = null;
 const _mannequinRaycaster = new THREE.Raycaster();
 const _mannequinNdc = new THREE.Vector2();
+
+// Positions + resizes the mannequin ring + axis label so the ring diameter
+// scales with the joint dot's projected on-screen size (stays proportional
+// across zoom). Ring center is anchored to the joint's screen position.
+// Also updates the label's text + color when liveAxis is provided.
+function _positionMannequinRingAndLabel(gizmo, liveAxis, liveDeg) {
+	if (!gizmo) return;
+	const wpos = new THREE.Vector3();
+	gizmo.getWorldPosition(wpos);
+	// A point one gizmo-radius to the right (in view-space) — projecting
+	// both anchors gives us the joint's on-screen radius in pixels.
+	const camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+	const edge = wpos.clone().add(camRight.multiplyScalar(_MANNEQUIN_GIZMO_RADIUS));
+	const center = wpos.clone();
+	center.project(camera);
+	edge.project(camera);
+	const wr = canvasWrap.getBoundingClientRect();
+	const cv = canvas.getBoundingClientRect();
+	const sx = (center.x * 0.5 + 0.5) * cv.width;
+	const sy = (1 - (center.y * 0.5 + 0.5)) * cv.height;
+	const ex = (edge.x * 0.5 + 0.5) * cv.width;
+	const ey = (1 - (edge.y * 0.5 + 0.5)) * cv.height;
+	const jointRadiusPx = Math.max(6, Math.hypot(ex - sx, ey - sy));
+	// Ring is ~2.6x the joint's on-screen radius — big enough to read as a
+	// halo, small enough that it doesn't dominate the view.
+	const ringDiameter = Math.round(jointRadiusPx * 5.2);
+	const px = cv.left - wr.left + sx;
+	const py = cv.top - wr.top + sy;
+	const ring = document.getElementById("mannequin-ring");
+	if (ring) {
+		ring.style.left = px + "px";
+		ring.style.top = py + "px";
+		ring.style.width = ringDiameter + "px";
+		ring.style.height = ringDiameter + "px";
+		const r = ringDiameter / 2;
+		ring.style.transform = `translate(${-r}px, ${-r}px)`;
+	}
+	const label = document.getElementById("gizmo-axis-label");
+	if (label) {
+		// Anchor at the ring's right edge with a 4px gap.
+		label.style.left = (px + ringDiameter / 2 + 4) + "px";
+		label.style.top = (py - 8) + "px";
+		if (liveAxis) {
+			label.textContent = `${liveAxis} ${Math.round(liveDeg)}°`;
+			label.className = "visible axis-" + liveAxis.toLowerCase();
+		}
+	}
+}
+
+// Highlight the .joint-row matching the currently-active joint in the
+// Properties pane's Joint Rotations list, and scroll it into view if it's
+// off-screen. Called whenever _mannequinLastSelected changes.
+function _syncMannequinJointRowHighlight() {
+	const host = document.getElementById("obj-mannequin-joints-cells");
+	if (!host) return;
+	const activeName = _mannequinLastSelected?.userData?._mannequinBoneName || null;
+	let activeRow = null;
+	for (const row of host.querySelectorAll(".joint-row")) {
+		const match = activeName && row.dataset.bone === activeName;
+		row.classList.toggle("active", !!match);
+		if (match) activeRow = row;
+	}
+	if (activeRow) {
+		try { activeRow.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch { activeRow.scrollIntoView(); }
+	}
+}
 
 function _mannequinPickGizmo(clientX, clientY) {
 	if (!selected || selected.userData?.primKind !== "mannequin") return null;
@@ -15173,12 +15583,36 @@ function _mannequinPickGizmo(clientX, clientY) {
 	_mannequinRaycaster.setFromCamera(_mannequinNdc, camera);
 	const targets = Array.from(gizmos.values());
 	const hits = _mannequinRaycaster.intersectObjects(targets, false);
-	return hits.length ? hits[0].object : null;
+	if (hits.length) return hits[0].object;
+	// Sticky-grab: if the user just released a joint, give them an enlarged
+	// invisible "click halo" around it so a follow-up click nearby re-grabs
+	// the SAME joint — perfect for iterating on multiple axes without
+	// hunting the small dot again. Radius is in screen pixels; a ring ~28px
+	// wide feels comfortable without stealing other joints' hits.
+	if (_mannequinLastSelected) {
+		const wpos = new THREE.Vector3();
+		_mannequinLastSelected.getWorldPosition(wpos);
+		wpos.project(camera);
+		const sx = (wpos.x * 0.5 + 0.5) * rect.width + rect.left;
+		const sy = (1 - (wpos.y * 0.5 + 0.5)) * rect.height + rect.top;
+		const dx = clientX - sx, dy = clientY - sy;
+		if (dx * dx + dy * dy <= 28 * 28) return _mannequinLastSelected;
+	}
+	return null;
 }
 
-function _mannequinSetGizmoTint(sphere, hovered) {
+// state: "idle" (default) | "active" (clicked, persists) | "drag" (currently
+// being rotated) | true (legacy — mapped to "active") | false (legacy → idle).
+// Active is amber-orange, drag is yellow, idle is the default white dot.
+const MANNEQUIN_DRAG_COLOR = 0xffff00;  // yellow while being dragged
+function _mannequinSetGizmoTint(sphere, state) {
 	const m = sphere.material;
-	if (hovered) {
+	if (state === true) state = "active";
+	else if (state === false) state = "idle";
+	if (state === "drag") {
+		m.color.setHex(MANNEQUIN_DRAG_COLOR);
+		m.opacity = 1.0;
+	} else if (state === "active") {
 		m.color.setHex(MANNEQUIN_HIGHLIGHT_COLOR);
 		m.opacity = 1.0;
 	} else {
@@ -15199,7 +15633,26 @@ function _mannequinClearHover() {
 		if (e.button !== 0) return;
 		if (transform.dragging || transform.axis) return;
 		const gizmo = _mannequinPickGizmo(e.clientX, e.clientY);
-		if (!gizmo) return;
+		if (!gizmo) {
+			// Empty-space click while a joint was still tinted → clear the
+			// last-touched highlight so it stops persisting. Timeline flips
+			// back to the object-level track.
+			if (_mannequinLastSelected) {
+				_mannequinSetGizmoTint(_mannequinLastSelected, false);
+				_mannequinLastSelected = null;
+				renderKeyframeMarkers?.();
+				_syncMannequinJointRowHighlight();
+			}
+			return;
+		}
+		// Different joint clicked → clear the previous last-touched tint
+		// before starting the drag. endDrag sets _mannequinLastSelected to
+		// the newly-released joint.
+		if (_mannequinLastSelected && _mannequinLastSelected !== gizmo) {
+			_mannequinSetGizmoTint(_mannequinLastSelected, false);
+			_mannequinLastSelected = null;
+			_syncMannequinJointRowHighlight();
+		}
 		e.preventDefault();
 		e.stopPropagation();
 		e.stopImmediatePropagation();
@@ -15213,30 +15666,112 @@ function _mannequinClearHover() {
 		const startSecondaryDeg = map.axisX ? (bone.rotation[map.axisX] - rest[map.axisX]) * 180 / Math.PI : 0;
 		_mannequinDrag = {
 			wrapper, bone, boneName, gizmo, map, rest,
-			startX: e.clientX,
-			startY: e.clientY,
+			// Accumulated cursor delta since drag started. Pointer Lock (below)
+			// gives us pure movementX/Y so startX/Y aren't meaningful anymore —
+			// we integrate the deltas here instead.
+			accumX: 0,
+			accumY: 0,
 			startPrimary: startPrimaryDeg,
 			startSecondary: startSecondaryDeg,
+			// One-axis lock: the first movement direction that clears a small
+			// threshold decides which axis this drag commits to. Prevents the
+			// "diagonal rotates both" mush the user flagged.
+			lockedAxis: null,
 		};
-		_mannequinSetGizmoTint(gizmo, true);
+		// Immediately mark this joint as ACTIVE (orange) — persists after
+		// release. If the user drags, we swap to "drag" (yellow) during
+		// movement, then back to "active" when they let go.
+		_mannequinSetGizmoTint(gizmo, "active");
+		_mannequinLastSelected = gizmo;
+		renderKeyframeMarkers?.();
+		_syncMannequinJointRowHighlight();
 		canvas.style.cursor = "grabbing";
+		// Show the ring + label anchored to the joint. Ring diameter tracks
+		// the joint dot's projected on-screen size — the ring stays a
+		// consistent multiple of the dot regardless of camera zoom.
+		_positionMannequinRingAndLabel(gizmo, null, 0);
+		document.getElementById("mannequin-ring")?.classList.add("visible");
+		const _lbl = document.getElementById("gizmo-axis-label");
+		if (_lbl) { _lbl.textContent = "—"; _lbl.className = "visible"; }
+		// Standard pointer capture — cursor stays visible and follows the
+		// mouse naturally. The sticky-grab halo (28px pick radius around the
+		// last-touched joint, further down in _mannequinPickGizmo) makes it
+		// easy to re-click without hunting the small dot.
 		try { canvas.setPointerCapture(e.pointerId); } catch {}
 	}, { capture: true });
 
 	canvas.addEventListener("pointermove", (e) => {
 		if (_mannequinDrag) {
-			const dx = e.clientX - _mannequinDrag.startX;
-			const dy = e.clientY - _mannequinDrag.startY;
+			// Under Pointer Lock, movementX/Y are pure per-frame deltas. To
+			// keep drags single-axis-at-a-time WITHOUT permanently locking,
+			// each frame's motion only counts toward whichever direction is
+			// dominant THIS frame (>70% of total). Diagonal jitter → no
+			// accumulation. Users can transition freely between horizontal
+			// (axisX) and vertical (axisY) drags within a single grab —
+			// each direction still controls its own axis.
+			let mx = 0, my = 0;
+			if (document.pointerLockElement === canvas) {
+				mx = e.movementX || 0;
+				my = e.movementY || 0;
+			} else {
+				if (_mannequinDrag._fallbackStart == null) {
+					_mannequinDrag._fallbackStart = { x: e.clientX, y: e.clientY };
+					_mannequinDrag._fallbackLast = { x: e.clientX, y: e.clientY };
+				}
+				mx = e.clientX - _mannequinDrag._fallbackLast.x;
+				my = e.clientY - _mannequinDrag._fallbackLast.y;
+				_mannequinDrag._fallbackLast = { x: e.clientX, y: e.clientY };
+			}
+			const absX = Math.abs(mx);
+			const absY = Math.abs(my);
+			const total = absX + absY;
+			if (total > 0) {
+				const wX = absX / total;
+				const wY = absY / total;
+				// Only the dominant direction accumulates — 70% threshold
+				// filters out diagonals so you don't get both-axes-at-once.
+				if (wX > 0.7) _mannequinDrag.accumX += mx;
+				else if (wY > 0.7) _mannequinDrag.accumY += my;
+				// Flip to the yellow "drag" state as soon as we see real
+				// motion — signals the joint is being rotated (not just
+				// active).
+				_mannequinSetGizmoTint(_mannequinDrag.gizmo, "drag");
+			}
+			const dx = _mannequinDrag.accumX;
+			const dy = _mannequinDrag.accumY;
 			const map = _mannequinDrag.map;
 			const rest = _mannequinDrag.rest;
 			const bone = _mannequinDrag.bone;
+			// Live axis readout for the label — whichever axis has moved MOST
+			// recently (larger accumulated distance) wins the display.
+			let liveDeg = 0, liveAxis = "";
+			// Apply both axes independently from their accumulated deltas.
+			// Since diagonals don't accumulate, each axis only rotates when
+			// the user moves in a mostly-one-direction motion.
 			if (map.axisX && map.sensX) {
-				const rad = (_mannequinDrag.startSecondary + dx * map.sensX) * Math.PI / 180;
-				bone.rotation[map.axisX] = rest[map.axisX] + rad;
+				const deg = _mannequinDrag.startSecondary + dx * map.sensX;
+				bone.rotation[map.axisX] = rest[map.axisX] + deg * Math.PI / 180;
+				if (Math.abs(dx) >= Math.abs(dy) && Math.abs(dx) > 2) {
+					liveDeg = deg;
+					liveAxis = map.axisX.toUpperCase();
+				}
 			}
 			if (map.axisY && map.sensY) {
-				const rad = (_mannequinDrag.startPrimary + dy * map.sensY) * Math.PI / 180;
-				bone.rotation[map.axisY] = rest[map.axisY] + rad;
+				const deg = _mannequinDrag.startPrimary + dy * map.sensY;
+				bone.rotation[map.axisY] = rest[map.axisY] + deg * Math.PI / 180;
+				if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 2) {
+					liveDeg = deg;
+					liveAxis = map.axisY.toUpperCase();
+				}
+			}
+			// Reposition + resize the ring + label so they follow the joint
+			// (camera can be orbited mid-drag) and stay proportional to the
+			// joint dot's on-screen size.
+			_positionMannequinRingAndLabel(_mannequinDrag.gizmo, liveAxis, liveDeg);
+			const label = document.getElementById("gizmo-axis-label");
+			if (label && !liveAxis) {
+				label.textContent = "—";
+				label.className = "visible";
 			}
 			return;
 		}
@@ -15246,14 +15781,15 @@ function _mannequinClearHover() {
 		}
 		const gizmo = _mannequinPickGizmo(e.clientX, e.clientY);
 		if (gizmo) {
-			if (_mannequinHovered !== gizmo) {
-				if (_mannequinHovered) _mannequinSetGizmoTint(_mannequinHovered, false);
-				_mannequinSetGizmoTint(gizmo, true);
-				_mannequinHovered = gizmo;
-			}
+			// No color change on hover — the joint tint carries three states
+			// (idle / active / drag). Hover only flips the cursor to grab so
+			// the user knows it's clickable. Prevents hover from stomping the
+			// persistent orange "active" tint of the last-clicked joint.
 			canvas.style.cursor = "grab";
+			_mannequinHovered = gizmo;
 		} else if (_mannequinHovered) {
-			_mannequinClearHover();
+			_mannequinHovered = null;
+			if (canvas.style.cursor === "grab") canvas.style.cursor = "";
 		}
 	});
 
@@ -15271,12 +15807,29 @@ function _mannequinClearHover() {
 		_mannequinDrag = null;
 		orbit.enabled = true;
 		canvas.style.cursor = "";
-		// Clear the drag tint on the released gizmo — otherwise it sticks amber
-		// after release and a subsequent drag on a different joint leaves TWO
-		// joints tinted. If the cursor is still over it, the next pointermove
-		// re-tints it as hovered within a frame.
-		if (dragGizmo) _mannequinSetGizmoTint(dragGizmo, false);
+		document.getElementById("mannequin-cursor")?.classList.remove("visible");
+		document.getElementById("mannequin-ring")?.classList.remove("visible");
+		// Release the pointer lock — cursor reappears right where it was
+		// captured (on the joint dot) so the user can click again for
+		// another axis without moving the mouse.
+		try {
+			if (document.pointerLockElement === canvas) document.exitPointerLock();
+		} catch {}
+		// Keep the tint on the released gizmo as a "last-touched" cue so the
+		// user knows which joint they just moved. Cleared when they click a
+		// different joint (below in pointerdown) or empty space.
+		if (dragGizmo) {
+			if (_mannequinLastSelected && _mannequinLastSelected !== dragGizmo) {
+				_mannequinSetGizmoTint(_mannequinLastSelected, "idle");
+			}
+			_mannequinLastSelected = dragGizmo;
+			// Revert from yellow (drag) → orange (active persistent).
+			_mannequinSetGizmoTint(dragGizmo, "active");
+			renderKeyframeMarkers?.();
+			_syncMannequinJointRowHighlight();
+		}
 		_mannequinHovered = null;
+		document.getElementById("gizmo-axis-label")?.classList.remove("visible");
 		try { canvas.releasePointerCapture(e.pointerId); } catch {}
 		_mannequinSyncPoseJoints(wrapper);
 		_mannequinReground(wrapper);
@@ -16556,6 +17109,34 @@ function renderWorkflowCellProperties(cell) {
 			e.stopPropagation();
 			cell.values[key] = null;
 			paint();
+			saveSceneDebounced?.();
+		});
+		// Accept dragged assets from the Assets pane / render-overlay / etc.
+		// via the shared application/x-cb-asset payload — same wiring the
+		// gen-cell slots use. Was missing on workflow cells, so dragging the
+		// Blockout / Render into a Tripo slot showed a no-drop cursor.
+		slot.addEventListener("dragover", e => {
+			if (!e.dataTransfer?.types?.includes("application/x-cb-asset")) return;
+			e.preventDefault();
+			e.dataTransfer.dropEffect = "copy";
+			slot.classList.add("drop-target");
+		});
+		slot.addEventListener("dragleave", () => slot.classList.remove("drop-target"));
+		slot.addEventListener("drop", e => {
+			slot.classList.remove("drop-target");
+			const raw = e.dataTransfer?.getData("application/x-cb-asset");
+			if (!raw) return;
+			e.preventDefault();
+			let asset;
+			try { asset = JSON.parse(raw); } catch { return; }
+			if (asset.kind !== "image") {
+				window.showAlert?.("Wrong kind", "This slot only accepts images.");
+				return;
+			}
+			cell.values[key] = { url: asset.url, filename: asset.filename, kind: "image" };
+			paint();
+			slot.classList.add("just-dropped");
+			setTimeout(() => slot.classList.remove("just-dropped"), 700);
 			saveSceneDebounced?.();
 		});
 	}
@@ -17930,12 +18511,24 @@ async function runAssistantTool(tu) {
 }
 
 let assistantBusy = false;
+// Messages typed while the agent is thinking get queued here and fired in
+// order once the current run completes. Preserves the natural rhythm of
+// chat — user shouldn't have to wait for the bot to finish before typing
+// their follow-up. Silent/system sends don't queue (they're programmatic).
+const assistantQueue = [];
 async function sendAssistant(message, opts = {}) {
 	// `opts.silent` skips the "you · …" bubble and replaces it with a compact
 	// system-styled line — used for command-style actions like the Inspect
 	// button, where the user didn't type anything and doesn't want their
 	// (auto-generated) prompt to look like a chat message.
-	if (assistantBusy) return;
+	if (assistantBusy) {
+		if (opts.silent) return;  // programmatic sends don't queue
+		const text = (message ?? assistantInput.value).trim();
+		if (!text) return;
+		assistantQueue.push({ text, opts: { ...opts } });
+		assistantInput.value = "";
+		return;
+	}
 	const text = (message ?? assistantInput.value).trim();
 	if (!text) return;
 	// Slash commands run locally instead of hitting the LLM. `/clear` flushes
@@ -17975,7 +18568,13 @@ async function sendAssistant(message, opts = {}) {
 	chatAttachments = [];
 	assistantInput.value = "";
 	assistantBusy = true;
-	assistantInput.disabled = true;
+	// Input stays enabled so the user can type their next question while the
+	// agent is thinking — Enter enqueues (see the guard at the top of this
+	// function). Placeholder swaps to hint that follow-ups will queue.
+	if (!assistantInput.dataset.savedPlaceholder) {
+		assistantInput.dataset.savedPlaceholder = assistantInput.placeholder || "";
+	}
+	assistantInput.placeholder = "Agent is thinking… messages will queue until it finishes";
 	assistantStatus.textContent = "MCP · thinking";
 	assistantStatus.className = "assistant-status busy";
 	refreshChatContextChip();
@@ -18068,7 +18667,22 @@ async function sendAssistant(message, opts = {}) {
 	} finally {
 		assistantBusy = false;
 		assistantInput.disabled = false;
-		assistantInput.focus();
+		// Restore the normal placeholder now that the agent is free again.
+		if (assistantInput.dataset.savedPlaceholder !== undefined) {
+			assistantInput.placeholder = assistantInput.dataset.savedPlaceholder;
+			delete assistantInput.dataset.savedPlaceholder;
+		}
+		// Drain any queued follow-ups the user typed while the agent was
+		// thinking. Each queued message fires as its own sendAssistant call
+		// so it goes through the full flow (user bubble, agentic loop, etc).
+		if (assistantQueue.length) {
+			const next = assistantQueue.shift();
+			// Yield to the microtask queue so this finally block fully unwinds
+			// before the recursive send flips assistantBusy back on.
+			queueMicrotask(() => sendAssistant(next.text, next.opts));
+		} else {
+			assistantInput.focus();
+		}
 	}
 }
 
@@ -18789,6 +19403,57 @@ function applyPivotShift(obj, P) {
 
 let renderCamDragDist = null;
 let scaleDragStart = null;
+// Axis-letter overlay for the transform gizmo. Positioned along the active
+// axis line from the object's origin, so the letter reads as attached to the
+// axis it names rather than floating with the cursor. Updated every
+// pointermove while transform.axis is set. Handles single-axis (X/Y/Z),
+// plane-drag (XY / XZ / YZ), and screen-space axes gracefully.
+(() => {
+	const label = document.getElementById("gizmo-axis-label");
+	if (!label) return;
+	const wrap = document.getElementById("canvas-wrap");
+	function classFor(ax) {
+		if (!ax) return "";
+		if (ax === "X") return "axis-x";
+		if (ax === "Y") return "axis-y";
+		if (ax === "Z") return "axis-z";
+		return "";
+	}
+	const _axisDir = {
+		X: new THREE.Vector3(1, 0, 0),
+		Y: new THREE.Vector3(0, 1, 0),
+		Z: new THREE.Vector3(0, 0, 1),
+	};
+	function update() {
+		const ax = transform.axis;
+		if (!ax || !transform.dragging || !transform.object) {
+			if (label.classList.contains("visible")) label.classList.remove("visible");
+			return;
+		}
+		// Project a point ~0.6 units along the active axis (in world space)
+		// from the object's origin to screen. For plane-drags (XY etc), fall
+		// back to the object's own origin.
+		const origin = new THREE.Vector3();
+		transform.object.getWorldPosition(origin);
+		const dir = _axisDir[ax];
+		const anchor = origin.clone();
+		if (dir) anchor.add(dir.clone().multiplyScalar(0.6));
+		anchor.project(camera);
+		const wr = wrap.getBoundingClientRect();
+		const cv = canvas.getBoundingClientRect();
+		const sx = (anchor.x * 0.5 + 0.5) * cv.width;
+		const sy = (1 - (anchor.y * 0.5 + 0.5)) * cv.height;
+		label.style.left = (cv.left - wr.left + sx + 8) + "px";
+		label.style.top = (cv.top - wr.top + sy - 6) + "px";
+		label.textContent = ax;
+		label.className = "visible " + classFor(ax);
+	}
+	window.addEventListener("pointermove", update);
+	transform.addEventListener("dragging-changed", (ev) => {
+		if (!ev.value) label.classList.remove("visible");
+	});
+})();
+
 transform.addEventListener("mouseDown", () => {
 	// Snapshot pre-drag state so Ctrl+Z restores the object's transform from before the
 	// gizmo drag. One snapshot per gesture; objectChange fires per pixel and intentionally
@@ -22200,8 +22865,19 @@ window.addEventListener("keydown", (e) => {
 		// or the render camera when nothing (or renderCam itself) is selected.
 		// Modifier guard so Ctrl+S / Cmd+S falls through to the project-save
 		// shortcut instead of also stamping a stray keyframe.
-		if (selected && selected !== renderCam) addObjectKeyframe(selected);
-		else addKeyframe();
+		// Mannequin + active joint → key just that bone's rotation; keeps
+		// per-object transform track separate from per-joint tracks.
+		if (
+			selected?.userData?.primKind === "mannequin"
+			&& _mannequinLastSelected?.userData?._mannequinBoneName
+			&& _mannequinLastSelected.userData._mannequinWrapper === selected
+		) {
+			addJointKeyframe(selected, _mannequinLastSelected.userData._mannequinBoneName);
+		} else if (selected && selected !== renderCam) {
+			addObjectKeyframe(selected);
+		} else {
+			addKeyframe();
+		}
 	}
 	else if (e.key === "f" || e.key === "F") frameScene();
 	else if (e.key === "Home") { camera.position.set(-4, 3, -5); orbit.target.set(0, 0.5, 0); camera.up.set(0, 1, 0); camera.updateProjectionMatrix(); }
@@ -23570,10 +24246,18 @@ function applyObjectsAt(t) {
 	let touchedSelected = false;
 	for (const obj of objects) {
 		const ks = obj.userData?.keyframes;
-		if (!ks || ks.length === 0) continue;
-		const s = sampleObjectAt(obj, t);
-		if (s) {
-			applyObjectState(obj, s);
+		if (ks && ks.length > 0) {
+			const s = sampleObjectAt(obj, t);
+			if (s) {
+				applyObjectState(obj, s);
+				if (obj === selected) touchedSelected = true;
+			}
+		}
+		// Per-joint keyframes on mannequins — evaluated independently from the
+		// object-level track so a mannequin can be animated in the world AND
+		// have posed-in-place joint motion simultaneously.
+		if (obj.userData?.primKind === "mannequin" && obj.userData.jointKeyframes) {
+			applyJointKeyframesAt(obj, t);
 			if (obj === selected) touchedSelected = true;
 		}
 	}
@@ -24160,24 +24844,55 @@ function renderKeyframeMarkers() {
 		enableEase: true,
 	});
 
-	// Per-object tracks — cyan diamonds layered just below the camera row.
-	for (const obj of objects) {
-		const ks = obj.userData?.keyframes;
-		if (!Array.isArray(ks) || ks.length === 0) continue;
+	// Object-track diamonds — only the CURRENTLY selected object is shown
+	// (plus the always-visible camera track above). Prevents the timeline
+	// from crowding with every animated object's keys at once. If the user
+	// wants to see another object's keys they select it in the outliner.
+	// Also: when a mannequin joint is active, its per-joint track takes
+	// precedence over the mannequin's object-level track — user is working
+	// on the joint, so surface the joint's keys instead.
+	const _mannequinJointActive = selected?.userData?.primKind === "mannequin"
+		&& _mannequinLastSelected?.userData?._mannequinBoneName
+		&& _mannequinLastSelected.userData._mannequinWrapper === selected;
+	const _tracksForSelected = [];
+	if (_mannequinJointActive) {
+		const bn = _mannequinLastSelected.userData._mannequinBoneName;
+		const jks = selected.userData.jointKeyframes?.[bn];
+		if (Array.isArray(jks) && jks.length) {
+			_tracksForSelected.push({
+				ks: jks,
+				applyState: (k) => {
+					const bone = selected.userData._bonesByName?.get(bn);
+					if (bone && Array.isArray(k.quat)) bone.quaternion.set(k.quat[0], k.quat[1], k.quat[2], k.quat[3]);
+				},
+				sortKeys: () => jks.sort((a, b) => a.t - b.t),
+			});
+		}
+	} else if (selected) {
+		const ks = selected.userData?.keyframes;
+		if (Array.isArray(ks) && ks.length) {
+			_tracksForSelected.push({
+				ks,
+				applyState: (k) => applyObjectState(selected, k),
+				sortKeys: () => selected.userData.keyframes.sort((a, b) => a.t - b.t),
+			});
+		}
+	}
+	for (const track of _tracksForSelected) {
 		if (havePv) {
 			renderTrackOnTimeline({
-				keys: ks, parent: pvScrubEl, container: pvKeysEl,
+				keys: track.ks, parent: pvScrubEl, container: pvKeysEl,
 				lineCls: "pv-key-line", dotCls: "pv-key obj",
-				applyState: (k) => applyObjectState(obj, k),
-				sortKeys: () => obj.userData.keyframes.sort((a, b) => a.t - b.t),
+				applyState: track.applyState,
+				sortKeys: track.sortKeys,
 				enableEase: false,
 			});
 		}
 		renderTrackOnTimeline({
-			keys: ks, parent: tlScrub, container: tlKeys,
+			keys: track.ks, parent: tlScrub, container: tlKeys,
 			lineCls: "tl-key-line", dotCls: "tl-key obj",
-			applyState: (k) => applyObjectState(obj, k),
-			sortKeys: () => obj.userData.keyframes.sort((a, b) => a.t - b.t),
+			applyState: track.applyState,
+			sortKeys: track.sortKeys,
 			enableEase: true,
 		});
 	}
@@ -24280,6 +24995,71 @@ function deleteKeyframes() {
 	// off-path until the next scrub.
 	applyObjectsAt(playhead);
 	saveSceneDebounced?.();
+}
+
+// Per-joint keyframes on a mannequin. Independent from the object-level
+// keyframes track — each bone gets its own quaternion timeline stored on
+// wrapper.userData.jointKeyframes = { boneName: [{t, quat:[x,y,z,w], ease}] }.
+// The + / S handler routes here when the user has a joint marked active
+// (_mannequinLastSelected) on a selected mannequin wrapper.
+function addJointKeyframe(wrapper, boneName) {
+	if (!wrapper || !boneName) return;
+	const bone = wrapper.userData?._bonesByName?.get(boneName);
+	if (!bone) return;
+	snapshotForUndo();
+	if (!wrapper.userData.jointKeyframes) wrapper.userData.jointKeyframes = {};
+	const track = wrapper.userData.jointKeyframes[boneName] || [];
+	const t = playhead;
+	const q = bone.quaternion;
+	const others = track.filter(k => Math.abs(k.t - t) > 0.005);
+	const isBetween = others.length >= 2 && t > others[0].t && t < others[others.length - 1].t;
+	const key = {
+		t,
+		quat: [q.x, q.y, q.z, q.w],
+		ease: isBetween ? "through" : "linear",
+	};
+	others.push(key);
+	others.sort((a, b) => a.t - b.t);
+	wrapper.userData.jointKeyframes[boneName] = others;
+	justAddedKeys.add(key);
+	renderKeyframeMarkers?.();
+	saveSceneDebounced?.();
+}
+// Sample every keyframed joint on a mannequin at time t and apply the
+// interpolated quaternion. Called per-frame from applyObjectsAt so joint
+// animation plays back alongside the object-level transform track.
+function applyJointKeyframesAt(wrapper, t) {
+	const kfs = wrapper.userData?.jointKeyframes;
+	if (!kfs) return;
+	const bones = wrapper.userData?._bonesByName;
+	if (!bones) return;
+	for (const boneName of Object.keys(kfs)) {
+		const arr = kfs[boneName];
+		if (!arr || !arr.length) continue;
+		const bone = bones.get(boneName);
+		if (!bone) continue;
+		if (arr.length === 1 || t <= arr[0].t) {
+			const q = arr[0].quat;
+			bone.quaternion.set(q[0], q[1], q[2], q[3]);
+			continue;
+		}
+		if (t >= arr[arr.length - 1].t) {
+			const q = arr[arr.length - 1].quat;
+			bone.quaternion.set(q[0], q[1], q[2], q[3]);
+			continue;
+		}
+		for (let i = 0; i < arr.length - 1; i++) {
+			const a = arr[i], b = arr[i + 1];
+			if (t >= a.t && t <= b.t) {
+				const local = (t - a.t) / (b.t - a.t);
+				const eased = (easings[b.ease] || easings.linear)(local);
+				const qa = new THREE.Quaternion(a.quat[0], a.quat[1], a.quat[2], a.quat[3]);
+				const qb = new THREE.Quaternion(b.quat[0], b.quat[1], b.quat[2], b.quat[3]);
+				bone.quaternion.slerpQuaternions(qa, qb, eased);
+				break;
+			}
+		}
+	}
 }
 
 function addObjectKeyframe(obj) {
@@ -25105,6 +25885,13 @@ function serializeScene() {
 			locked: o.userData.locked || undefined,
 			notes: o.userData.notes || undefined,
 			keyframes: serializeObjectKeyframes(o),
+			// Per-joint keyframes (bone quaternion timelines) — added when a
+			// user keys individual joints on the mannequin via the S / + button
+			// with a joint active. Persisted so the pose animation survives
+			// save/reload.
+			jointKeyframes: (o.userData.jointKeyframes && Object.keys(o.userData.jointKeyframes).length)
+				? o.userData.jointKeyframes
+				: undefined,
 		})),
 		camera: {
 			position: sceneCam.position.toArray(),
@@ -25361,6 +26148,9 @@ async function deserializeScene(state, opts = {}) {
 			if (mn.notes) obj.userData.notes = mn.notes;
 			if (mn.animoflowManaged) obj.userData.animoflowManaged = true;
 			if (Array.isArray(mn.keyframes)) obj.userData.keyframes = deserializeObjectKeyframes(mn.keyframes);
+			if (mn.jointKeyframes && typeof mn.jointKeyframes === "object") {
+				obj.userData.jointKeyframes = mn.jointKeyframes;
+			}
 		}).catch(e => console.error("[mannequin] restore failed:", e));
 	}
 

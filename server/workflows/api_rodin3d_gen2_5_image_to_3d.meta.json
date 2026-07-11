@@ -1,6 +1,6 @@
 {
-  "id": "tripo_p1_i2m_cloud",
-  "label": "Tripo P1 \u00b7 I2M",
+  "id": "api_rodin3d_gen2_5_image_to_3d",
+  "label": "Rodin Gen2.5 \u00b7 I2M",
   "kind": "3d",
   "output_ext": "glb",
   "runner": "cloud",
@@ -9,8 +9,7 @@
       "name": "image",
       "type": "scene-image",
       "patch": {
-        "node_id": 45,
-        "widget_index": 0,
+        "node_id": "2",
         "widget_name": "image"
       }
     }

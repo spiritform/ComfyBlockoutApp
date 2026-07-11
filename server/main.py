@@ -2577,6 +2577,7 @@ async def run_module(module_id: str, request: Request):
         if cam_bits:
             lines.append("Camera: " + "; ".join(cam_bits) + ".")
         checker_objs = []
+        mannequin_objs = []
         for o in objs:
             name = o.get("name") or "?"
             kind = o.get("kind") or "object"
@@ -2590,12 +2591,15 @@ async def run_module(module_id: str, request: Request):
             notes = o.get("notes")
             notes_note = f" — notes: {notes}" if notes else ""
             checker_note = " — the checkerboard on this surface is a reference GRID (perspective / vanishing points only); completely disregard the black-and-white texture in the output" if o.get("checker") else ""
+            mannequin_note = " — mannequin: loose placement/scale reference for a human figure; treat the pose as approximate guidance, not a strict pose lock" if kind == "mannequin" else ""
             lines.append(
                 f"- {name} ({color} {kind}): centered at x={x}% y={y}% "
-                f"of frame, occupies ~{w}%×{h}% of frame{ref_note}{notes_note}{checker_note}"
+                f"of frame, occupies ~{w}%×{h}% of frame{ref_note}{notes_note}{checker_note}{mannequin_note}"
             )
             if o.get("checker"):
                 checker_objs.append(name)
+            if kind == "mannequin":
+                mannequin_objs.append(name)
         if checker_objs:
             names = ", ".join(checker_objs)
             lines.append(
@@ -2606,6 +2610,21 @@ async def run_module(module_id: str, request: Request):
                 "render the scene described in the user prompt exactly "
                 "adhering to these perspective lines, proportions, and "
                 "spatial arrangements."
+            )
+        if mannequin_objs:
+            names = ", ".join(mannequin_objs)
+            lines.append(
+                f"MANNEQUIN(S) — {names}: Any mannequin figures in image 1 are "
+                "loose STRUCTURAL and PLACEMENT references only. Use them to "
+                "understand where a human character sits in the scene, at what "
+                "scale, and their approximate orientation — but treat the pose "
+                "as APPROXIMATE guidance, not a strict pose lock. The final "
+                "character can move naturally into a more expressive, realistic "
+                "pose that fits the user prompt and scene context, as long as "
+                "the general placement and size in the frame are respected. "
+                "Do NOT render the mannequin's flat grey blocky body, joint "
+                "spheres, or stiff articulated look — replace it with the "
+                "human subject described in the user prompt."
             )
         lines.append(
             "Use the screen-space %s above as the exact pixel footprint for each "

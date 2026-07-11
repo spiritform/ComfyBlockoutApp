@@ -138,63 +138,118 @@ async def _submit_wait_download(
         if not prompt_id:
             raise RuntimeError(f"couldn't parse prompt_id from `comfy run`. First 500 chars: {out[:500]}")
 
-        code, out, err = await run_cli([
-            comfy_bin(), "--json", "jobs", "wait", prompt_id,
-            "--poll-interval", "5",
-            "--timeout", "1500",
-            *WHERE_CLOUD,
-        ], timeout=1600)
-        env = _parse_envelope(out)
-        if code != 0 or not env or not env.get("ok"):
-            detail = (env or {}).get("error") if env else None
-            raise RuntimeError(f"comfy jobs wait failed (rc={code}): {detail or err.strip() or out.strip()[:800]}")
-
-        scratch = Path(tempfile.mkdtemp(prefix=f"{module_id}_"))
-        # Track when the job started so a fallback scan of the local `output/`
-        # folder can tell fresh files from stale ones. 30s pad for clock drift.
+        # Job started NOW — anything freshly landing in output/ from this point
+        # forward is our artifact. 30s pad for clock drift. Kept here so the
+        # parallel output-poller below has a floor to compare mtimes against.
         job_start = time.time() - 30
+        scratch = Path(tempfile.mkdtemp(prefix=f"{module_id}_"))
+
+        # Race `comfy jobs wait` against a local output/ poller. The Comfy CLI
+        # auto-syncs cloud artifacts to output/ DURING jobs wait — but a hung
+        # or misbehaving jobs-wait process (seen with some cloud partner nodes
+        # when the API's job-status endpoint stalls) would otherwise keep the
+        # coroutine blocked indefinitely, even after the file is already sitting
+        # in output/. This gives whichever finishes first the win.
+        async def _wait_for_output_file() -> str:
+            while True:
+                for ext in output_exts:
+                    for p in data_dir.rglob(f"*.{ext}"):
+                        try:
+                            if p.stat().st_mtime >= job_start:
+                                return "output_synced"
+                        except OSError:
+                            continue
+                await asyncio.sleep(5)
+
+        async def _run_jobs_wait() -> str:
+            code_, out_, err_ = await run_cli([
+                comfy_bin(), "--json", "jobs", "wait", prompt_id,
+                "--poll-interval", "5",
+                "--timeout", "1500",
+                *WHERE_CLOUD,
+            ], timeout=1600)
+            env_ = _parse_envelope(out_)
+            if code_ != 0 or not env_ or not env_.get("ok"):
+                detail_ = (env_ or {}).get("error") if env_ else None
+                raise RuntimeError(f"comfy jobs wait failed (rc={code_}): {detail_ or err_.strip() or out_.strip()[:800]}")
+            return "jobs_wait_ok"
+
+        wait_task = asyncio.create_task(_run_jobs_wait())
+        poll_task = asyncio.create_task(_wait_for_output_file())
+        done, pending = await asyncio.wait(
+            {wait_task, poll_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for t in pending:
+            t.cancel()
+        # If jobs_wait raised, surface it — bad workflow / auth / etc.
+        for t in done:
+            exc = t.exception()
+            if exc is not None:
+                raise exc
+        # Either the CLI finished waiting OR the poller spotted a fresh file
+        # on disk — both proceed the same way, running the pre-scan and (if
+        # needed) the download retry loop. The parallel race is just a hedge
+        # against a hung jobs-wait; we never skip the download attempt.
+
+        # Helper: scan local output/ for anything freshly landed by
+        # `jobs wait`'s auto-sync — Comfy CLI often drops the file there
+        # before `comfy download` acknowledges any output exists. Short-
+        # circuits the retry loop entirely when it hits, which is common
+        # for cloud partner nodes that complete before their asset store
+        # finalizes.
+        def _scan_output_dir() -> list[Path]:
+            found: list[Path] = []
+            for ext in output_exts:
+                for p in data_dir.rglob(f"*.{ext}"):
+                    try:
+                        if p.stat().st_mtime >= job_start:
+                            found.append(p)
+                    except OSError:
+                        continue
+            return found
+
         # Meshy + other partner-API 3D nodes fire the job-success signal from
         # the Cloud side BEFORE their asset store finishes indexing the file —
         # `comfy download` hits `download_no_outputs` for 30-60s after the job
         # completes. Pre-sleep 15s to skip the first wave of doomed retries,
         # then a longer patience budget (20 attempts × up to 30s = ~5min max).
-        await asyncio.sleep(15)
+        candidates: list[Path] = _scan_output_dir()
         last_env = None
-        for attempt in range(20):
-            code, out, err = await run_cli([
-                comfy_bin(), "--json", "download", prompt_id,
-                "-o", str(scratch),
-                *WHERE_CLOUD,
-            ], timeout=300)
-            last_env = _parse_envelope(out)
-            if code == 0 and last_env and last_env.get("ok"):
-                break
-            err_code = ((last_env or {}).get("error") or {}).get("code")
-            if err_code != "download_no_outputs":
-                detail = (last_env or {}).get("error") if last_env else None
-                raise RuntimeError(f"comfy download failed (rc={code}): {detail or err.strip() or out.strip()[:800]}")
-            await asyncio.sleep(min(5 + attempt * 3, 30))
+        if not candidates:
+            await asyncio.sleep(15)
+            candidates = _scan_output_dir()
+        if not candidates:
+            for attempt in range(20):
+                code, out, err = await run_cli([
+                    comfy_bin(), "--json", "download", prompt_id,
+                    "-o", str(scratch),
+                    *WHERE_CLOUD,
+                ], timeout=300)
+                last_env = _parse_envelope(out)
+                if code == 0 and last_env and last_env.get("ok"):
+                    break
+                # Even when download says "no_outputs", the fallback might
+                # already have the file — re-check between retries so a
+                # late-arriving `jobs wait` sync short-circuits us out.
+                fresh = _scan_output_dir()
+                if fresh:
+                    candidates = fresh
+                    break
+                err_code = ((last_env or {}).get("error") or {}).get("code")
+                if err_code != "download_no_outputs":
+                    detail = (last_env or {}).get("error") if last_env else None
+                    raise RuntimeError(f"comfy download failed (rc={code}): {detail or err.strip() or out.strip()[:800]}")
+                await asyncio.sleep(min(5 + attempt * 3, 30))
 
         # Look under scratch first (what `comfy download -o` was told to use).
-        candidates: list[Path] = []
-        for ext in output_exts:
-            candidates.extend(scratch.rglob(f"*.{ext}"))
-        # Fallback: scan the local `output/` folder for files created since
-        # the job started. Comfy CLI auto-syncs cloud outputs there during
-        # `jobs wait` — happens INDEPENDENTLY of our explicit `comfy download`
-        # call, so even when `download` reports `no_outputs` (a known Cloud
-        # API race) the file may already be sitting in ./output. Meshy jobs
-        # in particular hit this because their outputs finalize AFTER the
-        # job status flips to success.
         if not candidates:
-            fallback_root = data_dir
             for ext in output_exts:
-                for p in fallback_root.rglob(f"*.{ext}"):
-                    try:
-                        if p.stat().st_mtime >= job_start:
-                            candidates.append(p)
-                    except OSError:
-                        continue
+                candidates.extend(scratch.rglob(f"*.{ext}"))
+        # Final fallback: scan output/ once more in case the download call
+        # succeeded but wrote directly to output/ instead of scratch.
+        if not candidates:
+            candidates = _scan_output_dir()
         if not candidates:
             raise RuntimeError(f"no output matching {output_exts} found under {scratch} or fresh in {data_dir}")
         src = max(candidates, key=lambda p: p.stat().st_mtime)

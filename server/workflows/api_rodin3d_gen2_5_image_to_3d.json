@@ -1,0 +1,54 @@
+{
+  "1": {
+    "inputs": {
+      "images.image0": [
+        "2",
+        0
+      ],
+      "mode": "Regular",
+      "mode.tier": "Gen-2.5-High",
+      "mode.polygon_count": "Default",
+      "mode.creative": false,
+      "material": "Shaded",
+      "geometry_file_format": "glb",
+      "texture_mode": "Default",
+      "seed": 0,
+      "TAPose": false,
+      "hd_texture": false,
+      "texture_delight": false,
+      "use_original_alpha": false,
+      "addon_highpack": false,
+      "bbox_width": 0,
+      "bbox_height": 0,
+      "bbox_length": 0,
+      "height_cm": 0
+    },
+    "class_type": "Rodin3D_Gen25_Image",
+    "_meta": {
+      "title": "Rodin 3D Gen-2.5 - Image to 3D"
+    }
+  },
+  "2": {
+    "inputs": {
+      "image": "input.png",
+      "upload": "image"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "3": {
+    "inputs": {
+      "filename_prefix": "3d/Rodin3d_gen2.5",
+      "mesh": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "SaveGLB",
+    "_meta": {
+      "title": "Save 3D Model"
+    }
+  }
+}

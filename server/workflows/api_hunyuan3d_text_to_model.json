@@ -1,0 +1,70 @@
+{
+  "2": {
+    "inputs": {
+      "model": "3.1",
+      "prompt": "A full-body muscular barbarian warrior, strong physique, bearded, tribal tattoos on shoulders and arms, fur shoulder pads, leather armbands, reddish loincloth, large battle axe in hand, realistic fantasy character, studio lighting.\n",
+      "face_count": 500000,
+      "generate_type": "Normal",
+      "generate_type.pbr": false,
+      "seed": 2127907248
+    },
+    "class_type": "TencentTextToModelNode",
+    "_meta": {
+      "title": "Hunyuan3D: Text to Model"
+    }
+  },
+  "6": {
+    "inputs": {
+      "model_file": [
+        "2",
+        0
+      ],
+      "image": ""
+    },
+    "class_type": "Preview3D",
+    "_meta": {
+      "title": "Preview 3D & Animation"
+    }
+  },
+  "7": {
+    "inputs": {
+      "filename_prefix": "3d/hunyuan3d_text2model",
+      "image": "",
+      "mesh": [
+        "2",
+        1
+      ]
+    },
+    "class_type": "SaveGLB",
+    "_meta": {
+      "title": "Save 3D Model"
+    }
+  },
+  "8": {
+    "inputs": {
+      "filename_prefix": "3d/hunyuan3d_text2model",
+      "image": "",
+      "mesh": [
+        "2",
+        2
+      ]
+    },
+    "class_type": "SaveGLB",
+    "_meta": {
+      "title": "Save 3D Model"
+    }
+  },
+  "9": {
+    "inputs": {
+      "filename_prefix": "3d/hunyuan3d_text2model_texture",
+      "images": [
+        "2",
+        3
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  }
+}
