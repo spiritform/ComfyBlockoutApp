@@ -781,7 +781,7 @@
 
 	#panel {
 		position: relative; z-index: 100;
-		flex: 0 0 295px; height: 100%;
+		flex: 0 0 320px; height: 100%;
 		background: #131318;
 		overflow: hidden;
 		display: flex; flex-direction: column;
@@ -805,6 +805,12 @@
 		overflow-y: auto; overflow-x: hidden;
 		padding: 0 20px calc(var(--lp-agent-h) + 28px);
 		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+		/* Reserve scrollbar gutter on the right so content doesn't shift left
+		   when overflow toggles on/off — but keep the left edge flush against
+		   #lp-zone-top-header's OBJECTS label (which sits outside this scroll
+		   container). Both-edges would center content but misalign it against
+		   the fixed header above. */
+		scrollbar-gutter: stable;
 	}
 	#lp-zone-top-body::-webkit-scrollbar { width: 4px; }
 	#lp-zone-top-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
@@ -999,12 +1005,16 @@
 	.mini-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 	.mini-btn:disabled:hover { background: transparent; color: rgba(255,255,255,0.4); }
 	/* Square icon variant — an inline-flex box sized for a 14px SVG glyph
-	   instead of text. Used by the outliner's Hide/Show all toggle. */
+	   instead of text. Used by the outliner's Hide/Show all toggle.
+	   No fill background — glyph reads as an icon-only toolbar action,
+	   consistent with the per-row lock/vis/expand icons below. Background
+	   only lights up on hover to signal interactivity. */
 	.mini-btn.outliner-eye-btn {
 		padding: 0; width: 22px; height: 22px;
+		background: transparent;
 		display: inline-flex; align-items: center; justify-content: center;
 	}
-	.mini-btn.outliner-eye-btn:hover { background: rgba(255,255,255,0.1); color: #e6e6ea; }
+	.mini-btn.outliner-eye-btn:hover { background: transparent; color: #e6e6ea; }
 	.mini-btn.outliner-eye-btn svg { width: 14px; height: 14px; }
 	/* "+ Add" variant of mini-btn — same chip shape as Clear but orange tint
 	   on hover to signal an additive action instead of a destructive one. */
@@ -1902,10 +1912,10 @@
 	   surface but per-object image refs are still one click away. */
 	.out-row .out-color { width: 12px; height: 12px; border-radius: 3px; }
 	.out-row .out-name { font-size: 10px; }
-	.out-row .out-vis { width: 18px; height: 18px; font-size: 10px; }
-	.out-row .out-lock { width: 18px; height: 18px; }
-	.out-lock svg { width: 10px; height: 10px; }
-	.out-row .out-expand-toggle { width: 18px; height: 18px; font-size: 12px; }
+	.out-row .out-vis { width: 22px; height: 22px; font-size: 12px; }
+	.out-row .out-lock { width: 22px; height: 22px; }
+	.out-lock svg { width: 12px; height: 12px; }
+	.out-row .out-expand-toggle { width: 22px; height: 22px; font-size: 18px; }
 	/* Expand panel — image slot (square) sits left of the prompt textarea,
 	   aligned to the top so a taller prompt doesn't stretch the slot. */
 	.out-row .out-expand { flex-direction: row; align-items: flex-start; gap: 8px; }
@@ -1936,7 +1946,7 @@
 		width: 22px; height: 22px; border: none; background: transparent;
 		border-radius: 4px; cursor: pointer; color: rgba(255,255,255,0.4);
 		display: flex; align-items: center; justify-content: center;
-		font-size: 14px; line-height: 1; transition: transform 0.15s ease;
+		font-size: 14px; line-height: 1;
 	}
 	.out-expand-toggle:hover { background: rgba(255,255,255,0.06); color: #e6e6ea; }
 	.out-row.expanded .out-expand-toggle { transform: rotate(180deg); color: #ffb454; }
@@ -2991,7 +3001,7 @@
 	/* Right properties panel */
 	#right-panel {
 		position: relative; z-index: 100;
-		flex: 0 0 295px; height: 100%;
+		flex: 0 0 320px; height: 100%;
 		background: #131318;
 		overflow: hidden; display: flex; flex-direction: column;
 		/* --rp-top-basis is set by the split-handle drag logic and persisted
@@ -3046,6 +3056,11 @@
 		   Top padding reduced 16 → 10 to lift the rows closer to the header. */
 		padding: 10px 12px 12px;
 		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+		/* Right-side gutter only — content stays flush-left with the
+		   OUTLINER label in #rp-zone-top-header above (which sits outside
+		   this scroll container). Both-edges would center rows and misalign
+		   them against the fixed header. */
+		scrollbar-gutter: stable;
 	}
 	#rp-pane-outliner .out-row {
 		padding-left: 8px;
@@ -3236,6 +3251,9 @@
 		overflow-y: auto; overflow-x: hidden;
 		padding: 16px 20px 28px;
 		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+		/* Right-side gutter only — keeps rows/labels flush-left instead of
+		   center-shifted, matching Outliner + left-panel behavior. */
+		scrollbar-gutter: stable;
 	}
 	#rp-body::-webkit-scrollbar { width: 4px; }
 	#rp-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
@@ -3741,7 +3759,7 @@
 		</div>
 		<div id="tl-rec-status" hidden></div>
 		<div id="timeline">
-			<span id="tl-time">0.00s / 4.00s</span>
+			<span id="tl-time">0.0s / 4.0s</span>
 			<button class="tl-btn rec" id="tl-rec" title="Record (auto-tween if keyframes exist)">●</button>
 			<button class="tl-btn" id="tl-play" title="Play / stop (space)" data-play-glyph="▶" data-pause-glyph="⏹">⏹</button>
 			<button class="tl-btn" id="tl-loop" title="Loop playback — restart at trim start when the playhead hits the end">↻</button>
@@ -4464,7 +4482,7 @@
 					     Layout intentionally mirrors gen-cells so the pattern is
 					     recognizable. -->
 					<div class="bg-cells" id="bg-cells">
-						<div class="bg-cell" data-bgmode="color">
+						<div class="bg-cell collapsed" data-bgmode="color">
 							<div class="bg-cell-head">
 								<span class="bg-cell-thumb" id="bg-color-swatch" style="background:#000000"></span>
 								<span class="bg-cell-label">Color</span>
@@ -6230,7 +6248,7 @@ const gridMat = new THREE.ShaderMaterial({
 			col = mix(col, uMajorColor, major);
 			a = max(a, major * 1.6);
 			col = mix(col, uAxisColor, max(axisX, axisZ));
-			a = max(a, max(axisX, axisZ) * 2.2);
+			a = max(a, max(axisX, axisZ) * 0.6);
 
 			gl_FragColor = vec4(col, a * uBaseOpacity * fade);
 		}
@@ -9206,10 +9224,10 @@ applyAssistantEnablement();
 	// handle all the way to the top and give Properties the full column
 	// (matches the AI Agent zone's drag-collapse-to-header behavior).
 	const OUTLINER_MIN_PX = 40;
-	// Properties has to keep enough room for header + at least a section or
-	// two — 40px (header-only) leaves it as a dead strip. 240 keeps the
-	// Appearance/Transform rows on-screen even when Outliner is fully open.
-	const PROPS_MIN_PX = 240;
+	// Properties mirrors Outliner's collapse — it can shrink to a 40px header
+	// strip sitting right above the transport, giving Outliner the full column
+	// when the user is arranging the scene and doesn't need per-object edits.
+	const PROPS_MIN_PX = 40;
 	// Release-glide inertia — track velocity during drag, animate a short
 	// easeOut glide on release if the user was moving fast. Precise slow
 	// drops (velocity ≈ 0) land exactly where the mouse was let go; quick
@@ -21302,11 +21320,18 @@ document.getElementById("cam-reset").addEventListener("click", () => {
 	try { snapshotForUndo(); } catch {}
 	suppressSliderSync = true;
 	try {
-		camera.position.set(-4, 3, -5);
-		orbit.target.set(0, 0.5, 0);
-		camera.up.set(0, 1, 0);
-		camera.fov = 55;
-		camera.updateProjectionMatrix();
+		// Always reset the RENDER camera specifically — this button lives on the
+		// Camera row in the Outliner and represents that render cam. Using the
+		// `camera` live binding would clobber whichever view is active, so a
+		// Reset from Scene view would blast the user's free-orbit perspective
+		// too. Only sync orbit.target when the render cam is the active view.
+		renderCam.position.set(-4, 3, -5);
+		renderCamTarget.set(0, 0.5, 0);
+		renderCam.up.set(0, 1, 0);
+		renderCam.fov = 55;
+		renderCam.lookAt(renderCamTarget);
+		renderCam.updateProjectionMatrix();
+		if (activeView === "camera") orbit.target.copy(renderCamTarget);
 		fovSlider.value = 55;
 		document.getElementById("fov-val").textContent = "55°";
 		orbit.update();
@@ -21337,24 +21362,29 @@ gridToggle.addEventListener("click", () => {
 	saveScene?.();
 });
 
-// Grid opacity — workspace-level preference. Restore on boot, drive
-// grid.material.opacity on input, persist on release. Default 11% matches
-// the historical bake-in value so nothing visually changes for existing users.
+// Grid opacity — workspace-level preference. Drives the shader grid's
+// uBaseOpacity uniform (the old GridHelper's `material.opacity` is gone
+// with the shader-based ground plane). Default 11% matches the historical
+// bake-in value so nothing visually changes for existing users.
 const CB_GRID_OPACITY_KEY = "cb.workspace.gridOpacity";
 const gridOpacityInput = document.getElementById("grid-opacity");
 const gridOpacityVal = document.getElementById("grid-opacity-val");
+const _setGridOpacity = (frac) => {
+	const u = grid.material?.uniforms?.uBaseOpacity;
+	if (u) u.value = frac;
+};
 try {
 	const saved = localStorage.getItem(CB_GRID_OPACITY_KEY);
 	if (saved !== null) {
 		const v = Math.max(0, Math.min(100, parseInt(saved, 10) || 0));
-		grid.material.opacity = v / 100;
+		_setGridOpacity(v / 100);
 		if (gridOpacityInput) gridOpacityInput.value = String(v);
 		if (gridOpacityVal) gridOpacityVal.textContent = String(v);
 	}
 } catch {}
 gridOpacityInput?.addEventListener("input", (e) => {
 	const v = parseInt(e.target.value, 10) || 0;
-	grid.material.opacity = v / 100;
+	_setGridOpacity(v / 100);
 	if (gridOpacityVal) gridOpacityVal.textContent = String(v);
 });
 gridOpacityInput?.addEventListener("change", (e) => {
@@ -24553,7 +24583,7 @@ function refreshAnimPaths() {
 			}
 			const lg = new THREE.BufferGeometry().setFromPoints(pts);
 			const lm = new THREE.LineBasicMaterial({
-				color: colorHex, transparent: true, opacity: 0.6, depthTest: false,
+				color: 0xffffff, transparent: true, opacity: 0.2, depthTest: false,
 			});
 			const line = new THREE.Line(lg, lm);
 			line.renderOrder = 999;
@@ -24561,12 +24591,12 @@ function refreshAnimPaths() {
 		}
 
 		// Square dots at each keyframe position — 2D screen-space size (no
-		// perspective shrink). Neutral light-grey so the dots read brighter
-		// than the tinted path line (visual hierarchy: dots = focal points,
-		// line = connecting geometry).
+		// perspective shrink). Colored to match the timeline diamond for the
+		// same track: object keys render as cyan/blue (`.tl-key.obj` #4dc4ff)
+		// so the viewport dot and its timeline counterpart read as one thing.
 		const pg = new THREE.BufferGeometry().setFromPoints(ks.map(k => k.pos));
 		const pm = new THREE.PointsMaterial({
-			color: 0xd0d0d8, size: 7, sizeAttenuation: false,
+			color: 0x4dc4ff, size: 7, sizeAttenuation: false,
 			transparent: true, opacity: 0.95, depthTest: false,
 		});
 		const points = new THREE.Points(pg, pm);
@@ -24602,17 +24632,19 @@ function refreshAnimPaths() {
 			}
 			const clg = new THREE.BufferGeometry().setFromPoints(cpts);
 			const clm = new THREE.LineBasicMaterial({
-				color: 0xcccdd2, transparent: true, opacity: 0.6, depthTest: false,
+				color: 0xffffff, transparent: true, opacity: 0.2, depthTest: false,
 			});
 			const cline = new THREE.Line(clg, clm);
 			cline.renderOrder = 999;
 			animPathsGroup.add(cline);
 		}
 		// Dot at every key (including through) so the user can grab any of them
-		// to move them around — same neutral grey as object path dots.
+		// to move them around — green to match the timeline camera keys
+		// (`.tl-key` #38d977). Convention: viewport keyframe dots share color
+		// with their timeline diamond so track membership reads at a glance.
 		const cpg = new THREE.BufferGeometry().setFromPoints(keyframes.map(k => k.pos));
 		const cpm = new THREE.PointsMaterial({
-			color: 0xd0d0d8, size: 7, sizeAttenuation: false,
+			color: 0x38d977, size: 7, sizeAttenuation: false,
 			transparent: true, opacity: 0.95, depthTest: false,
 		});
 		const cpoints = new THREE.Points(cpg, cpm);
@@ -24713,7 +24745,10 @@ function setPlayhead(t) {
 		: (playhead >= trimEnd - gap * 1.5 ? trimEnd : playhead);
 	// Format as compact seconds — drop trailing zeros so 0 → "0s", 4 → "4s",
 	// 2.5 → "2.5s". Reads cleaner than "0.00s / 4.00s" for a status label.
-	const fmtSec = (v) => (Math.abs(v - Math.round(v)) < 0.05 ? `${Math.round(v)}s` : `${v.toFixed(1)}s`);
+	// Always 1 decimal so character count never changes — otherwise the
+	// timecode shifts left/right as time crosses whole-second boundaries
+	// (0.5s → 1s dropped from 4 chars to 2 and jerked the layout).
+	const fmtSec = (v) => `${v.toFixed(1)}s`;
 	tlTime.textContent = `${fmtSec(displayNorm * dur)} / ${fmtSec(dur)}`;
 	// Animated objects (with their own keyframes) follow the playhead automatically.
 	// No-op for objects without keys, so this is free for static scenes.
@@ -26252,6 +26287,11 @@ async function deserializeScene(state, opts = {}) {
 		mesh.position.fromArray(p.position);
 		mesh.rotation.set(p.rotation[0], p.rotation[1], p.rotation[2]);
 		mesh.scale.fromArray(p.scale);
+		// Re-stash the initial transform now that the serialized position is
+		// applied — otherwise Reset would snap back to (0,0,0) from addPrimitive,
+		// which drops seeded cubes below the floor plane. Matches how imports
+		// stash their load-time transform (registerImported → stashInitialTransform).
+		stashInitialTransform(mesh);
 		if (p.color !== undefined) mesh.material.color.setHex(p.color);
 		if (p.doubleSided) {
 			mesh.material.side = THREE.DoubleSide;
