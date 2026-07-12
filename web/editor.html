@@ -4781,7 +4781,7 @@
 						<input type="range" id="obj-annotation-opacity" min="0" max="1" step="0.01" value="1">
 						<span class="slider-val" id="obj-annotation-opacity-val">1.00</span>
 					</div>
-					<div class="hint" id="obj-annotation-count" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5);line-height:1.5">Empty — hold Shift and drag to draw. Camera controls stay unblocked when Shift isn't held.</div>
+					<div class="hint" id="obj-annotation-count" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5);line-height:1.5">Empty — hold <strong>Ctrl</strong> (or Cmd) and drag to draw. Camera controls stay unblocked when Ctrl isn't held.</div>
 				</div>
 				<!-- TripoSplat representation toggle — appears on TripoSplat
 				     results (splat OR resampled points with the pcResult flag
@@ -11980,7 +11980,7 @@ function runTool(kind) {
 const _annotateMode = {
 	active: false,              // annotate tool armed (tile is .active)
 	drawing: false,             // true between pointerdown and pointerup
-	shiftHeld: false,           // key tracker so we can swap cursor on keydown/up
+	ctrlHeld: false,           // Ctrl (or Meta on Mac) tracker for cursor swap
 	plane: null,                // THREE.Plane the current stroke is glued to
 	worldOrigin: null,          // hit point (or ray * dist) used as stroke start
 	pointsWorld: [],            // Vector3[] appended per mousemove (freehand)
@@ -12062,7 +12062,7 @@ function _setAnnotateMode(on) {
 	_annotateSyncCursor();
 	if (typeof updateStatus === "function") {
 		updateStatus(_annotateMode.active
-			? "Annotate — hold Shift + LMB to draw · plain drag/RMB orbits/pans as usual · Esc exits"
+			? "Annotate — hold Ctrl (Cmd) + LMB to draw · plain drag/RMB orbits/pans as usual · Esc exits"
 			: "Annotate mode off");
 	}
 	if (_annotateMode.active) {
@@ -12077,39 +12077,42 @@ function _setAnnotateMode(on) {
 		_annotatePruneEmptyContainer();
 	}
 }
-// Swap cursor between crosshair (Shift held → next drag will paint) and the
+// Swap cursor between crosshair (Ctrl held → next drag will paint) and the
 // default arrow (plain drag will orbit). Called from the keydown/up trackers
 // and from _setAnnotateMode. Only affects the viewport canvas wrap.
 function _annotateSyncCursor() {
 	const cw = document.getElementById("canvas-wrap");
 	if (!cw) return;
-	cw.style.cursor = (_annotateMode.active && _annotateMode.shiftHeld) ? "crosshair" : "";
+	cw.style.cursor = (_annotateMode.active && _annotateMode.ctrlHeld) ? "crosshair" : "";
 }
 // Esc exits draw mode — matches the "second click = off" toggle so users
-// have two ways out. Shift key just flips the cursor so the user gets a
-// visual cue that a Shift+drag will paint (vs a plain drag which orbits).
+// have two ways out. Ctrl / Meta (Cmd on Mac) flips the cursor so the user
+// gets a visual cue that a Ctrl+drag will paint (vs a plain drag which
+// orbits). We use Ctrl instead of Shift because three.js OrbitControls
+// treats Shift+LMB as a pan gesture and steals the event before our
+// capture-phase handler can intercept.
 window.addEventListener("keydown", (e) => {
 	if (e.key === "Escape" && _annotateMode.active) {
 		e.preventDefault();
 		_setAnnotateMode(false);
 		return;
 	}
-	if (e.key === "Shift" && _annotateMode.active && !_annotateMode.shiftHeld) {
-		_annotateMode.shiftHeld = true;
+	if ((e.key === "Control" || e.key === "Meta") && _annotateMode.active && !_annotateMode.ctrlHeld) {
+		_annotateMode.ctrlHeld = true;
 		_annotateSyncCursor();
 	}
 });
 window.addEventListener("keyup", (e) => {
-	if (e.key === "Shift" && _annotateMode.shiftHeld) {
-		_annotateMode.shiftHeld = false;
+	if ((e.key === "Control" || e.key === "Meta") && _annotateMode.ctrlHeld) {
+		_annotateMode.ctrlHeld = false;
 		_annotateSyncCursor();
 	}
 });
-// Window blur (Alt-tab) can strip a Shift keyup — reset so the cursor
+// Window blur (Alt-tab) can strip a Ctrl keyup — reset so the cursor
 // doesn't stay stuck on crosshair after the user swaps apps.
 window.addEventListener("blur", () => {
-	if (_annotateMode.shiftHeld) {
-		_annotateMode.shiftHeld = false;
+	if (_annotateMode.ctrlHeld) {
+		_annotateMode.ctrlHeld = false;
 		_annotateSyncCursor();
 	}
 });
@@ -12510,20 +12513,20 @@ window.addEventListener("resize", () => {
 });
 
 // Capture-phase pointer handlers — install BEFORE the existing viewport
-// pointerdown / pointerup handlers see the event. Painting is Shift-gated:
-// plain LMB drag still orbits (no intercept), so camera reframing between
-// strokes is friction-free. This is the "hold Shift to draw" UX the user
-// asked for. Non-shift / non-LMB / gizmo-axis all pass through unmodified.
+// pointerdown / pointerup handlers see the event. Painting is Ctrl-gated
+// (Cmd on Mac): plain LMB drag still orbits (no intercept), so camera
+// reframing between strokes is friction-free. We use Ctrl instead of Shift
+// because three.js OrbitControls binds Shift+LMB to PAN internally — it
+// steals the gesture before our capture-phase handler even runs.
 canvas.addEventListener("pointerdown", (e) => {
 	if (!_annotateMode.active) return;
-	// Painting requires plain LMB + Shift held. Every other combo (no Shift,
-	// RMB, MMB, Alt/Ctrl+LMB) passes through so orbit / pan / dolly / altCam
-	// all work uninterrupted. This inverts the earlier "always intercepts
-	// LMB" — camera control is now the DEFAULT during annotate mode.
-	if (e.button !== 0 || !e.shiftKey || e.altKey || e.ctrlKey || e.metaKey) return;
+	// Painting requires LMB + Ctrl/Meta held. Every other combo (no Ctrl,
+	// RMB, MMB, Alt+LMB, Shift+LMB) passes through so orbit / pan / dolly /
+	// altCam all work uninterrupted.
+	if (e.button !== 0 || !(e.ctrlKey || e.metaKey) || e.altKey) return;
 	// Gizmo priority — if the pointer is over a TransformControls axis handle,
 	// yield the click so grabbing the gizmo still moves/rotates/scales the
-	// current selection even while Shift is held.
+	// current selection even while Ctrl is held.
 	if (transform?.axis) return;
 	// Text tool — click-to-place with an inline HTML input (no browser prompt
 	// modal). Raycasts to find placement, opens a small floating <input>
@@ -12719,8 +12722,8 @@ function _annotationSyncPaneFromSelection(group) {
 		const kids = group.children || [];
 		const n = kids.filter(c => c.userData?._isAnnotationLine || c.userData?._isAnnotationText).length;
 		countEl.textContent = n === 0
-			? "Empty — hold Shift and drag to draw. Camera controls stay unblocked when Shift isn't held."
-			: `${n} element${n === 1 ? "" : "s"} — hold Shift and drag to add more. Plain drag orbits.`;
+			? "Empty — hold Ctrl (Cmd) and drag to draw. Camera controls stay unblocked when Ctrl isn't held."
+			: `${n} element${n === 1 ? "" : "s"} — hold Ctrl (Cmd) and drag to add more. Plain drag orbits.`;
 	}
 }
 // Push current _annotateMode defaults into the Annotate tool pane's controls.
