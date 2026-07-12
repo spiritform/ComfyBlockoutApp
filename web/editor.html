@@ -372,6 +372,46 @@
 	}
 	.modal-status.success { display: block; background: rgba(56,217,119,0.12); color: #5ce594; }
 	.modal-status.error { display: block; background: rgba(255,90,90,0.12); color: #ff8a8a; }
+	/* MCP servers list — one row per registered server. Compact, matches the
+	   dense modal density; enable toggle on the right, × removes. */
+	.mcp-row {
+		display: flex; align-items: center; gap: 8px;
+		padding: 8px 10px; border-radius: 5px;
+		background: rgba(255,255,255,0.03);
+		margin-bottom: 6px;
+	}
+	.mcp-row .mcp-meta { flex: 1; min-width: 0; }
+	.mcp-row .mcp-name {
+		font-size: 11px; font-weight: 500; color: #e6e6ea;
+		overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+	}
+	.mcp-row .mcp-url {
+		font-size: 10px; color: rgba(255,255,255,0.45);
+		overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+	}
+	.mcp-row .mcp-enable {
+		appearance: none; width: 28px; height: 16px; border-radius: 8px;
+		background: rgba(255,255,255,0.1); border: none; cursor: pointer;
+		position: relative; transition: background 120ms;
+	}
+	.mcp-row .mcp-enable::after {
+		content: ""; position: absolute;
+		width: 12px; height: 12px; border-radius: 50%;
+		background: rgba(255,255,255,0.9);
+		top: 2px; left: 2px; transition: left 120ms;
+	}
+	.mcp-row .mcp-enable:checked { background: #ffb454; }
+	.mcp-row .mcp-enable:checked::after { left: 14px; background: #1a1208; }
+	.mcp-row .mcp-remove {
+		background: transparent; border: none; cursor: pointer;
+		color: rgba(255,255,255,0.4); font-size: 14px; line-height: 1;
+		padding: 0 4px;
+	}
+	.mcp-row .mcp-remove:hover { color: #ff8a8a; }
+	.mcp-empty {
+		font-size: 10px; color: rgba(255,255,255,0.35);
+		padding: 6px 4px;
+	}
 
 	/* ---- first-run 3-CTA choices ---- */
 	.firstrun-choices { display: flex; flex-direction: column; gap: 8px; }
@@ -3642,6 +3682,7 @@
 				<h2>4. Generate a render</h2>
 				<p>The <strong>Workflows</strong> list on the left panel starts with <strong>Nano Banana</strong> (image) and <strong>Seedance</strong> (video). Click <strong>+ Add</strong> to bring in Tripo/Rodin (3D), Flux 2, Meshy, or a local ComfyUI workflow.</p>
 				<p>Click a workflow row to make it active, then type a prompt in the Properties panel and hit <strong>Generate</strong> (top-right). Renders drop into the <strong>Output</strong> panel (button in the header) and to disk under <code>output/images</code>, <code>output/videos</code>, <code>output/3d</code>.</p>
+				<p><strong>Import a workflow:</strong> use the ↑ upload button in the AI Agent header to bring in any Comfy Cloud workflow JSON. The agent inspects it and registers it as a new workflow module. Browse ready-made workflows at <a href="https://comfy.org/workflows/" target="_blank">comfy.org/workflows</a> and download the JSON to import here.</p>
 			</section>
 			<section id="help-sec-timeline" class="help-section">
 				<h2>5. Animate on the timeline</h2>
@@ -3651,6 +3692,9 @@
 			<section id="help-sec-agent" class="help-section">
 				<h2>6. AI Agent (optional)</h2>
 				<p>Bottom-left panel. Off by default — flip <a href="#" data-help-open-settings>Enable AI Agent</a> in Settings and paste your <a href="https://platform.claude.com/" target="_blank">Anthropic API key</a>. Once on, the agent can inspect your scene, drive Comfy MCP tools, generate workflows, and answer questions in a chat.</p>
+				<p><strong>How it picks tools:</strong> you don't call MCP tools yourself — the agent picks the right one based on what you ask for. Plain-language works ("generate an image of a cat astronaut", "upscale this photo", "find a Wan 2.2 video template"). Typical flow: <em>discover</em> (search_templates / search_models), <em>run</em> (run_template, submit_workflow, or partner_generate for Flux / Gemini / Seedance / etc.), <em>wait &amp; retrieve</em>. Full reference: <a href="https://docs.comfy.org/agent-tools/cloud" target="_blank">docs.comfy.org/agent-tools/cloud</a>.</p>
+				<p>Use <code>/clear</code> in the chat input to reset the conversation. The ↑ button in the AI Agent header imports a workflow JSON.</p>
+				<p><strong>Extend with MCP servers:</strong> Settings has an <strong>MCP Servers (Agent)</strong> section where you can register any HTTP MCP server (name + URL + optional bearer token). Once added, the agent can call that server's tools alongside the built-in editor tools and Comfy Cloud. Stdio/local-process MCP servers aren't supported here — HTTP transport only. See <a href="https://modelcontextprotocol.io/" target="_blank">modelcontextprotocol.io</a> for the spec and public server registries.</p>
 			</section>
 			<section id="help-sec-shortcuts" class="help-section">
 				<h2>Keyboard shortcuts</h2>
@@ -3845,6 +3889,18 @@
 							</span>
 							<input type="checkbox" id="tooltips-toggle" checked>
 						</label>
+					</div>
+					<div class="modal-section">
+						<div class="section-label">MCP Servers (Agent)</div>
+						<div class="modal-status" id="mcp-status"></div>
+						<div id="mcp-servers-list"></div>
+						<div id="mcp-add-form" style="margin-top:10px; display:flex; flex-direction:column; gap:6px">
+							<input class="modal-input" type="text" id="mcp-add-name" placeholder="Name (e.g. my-tools)" autocomplete="off" spellcheck="false">
+							<input class="modal-input" type="text" id="mcp-add-url" placeholder="https://example.com/mcp" autocomplete="off" spellcheck="false">
+							<input class="modal-input" type="password" id="mcp-add-token" placeholder="Authorization token (optional)" autocomplete="off" spellcheck="false">
+							<button type="button" class="modal-btn-primary" id="mcp-add-btn" style="align-self:flex-start">Add server</button>
+						</div>
+						<div class="modal-hint">Extend the AI Agent with any HTTP MCP server. Anthropic connects to it directly — stdio/local-process servers aren't supported here.</div>
 					</div>
 				</div>
 
@@ -5868,6 +5924,10 @@
 					}
 				} catch { /* silent — user can still enter values manually */ }
 			}
+			// Refresh the MCP servers list on open — the JSON file could have
+			// changed under us (manual edit, another tab), and this is a small
+			// fetch anyway.
+			refreshMcpServers?.();
 			setTimeout(() => settingsKey.focus(), 50);
 		}
 		function closeSettings() {
@@ -9743,6 +9803,98 @@ document.getElementById("tooltips-toggle")?.addEventListener("change", (e) => {
 	if (t) t.checked = _tooltipsEnabled;
 	applyTooltipsSetting();
 })();
+
+// MCP servers list in Settings — users add HTTP MCP servers to extend the
+// agent's tool surface beyond editor + Comfy Cloud tools. All state lives on
+// the backend (data/mcp_servers.json); the UI just reads/mutates via
+// /api/mcp/servers. Tokens are write-only — the backend never returns them.
+function _mcpStatus(kind, text, hideMs = 1800) {
+	const el = document.getElementById("mcp-status");
+	if (!el) return;
+	el.className = `modal-status ${kind}`;
+	el.textContent = text;
+	if (hideMs) setTimeout(() => { el.className = "modal-status"; el.textContent = ""; }, hideMs);
+}
+async function refreshMcpServers() {
+	const list = document.getElementById("mcp-servers-list");
+	if (!list) return;
+	try {
+		const r = await fetch("/api/mcp/servers");
+		if (!r.ok) throw new Error("failed to load");
+		const { servers } = await r.json();
+		list.innerHTML = "";
+		if (!servers.length) {
+			const empty = document.createElement("div");
+			empty.className = "mcp-empty";
+			empty.textContent = "No custom MCP servers yet.";
+			list.appendChild(empty);
+			return;
+		}
+		for (const s of servers) {
+			const row = document.createElement("div");
+			row.className = "mcp-row";
+			row.innerHTML = `
+				<div class="mcp-meta">
+					<div class="mcp-name"></div>
+					<div class="mcp-url"></div>
+				</div>
+				<input type="checkbox" class="mcp-enable" title="Enable / disable">
+				<button type="button" class="mcp-remove" title="Remove">×</button>
+			`;
+			row.querySelector(".mcp-name").textContent = s.name + (s.has_token ? " · 🔒" : "");
+			row.querySelector(".mcp-url").textContent = s.url;
+			const toggle = row.querySelector(".mcp-enable");
+			toggle.checked = !!s.enabled;
+			toggle.addEventListener("change", async () => {
+				try {
+					const r2 = await fetch(`/api/mcp/servers/${encodeURIComponent(s.name)}`, {
+						method: "PATCH", headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ enabled: toggle.checked }),
+					});
+					if (!r2.ok) throw new Error((await r2.json()).detail || "patch failed");
+				} catch (e) {
+					toggle.checked = !toggle.checked;
+					_mcpStatus("error", e.message || "toggle failed", 3000);
+				}
+			});
+			row.querySelector(".mcp-remove").addEventListener("click", async () => {
+				if (!confirm(`Remove MCP server "${s.name}"?`)) return;
+				try {
+					const r2 = await fetch(`/api/mcp/servers/${encodeURIComponent(s.name)}`, { method: "DELETE" });
+					if (!r2.ok) throw new Error((await r2.json()).detail || "delete failed");
+					refreshMcpServers();
+				} catch (e) {
+					_mcpStatus("error", e.message || "delete failed", 3000);
+				}
+			});
+			list.appendChild(row);
+		}
+	} catch (e) {
+		list.innerHTML = "";
+		_mcpStatus("error", e.message || "failed to load servers", 3000);
+	}
+}
+window.refreshMcpServers = refreshMcpServers;
+document.getElementById("mcp-add-btn")?.addEventListener("click", async () => {
+	const name = document.getElementById("mcp-add-name").value.trim();
+	const url  = document.getElementById("mcp-add-url").value.trim();
+	const tok  = document.getElementById("mcp-add-token").value;
+	if (!name || !url) { _mcpStatus("error", "name and URL are required", 2500); return; }
+	try {
+		const r = await fetch("/api/mcp/servers", {
+			method: "POST", headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ name, url, authorization_token: tok || null }),
+		});
+		if (!r.ok) throw new Error((await r.json()).detail || "add failed");
+		document.getElementById("mcp-add-name").value = "";
+		document.getElementById("mcp-add-url").value = "";
+		document.getElementById("mcp-add-token").value = "";
+		_mcpStatus("success", `Added ${name}`, 1600);
+		refreshMcpServers();
+	} catch (e) {
+		_mcpStatus("error", e.message || "add failed", 3000);
+	}
+});
 
 // Layout hoist at boot: Outliner → right-panel top zone, Assistant → left-
 // panel bottom zone. Both sections are declared in the left #panel HTML (with
@@ -18393,7 +18545,18 @@ function assistantSceneContext() {
 	const activeGen = genCells.find(c => c.id === activeGenCellId);
 	const activeWorkflow = workflowCells.find(c => c.id === activeWorkflowCellId);
 	const activeWorkflowMod = activeWorkflow ? workflowModules[activeWorkflow.moduleId] : null;
+	// Currently-selected object — same info the CONTEXT bar surfaces to the
+	// user. Sending it every turn means the agent doesn't have to guess (or
+	// call get_selected_object) when the user says "make this red" or "move it
+	// up 2m" — the referent is right here. Multi-select isn't disambiguated
+	// yet; when the set has >1, we send the primary `selected` since that's
+	// what the CONTEXT bar itself displays.
+	const sel = (selected && selected !== renderCam) ? {
+		name: selected.name,
+		kind: selected.userData?.primKind || "object",
+	} : null;
 	return {
+		selected: sel,
 		objects: objects.map(o => ({
 			name: o.name,
 			kind: o.userData.primKind || "object",
@@ -19297,6 +19460,101 @@ const ASSISTANT_TOOLS = {
 			if (!Array.isArray(j.poses) || j.poses.length === 0) return "error: animoflow returned empty poses";
 			_mannequinAttachMotionPreview(target, j.poses, String(prompt));
 			return `applied ${j.num_frames || j.poses.length} frames of "${prompt}" to [${target.name}] — user can scrub the timeline to preview`;
+		} catch (e) {
+			return `error: ${e.message || e}`;
+		}
+	},
+
+	// ─── Awareness getters ────────────────────────────────────────────
+	// Read-only introspection so the agent can react to what's already in
+	// the scene — "what's selected", "where's the camera pointed", "what
+	// did I just render" — without needing to guess or ask.
+
+	get_selected_object() {
+		if (!selected || selected === renderCam) return "nothing selected";
+		const o = selected;
+		return JSON.stringify({
+			name: o.name,
+			kind: o.userData?.primKind || "object",
+			position: [+o.position.x.toFixed(3), +o.position.y.toFixed(3), +o.position.z.toFixed(3)],
+			rotation_deg: [
+				+THREE.MathUtils.radToDeg(o.rotation.x).toFixed(1),
+				+THREE.MathUtils.radToDeg(o.rotation.y).toFixed(1),
+				+THREE.MathUtils.radToDeg(o.rotation.z).toFixed(1),
+			],
+			scale: [+o.scale.x.toFixed(3), +o.scale.y.toFixed(3), +o.scale.z.toFixed(3)],
+			color: o.userData?.particleSystem
+				? "#" + o.userData.particleSystem.config.color.toString(16).padStart(6, "0")
+				: (o.material?.color ? "#" + o.material.color.getHexString() : null),
+		});
+	},
+
+	get_camera_state() {
+		if (typeof renderCam === "undefined" || !renderCam) return "no camera";
+		const p = renderCam.position;
+		const t = (typeof renderCamTarget !== "undefined" && renderCamTarget) ? renderCamTarget : null;
+		return JSON.stringify({
+			position: [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3)],
+			target: t ? [+t.x.toFixed(3), +t.y.toFixed(3), +t.z.toFixed(3)] : null,
+			fov: renderCam.fov,
+			aspect: +renderCam.aspect.toFixed(3),
+		});
+	},
+
+	get_scene_summary() {
+		const byKind = {};
+		for (const o of objects) {
+			const k = o.userData?.primKind || "object";
+			byKind[k] = (byKind[k] || 0) + 1;
+		}
+		// Active workflow cells — try workflowCells if present, otherwise
+		// fall back to whatever is currently the active generator on the UI.
+		let activeWorkflows = [];
+		try {
+			if (Array.isArray(workflowCells)) {
+				activeWorkflows = workflowCells.filter(c => c?.active).map(c => c.module || c.name).filter(Boolean);
+			}
+		} catch {}
+		// Best-effort keyframe count across whatever timeline store is in play.
+		let kfCount = 0;
+		try {
+			for (const o of objects) {
+				const t = o.userData?.tracks;
+				if (Array.isArray(t)) kfCount += t.reduce((n, tr) => n + (tr.keys?.length || 0), 0);
+			}
+		} catch {}
+		return JSON.stringify({
+			object_count: objects.length,
+			by_kind: byKind,
+			active_workflows: activeWorkflows,
+			keyframe_count: kfCount,
+			scene_duration_s: (typeof _tlDuration === "number") ? _tlDuration : null,
+		});
+	},
+
+	set_skybox_image({ url }) {
+		if (!url) return "error: url is required";
+		const skybox = (typeof _findActiveSkybox === "function") ? _findActiveSkybox() : null;
+		if (!skybox) return "error: no skybox in the scene — call spawn_skybox first";
+		if (typeof _applySkyboxTexture !== "function") return "error: skybox texture loader unavailable";
+		_applySkyboxTexture(skybox, url);
+		return `applied ${url} to skybox [${skybox.name}]`;
+	},
+
+	async list_recent_outputs({ limit = 20, kind = null } = {}) {
+		try {
+			const r = await fetch(`/api/assets/list?limit=${limit}`);
+			if (!r.ok) return `error: ${r.status}`;
+			const j = await r.json();
+			let items = j.items || j.assets || [];
+			if (kind) items = items.filter(a => a.kind === kind);
+			items = items.slice(0, limit);
+			return JSON.stringify(items.map(a => ({
+				filename: a.filename || a.name,
+				kind: a.kind,
+				path: a.rel || a.path || a.url,
+				created: a.mtime || a.created || null,
+			})));
 		} catch (e) {
 			return `error: ${e.message || e}`;
 		}

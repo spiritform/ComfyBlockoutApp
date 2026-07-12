@@ -956,6 +956,113 @@ async def llm_status():
     return {"api_key_set": bool(os.environ.get("ANTHROPIC_API_KEY"))}
 
 
+# ---------- user MCP servers ----------
+#
+# Users can extend the agent's tool surface by registering HTTP MCP servers
+# (Puppeteer, GitHub, custom internal tools, etc.). We piggyback on the same
+# Anthropic MCP beta (`mcp-client-2025-11-20`) that Comfy Cloud is wired
+# through, so no local MCP client library is needed — Claude handles the
+# connections server-side. Stdio-transport MCP servers can't be exposed this
+# way; users needing those would run a local HTTP wrapper.
+#
+# Persisted as data/mcp_servers.json. Schema:
+#   {"servers": [{"name": str, "url": str,
+#                 "authorization_token": str | None,
+#                 "enabled": bool}]}
+
+_MCP_CFG_PATH = APP_DIR / "data" / "mcp_servers.json"
+
+def _load_mcp_servers() -> list[dict]:
+    try:
+        if not _MCP_CFG_PATH.exists():
+            return []
+        data = json.loads(_MCP_CFG_PATH.read_text(encoding="utf-8"))
+        arr = data.get("servers") if isinstance(data, dict) else None
+        return arr if isinstance(arr, list) else []
+    except Exception:
+        return []
+
+def _save_mcp_servers(servers: list[dict]) -> None:
+    _MCP_CFG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _MCP_CFG_PATH.write_text(
+        json.dumps({"servers": servers}, indent=2),
+        encoding="utf-8",
+    )
+
+def _redact_mcp_server(s: dict) -> dict:
+    """Never send raw tokens back to the client — the settings UI only needs
+    to know whether one exists, not its value."""
+    return {
+        "name": s.get("name", ""),
+        "url": s.get("url", ""),
+        "has_token": bool(s.get("authorization_token")),
+        "enabled": bool(s.get("enabled", True)),
+    }
+
+@app.get("/api/mcp/servers")
+async def list_mcp_servers():
+    return {"servers": [_redact_mcp_server(s) for s in _load_mcp_servers()]}
+
+@app.post("/api/mcp/servers")
+async def add_mcp_server(request: Request):
+    body = await request.json()
+    name = str(body.get("name", "")).strip()
+    url = str(body.get("url", "")).strip()
+    token = body.get("authorization_token")
+    if not name:
+        raise HTTPException(400, "name is required")
+    # Names become part of the Claude tool namespace; keep them tame.
+    if not all(c.isalnum() or c in "-_" for c in name):
+        raise HTTPException(400, "name may only contain letters, digits, - and _")
+    if not url.startswith("https://") and not url.startswith("http://"):
+        raise HTTPException(400, "url must start with http(s)://")
+    # Reserve 'comfy-cloud' — it's hardcoded elsewhere and gets its auth from
+    # the Cloud API key, not the user-server config.
+    if name == "comfy-cloud":
+        raise HTTPException(400, "'comfy-cloud' is reserved")
+    servers = _load_mcp_servers()
+    if any(s.get("name") == name for s in servers):
+        raise HTTPException(400, f"a server named '{name}' already exists")
+    entry = {"name": name, "url": url, "enabled": True}
+    if isinstance(token, str) and token.strip():
+        entry["authorization_token"] = token.strip()
+    servers.append(entry)
+    _save_mcp_servers(servers)
+    return {"server": _redact_mcp_server(entry)}
+
+@app.delete("/api/mcp/servers/{name}")
+async def delete_mcp_server(name: str):
+    servers = _load_mcp_servers()
+    new = [s for s in servers if s.get("name") != name]
+    if len(new) == len(servers):
+        raise HTTPException(404, f"no server named '{name}'")
+    _save_mcp_servers(new)
+    return {"deleted": name}
+
+@app.patch("/api/mcp/servers/{name}")
+async def patch_mcp_server(name: str, request: Request):
+    body = await request.json()
+    servers = _load_mcp_servers()
+    hit = next((s for s in servers if s.get("name") == name), None)
+    if not hit:
+        raise HTTPException(404, f"no server named '{name}'")
+    if "enabled" in body:
+        hit["enabled"] = bool(body["enabled"])
+    if "url" in body:
+        url = str(body["url"]).strip()
+        if not (url.startswith("http://") or url.startswith("https://")):
+            raise HTTPException(400, "url must start with http(s)://")
+        hit["url"] = url
+    if "authorization_token" in body:
+        tok = body["authorization_token"]
+        if tok is None or tok == "":
+            hit.pop("authorization_token", None)
+        elif isinstance(tok, str) and tok.strip():
+            hit["authorization_token"] = tok.strip()
+    _save_mcp_servers(servers)
+    return {"server": _redact_mcp_server(hit)}
+
+
 # ---------- reference upload (signed-URL via comfy-cli) ----------
 
 _REF_DIR = DATA_DIR / "refs"
@@ -3254,6 +3361,43 @@ EDITOR_TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "get_selected_object",
+        "description": "Return the currently selected object's name, kind, transform, and color. Returns 'nothing selected' when the user has nothing highlighted. Use this to answer questions like 'what is this?' or before editing 'the selected thing' — much cheaper than list_objects when the user is pointing at something specific.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "get_camera_state",
+        "description": "Return the render camera's world position, aim target (if any), FOV, and aspect ratio. Use before answering camera framing questions or before proposing camera edits so you know where the shot currently is.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "get_scene_summary",
+        "description": "High-level scene digest: object count grouped by kind, active workflow modules, total keyframe count, and scene duration in seconds. Cheaper than list_objects for a broad 'what's in this scene' answer.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "set_skybox_image",
+        "description": "Apply an equirectangular panorama image to the scene's skybox. Pair with list_recent_outputs to pull the user's last render — e.g. 'apply my last generated image as a skybox' becomes list_recent_outputs(kind='image', limit=1) → set_skybox_image(url=<returned url>). If no skybox exists, spawn one first via spawn_skybox. Non-equirectangular images will stretch on the sphere — best used with generated 360° panos.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "Image URL (from list_recent_outputs) or a full http(s) URL"},
+            },
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "list_recent_outputs",
+        "description": "Return recently generated outputs (images, videos, 3D meshes) with their filenames, kinds, and paths. Use this to reference the user's recent renders — e.g. 'apply my last image as a skybox' or 'what did I generate today?'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100, "description": "Max results to return (default 20)"},
+                "kind": {"type": "string", "enum": ["image", "video", "3d"], "description": "Optional filter — only return this asset kind"},
+            },
+        },
+    },
+    {
         "name": "delete_object",
         "description": "Delete an object by name.",
         "input_schema": {
@@ -3981,6 +4125,20 @@ def _call_claude(history, ctx_block_for_caching):
             "authorization_token": comfy_key,
         })
         tools.append({"type": "mcp_toolset", "mcp_server_name": "comfy-cloud"})
+    # User-registered MCP servers (data/mcp_servers.json). HTTP-transport only.
+    # Anthropic handles the connection; we just declare them. Skip disabled
+    # entries and anything missing a URL. Names have already been validated at
+    # write time (letters/digits/_/-, no 'comfy-cloud' collision).
+    for s in _load_mcp_servers():
+        if not s.get("enabled", True): continue
+        url = s.get("url")
+        name = s.get("name")
+        if not url or not name: continue
+        entry = {"type": "url", "url": url, "name": name}
+        tok = s.get("authorization_token")
+        if tok: entry["authorization_token"] = tok
+        mcp_servers.append(entry)
+        tools.append({"type": "mcp_toolset", "mcp_server_name": name})
 
     import anthropic
     client = anthropic.Anthropic()
