@@ -1258,6 +1258,19 @@
 	#lp-zone-top-body > .section:first-of-type {
 		padding-top: 12px;
 	}
+	/* OBJECTS' head-row is hidden (its label lives in the 40px band above),
+	   so when the section collapses there's nothing visible inside — the
+	   default 12px bottom padding becomes a phantom gap that pushes TOOLS
+	   further from the OBJECTS label than TOOLS sits from WORKFLOWS.
+	   Zero it out so all three headers space evenly when collapsed. */
+	#lp-zone-top-body > .section:first-of-type.collapsed { padding: 0; }
+	/* Dim the OBJECTS kicker when its section is collapsed — matches the
+	   fade the other .section-label rows get via .collapsed. The label lives
+	   outside the section (in the fixed band), so :has() reaches into the
+	   sibling body to detect the state. */
+	#panel:has(#lp-zone-top-body > .section:first-of-type.collapsed) #lp-zone-top-header .rp-kicker {
+		color: rgba(255,255,255,0.32);
+	}
 	/* Left-panel top-zone header — mirrors #rp-zone-top-header. Fixed 40px
 	   band that sits OUTSIDE the scroll area so the scrollbar starts under
 	   it, not through it. */
@@ -1334,9 +1347,12 @@
 	}
 	.mini-btn.outliner-eye-btn:hover { background: transparent; color: #e6e6ea; }
 	.mini-btn.outliner-eye-btn svg { width: 14px; height: 14px; }
-	/* "+ Add" variant of mini-btn — same chip shape as Clear but orange tint
-	   on hover to signal an additive action instead of a destructive one. */
+	/* "+ Add" variant of mini-btn — no idle box, orange tint on hover only.
+	   The `+` glyph is enlarged via a nested <span class="plus"> so ADD text
+	   stays at the shared 9px caps size. */
+	.mini-btn.add { background: transparent; }
 	.mini-btn.add:hover { background: rgba(255,180,84,0.14); color: #ffb454; }
+	.mini-btn.add .plus { font-size: 14px; font-weight: 600; vertical-align: -1px; margin-right: 2px; }
 
 	/* Add-generator dropdown — flows in place below the .gen-cells list when
 	   triggered by the section header's "+ Add" button. Lists every registered
@@ -1817,7 +1833,6 @@
 	   different affordance from the rest of the head (which activates the
 	   cell). Cursor hint reflects that. */
 	.gen-icon { cursor: pointer; }
-	.gen-icon:hover { background: rgba(255,255,255,0.12); }
 	.gen-head-end { display: flex; align-items: center; gap: 2px; }
 	/* Per-cell Generate button — small amber play glyph in the head-end. Routes
 	   through the shared vp-generate pipeline; setActiveGenCell first so the run
@@ -1833,7 +1848,7 @@
 	   font-metric-driven positioning of the old unicode text glyphs. */
 	.gen-run-btn svg, .gen-del-btn svg { width: 12px; height: 12px; display: block; }
 	.gen-run-btn {
-		background: rgba(255,180,84,0.14); color: rgba(255,180,84,0.85);
+		background: transparent; color: rgba(255,180,84,0.85);
 		font-size: 11px; line-height: 1;
 	}
 	.gen-run-btn:hover { background: rgba(255,180,84,0.28); color: #ffd28a; }
@@ -1860,7 +1875,7 @@
 	}
 	.gen-run-btn { position: relative; }
 	.gen-del-btn {
-		background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.4);
+		background: transparent; color: rgba(255,255,255,0.4);
 		font: 700 16px/1 ui-sans-serif, system-ui, sans-serif;
 	}
 	.gen-del-btn:hover { background: rgba(255,80,80,0.22); color: #ff8a8a; }
@@ -1873,8 +1888,7 @@
 	.gen-cell:hover .gen-del, .gen-cell.active .gen-del { opacity: 1; }
 	.gen-del:hover { background: rgba(255,255,255,0.06); color: #ff5a5a; }
 	.gen-icon {
-		width: 26px; height: 26px; border-radius: 4px;
-		background: rgba(255,255,255,0.06);
+		width: 26px; height: 26px;
 		display: flex; align-items: center; justify-content: center;
 		color: rgba(255,255,255,0.7);
 	}
@@ -4164,16 +4178,11 @@
 				<button class="prim-btn" data-tool="util:triposplat-local" data-hardcoded="1" data-label="TripoSplat" title="TripoSplat — generate a 3D gaussian splat from a source image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.983 21.186a1 1 0 0 1-1.966 0 10 10 0 0 0-8.203-8.203 1 1 0 0 1 0-1.966 10 10 0 0 0 8.203-8.203 1 1 0 0 1 1.966 0 10 10 0 0 0 8.203 8.203 1 1 0 0 1 0 1.966 10 10 0 0 0-8.203 8.203"/></svg></button>
 				<!-- Mannequin — procedural block-figure at real-world 1.72m scale.
 				     Reference for blockouts (door frames, couches, camera height).
-				     Sits above AnimoFlow so the human-scale reference reads first
-				     in the mental order "spawn a person → then optionally drive
-				     it with motion". -->
-				<button class="prim-btn" data-tool="mannequin" data-label="Mannequin" title="Mannequin — spawn a ~1.72m human-scale block figure for reference"><svg viewBox="3 3 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6"/><path d="m6 8 6 2 6-2"/><path d="M12 10v4"/></svg></button>
-				<!-- Motion util — text-to-motion animation targeting the mannequin's
-				     Mixamo skeleton via AnimoFlow. Pane renders a requirements
-				     card (Docker + container + mannequin-in-scene) instead of
-				     the generic scene-video/image UI, so the user sees exactly
-				     what's needed before they try to generate. -->
-				<button class="prim-btn" data-tool="util:motion" data-hardcoded="1" data-label="AnimoFlow" title="AnimoFlow — text prompt → animated motion clip that drives the mannequin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z"/><path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z"/><path d="M16 17h4"/><path d="M4 13h4"/></svg></button>
+				     AnimoFlow (text-to-motion) lives inside the Mannequin
+				     properties panel as an Animation subsection now — a
+				     mannequin is always the target, so consolidating them
+				     avoided the standalone tool + auto-spawn dance. -->
+				<button class="prim-btn" data-tool="mannequin" data-label="Mannequin" title="Mannequin — spawn a ~1.72m human-scale block figure for reference (Animation / AnimoFlow lives inside the properties pane)"><svg viewBox="3 3 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6"/><path d="m6 8 6 2 6-2"/><path d="M12 10v4"/></svg></button>
 				<!-- Light — Directional / Point / Spot / Softbox picker in the
 				     object inspector; VSM shadows on Directional+Spot, Point +
 				     Softbox as ambient / fill options. -->
@@ -4218,7 +4227,7 @@
 				<span class="head-end">
 					<!-- Sole entry point for adding a workflow. Opens the shared
 					     #workflow-add-menu below the cells list. -->
-					<button type="button" class="mini-btn add" id="workflow-add-btn" title="Add workflow (API or local)">+ Add</button>
+					<button type="button" class="mini-btn add" id="workflow-add-btn" title="Add workflow (API or local)"><span class="plus">+</span>Add</button>
 				</span>
 			</div>
 			<div class="gen-cells" id="workflow-cells"></div>
@@ -4503,7 +4512,7 @@
 		</div>
 		<div id="rp-split-handle" title="Drag to resize" role="separator" aria-orientation="horizontal"></div>
 		<div id="rp-zone-bottom">
-		<div id="rp-header">
+		<div id="rp-header" title="Click to collapse or restore · drag to resize">
 			<span class="rp-kicker" id="rp-kicker">Properties</span>
 			<span class="rp-sep" id="rp-sep">:</span>
 			<span id="rp-title">Scene</span>
@@ -4738,10 +4747,17 @@
 						     control it. Bone-name match — clip tracks like
 						     `mixamorigLeftArm.quaternion` bind to the equivalent
 						     bones in Xbot's skeleton by name. -->
-						<div id="obj-mannequin-anim-status" class="hint" style="margin-top:10px;font-size:10px;color:rgba(255,255,255,0.5)">No clip loaded</div>
+						<div id="obj-mannequin-anim-status" class="hint" style="margin-top:10px;font-size:10px;color:rgba(255,255,255,0.5);display:none"></div>
 						<button type="button" id="obj-mannequin-anim-clear" class="mp-still-btn" style="width:100%;margin-top:6px;background:rgba(255,80,80,0.14);color:#ff8a8a;display:none">Clear animation</button>
 						<input type="file" id="obj-mannequin-anim-file" accept=".glb,.gltf" hidden>
 						<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Load — Mixamo-rigged .glb; transport scrubs, play plays.</div>
+						<!-- Animation subsection — hosts the AnimoFlow generator UI
+						     (previously a standalone Tools-grid button). Same
+						     _renderMotionUtilPane fn mounts into #obj-mannequin-animoflow
+						     when a mannequin is selected. Consolidates the motion-
+						     generation flow into the object it targets. -->
+						<div class="section-label" style="margin-top:16px">Animation</div>
+						<div id="obj-mannequin-animoflow"></div>
 					</div>
 					<div class="section" id="obj-tps-convert-section" style="display:none">
 					<div class="section-label">Mode</div>
@@ -10362,6 +10378,13 @@ document.getElementById("mcp-add-btn")?.addEventListener("click", async () => {
 			const outlinerPx = Math.max(OUTLINER_MIN_PX, Math.min(rect.height - PROPS_MIN_PX - RP_HANDLE_PX, grabSplitPx + dy));
 			const pct = ((outlinerPx / rect.height) * 100).toFixed(2) + "%";
 			rpPanel.style.setProperty("--rp-top-basis", pct);
+			// Remember the last outliner size while Properties still had real
+			// room — freezes just before we cross into "props at min" so a later
+			// header-click restore returns to where the user last had it, not
+			// the hardcoded 35% fallback.
+			if (rect.height - outlinerPx - RP_HANDLE_PX > PROPS_MIN_PX + 4) {
+				rpPanel.dataset.savedOutlinerPx = String(outlinerPx);
+			}
 			const now = performance.now();
 			const dt = Math.max(1, now - lastMoveT);
 			lastVel = ((e.clientY - lastMoveY) / dt) * 1000;
@@ -10378,7 +10401,12 @@ document.getElementById("mcp-add-btn")?.addEventListener("click", async () => {
 			const curOutlinerPx = cur.endsWith("%")
 				? (parseFloat(cur) / 100) * rect.height
 				: (parseFloat(cur) || rect.height * 0.35);
-			const propsPx = rect.height - curOutlinerPx;
+			// Handle itself takes RP_HANDLE_PX between the zones — subtract it
+			// so propsPx matches the real rendered height. Without this, at min
+			// the check computes propsPx = PROPS_MIN_PX + RP_HANDLE_PX (57) which
+			// fails the AT_MIN gate and the toggle keeps collapsing instead of
+			// restoring.
+			const propsPx = rect.height - curOutlinerPx - RP_HANDLE_PX;
 			const AT_MIN = propsPx <= PROPS_MIN_PX + 2;
 			if (AT_MIN) {
 				// Restore — pop back to the saved outliner size (default ~35%).
@@ -10799,15 +10827,11 @@ function select(obj, opts = {}) {
 		_applyGizmoSpaceForSelection();
 		if (anchorMode) tintGizmo(0xffb454);
 		orbit.enabled = true;
-		// AnimoFlow-managed mannequins have no user-editable properties (pose is
-		// driven by the motion clip, joints can't be keyframed or hand-posed).
-		// Route selection straight to the AnimoFlow tool pane so the user gets
-		// prompt + Generate instead of a Mannequin properties panel that would
-		// mislead them into thinking they can adjust the character.
-		if (selected.userData?.animoflowManaged) {
-			runUtilTool("motion");
-			return;
-		}
+		// AnimoFlow-managed mannequins used to redirect to a standalone Motion
+		// tool pane. The Animation subsection now lives inside the Mannequin
+		// properties panel (same _renderMotionUtilPane fn), so selecting any
+		// mannequin — animoflow-tagged or hand-spawned — just opens the
+		// Mannequin inspector with Animation available inline.
 		forceRightPane("object", objectPaneLabel(selected));
 		refreshObjectInspector?.();
 		// Scroll the Object pane to the Transform section by default — for
@@ -14053,6 +14077,10 @@ function refreshUtilTools() {
 	}
 	const DEFAULT_UTIL_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6 6 3 3 6-6a4 4 0 0 0 5.4-5.4l-2 2-2-2-2-2z"/></svg>`;
 	for (const m of Object.values(utilModules)) {
+		// Motion (AnimoFlow) is now embedded inside the Mannequin properties
+		// pane's Animation subsection — no standalone Tools-grid button. Skip
+		// so the /api/modules refresh doesn't re-spawn the removed tile.
+		if (m.id === "motion") continue;
 		let btn = grid.querySelector(`button[data-tool="util:${m.id}"]`);
 		const isNew = !btn;
 		if (isNew) {
@@ -16564,11 +16592,46 @@ function _mannequinClearAnimation(wrapper, opts = {}) {
 	}
 }
 
+// Mount the AnimoFlow generator UI into the mannequin properties' Animation
+// subsection. Idempotent — reuses the same container so _renderMotionUtilPane's
+// per-pane state (seed, requirements cache, prompt draft) persists across
+// re-selections. If the motion manifest hasn't arrived yet from /api/modules,
+// wait a few frames and retry so the section isn't left blank on first paint
+// after boot.
+let _mountMannequinAnimoFlowRetries = 0;
+function _mountMannequinAnimoFlow() {
+	const container = document.getElementById("obj-mannequin-animoflow");
+	if (!container) return;
+	const m = utilModules.motion;
+	if (!m) {
+		if (_mountMannequinAnimoFlowRetries++ < 40) {
+			setTimeout(_mountMannequinAnimoFlow, 100);
+		} else {
+			container.innerHTML = `<div class="hint" style="font-size:10px;color:rgba(255,255,255,0.4)">AnimoFlow module not registered — check /api/modules.</div>`;
+		}
+		return;
+	}
+	_mountMannequinAnimoFlowRetries = 0;
+	// Only render on first mount (or if the container was cleared). Re-renders
+	// after that happen inside _renderMotionUtilPane's own event wiring, which
+	// preserves seed/prompt/reqs state — calling render from here on every
+	// selection would blow away an in-progress prompt textarea.
+	if (!container.dataset.mounted) {
+		_renderMotionUtilPane(container, m);
+		container.dataset.mounted = "1";
+	}
+}
+
 function _mannequinSetAnimStatus(msg, tone) {
 	const el = document.getElementById("obj-mannequin-anim-status");
 	const clearBtn = document.getElementById("obj-mannequin-anim-clear");
+	// Idle "No clip loaded" text was noise — hide the element entirely when
+	// there's nothing meaningful to say. A loaded clip / busy load / error
+	// still shows its status.
+	const idle = !msg || msg === "No clip loaded";
 	if (el) {
-		el.textContent = msg;
+		el.textContent = idle ? "" : msg;
+		el.style.display = idle ? "none" : "";
 		el.style.color = tone === "error" ? "#ff8a8a"
 			: tone === "busy" ? "rgba(255,180,84,0.85)"
 			: tone === "ok" ? "rgba(102,204,122,0.9)"
@@ -21884,8 +21947,14 @@ function refreshObjectInspector() {
 					"ok",
 				);
 			} else {
-				_mannequinSetAnimStatus("No clip loaded", "");
+				_mannequinSetAnimStatus("", "");
 			}
+			// Mount AnimoFlow into the ANIMATION subsection. Uses the same
+			// _renderMotionUtilPane fn the old Tools-grid AnimoFlow button did,
+			// just targeted at the container inside the mannequin properties.
+			// If the manifest hasn't arrived from /api/modules yet, poll a few
+			// frames — same guard the Tools-grid path had via refreshUtilTools.
+			_mountMannequinAnimoFlow();
 		}
 	}
 	// Terrain section — visible when the selected object is a terrain. Syncs
