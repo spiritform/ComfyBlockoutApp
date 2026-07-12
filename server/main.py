@@ -4606,6 +4606,12 @@ async def assets_list(limit: int = 200):
     for p in DATA_DIR.rglob("out_*.*"):
         if not p.is_file():
             continue
+        # Skip the on-disk thumbnail cache (`.thumbs/<size>/…`). Its cached
+        # tiles preserve the source `out_*` filename, so a naive rglob would
+        # surface them as if they were standalone assets — the listing then
+        # returns tiny 256px JPGs where the full-res original should be.
+        if any(part == ".thumbs" for part in p.parts):
+            continue
         # Match `out_<stem>.thumb.<ext>` — .stem strips the last extension
         # only, so we still see `.thumb` in the remaining name.
         if p.stem.endswith(".thumb"):

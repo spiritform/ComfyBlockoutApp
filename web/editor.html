@@ -2556,10 +2556,12 @@
 	#result-overlay.loading #result-overlay-spinner { display: block; }
 	#result-overlay.loading img { visibility: hidden; }
 	/* Compare slider — only wired up in Render mode. The blockout underlay
-	   sits behind the render img/vid at z-index 0; when compare-mode is on
-	   we clip the render's LEFT edge (via inset X% left) so the blockout
-	   shows through on the left of the handle. --compare-x is the handle's
-	   position from the left in %; defaults to 50% so it opens in the middle. */
+	   sits behind the render img/vid at z-index 0; the render is clipped on
+	   the RIGHT side so dragging the handle leftward reveals the blockout
+	   underneath on the right (matching where the handle appears from).
+	   --compare-x is the handle's position from the left in %; defaults to
+	   100% so the render shows in full on entry, with the handle parked at
+	   the right edge and only revealed on hover. */
 	/* Nested-ID selector so specificity (0,2,0,0) beats the general
 	   `#result-overlay img` rule (0,1,0,1) that would otherwise force
 	   display: block and show a blank/black underlay over Blockout mode. */
@@ -2570,40 +2572,68 @@
 		display: none; z-index: 0; pointer-events: none;
 	}
 	#result-overlay.compare-mode #result-overlay-blockout-img { display: block; }
+	/* Overlay keeps its default overflow:hidden in compare mode too — that
+	   way when the tab is parked at the AR-frame edge (0% / 100%) only its
+	   inner half is visible, and dragging it inward reveals the full
+	   capsule. Matches the "peek out from the edge" affordance the user
+	   asked for. Hit-testing still works on the clipped half since pointer
+	   events don't respect overflow clipping. */
 	#result-overlay .compare-handle { display: none; }
 	#result-overlay.compare-mode .compare-handle {
 		position: absolute; top: 0; bottom: 0;
-		width: 2px;
-		background: rgba(255,180,84,0.85);
-		box-shadow: 0 0 12px rgba(255,180,84,0.5);
+		/* Wider transparent hit target than the visible line so the user can
+		   grab the slider comfortably. The visible 1px line lives at the
+		   center of the strip via the linear-gradient below. */
+		width: 20px;
+		background: linear-gradient(to right,
+			transparent 0, transparent 9px,
+			rgba(230,230,236,0.55) 9px, rgba(230,230,236,0.55) 11px,
+			transparent 11px, transparent 20px);
 		z-index: 5;
-		pointer-events: auto; cursor: ew-resize;
-		left: var(--compare-x, 50%);
+		pointer-events: auto; cursor: grab;
+		/* Raw --compare-x — no visual clamp, so 0% / 100% put the line
+		   flush with the AR-frame edges. Tab overflow is handled by the
+		   overlay's `overflow: visible` above. */
+		left: var(--compare-x, 100%);
 		transform: translateX(-50%);
 		display: block;
+		opacity: 0;
+		transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 	}
+	#result-overlay.compare-mode .compare-handle.dragging { cursor: grabbing; }
+	/* Handle only visible while hovering the overlay or actively dragging —
+	   render stays clean by default; slider surfaces on intent. Uses the
+	   same 0.28s cubic-bezier the right-panel panes fade with. */
+	#result-overlay.compare-mode:hover .compare-handle,
+	#result-overlay.compare-mode .compare-handle.dragging { opacity: 1; }
+	/* Solid light-grey tab — reads clearly against both the render and the
+	   blockout underlay. Inverted arrows (dark on light) for legibility. */
 	#result-overlay.compare-mode .compare-handle::before {
 		content: ""; position: absolute;
 		left: 50%; top: 50%;
-		width: 34px; height: 34px; border-radius: 50%;
-		background: rgba(20,20,26,0.85);
-		border: 1.5px solid rgba(255,180,84,0.9);
+		width: 24px; height: 36px; border-radius: 8px;
+		background: rgb(230,230,236);
 		transform: translate(-50%, -50%);
-		box-shadow: 0 4px 14px rgba(0,0,0,0.55);
+		box-shadow: 0 4px 14px rgba(0,0,0,0.6);
 	}
+	/* Two outward-pointing triangles via inline SVG — deterministic at any
+	   size, no font-rendering quirks. Fill is dark now that the tab is
+	   solid light grey. Always visible whenever the handle itself is (the
+	   user asked to keep the direction hint on rather than progressive-
+	   reveal it on tab hover). */
 	#result-overlay.compare-mode .compare-handle::after {
-		content: "⇔"; position: absolute;
+		content: ""; position: absolute;
 		left: 50%; top: 50%;
-		font-size: 14px; color: #ffd28a; font-weight: 600;
+		width: 16px; height: 10px;
 		transform: translate(-50%, -50%);
+		background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'><path d='M0 5 L5 0 L5 10 Z M16 5 L11 0 L11 10 Z' fill='rgb(20,20,26)'/></svg>") center/contain no-repeat;
 		pointer-events: none;
-		text-shadow: 0 1px 2px rgba(0,0,0,0.6);
 	}
-	/* Clip the render on the LEFT side up to the handle's X — everything to
-	   the left of the handle shows the blockout underneath. */
+	/* Clip the render on the RIGHT side — blockout shows through to the
+	   right of the handle; left of the handle is the render. */
 	#result-overlay.compare-mode #result-overlay-img,
 	#result-overlay.compare-mode #result-overlay-vid {
-		clip-path: inset(0 0 0 var(--compare-x, 50%));
+		clip-path: inset(0 calc(100% - var(--compare-x, 100%)) 0 0);
 	}
 	/* Result toggle — the Viewport / Blockout / Render pill group. Sits to the
 	   right of Generate in the viewport toolbar. Buttons now match .vt-btn
@@ -4985,11 +5015,6 @@
 						<div class="drag-num" id="cam-pitch"><span class="drag-label">Pitch</span><span class="drag-val">0°</span></div>
 						<div class="drag-num" id="cam-roll"><span class="drag-label">Roll</span><span class="drag-val">0°</span></div>
 					</div>
-					<div class="hint">drag a value sideways to scrub · click to type · Shift = fine · F focus · Alt+drag look · Alt+RMB roll</div>
-					<div class="vt-group rp-vt-group" style="margin-top:10px">
-						<button class="vt-btn" id="toggle-guides">Guides</button>
-						<button class="vt-btn active" id="toggle-ar" title="Toggle aspect ratio overlay (frame + letterbox)">AR</button>
-					</div>
 				</div>
 				<!-- Target Object — when set, the render camera continuously
 				     lookAt()s the chosen object's world position each frame.
@@ -6606,7 +6631,24 @@ transform.addEventListener("dragging-changed", (e) => {
 	// grab something. Any pointerdown that DOES grab a gizmo handle routes
 	// through this event and disables orbit for the duration of the drag.
 	orbit.enabled = !e.value;
-	if (!e.value) {
+	if (e.value) {
+		// Drag started — scroll the properties pane to the Transform section
+		// so the live X/Y/Z readouts sit in view while the user pushes the
+		// gizmo. Guarded: only nudge the pane if the section isn't already
+		// visible, otherwise the scroll is jarring for objects whose
+		// Properties is short enough that Transform is already on-screen.
+		const tSec = document.getElementById("obj-transform-section");
+		if (tSec && tSec.offsetParent !== null) {
+			const container = tSec.closest(".rp-pane-body, .rp-scroll, .rp-pane") || tSec.parentElement;
+			const cRect = container?.getBoundingClientRect();
+			const sRect = tSec.getBoundingClientRect();
+			// If Transform's top is below the container's bottom OR its bottom
+			// is above the container's top, it's off-screen and worth scrolling.
+			if (cRect && (sRect.top >= cRect.bottom || sRect.bottom <= cRect.top)) {
+				tSec.scrollIntoView({ behavior: "smooth", block: "start" });
+			}
+		}
+	} else {
 		renderCamDragDist = null;
 		scaleDragStart = null;
 		saveSceneDebounced();
@@ -6832,6 +6874,11 @@ function setActiveView(which) {
 	orbit.target.copy(which === "camera" ? renderCamTarget : sceneCamTarget);
 	orbit.update();
 	transform.camera = cam;
+	// Camera-view lock: if the user locked renderCam in the outliner, orbiting
+	// in camera view would silently reposition it — same class of surprise the
+	// lock is meant to prevent for other objects. Disable orbit while the lock
+	// is on and we're looking through renderCam.
+	syncCamLockToOrbit?.();
 	// Wireframe visibility was already applied above (before the early-return guard).
 	// If we're switching INTO camera view with renderCam still selected, the gizmo
 	// would sit at the camera's own origin — invisible-huge and useless. Detach.
@@ -6846,97 +6893,39 @@ function setActiveView(which) {
 }
 window.setActiveView = setActiveView;
 
-// Shader-based ground grid — a single large plane whose fragment shader
-// draws the grid pattern analytically with `fwidth`-based anti-aliasing.
-// GL_LINES (used by THREE.GridHelper) can't be MSAA'd on most drivers, so
-// the old GridHelper always looked pixelated even with renderer AA on.
-// This approach stays crisp at any distance/angle, matches Blender/Maya's
-// viewport grid feel, and gives us free distance fade so the horizon line
-// blends softly instead of terminating hard.
+// Toggle OrbitControls on/off based on the render-camera lock state and
+// the current view. Called after setActiveView + after the outliner's
+// camera-lock button flips renderCam.userData.locked. Keeps orbit off
+// only when we're actually looking through the locked camera; scene view
+// always stays orbitable (that camera isn't the locked one).
+function syncCamLockToOrbit() {
+	if (!orbit) return;
+	if (activeView === "camera" && renderCam.userData.locked) {
+		orbit.enabled = false;
+	} else {
+		orbit.enabled = true;
+	}
+}
+window.syncCamLockToOrbit = syncCamLockToOrbit;
+
+// Ground grid — plain THREE.GridHelper. Previously used a shader-based
+// PlaneGeometry with `fwidth`-based AA + distance fade, but the shader
+// path drew visibly different line thickness/density in the blockout
+// snapshot vs the live viewport because `fwidth` scales with pixel
+// density and the two render passes had different physical resolutions.
+// GridHelper is line-based (no fragment-derivative math), so identical
+// rasterization in both passes → identical appearance.
 //
-// Two frequencies: minor (every 1 unit) + major (every 10 units, slightly
-// brighter). Origin X and Z axes get a subtle emphasis so the world center
-// still reads. Everything runs at the same 0.11 base opacity as the old
-// GridHelper — user-tuned setting we don't want to change.
-const GRID_SIZE = 200; // plane extent in world units; larger = grid visible further out
-const gridGeom = new THREE.PlaneGeometry(GRID_SIZE, GRID_SIZE);
-gridGeom.rotateX(-Math.PI / 2); // horizontal, matches GridHelper orientation
-const gridMat = new THREE.ShaderMaterial({
-	transparent: true,
-	depthWrite: false,
-	// side: DoubleSide so the grid reads when the camera dips below y=0 (e.g.
-	// low-angle shots). Cheap — one plane, two-sided.
-	side: THREE.DoubleSide,
-	uniforms: {
-		uMinorColor: { value: new THREE.Color(0x888888) },
-		uMajorColor: { value: new THREE.Color(0xd0d0d8) },
-		uAxisColor:  { value: new THREE.Color(0xd0d0d8) },
-		uBaseOpacity: { value: 0.11 },
-		uCameraPos:  { value: new THREE.Vector3() },
-	},
-	vertexShader: /* glsl */`
-		varying vec3 vWorld;
-		void main() {
-			vec4 wp = modelMatrix * vec4(position, 1.0);
-			vWorld = wp.xyz;
-			gl_Position = projectionMatrix * viewMatrix * wp;
-		}
-	`,
-	fragmentShader: /* glsl */`
-		precision highp float;
-		varying vec3 vWorld;
-		uniform vec3 uMinorColor;
-		uniform vec3 uMajorColor;
-		uniform vec3 uAxisColor;
-		uniform float uBaseOpacity;
-		uniform vec3 uCameraPos;
-
-		// Antialiased grid line — returns 0..1 line strength for lines at
-		// integer multiples of 'scale'. fwidth gives per-pixel derivative so
-		// the line always stays roughly one pixel thick regardless of zoom.
-		float gridLine(vec2 p, float scale) {
-			vec2 g = abs(fract(p / scale - 0.5) - 0.5) / fwidth(p / scale);
-			return 1.0 - min(min(g.x, g.y), 1.0);
-		}
-
-		// Same trick but per-axis — used to emphasize the X and Z origin lines.
-		float axisLine(float p) {
-			float w = fwidth(p);
-			return 1.0 - smoothstep(0.0, w * 1.5, abs(p));
-		}
-
-		void main() {
-			vec2 xz = vWorld.xz;
-			float minor = gridLine(xz, 1.0);
-			float major = gridLine(xz, 10.0);
-			float axisX = axisLine(vWorld.z);
-			float axisZ = axisLine(vWorld.x);
-
-			// Distance fade — softens the far edge of the plane so it doesn't
-			// terminate with a hard rectangular boundary at GRID_SIZE / 2.
-			// Wide range (5→120 units) + gamma-shaped curve gives a gradual
-			// horizon-blend feel instead of a visible fade band.
-			float dist = length(vWorld.xz - uCameraPos.xz);
-			float t = smoothstep(5.0, 120.0, dist);
-			float fade = pow(1.0 - t, 1.8);
-			if (fade <= 0.001) discard;
-
-			// Composite: axis > major > minor; each on top of the previous.
-			vec3 col = uMinorColor;
-			float a = minor * 1.0;
-			col = mix(col, uMajorColor, major);
-			a = max(a, major * 1.6);
-			col = mix(col, uAxisColor, max(axisX, axisZ));
-			a = max(a, max(axisX, axisZ) * 0.6);
-
-			gl_FragColor = vec4(col, a * uBaseOpacity * fade);
-		}
-	`,
-});
-let grid = new THREE.Mesh(gridGeom, gridMat);
+// `.material.opacity` is exposed as the grid opacity slider's target
+// (see _setGridOpacity below). The uBaseOpacity uniform previously
+// used by the shader is emulated by mapping 0..1 → material.opacity.
+let grid = new THREE.GridHelper(200, 200, 0xd0d0d8, 0x888888);
+grid.material.transparent = true;
+grid.material.opacity = 0.11;
+grid.material.depthWrite = false;
 grid.name = "GroundGrid";
-grid.renderOrder = -1; // paints before scene objects so alpha-blends correctly
-grid.frustumCulled = false; // huge plane; skip cull test since it always intersects the view
+grid.renderOrder = -1;
+grid.frustumCulled = false;
 scene.add(grid);
 
 // Default fill lights removed — the scene relies on explicit user-added lights
@@ -11017,6 +11006,9 @@ function refreshOutliner() {
 			// If we just locked while renderCam is currently selected, detach
 			// the gizmo — matches how regular object-row lock works.
 			if (renderCam.userData.locked && selected === renderCam) transform.detach();
+			// Freeze orbit if we're currently looking through renderCam so the
+			// user can't nudge the "locked" shot camera with a trackpad swipe.
+			syncCamLockToOrbit?.();
 			refreshOutliner();
 			saveScene?.();
 		});
@@ -20281,7 +20273,12 @@ let flyMode = false;
 let flyLastX = 0, flyLastY = 0;
 let flyPointerId = null;
 let flyShiftHeld = false;
-let flySpeed = 4;
+// Base fly speed in world units/second. Scroll wheel while RMB-flying
+// scales this up/down (matches Unreal's flight controls); Shift held gives
+// a 3x boost. Starts modest so a fresh RMB-drag doesn't rocket the camera
+// across the scene — the user can crank it up with a couple scroll-up
+// clicks if they want to cover more ground.
+let flySpeed = 1.5;
 const flyKeys = new Set();
 const FLY_KEY_RE = /^[wasdqe]$/;
 function setFlyMode(on) {
@@ -20338,9 +20335,13 @@ canvas.addEventListener("wheel", e => {
 	if (!flyMode) return;
 	e.preventDefault();
 	e.stopPropagation();
+	// Range widened on the low end (0.1 → 50) so the user can crawl for
+	// close-up framing without having to leave fly mode. Multiplier stays
+	// modest (~15% per notch) so a single wheel click nudges rather than
+	// jumps the speed.
 	const factor = e.deltaY < 0 ? 1.15 : 0.87;
-	flySpeed = Math.max(0.5, Math.min(50, flySpeed * factor));
-	updateStatus?.(`fly speed: ${flySpeed.toFixed(1)} u/s`);
+	flySpeed = Math.max(0.1, Math.min(50, flySpeed * factor));
+	updateStatus?.(`fly speed: ${flySpeed.toFixed(2)} u/s`);
 }, true);
 // Listen on window so keys land regardless of focus inside the editor.
 window.addEventListener("keydown", e => {
@@ -22615,16 +22616,14 @@ gridToggle.addEventListener("click", () => {
 	saveScene?.();
 });
 
-// Grid opacity — workspace-level preference. Drives the shader grid's
-// uBaseOpacity uniform (the old GridHelper's `material.opacity` is gone
-// with the shader-based ground plane). Default 11% matches the historical
-// bake-in value so nothing visually changes for existing users.
+// Grid opacity — workspace-level preference. Sets material.opacity on the
+// GridHelper. Default 11% matches the historical bake-in value so nothing
+// visually changes for existing users.
 const CB_GRID_OPACITY_KEY = "cb.workspace.gridOpacity";
 const gridOpacityInput = document.getElementById("grid-opacity");
 const gridOpacityVal = document.getElementById("grid-opacity-val");
 const _setGridOpacity = (frac) => {
-	const u = grid.material?.uniforms?.uBaseOpacity;
-	if (u) u.value = frac;
+	if (grid?.material) grid.material.opacity = frac;
 };
 try {
 	const saved = localStorage.getItem(CB_GRID_OPACITY_KEY);
@@ -22646,9 +22645,13 @@ gridOpacityInput?.addEventListener("change", (e) => {
 
 const rightPanel = document.getElementById("right-panel");
 
+// Guides + AR toggle buttons were removed from the Camera properties pane —
+// the state variables stay so save/load and the aspect-frame render path
+// keep working. Handlers are guarded so a future re-adding of the buttons
+// just needs the DOM back.
 const guidesToggle = document.getElementById("toggle-guides");
 let guidesVisible = false;
-guidesToggle.addEventListener("click", () => {
+guidesToggle?.addEventListener("click", () => {
 	guidesVisible = !guidesVisible;
 	guidesToggle.classList.toggle("active", guidesVisible);
 	aspectFrame.classList.toggle("no-guides", !guidesVisible);
@@ -22657,7 +22660,7 @@ guidesToggle.addEventListener("click", () => {
 
 const arToggle = document.getElementById("toggle-ar");
 let arVisible = true;
-arToggle.addEventListener("click", () => {
+arToggle?.addEventListener("click", () => {
 	arVisible = !arVisible;
 	arToggle.classList.toggle("active", arVisible);
 	aspectFrame.style.display = arVisible ? "block" : "none";
@@ -24040,7 +24043,33 @@ function showRenderResult() {
 // CSS wires the clip + handle location from the same source of truth.
 const _compareHandle = document.getElementById("result-compare-handle");
 const _blockoutUnderlay = document.getElementById("result-overlay-blockout-img");
-let _comparePct = 50;
+// _compareTarget is where the pointer says the handle should be; _comparePct
+// is the currently-rendered position. A RAF loop eases _comparePct toward the
+// target so quick pointer flicks glide instead of snapping. Both default to
+// 100 (handle at right edge, render shown in full).
+let _comparePct = 100;
+let _compareTarget = 100;
+let _compareRAF = null;
+// Ease factor per animation frame — higher = snappier, lower = floatier.
+// 0.28 gives ~2 frames to close half the gap → tracks close pointer moves
+// almost 1:1 but noticeably eases on flicks / dblclick / big jumps.
+const _COMPARE_EASE = 0.28;
+function _compareTick() {
+	_compareRAF = null;
+	const delta = _compareTarget - _comparePct;
+	if (Math.abs(delta) < 0.05) {
+		_comparePct = _compareTarget;
+		resultOverlay.style.setProperty("--compare-x", `${_comparePct}%`);
+		return;
+	}
+	_comparePct += delta * _COMPARE_EASE;
+	resultOverlay.style.setProperty("--compare-x", `${_comparePct}%`);
+	_compareRAF = requestAnimationFrame(_compareTick);
+}
+function _setCompareTarget(pct) {
+	_compareTarget = Math.max(0, Math.min(100, pct));
+	if (!_compareRAF) _compareRAF = requestAnimationFrame(_compareTick);
+}
 function syncCompareMode() {
 	if (!resultOverlay || !_blockoutUnderlay) return;
 	const active = (resultMode === "render") && !!lastResult;
@@ -24064,6 +24093,10 @@ if (_compareHandle) {
 	let dragging = false;
 	_compareHandle.addEventListener("pointerdown", (e) => {
 		dragging = true;
+		// .dragging keeps the handle visible while the pointer briefly leaves
+		// the overlay during a fast wipe — otherwise the hover-only opacity
+		// would flicker to 0 mid-drag.
+		_compareHandle.classList.add("dragging");
 		_compareHandle.setPointerCapture(e.pointerId);
 		e.preventDefault();
 	});
@@ -24071,14 +24104,87 @@ if (_compareHandle) {
 		if (!dragging) return;
 		const rect = resultOverlay.getBoundingClientRect();
 		const x = e.clientX - rect.left;
-		const pct = Math.max(0, Math.min(100, (x / rect.width) * 100));
-		_comparePct = pct;
-		resultOverlay.style.setProperty("--compare-x", `${pct}%`);
+		_setCompareTarget((x / rect.width) * 100);
 	});
-	const end = () => { dragging = false; };
+	const end = () => {
+		dragging = false;
+		_compareHandle.classList.remove("dragging");
+	};
 	_compareHandle.addEventListener("pointerup", end);
 	_compareHandle.addEventListener("pointercancel", end);
+	// Double-click resets the handle to center — cheap escape hatch if the
+	// user parks it near an edge and wants a neutral 50/50 preview.
+	_compareHandle.addEventListener("dblclick", (e) => {
+		e.preventDefault();
+		_setCompareTarget(50);
+	});
 }
+
+// Dev helper — replays the most recent render so the compare slider / Render
+// pill can be exercised without burning credits on a fresh generation. Call
+// from the console: `_fakeRender()` picks the newest image/video in the
+// assets list; `_fakeRender("/path/to/image.png")` overrides with a specific
+// URL. Clear with `_fakeRender(null)`.
+//
+// `switchTo` controls whether we auto-swap the viewport into Render mode. The
+// boot-time auto-load passes false so the editor still opens on the live
+// viewport; explicit console calls default to true (jump straight into the
+// preview so the caller sees the swap immediately).
+window._fakeRender = async function (url, { switchTo = true } = {}) {
+	if (url === null || url === false) {
+		lastResult = null;
+		if (renderToggleBtn) renderToggleBtn.hidden = true;
+		syncResultToggleContainer();
+		resultMode = "viewport";
+		applyResultMode();
+		return "cleared";
+	}
+	let src = url;
+	let kind = "image";
+	let filename = "fake-render.png";
+	if (!src) {
+		try {
+			const r = await fetch("/api/assets/list?limit=200");
+			const j = r.ok ? await r.json() : null;
+			// Skip anything under `.thumbs/` — server rglob used to bleed the
+			// thumbnail cache into the asset list; belt-and-suspenders in case
+			// an older backend is still running behind a stale uvicorn.
+			const latest = (j?.assets || []).find(a =>
+				(a.kind === "image" || a.kind === "video") && !(a.url || "").includes("/.thumbs/")
+			);
+			if (!latest) { console.warn("_fakeRender: no prior renders in /output"); return null; }
+			src = latest.url;
+			kind = latest.kind;
+			filename = latest.filename;
+		} catch (e) {
+			console.warn("_fakeRender: assets list failed:", e);
+			return null;
+		}
+	}
+	lastResult = { kind, url: src, filename, intermediates: [] };
+	if (renderToggleBtn) renderToggleBtn.hidden = false;
+	syncResultToggleContainer();
+	if (switchTo) {
+		resultMode = "render";
+		applyResultMode();
+	}
+	return src;
+};
+
+// Boot-time auto-load — populate the Render pill with the newest asset on
+// disk so the compare slider is always ready to test without a fresh
+// generation. Off by default (real users opening the editor shouldn't see
+// unrelated prior renders pre-loaded into the Render pill — confusing).
+// Opt-in per-machine via localStorage:
+//   localStorage.setItem("cb.dev.autoLoadLastRender", "1")
+// Stays on Viewport (switchTo:false) so enabling it doesn't hijack the live
+// 3D view; the Render pill just becomes clickable.
+window.addEventListener("cb:boot-ready", () => {
+	let on = false;
+	try { on = localStorage.getItem("cb.dev.autoLoadLastRender") === "1"; } catch {}
+	if (!on) return;
+	window._fakeRender(undefined, { switchTo: false }).catch(() => {});
+}, { once: true });
 
 // Show a preprocessor preview (depth map, canny edges, etc.) declared by the
 // workflow manifest. Same overlay treatment as the blockout — contain so the
@@ -24979,13 +25085,6 @@ function loop() {
 		// noop when no mannequins exist.
 		if (typeof _mannequinTickGizmos === "function") _mannequinTickGizmos();
 		if (typeof _motionPreviewTick === "function") _motionPreviewTick();
-		// Track the camera position in the ground-grid shader so the
-		// distance fade always centers on the viewer — otherwise the grid
-		// would fade to a fixed world region and orbiting far from origin
-		// would strand the visible grid off-screen.
-		if (grid?.material?.uniforms?.uCameraPos) {
-			grid.material.uniforms.uCameraPos.value.copy(camera.position);
-		}
 		orbit.update();
 		// Camera Target Object — locks the render camera's aim to the chosen
 		// object's world position each frame. Applied AFTER orbit.update so
@@ -25000,7 +25099,11 @@ function loop() {
 		// Also hidden while recording so the amber path doesn't burn into
 		// the exported video (same pattern as the scatter helper boxes).
 		if (frameCounter > 0 && typeof _tickCamOrbitRing === "function") _tickCamOrbitRing();
-		if (_camOrbitRing) _camOrbitRing.visible = !recording && (selected === renderCam);
+		// frameCounter>0 gate — `_camOrbitRing` is `let`-declared further down in
+		// the file (~25611), so on the very first loop pass reading it directly
+		// throws a TDZ ReferenceError. By frame 1 the whole script has evaluated
+		// and the binding is initialized.
+		if (frameCounter > 0 && _camOrbitRing) _camOrbitRing.visible = !recording && (selected === renderCam);
 		// Light helper per-frame sync — SpotLightHelper + DirectionalLightHelper
 		// need .update() so the cone / pyramid follows the wrapper's aim after
 		// a gizmo drag; _PointLightGlyph needs the camera to billboard the ring
@@ -25029,6 +25132,19 @@ function loop() {
 		// Applied BEFORE renderCamHelper.update so the wireframe (visible in
 		// scene view) picks up the shaken pose — user can preview handheld
 		// motion without switching to camera view.
+		// Skip the whole render pass while the scene is still hydrating —
+		// otherwise the grid ghosts through the translucent boot curtain
+		// while the user is staring at "INITIALIZING...". `_sceneReady`
+		// flips true when deserializeScene resolves (both at boot and on
+		// Open), so the canvas stays a clean black field until objects
+		// are actually in scene. Placed BEFORE _applyCamShake / helper
+		// update so we don't do any per-frame work when there's nothing
+		// to paint anyway.
+		if (!window._sceneReady) {
+			frameCounter++;
+			requestAnimationFrame(loop);
+			return;
+		}
 		const _shakeRestore = (frameCounter > 0 && typeof _applyCamShake === "function") ? _applyCamShake() : null;
 		// Keep the render-camera helper in sync with renderCam's current pose so the
 		// wireframe follows keyframe tweens / user edits / handheld shake in real time.
@@ -27996,7 +28112,7 @@ async function deserializeScene(state, opts = {}) {
 		}
 		if (typeof state.viewport.guides === "boolean") {
 			guidesVisible = state.viewport.guides;
-			guidesToggle.classList.toggle("active", guidesVisible);
+			guidesToggle?.classList.toggle("active", guidesVisible);
 			aspectFrame.classList.toggle("no-guides", !guidesVisible);
 		}
 		if (typeof state.viewport.bg === "string") {
@@ -28021,7 +28137,7 @@ async function deserializeScene(state, opts = {}) {
 		applyBgMode();
 		if (typeof state.viewport.ar === "boolean") {
 			arVisible = state.viewport.ar;
-			arToggle.classList.toggle("active", arVisible);
+			arToggle?.classList.toggle("active", arVisible);
 			updateAspectFrame();
 		}
 	}
@@ -28695,18 +28811,27 @@ async function refreshProjectsPane() {
 
 async function _loadProjectInline(name) {
 	updateStatus(`opening ${name}…`);
-	const j = await loadProject(name);
-	if (!j.success) { updateStatus(`open failed: ${j.error || "unknown"}`); return; }
-	// Backend already persisted scene + assets — no need for the post-deserialize save,
-	// and skipping it avoids clobbering disk if any asset fetch transiently fails.
-	await deserializeScene(j.scene, { skipSave: true });
-	applyProjectName(name);
-	updateStatus(`opened · ${name}`);
-	// Return the right-panel to its default view now that the load is complete.
-	forceRightPane(defaultRightPane());
-	// Ask the parent to fully rebuild the in-node preview iframe — live scene-sync
-	// can miss when the preview was minted with a different NODE_ID than the editor.
-	try { window.parent?.postMessage({ source: "comfy3d-editor", type: "preview-refresh", node_id: NODE_ID }, "*"); } catch {}
+	// Raise the boot curtain again so the user doesn't watch the previous
+	// scene tear down + the new scene's mid-hydrate state (grid alone, then
+	// objects popping in). Dropped in the finally block once deserialize
+	// resolves, matching the boot flow.
+	window.setSceneLoading?.(true);
+	try {
+		const j = await loadProject(name);
+		if (!j.success) { updateStatus(`open failed: ${j.error || "unknown"}`); return; }
+		// Backend already persisted scene + assets — no need for the post-deserialize save,
+		// and skipping it avoids clobbering disk if any asset fetch transiently fails.
+		await deserializeScene(j.scene, { skipSave: true });
+		applyProjectName(name);
+		updateStatus(`opened · ${name}`);
+		// Return the right-panel to its default view now that the load is complete.
+		forceRightPane(defaultRightPane());
+		// Ask the parent to fully rebuild the in-node preview iframe — live scene-sync
+		// can miss when the preview was minted with a different NODE_ID than the editor.
+		try { window.parent?.postMessage({ source: "comfy3d-editor", type: "preview-refresh", node_id: NODE_ID }, "*"); } catch {}
+	} finally {
+		window.setSceneLoading?.(false);
+	}
 }
 
 document.getElementById("project-open").addEventListener("click", async () => {
@@ -29193,47 +29318,47 @@ function drawBgLayerToSnapshotCtx(ctx, w, h) {
 
 async function autoSnapshot() {
 	try {
-		const asp = currentAspect();
-		const ratio = asp ? asp.ratio : (canvas.width / canvas.height || 16 / 9);
-		const w = SNAPSHOT_TARGET_W;
-		const h = Math.max(1, Math.round(w / ratio));
+		// New approach — instead of rendering the scene into a parallel
+		// offscreen WebGLRenderTarget (which duplicated the render pipeline
+		// and drifted from the live viewport in subtle ways: no AO/SMAA,
+		// different fwidth / pixel density, premultiplied-alpha readback
+		// quirks), we drive the SAME pipeline the animate loop uses,
+		// render one frame to the on-screen canvas through renderCam, then
+		// synchronously copy those pixels into an offscreen 2D canvas. The
+		// result is byte-identical to what the user sees if they swap the
+		// viewport into camera view — same lighting, same post, same grid.
+		//
+		// showBlockoutSnapshot puts an opaque #result-overlay in .loading
+		// state over the canvas before calling us, so the brief renderCam-
+		// through-viewport frame is fully covered — no visible flicker.
+		const fit = (typeof fitDimensions === "function") ? fitDimensions() : null;
+		const dpr = window.devicePixelRatio || 1;
+		const w = fit ? Math.max(1, Math.round(fit.w * dpr)) : Math.max(1, canvas.width);
+		const h = fit ? Math.max(1, Math.round(fit.h * dpr)) : Math.max(1, canvas.height);
 
-		if (!snapshotTarget || snapshotTarget.width !== w || snapshotTarget.height !== h) {
-			snapshotTarget?.dispose();
-			snapshotTarget = new THREE.WebGLRenderTarget(w, h, {
-				type: THREE.UnsignedByteType,
-				colorSpace: THREE.SRGBColorSpace,
-			});
+		if (!snapshotCanvas || snapshotCanvas.width !== w || snapshotCanvas.height !== h) {
 			snapshotCanvas = document.createElement("canvas");
 			snapshotCanvas.width = w;
 			snapshotCanvas.height = h;
 			snapshotCtx = snapshotCanvas.getContext("2d");
-			snapshotPixels = new Uint8Array(w * h * 4);
+		}
+		if (!snapshotSceneCanvas || snapshotSceneCanvas.width !== w || snapshotSceneCanvas.height !== h) {
+			snapshotSceneCanvas = document.createElement("canvas");
+			snapshotSceneCanvas.width = w;
+			snapshotSceneCanvas.height = h;
+			snapshotSceneCtx = snapshotSceneCanvas.getContext("2d");
 		}
 
+		// Save + hide editor overlays so they don't burn into the PNG. Same
+		// list as before — anything that reads as an "editor helper" that
+		// would confuse the downstream depth/ControlNet or Nano prompt.
 		const helperWasVisible = transformHelper.visible;
-		// The render-camera frustum wireframe and the animation motion paths
-		// are editor overlays — great in the live viewport, but they burn into
-		// the blockout PNG and then get preserved by the depth ControlNet as
-		// yellow/cyan lines in the final render. Hide them for the snapshot
-		// and restore after.
 		const camHelperWasVisible = renderCamHelper?.visible;
 		const animPathsWereVisible = animPathsGroup?.visible;
-		// Selection outline hulls are scene-root meshes (see applySelectionTint);
-		// they'd otherwise burn the amber rim into every snapshot, then get
-		// preserved by any ControlNet/depth pass that reads the blockout PNG.
-		// Snapshot with clean silhouettes; restore visibility after.
 		const rimStates = _rimOverlays.map(({ mesh }) => [mesh, mesh.visible]);
 		for (const { mesh } of _rimOverlays) mesh.visible = false;
-		// Turntable orbit ring — same story: hide the amber circle so it
-		// doesn't render into the blockout PNG and leak downstream.
 		const orbitRingWasVisible = _camOrbitRing?.visible;
 		if (_camOrbitRing) _camOrbitRing.visible = false;
-		// FX helper wireframes (scatter blue box, particle emitter box/sphere) —
-		// also editor-only overlays that leak into the blockout unless hidden.
-		// Collect + restore in one pass so we don't have to know the full FX
-		// taxonomy up front; anything with a `.boxHelper` / `.sphereHelper` gets
-		// swept.
 		const fxHelperStates = [];
 		for (const o of objects) {
 			const fx = o.userData?.scatterFx || o.userData?.particleSystem;
@@ -29246,22 +29371,6 @@ async function autoSnapshot() {
 				}
 			}
 		}
-		// Blockout is the FRAMED SHOT — always render through renderCam, not
-		// whatever activeView happens to be. If the user is in split view or
-		// looking through the perspective (scene) camera, the blockout should
-		// still preview what the recorded output will look like, not the
-		// editor's current perspective.
-		const snapCam = renderCam;
-		const prevAspect = snapCam.aspect;
-		// Keep the checker texture visible in the snapshot — Nano's prompt now
-		// treats it explicitly as "reference grid, disregard the texture" per
-		// the working template the user landed on. Stripping at input was
-		// a workaround; the language-based approach lets the model still see
-		// the grid AS a perspective anchor.
-		// Mannequin joint spheres — editor-only handles for posing. They burn
-		// as bright white dots into the blockout snapshot otherwise, which
-		// Nano tries to reproduce as glowing orbs on the character. Collect
-		// every gizmo container and hide during the snapshot pass.
 		const mannequinGizmoStates = [];
 		for (const o of objects) {
 			const gz = o.userData?._gizmoContainer;
@@ -29270,16 +29379,40 @@ async function autoSnapshot() {
 				gz.visible = false;
 			}
 		}
+
+		// Blockout is the FRAMED SHOT — always render through renderCam.
+		const snapCam = renderCam;
+		const prevAspect = snapCam.aspect;
 		try {
 			transformHelper.visible = false;
 			if (renderCamHelper) renderCamHelper.visible = false;
 			if (animPathsGroup) animPathsGroup.visible = false;
 			snapCam.aspect = w / h;
 			snapCam.updateProjectionMatrix();
-			renderer.setRenderTarget(snapshotTarget);
-			renderer.render(scene, snapCam);
+
+			// Same render branch the animate loop uses — pixel-identical
+			// pipeline. AO composer path: retarget every RenderPass at
+			// snapCam (they cache the camera) then run the composer. The
+			// animate loop re-points these at the active `camera` on its
+			// next tick, so no restore needed here.
+			if (aoEnabled && aoComposer && !recording) {
+				for (const p of aoComposer.passes) {
+					if (p.camera) p.camera = snapCam;
+				}
+				const prevCS = renderer.outputColorSpace;
+				renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+				aoComposer.render();
+				renderer.outputColorSpace = prevCS;
+			} else {
+				renderer.render(scene, snapCam);
+			}
+
+			// Copy canvas pixels into an offscreen buffer synchronously —
+			// the animate loop's next requestAnimationFrame can then repaint
+			// the canvas without clobbering our snapshot.
+			snapshotSceneCtx.clearRect(0, 0, w, h);
+			snapshotSceneCtx.drawImage(canvas, 0, 0, w, h);
 		} finally {
-			renderer.setRenderTarget(null);
 			snapCam.aspect = prevAspect;
 			snapCam.updateProjectionMatrix();
 			transformHelper.visible = helperWasVisible;
@@ -29291,26 +29424,9 @@ async function autoSnapshot() {
 			for (const [gz, prev] of mannequinGizmoStates) gz.visible = prev;
 		}
 
-		renderer.readRenderTargetPixels(snapshotTarget, 0, 0, w, h, snapshotPixels);
-		// WebGL pixels arrive bottom-up; canvas expects top-down. Flip rows into
-		// a persistent scene-canvas so we can drawImage them (respecting alpha)
-		// on top of the composited BG.
-		if (!snapshotSceneCanvas || snapshotSceneCanvas.width !== w || snapshotSceneCanvas.height !== h) {
-			snapshotSceneCanvas = document.createElement("canvas");
-			snapshotSceneCanvas.width = w;
-			snapshotSceneCanvas.height = h;
-			snapshotSceneCtx = snapshotSceneCanvas.getContext("2d");
-		}
-		const imageData = snapshotSceneCtx.createImageData(w, h);
-		const stride = w * 4;
-		for (let y = 0; y < h; y++) {
-			const srcOff = (h - 1 - y) * stride;
-			imageData.data.set(snapshotPixels.subarray(srcOff, srcOff + stride), y * stride);
-		}
-		snapshotSceneCtx.putImageData(imageData, 0, 0);
-		// Clean slate on the output canvas, then BG underneath, then WebGL on top.
-		// Alpha in the WebGL render (transparent clear when bg mode is image/video)
-		// lets the BG show through wherever the scene didn't draw a pixel.
+		// Composite BG (image/video mode) under the captured scene. Color
+		// mode has no DOM bg — the canvas already carries the opaque black
+		// clear color, so drawBgLayerToSnapshotCtx no-ops for that path.
 		snapshotCtx.clearRect(0, 0, w, h);
 		drawBgLayerToSnapshotCtx(snapshotCtx, w, h);
 		snapshotCtx.drawImage(snapshotSceneCanvas, 0, 0);
@@ -29862,11 +29978,11 @@ document.getElementById("th-help")?.addEventListener("click", () => {
 	// deserialize now fetches + parses in parallel (Promise.allSettled) so
 	// wall time is max(imports) instead of sum. Fresh/empty scenes drop
 	// the curtain the moment the seed cube lands — no artificial hold.
+	// Overlay is left in the DOM (not remove()d) so `setSceneLoading(true)`
+	// can raise the same curtain during subsequent project opens.
+	window._sceneReady = true;
 	const initOverlay = document.getElementById("init-overlay");
-	if (initOverlay) {
-		initOverlay.classList.add("hidden");
-		setTimeout(() => initOverlay.remove(), 400);
-	}
+	if (initOverlay) initOverlay.classList.add("hidden");
 	// Signal downstream one-shot UIs (first-run onboarding modal, etc.) that
 	// the boot chain is complete and the curtain is dropping.
 	window.dispatchEvent(new CustomEvent("cb:boot-ready"));
@@ -29874,11 +29990,24 @@ document.getElementById("th-help")?.addEventListener("click", () => {
 		console.error("[ComfyBlockout] boot failed:", e);
 		// Still drop the curtain so the user can at least interact with what
 		// rendered — the watchdog would catch this after 5s but no reason to wait.
+		window._sceneReady = true;
 		const ov = document.getElementById("init-overlay");
-		if (ov) { ov.classList.add("hidden"); setTimeout(() => ov.remove?.(), 400); }
+		if (ov) ov.classList.add("hidden");
 	} finally {
 		clearTimeout(_bootWatchdog);
 	}
+
+	// Reusable curtain — kept alive after boot so opening a project (or any
+	// other flow that re-hydrates the scene) can hide the "half-loaded"
+	// state where the grid is visible but objects haven't landed yet.
+	// Also flips `_sceneReady` so the animate loop stops rendering the
+	// old scene (grid + previous objects) while the new one hydrates.
+	window.setSceneLoading = function (on) {
+		window._sceneReady = !on;
+		const ov = document.getElementById("init-overlay");
+		if (!ov) return;
+		ov.classList.toggle("hidden", !on);
+	};
 })();
 
 if (IS_PREVIEW) {
