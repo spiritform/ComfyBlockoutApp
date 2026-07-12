@@ -4731,7 +4731,7 @@
 						<button type="button" data-anno-shape="freehand" class="active" title="Freehand pen — click-drag to sketch"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a2.82 2.82 0 0 0-3.986-3.987L3.842 16.175a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button>
 						<button type="button" data-anno-shape="arrow" title="Arrow — drag from tail to head"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></button>
 						<button type="button" data-anno-shape="box" title="Box — drag two opposite corners"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></button>
-						<button type="button" data-anno-shape="text" title="Text — coming soon" disabled style="opacity:0.4;cursor:not-allowed"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7V5h14v2"/><path d="M12 5v14"/><path d="M9 19h6"/></svg></button>
+						<button type="button" data-anno-shape="text" title="Text — Shift+click to place a floating label"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7V5h14v2"/><path d="M12 5v14"/><path d="M9 19h6"/></svg></button>
 					</div>
 					<div class="sub-label" style="margin-top:10px">Look</div>
 					<div class="drag-row" style="margin-top:4px;position:relative">
@@ -10893,6 +10893,15 @@ function select(obj, opts = {}) {
 		selected = obj;
 	}
 	window.__selectedObj = selected;
+	// Auto-disarm Annotate — the tool creates + selects the container on
+	// activation, so as soon as the user hops to a different object we can
+	// assume they're done drawing for now. Second click on the tile re-arms.
+	// Guarded by `_annotateMode?.active` so this branch is silent when the
+	// tool wasn't on to begin with, and by primKind so hopping BETWEEN
+	// annotation containers (if we ever have more than one) doesn't disarm.
+	if (_annotateMode?.active && selected?.userData?.primKind !== "annotation") {
+		_setAnnotateMode?.(false);
+	}
 	// Outline every set member — primary + additive members read the same.
 	for (const o of selectionSet) applySelectionTint(o);
 	if (selected) {
@@ -12047,9 +12056,10 @@ window.addEventListener("blur", () => {
 
 // Point-thinning threshold: don't append a new stroke point unless the ray-
 // projected world position moved at least this far from the last one. Keeps
-// the geometry lean when the user drags slowly; without it a 1s slow drag
-// can produce hundreds of near-identical vertices.
-const _ANNOTATE_MIN_STEP_WORLD = 0.02;
+// the geometry lean when the user drags slowly. Lowered from 0.02 to 0.005
+// so freehand ink follows the cursor tightly — the previous coarser value
+// made short slow drags look chunky.
+const _ANNOTATE_MIN_STEP_WORLD = 0.005;
 
 // Screen→world projection for the current stroke. Raycasts from the active
 // camera through the pointer NDC and intersects the plane we locked in at
@@ -12228,6 +12238,65 @@ function _annotateFinishStroke() {
 	cleanupState();
 }
 
+// Build a text sprite for the annotation container — a Sprite with a
+// CanvasTexture rendered from the given text. Auto-faces the camera, so
+// it stays readable regardless of orbit. Sized so the text height is about
+// 20cm at world scale (0.2 world units); the source canvas is drawn at
+// generous resolution so it stays crisp when zoomed in. Color matches the
+// container's stroke color for visual coherence.
+function _annotateBuildTextSprite({ text, color, opacity }) {
+	const cv = document.createElement("canvas");
+	// Padding on all sides so the glyph outline doesn't hit the texture edge
+	// and get filtered into the transparent border.
+	const fontPx = 96;
+	const pad = 24;
+	const ctx0 = cv.getContext("2d");
+	ctx0.font = `600 ${fontPx}px "Inter", system-ui, sans-serif`;
+	const measured = ctx0.measureText(text);
+	cv.width = Math.max(64, Math.ceil(measured.width) + pad * 2);
+	cv.height = fontPx + pad * 2;
+	// Recreate the context — resizing the canvas resets its state.
+	const ctx = cv.getContext("2d");
+	ctx.font = `600 ${fontPx}px "Inter", system-ui, sans-serif`;
+	ctx.textBaseline = "middle";
+	ctx.textAlign = "left";
+	// Faint dark backdrop plate so the text stays readable against light
+	// scenes / skyboxes. Semi-transparent so it doesn't blot out the object
+	// behind it entirely.
+	ctx.fillStyle = "rgba(0,0,0,0.55)";
+	const r = 8;
+	// Rounded-rect fill via a Path2D — old Chrome supports roundRect but
+	// we fall back to a plain rect for safety.
+	if (typeof ctx.roundRect === "function") {
+		ctx.beginPath();
+		ctx.roundRect(2, 2, cv.width - 4, cv.height - 4, r);
+		ctx.fill();
+	} else {
+		ctx.fillRect(2, 2, cv.width - 4, cv.height - 4);
+	}
+	ctx.fillStyle = color || "#ffb454";
+	ctx.fillText(text, pad, cv.height / 2);
+	const tex = new THREE.CanvasTexture(cv);
+	tex.anisotropy = 8;
+	tex.needsUpdate = true;
+	const mat = new THREE.SpriteMaterial({
+		map: tex,
+		transparent: true,
+		opacity: opacity,
+		depthWrite: false,
+		toneMapped: false,
+	});
+	const sprite = new THREE.Sprite(mat);
+	// Scale sprite so text height reads ~20cm at world scale. Aspect ratio
+	// mirrors the canvas so the label doesn't stretch.
+	const worldH = 0.2;
+	const worldW = worldH * (cv.width / cv.height);
+	sprite.scale.set(worldW, worldH, 1);
+	sprite.userData._isAnnotationText = true;
+	sprite.userData.text = text;
+	return sprite;
+}
+
 // Build just the Line2 mesh (no Group wrapper) — a stroke. Used by both
 // live finalize and scene-load deserialize. Caller parents to the container.
 function _annotateBuildStrokeLine({ pointsFlat, color, widthPx, opacity }) {
@@ -12320,6 +12389,59 @@ canvas.addEventListener("pointerdown", (e) => {
 	// yield the click so grabbing the gizmo still moves/rotates/scales the
 	// current selection even while Shift is held.
 	if (transform?.axis) return;
+	// Text tool — click-to-place, no drag needed. Raycast to find placement
+	// point, prompt for the label, spawn a Sprite as a container child. We
+	// consume the event here (stopImmediatePropagation below runs regardless
+	// via the shared exit path) so the same click doesn't also start a stroke.
+	if (_annotateMode.shape === "text") {
+		const container = _annotateEnsureContainer();
+		if (!container) return;
+		const rect = canvas.getBoundingClientRect();
+		const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+		const ny = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+		ndc.set(nx, ny);
+		raycaster.setFromCamera(ndc, camera);
+		const candidates = objects.filter(o =>
+			o.userData?.primKind !== "splat"
+			&& o.userData?.primKind !== "annotation"
+			&& o.visible !== false
+			&& !o.userData?.locked
+		);
+		const hits = raycaster.intersectObjects(candidates, true);
+		let worldPos;
+		if (hits.length) {
+			worldPos = hits[0].point.clone();
+		} else {
+			const dist = camera.position.distanceTo(orbit.target);
+			worldPos = new THREE.Vector3()
+				.copy(raycaster.ray.direction)
+				.multiplyScalar(dist)
+				.add(raycaster.ray.origin);
+		}
+		// Defer the prompt() so the current pointer gesture ends first — a
+		// modal prompt() blocks the main thread and can leave the pointer
+		// capture in a weird state on some browsers.
+		setTimeout(() => {
+			const text = window.prompt("Text:", "");
+			if (!text || !text.trim()) return;
+			snapshotForUndo();
+			container.updateMatrixWorld(true);
+			const cfg = container.userData.annotation;
+			const sprite = _annotateBuildTextSprite({
+				text: text.trim(),
+				color: cfg.color,
+				opacity: cfg.opacity,
+			});
+			const local = container.worldToLocal(worldPos.clone());
+			sprite.position.copy(local);
+			container.add(sprite);
+			refreshObjectInspector?.();
+			if (typeof saveScene === "function") saveScene();
+		}, 0);
+		e.stopImmediatePropagation();
+		e.preventDefault();
+		return;
+	}
 	// Draw begins here.
 	_annotateBeginStroke(e.clientX, e.clientY);
 	// Preview: for Freehand we build a live-updating polyline as the drag
@@ -12335,7 +12457,7 @@ canvas.addEventListener("pointerdown", (e) => {
 	const container = _annotateEnsureContainer();
 	const cfg = container?.userData?.annotation || { color: "#ffb454", widthPx: 4, opacity: 1 };
 	_annotatePreview = _annotateBuildStrokeLine({
-		pointsFlat: [0, 0, 0],   // degenerate seed; refreshed on first move
+		pointsFlat: [0, 0, 0, 0, 0, 0],   // degenerate zero-length segment; setPositions needs ≥ 2 pts to render
 		color: cfg.color,
 		widthPx: cfg.widthPx,
 		opacity: cfg.opacity,
@@ -12347,24 +12469,43 @@ canvas.addEventListener("pointerdown", (e) => {
 }, true);
 canvas.addEventListener("pointermove", (e) => {
 	if (!_annotateMode.active || !_annotateMode.drawing) return;
-	// Freehand samples every move; Arrow / Box only need start + current
-	// endpoint, so we still append (buildShapePoints ignores intermediates
-	// for those shapes) and just refresh the preview from the shape output.
 	_annotateAppendPoint(e.clientX, e.clientY);
-	if (_annotatePreview) {
-		const worldPts = _annotateBuildShapePoints();
-		const line = _annotatePreview;
-		const container = _annotateMode.activeContainer;
-		if (worldPts && worldPts.length >= 2 && container) {
-			container.updateMatrixWorld(true);
-			const flat = [];
-			for (const p of worldPts) {
-				const local = container.worldToLocal(p.clone());
-				flat.push(local.x, local.y, local.z);
-			}
-			line.geometry?.setPositions(flat);
-			line.computeLineDistances?.();
+	if (!_annotatePreview || !_annotateMode.activeContainer) return;
+	// Real-time preview: always project the current cursor onto the stroke
+	// plane and use it as the LIVE endpoint, even when the point wasn't
+	// committed to pointsWorld (below-threshold movement). This makes ink
+	// follow the cursor pixel-for-pixel from the very first move instead
+	// of waiting for a full threshold hop.
+	const cur = _annotateProjectToPlane(e.clientX, e.clientY);
+	const container = _annotateMode.activeContainer;
+	container.updateMatrixWorld(true);
+	const shape = _annotateMode.shape;
+	let worldPts = null;
+	if (shape === "arrow" || shape === "box") {
+		// Arrow / Box: preview always spans start → current cursor. Swap
+		// pointsWorld temporarily so _annotateBuildShapePoints uses the
+		// live cursor as the endpoint (finalize replays with the real buffer).
+		const start = _annotateMode.pointsWorld[0];
+		if (start && cur) {
+			const saved = _annotateMode.pointsWorld;
+			_annotateMode.pointsWorld = [start, cur];
+			worldPts = _annotateBuildShapePoints();
+			_annotateMode.pointsWorld = saved;
 		}
+	} else {
+		// Freehand: committed points + live cursor for a smooth trailing tip.
+		const rendered = _annotateMode.pointsWorld.slice();
+		if (cur) rendered.push(cur);
+		if (rendered.length >= 2) worldPts = rendered;
+	}
+	if (worldPts && worldPts.length >= 2) {
+		const flat = [];
+		for (const p of worldPts) {
+			const local = container.worldToLocal(p.clone());
+			flat.push(local.x, local.y, local.z);
+		}
+		_annotatePreview.geometry?.setPositions(flat);
+		_annotatePreview.computeLineDistances?.();
 	}
 	e.stopImmediatePropagation();
 }, true);
@@ -12391,26 +12532,42 @@ let _annotatePreview = null;
 // container updates in one edit (single-color-per-container model).
 function _annotationApplyLook(group, { color, widthPx, opacity } = {}) {
 	if (!group) return;
-	const lines = (group.children || []).filter(c => c.userData?._isAnnotationLine);
-	if (!lines.length) {
-		// No strokes yet — just persist the future-default look on the
-		// container so freshly drawn lines pick it up.
-		if (group.userData?.annotation) {
-			if (color !== undefined) group.userData.annotation.color = color;
-			if (widthPx !== undefined) group.userData.annotation.widthPx = widthPx;
-			if (opacity !== undefined) group.userData.annotation.opacity = Math.max(0, Math.min(1, opacity));
-		}
-		return;
+	// Persist the container's default look no matter what — even before any
+	// strokes / text exist, so a fresh draw picks up the current brush.
+	if (group.userData?.annotation) {
+		if (color !== undefined) group.userData.annotation.color = color;
+		if (widthPx !== undefined) group.userData.annotation.widthPx = widthPx;
+		if (opacity !== undefined) group.userData.annotation.opacity = Math.max(0, Math.min(1, opacity));
 	}
-	if (color !== undefined) group.userData.annotation.color = color;
-	if (widthPx !== undefined) group.userData.annotation.widthPx = widthPx;
-	if (opacity !== undefined) group.userData.annotation.opacity = Math.max(0, Math.min(1, opacity));
+	const lines = (group.children || []).filter(c => c.userData?._isAnnotationLine);
 	for (const line of lines) {
 		if (!line.material) continue;
 		if (color !== undefined) line.material.color.set(color);
 		if (widthPx !== undefined) line.material.linewidth = widthPx;
 		if (opacity !== undefined) line.material.opacity = Math.max(0, Math.min(1, opacity));
 		line.material.needsUpdate = true;
+	}
+	// Text sprites: color change means re-rasterizing the canvas since the
+	// glyph fill is baked into the texture. Opacity is a live material set.
+	const texts = (group.children || []).filter(c => c.userData?._isAnnotationText);
+	for (const t of texts) {
+		if (opacity !== undefined && t.material) {
+			t.material.opacity = Math.max(0, Math.min(1, opacity));
+		}
+		if (color !== undefined) {
+			// Rebuild the sprite in place — swap texture + material rather
+			// than tearing down the Sprite node, so the transform / parent
+			// stay intact.
+			const fresh = _annotateBuildTextSprite({
+				text: t.userData.text || "",
+				color,
+				opacity: (opacity !== undefined ? opacity : (t.material?.opacity ?? 1)),
+			});
+			t.material?.map?.dispose?.();
+			t.material?.dispose?.();
+			t.material = fresh.material;
+			t.scale.copy(fresh.scale);
+		}
 	}
 }
 
@@ -12439,13 +12596,14 @@ function _annotationSyncPaneFromSelection(group) {
 	for (const b of document.querySelectorAll('#obj-annotation-shape [data-anno-shape]')) {
 		b.classList.toggle("active", b.dataset.annoShape === _annotateMode.shape);
 	}
-	// Stroke count hint — helps the user see how many strokes the group has
-	// without having to squint at the viewport.
+	// Element count hint — strokes + text sprites together. Helps the user
+	// see how much lives in this container at a glance.
 	if (countEl) {
-		const n = (group.children || []).filter(c => c.userData?._isAnnotationLine).length;
+		const kids = group.children || [];
+		const n = kids.filter(c => c.userData?._isAnnotationLine || c.userData?._isAnnotationText).length;
 		countEl.textContent = n === 0
 			? "Empty — hold Shift and drag to draw. Camera controls stay unblocked when Shift isn't held."
-			: `${n} stroke${n === 1 ? "" : "s"} — hold Shift and drag to add more. Plain drag orbits.`;
+			: `${n} element${n === 1 ? "" : "s"} — hold Shift and drag to add more. Plain drag orbits.`;
 	}
 }
 // Push current _annotateMode defaults into the Annotate tool pane's controls.
@@ -28836,19 +28994,23 @@ function serializeScene() {
 			const strokes = (o.children || [])
 				.filter(c => c.userData?._isAnnotationLine)
 				.map(line => {
-					const attr = line.geometry?.attributes?.instanceStart;
-					// LineGeometry stores segment pairs in instanceStart/End —
-					// pull the polyline back out by reading the .array we set
-					// via setPositions (LineGeometry keeps it as an internal
-					// property, but the safest source is the tag we cached
-					// when finalizing). Fall back to reading attribute data.
 					const pts = line.userData?._pts;
 					return {
 						points: pts ? Array.from(pts) : [],
 						shape: line.userData?.annotationShape || "freehand",
 					};
 				})
-				.filter(s => s.points.length >= 6);   // ≥2 xyz triples
+				.filter(s => s.points.length >= 6);
+			// Text sprites — position (container-local), text string, and the
+			// per-sprite scale (canvas size varies with text length so we
+			// re-derive on load, but keep the current scale as a hint).
+			const texts = (o.children || [])
+				.filter(c => c.userData?._isAnnotationText)
+				.map(sprite => ({
+					text: sprite.userData?.text || "",
+					position: sprite.position.toArray(),
+				}))
+				.filter(t => t.text.length > 0);
 			return {
 				name: o.name,
 				position: o.position.toArray(),
@@ -28861,6 +29023,7 @@ function serializeScene() {
 				widthPx: cfg.widthPx,
 				opacity: cfg.opacity,
 				strokes,
+				texts,
 				keyframes: serializeObjectKeyframes(o),
 			};
 		}),
@@ -29224,6 +29387,16 @@ async function deserializeScene(state, opts = {}) {
 				});
 				line.userData.annotationShape = s.shape || "freehand";
 				group.add(line);
+			}
+			for (const t of (ar.texts || [])) {
+				if (!t.text) continue;
+				const sprite = _annotateBuildTextSprite({
+					text: t.text,
+					color,
+					opacity,
+				});
+				if (Array.isArray(t.position)) sprite.position.fromArray(t.position);
+				group.add(sprite);
 			}
 			// Bump the annotation counter so freshly created containers don't
 			// reuse restored numbers ("Annotations.003" already exists).
