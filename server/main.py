@@ -7,6 +7,7 @@ or COMFY_API_KEY env var as a fallback)."""
 from __future__ import annotations
 
 import asyncio
+import httpx
 import importlib
 import json
 import os
@@ -1492,9 +1493,13 @@ async def triposplat_requirements():
     if container_ok:
         try:
             async with httpx.AsyncClient() as client:
+                # 10s timeout so a momentary /health delay (busy event loop
+                # right after a big generate returned, GC pause, etc.)
+                # doesn't flash the row red and hide the source-image
+                # section underneath.
                 r = await client.get(
                     f"http://{_TRIPOSPLAT_HOST}:{_TRIPOSPLAT_PORT}/health",
-                    timeout=3.0,
+                    timeout=10.0,
                 )
                 if r.status_code == 200:
                     j = r.json()

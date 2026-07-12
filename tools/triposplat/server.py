@@ -17,6 +17,7 @@ starts reuse the cached weights (few seconds instead of a multi-GB pull).
 
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 import os
@@ -32,15 +33,16 @@ log = logging.getLogger("triposplat")
 
 CKPTS_DIR = Path(os.environ.get("TRIPOSPLAT_CKPTS", "/app/ckpts"))
 HF_REPO = "VAST-AI/TripoSplat"
-# Filenames the pipeline expects, per README + example. We check the ckpts
-# dir for these on startup; any missing → we resnapshot the HF repo.
-EXPECTED_CKPT_FILES = [
-    "model.safetensors",
-    "decoder.safetensors",
-    "dinov3.safetensors",
-    "flux2_vae_encoder.safetensors",
-    "rmbg.safetensors",
-]
+# Actual on-disk layout of the VAST-AI/TripoSplat repo — checkpoints live
+# in subfolders, not flat under ckpts/. Paths mirror `run_example.py` in
+# the upstream repo. Any missing → we resnapshot.
+CKPT_MAP = {
+    "ckpt":         "diffusion_models/triposplat_fp16.safetensors",
+    "decoder":      "vae/triposplat_vae_decoder_fp16.safetensors",
+    "dinov3":       "clip_vision/dino_v3_vit_h.safetensors",
+    "flux2_vae":    "vae/flux2-vae.safetensors",
+    "rmbg":         "background_removal/birefnet.safetensors",
+}
 
 # One-time pipeline handle guarded by a lock so concurrent requests during
 # cold-start don't try to load twice. Once `_pipeline` is non-None it can be
@@ -52,8 +54,7 @@ _pipeline_lock = threading.Lock()
 def _weights_present() -> bool:
     if not CKPTS_DIR.exists():
         return False
-    have = {p.name for p in CKPTS_DIR.rglob("*") if p.is_file()}
-    return all(name in have for name in EXPECTED_CKPT_FILES)
+    return all((CKPTS_DIR / rel).exists() for rel in CKPT_MAP.values())
 
 
 def _download_weights() -> None:
@@ -90,11 +91,11 @@ def _init_pipeline():
 
     log.info("instantiating TripoSplatPipeline")
     pipe = TripoSplatPipeline(
-        ckpt_path=str(CKPTS_DIR / "model.safetensors"),
-        decoder_path=str(CKPTS_DIR / "decoder.safetensors"),
-        dinov3_path=str(CKPTS_DIR / "dinov3.safetensors"),
-        flux2_vae_encoder_path=str(CKPTS_DIR / "flux2_vae_encoder.safetensors"),
-        rmbg_path=str(CKPTS_DIR / "rmbg.safetensors"),
+        ckpt_path=str(CKPTS_DIR / CKPT_MAP["ckpt"]),
+        decoder_path=str(CKPTS_DIR / CKPT_MAP["decoder"]),
+        dinov3_path=str(CKPTS_DIR / CKPT_MAP["dinov3"]),
+        flux2_vae_encoder_path=str(CKPTS_DIR / CKPT_MAP["flux2_vae"]),
+        rmbg_path=str(CKPTS_DIR / CKPT_MAP["rmbg"]),
         device=device,
     )
     log.info("pipeline ready")
@@ -112,6 +113,37 @@ def _get_pipeline():
 
 
 app = FastAPI(title="TripoSplat", version="1.0")
+
+
+# Kick off the HF snapshot as soon as the container boots so the frontend
+# requirements pane can see progress instead of a silent /health probe
+# loop. Runs in a background thread so /health stays responsive during
+# the multi-GB download. Idempotent — snapshot_download resumes cached
+# files without re-pulling.
+_weights_download_thread: threading.Thread | None = None
+
+
+def _ensure_weights_download_started() -> None:
+    global _weights_download_thread
+    if _weights_present():
+        return
+    if _weights_download_thread and _weights_download_thread.is_alive():
+        return
+
+    def _worker():
+        try:
+            _download_weights()
+        except Exception:
+            log.exception("background weight download failed — will retry on next /generate")
+
+    t = threading.Thread(target=_worker, name="triposplat-weights", daemon=True)
+    t.start()
+    _weights_download_thread = t
+
+
+@app.on_event("startup")
+def _on_startup():
+    _ensure_weights_download_started()
 
 
 @app.get("/health")
@@ -150,12 +182,22 @@ async def generate(
     try:
         pipe = _get_pipeline()
         log.info(f"generating splat: input={in_path.name} num_gaussians={num_gaussians}")
-        gaussian, _prepared = pipe.run(
-            input=str(in_path),
-            num_gaussians=num_gaussians,
-            show_progress=False,
-        )
-        gaussian.save_ply(str(out_path))
+
+        # Offload the blocking pipe.run() to a worker thread so the event
+        # loop stays free — otherwise /health probes queue behind the
+        # multi-minute inference and the frontend requirements pane goes
+        # red mid-run with "container up but /health unreachable".
+        def _run_and_save() -> None:
+            # `input` is positional in TripoSplatPipeline.run — passing it
+            # as a kwarg raises TypeError. Matches upstream run_example.py.
+            gaussian, _prepared = pipe.run(
+                str(in_path),
+                num_gaussians=num_gaussians,
+                show_progress=False,
+            )
+            gaussian.save_ply(str(out_path))
+
+        await asyncio.to_thread(_run_and_save)
         log.info(f"generated {out_path.name} ({out_path.stat().st_size} bytes)")
         return FileResponse(
             str(out_path),
