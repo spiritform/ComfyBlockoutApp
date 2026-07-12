@@ -4,6 +4,8 @@ A **3D blockout editor** that turns your scene into a rendered image or video vi
 
 Built for people who want the creative frame of a 3D editor without the mesh-modeling depth of Blender. Drop primitives, splats, skyboxes, terrain, mannequins, lights. Aim the camera. Add keyframes. Hit Generate.
 
+![ComfyBlockout editor](docs/screenshots/editor.png)
+
 ---
 
 ## Install
@@ -17,6 +19,8 @@ First launch creates a `.venv`, installs deps (FastAPI + `comfy-cli` + ffmpeg sh
 Windows only for now. Requires Python 3.10+ on PATH.
 
 ## Auth
+
+![Settings modal](docs/screenshots/settings.png)
 
 **Comfy Cloud (required for cloud workflows):** open **Settings** (gear icon, top-right), hit **Sign in with Comfy Cloud** — the API keys page opens in a new tab at `platform.comfy.org/profile/api-keys`. Sign up first via the "New to Comfy?" link if you don't have an account. Copy the key, paste it into the input below the button, hit Save.
 
