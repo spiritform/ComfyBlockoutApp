@@ -2216,6 +2216,11 @@
 	.out-row:last-child { border-bottom: none; }
 	/* Kill the parent .outliner's gap — dividers replace the visual gap. */
 	.outliner { gap: 0; }
+	/* Drag-to-reorder affordances — source row dims slightly while dragged;
+	   drop target gets a 2px amber bar on the edge the row will land on. */
+	.out-row.out-drag-source { opacity: 0.45; }
+	.out-row.out-drop-above { box-shadow: inset 0 2px 0 0 #ffb454; }
+	.out-row.out-drop-below { box-shadow: inset 0 -2px 0 0 #ffb454; }
 	.out-name-edit { user-select: text; -webkit-user-select: text; }
 	/* Text-highlight in the rename input — override the browser's default
 	   blue with a soft amber tint that matches the app's accent language,
@@ -6632,22 +6637,9 @@ transform.addEventListener("dragging-changed", (e) => {
 	// through this event and disables orbit for the duration of the drag.
 	orbit.enabled = !e.value;
 	if (e.value) {
-		// Drag started — scroll the properties pane to the Transform section
-		// so the live X/Y/Z readouts sit in view while the user pushes the
-		// gizmo. Guarded: only nudge the pane if the section isn't already
-		// visible, otherwise the scroll is jarring for objects whose
-		// Properties is short enough that Transform is already on-screen.
-		const tSec = document.getElementById("obj-transform-section");
-		if (tSec && tSec.offsetParent !== null) {
-			const container = tSec.closest(".rp-pane-body, .rp-scroll, .rp-pane") || tSec.parentElement;
-			const cRect = container?.getBoundingClientRect();
-			const sRect = tSec.getBoundingClientRect();
-			// If Transform's top is below the container's bottom OR its bottom
-			// is above the container's top, it's off-screen and worth scrolling.
-			if (cRect && (sRect.top >= cRect.bottom || sRect.bottom <= cRect.top)) {
-				tSec.scrollIntoView({ behavior: "smooth", block: "start" });
-			}
-		}
+		// Drag started — scroll the properties pane so the Transform section
+		// with the live X/Y/Z readouts sits in view.
+		_scrollPropsToTransform?.();
 	} else {
 		renderCamDragDist = null;
 		scaleDragStart = null;
@@ -6898,6 +6890,13 @@ window.setActiveView = setActiveView;
 // camera-lock button flips renderCam.userData.locked. Keeps orbit off
 // only when we're actually looking through the locked camera; scene view
 // always stays orbitable (that camera isn't the locked one).
+//
+// One-shot toggling isn't enough on its own — several other code paths
+// (mannequin drag end, TransformControls dragging-changed, etc.) blindly
+// flip orbit.enabled back to true. The animate loop re-enforces the
+// lock every frame so the guard survives those. This function stays as
+// the "on state change" hook (fires on select / lock / view-swap) so the
+// change is instant instead of one-frame-delayed.
 function syncCamLockToOrbit() {
 	if (!orbit) return;
 	if (activeView === "camera" && renderCam.userData.locked) {
@@ -6907,6 +6906,26 @@ function syncCamLockToOrbit() {
 	}
 }
 window.syncCamLockToOrbit = syncCamLockToOrbit;
+
+// Scroll the Object-properties pane so the Transform section is visible.
+// Called from select() (default view on selection) and from the transform
+// gizmo's dragging-changed handler (safety net for the fast-moving gizmo
+// case). #rp-body is the scrollable ancestor; scrolling scrollTop is more
+// reliable than scrollIntoView for nested-flex containers. Only scrolls
+// when the section isn't already fully visible so short panes don't get
+// nudged unnecessarily.
+function _scrollPropsToTransform() {
+	const tSec = document.getElementById("obj-transform-section");
+	const body = document.getElementById("rp-body");
+	if (!tSec || !body || tSec.offsetParent === null) return;
+	const cRect = body.getBoundingClientRect();
+	const sRect = tSec.getBoundingClientRect();
+	const needsScroll = sRect.top < cRect.top || sRect.bottom > cRect.bottom;
+	if (!needsScroll) return;
+	const targetTop = body.scrollTop + (sRect.top - cRect.top) - 12;
+	body.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+}
+window._scrollPropsToTransform = _scrollPropsToTransform;
 
 // Ground grid — plain THREE.GridHelper. Previously used a shader-based
 // PlaneGeometry with `fwidth`-based AA + distance fade, but the shader
@@ -10635,6 +10654,12 @@ function select(obj, opts = {}) {
 		}
 		forceRightPane("object", objectPaneLabel(selected));
 		refreshObjectInspector?.();
+		// Scroll the Object pane to the Transform section by default — for
+		// tall property panes (Particles / Scatter / etc.) the Transform
+		// controls otherwise start below the fold, so users can't just
+		// grab a value without hunting. Deferred a frame so the pane has
+		// laid out its content first.
+		requestAnimationFrame(() => _scrollPropsToTransform?.());
 	} else {
 		transform.detach();
 		if (anchorMode) pivotMarker.visible = false;
@@ -10674,9 +10699,66 @@ function toggleLock(obj) {
 // Extracted so refreshOutliner can call it twice — once for root-level
 // unassigned objects, once for each group's expanded members (with `nested`
 // so CSS shrinks the row and hides the color/image slots + prompt textarea).
+// Drag-to-reorder rows in the outliner. Regular object rows are draggable;
+// the Camera row is intentionally excluded (renders separately at the top
+// and stays pinned there). Drop above/below the target row inserts the
+// dragged object at that position in `objects[]`; refreshOutliner + save
+// commit the new order.
+function _wireOutlinerRowDrag(row, obj) {
+	row.draggable = true;
+	row.dataset.outObjName = obj.name;
+	row.addEventListener("dragstart", (e) => {
+		e.stopPropagation();
+		e.dataTransfer.effectAllowed = "move";
+		try { e.dataTransfer.setData("text/plain", obj.name); } catch {}
+		row.classList.add("out-drag-source");
+	});
+	row.addEventListener("dragend", () => {
+		row.classList.remove("out-drag-source");
+		outlinerEl?.querySelectorAll(".out-drop-above, .out-drop-below")
+			.forEach(r => r.classList.remove("out-drop-above", "out-drop-below"));
+	});
+	row.addEventListener("dragover", (e) => {
+		e.preventDefault();
+		e.dataTransfer.dropEffect = "move";
+		const rect = row.getBoundingClientRect();
+		const above = (e.clientY - rect.top) < rect.height / 2;
+		row.classList.toggle("out-drop-above", above);
+		row.classList.toggle("out-drop-below", !above);
+	});
+	row.addEventListener("dragleave", () => {
+		row.classList.remove("out-drop-above", "out-drop-below");
+	});
+	row.addEventListener("drop", (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+		const srcName = (() => { try { return e.dataTransfer.getData("text/plain"); } catch { return ""; } })();
+		row.classList.remove("out-drop-above", "out-drop-below");
+		if (!srcName || srcName === obj.name) return;
+		const src = objects.find(o => o.name === srcName);
+		const dst = obj;
+		if (!src || !dst || src === dst) return;
+		const srcIdx = objects.indexOf(src);
+		if (srcIdx === -1) return;
+		objects.splice(srcIdx, 1);
+		let dstIdx = objects.indexOf(dst);
+		if (dstIdx === -1) return;
+		const rect = row.getBoundingClientRect();
+		const above = (e.clientY - rect.top) < rect.height / 2;
+		objects.splice(above ? dstIdx : dstIdx + 1, 0, src);
+		refreshOutliner();
+		saveScene?.();
+	});
+}
+
 function buildOutlinerRow(obj, { nested = false } = {}) {
 	const row = document.createElement("div");
 	row.className = "out-row" + (nested ? " nested" : "") + (selectionSet.has(obj) ? " selected" : "") + (obj.visible === false ? " hidden" : "") + (obj.userData.locked ? " locked" : "");
+	// Drag-to-reorder — nested rows (inside a group) are skipped so the drag
+	// hint stays consistent with the group's own ordering. Wired up on the
+	// row itself; drop reordering happens against objects[] using the
+	// stashed object name.
+	if (!nested) _wireOutlinerRowDrag(row, obj);
 		const ps = obj.userData.particleSystem;
 		const hex = ps
 			? "#" + ps.config.color.toString(16).padStart(6, "0")
@@ -11369,7 +11451,27 @@ canvas.addEventListener("pointerup", e => {
 		objects.filter(o => o.userData.primKind !== "splat" && o.visible !== false && !o.userData.locked),
 		true,
 	);
-	const meshHit = meshHits[0] || null;
+	// Scatter pickMeshes are invisible boxes that give the scatter's
+	// bounding box a raycastable hit target (empty-container case stays
+	// selectable). Filter them out of primary hits so they don't steal
+	// clicks meant for real visible meshes.
+	const nonPickHits = meshHits.filter(h => !h.object?.userData?._scatterPickTarget);
+	// Priority-based picking — real top-level objects (like Cube.001, the
+	// scatter's SOURCE cube) win over scatter clones even if the clone is
+	// visually closer. Rationale: clones share the source's identity, so
+	// clicking any of them is ambiguous, whereas the source is a distinct
+	// object with its own transform, material, etc. Clicking on empty
+	// clone-only territory still falls back to selecting the scatter.
+	const isScatterChild = (o) => {
+		let p = o?.parent;
+		while (p) {
+			if (p.userData?.primKind === "scatter") return true;
+			p = p.parent;
+		}
+		return false;
+	};
+	const nonScatterHits = nonPickHits.filter(h => !isScatterChild(h.object));
+	const meshHit = nonScatterHits[0] || nonPickHits[0] || meshHits[0] || null;
 	// Sphere-pick for objects without reliable triangle raycast (splats, SkinnedMesh inside FBX).
 	// For splats we also verify that the click actually landed on rendered pixels —
 	// their pickSphere is a loose AABB fit, so empty space around irregular shapes
@@ -25085,6 +25187,14 @@ function loop() {
 		// noop when no mannequins exist.
 		if (typeof _mannequinTickGizmos === "function") _mannequinTickGizmos();
 		if (typeof _motionPreviewTick === "function") _motionPreviewTick();
+		// Per-frame re-enforce of the camera-lock. Several other paths
+		// (mannequin drag end, TransformControls dragging-changed, etc.)
+		// blindly set `orbit.enabled = true` and would otherwise unlock
+		// the camera behind the user's back — matches the "toggle lock
+		// twice to fix it" symptom the user reported. Cheap boolean
+		// check every frame so the guard survives any code that
+		// re-enables orbit.
+		if (activeView === "camera" && renderCam.userData.locked) orbit.enabled = false;
 		orbit.update();
 		// Camera Target Object — locks the render camera's aim to the chosen
 		// object's world position each frame. Applied AFTER orbit.update so
