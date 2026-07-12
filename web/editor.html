@@ -15,7 +15,10 @@
 	#top-header {
 		flex: 0 0 52px;
 		display: flex; align-items: center; justify-content: space-between;
-		padding: 0 24px 0 20px;
+		/* Symmetric 20px padding both sides — settings ⚙ sits the same
+		   distance from the right edge as the ComfyBlockout logo sits from
+		   the left edge. Reads as a balanced brand row. */
+		padding: 0 20px;
 		background: #020203;
 		z-index: 200;
 	}
@@ -33,7 +36,13 @@
 		color: rgba(255,255,255,0.4); font-weight: 400; font-size: 10px;
 		letter-spacing: 0.06em; text-transform: uppercase;
 	}
-	#top-header .th-brand .th-sep { color: rgba(255,255,255,0.25); }
+	#top-header .th-brand .th-sep {
+		color: rgba(255,255,255,0.25);
+		/* Extra breathing room on both sides so the gap logo→brand and the
+		   gap brand→colon→project title feel proportionally similar. Without
+		   this, the colon reads tight against the ComfyBlockout text. */
+		margin: 0 6px;
+	}
 	#top-header .th-brand .th-project-name {
 		text-transform: none; font-size: 11px; letter-spacing: 0.02em;
 		cursor: text; padding: 2px 4px; border-radius: 3px;
@@ -68,12 +77,12 @@
 	#top-header .th-btn-mini:hover { background: rgba(255,255,255,0.06); color: #fff; }
 	#top-header .th-btn-mini.active { background: rgba(255,180,84,0.18); color: #ffd28a; }
 	.th-icon-btn {
-		width: 32px; height: 32px; border-radius: 6px; border: none;
-		background: transparent; color: rgba(255,255,255,0.55); cursor: pointer;
+		width: 28px; height: 28px; border-radius: 6px; border: none;
+		background: transparent; color: rgba(255,255,255,0.4); cursor: pointer;
 		display: inline-flex; align-items: center; justify-content: center;
 	}
 	.th-icon-btn:hover { background: rgba(255,255,255,0.08); color: #e6e6ea; }
-	.th-icon-btn svg { width: 16px; height: 16px; }
+	.th-icon-btn svg { width: 14px; height: 14px; }
 
 	/* ---- Help view (full-page, under header) ----
 	   Two-column layout matching the editor: left nav ~= left panel width,
@@ -752,7 +761,10 @@
 		   as a distinct band above the viewport instead of merging into the
 		   near-black canvas surround. */
 		background: #0f0f14;
-		display: flex; align-items: flex-end; gap: 3px; padding: 14px 24px 14px 14px;
+		/* Symmetric 14px horizontal padding — the empty space before the ⏺
+		   record button matches the empty space after the scrub track, and
+		   the scrubber itself extends a bit further right. */
+		display: flex; align-items: flex-end; gap: 3px; padding: 14px;
 		font-family: inherit; user-select: none;
 	}
 	/* Small recording status line — sits directly above the transport, shown only while
@@ -1042,11 +1054,17 @@
 	#timeline { position: relative; }
 	#tl-time {
 		position: absolute; top: 6px; left: 14px;
-		z-index: 2; pointer-events: none;
+		z-index: 2;
 		font-size: 10px; letter-spacing: 0.08em;
-		color: rgba(255,255,255,0.5);
+		/* Dimmed to 0.32 so the timeline transport (record / play / etc.)
+		   reads as primary and the current-time readout as secondary metadata. */
+		color: rgba(255,255,255,0.32);
 		font-variant-numeric: tabular-nums;
+		cursor: pointer; user-select: none;
+		padding: 2px 4px; margin: -2px -4px; border-radius: 3px;
+		transition: color 0.12s, background 0.12s;
 	}
+	#tl-time:hover { color: rgba(255,255,255,0.7); }
 
 	#status {
 		position: absolute; top: 14px; right: 14px; z-index: 10;
@@ -1085,11 +1103,12 @@
 		overflow-y: auto; overflow-x: hidden;
 		padding: 0 20px calc(var(--lp-agent-h) + 28px);
 		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
-		/* Reserve scrollbar gutter on the right so content doesn't shift left
-		   when overflow toggles on/off — but keep the left edge flush against
-		   #lp-zone-top-header's OBJECTS label (which sits outside this scroll
-		   container). Both-edges would center content but misalign it against
-		   the fixed header above. */
+		/* Reserve gutter on the RIGHT only so content doesn't shift when the
+		   scrollbar appears/disappears. Left stays flush at 20px so the
+		   OBJECTS / TOOLS / WORKFLOWS labels stay aligned with the
+		   ComfyBlockout logo above and the AI AGENT header below. Both-edges
+		   would center content but throw the label column out of line with
+		   the brand row. */
 		scrollbar-gutter: stable;
 	}
 	#lp-zone-top-body::-webkit-scrollbar { width: 4px; }
@@ -1191,7 +1210,11 @@
 	#lp-fixed-bottom .assistant-prompt-arrow { top: 15px; left: 18px; }
 	#lp-zone-bottom-header {
 		flex: 0 0 40px;
-		padding: 0 20px;
+		/* Padding-right 24 compensates for scrollbar gutter in the assistant
+		   log below — right edges of "AI AGENT · MCP · IDLE" and the log's
+		   right margin line up. Left stays 20 to match the OBJECTS band and
+		   the ComfyBlockout logo. */
+		padding: 0 24px 0 20px;
 		display: flex; align-items: center; gap: 6px;
 		white-space: nowrap;
 		cursor: grab; user-select: none;
@@ -1277,9 +1300,15 @@
 	#lp-zone-top-header {
 		/* Fixed 40px band — always visible, matches the viewport toolbar
 		   height. AI Agent drag stops right under this header (top zone can
-		   shrink to just this header) so OBJECTS label stays put. */
+		   shrink to just this header) so OBJECTS label stays put. Padding
+		   left matches #top-header's own 20px left padding so the OBJECTS
+		   label sits directly under the ComfyBlockout logo. Padding right
+		   is 24px to compensate for the 4px scrollbar-gutter reservation in
+		   #lp-zone-top-body below — right edges of the band and the section
+		   grids line up because both effective right-content edges sit at
+		   panel_width - 24. */
 		flex: 0 0 40px;
-		padding: 0 20px;
+		padding: 0 24px 0 20px;
 		display: flex; align-items: center; gap: 6px;
 		white-space: nowrap;
 		user-select: none;
@@ -1297,10 +1326,13 @@
 	#lp-zone-top-body .section:first-of-type { padding-top: 0; }
 	#lp-zone-top-body .section:last-child { padding-bottom: 28px; }
 
-	/* Collapsible sections — click the head-row to fold the body */
+	/* Collapsible sections — click the head-row to fold the body. Bumped
+	   margin-bottom from 4 → 8 to equalize the visible label-to-grid gap
+	   with OBJECTS, whose label lives in the fixed 40px band above and
+	   naturally sits ~4px further from the grid. */
 	.section.collapsible .section-head-row {
 		cursor: pointer; user-select: none;
-		margin-bottom: 4px;
+		margin-bottom: 8px;
 	}
 	.section.collapsible.collapsed .section-head-row { margin-bottom: 0; }
 	.section.collapsible.collapsed { padding-bottom: 14px; }
@@ -1322,10 +1354,13 @@
 		letter-spacing: 0.06em; color: rgba(255,255,255,0.4);
 		margin-bottom: 14px; display: block;
 	}
-	/* min-height keeps the head-row the same height whether or not the head-end
-	   has a visible button — otherwise the label jumps up ~2-3px when a section
-	   collapses (Clear/+ Add get hidden, row shrinks to label-height). */
-	.section-head-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; min-height: 20px; }
+	/* Fixed height keeps the head-row the same size whether or not the head-end
+	   has a visible button — otherwise the label jumps up ~1-2px when a section
+	   collapses (Clear/+ Add get hidden, row shrinks to label-height). 24px is
+	   just above the tallest mini-btn.add box (the enlarged + glyph pushed the
+	   old 20px min-height to overflow slightly, leaving a small shift when
+	   collapse hid the button). */
+	.section-head-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; height: 24px; }
 	.section-head-row .section-label { margin-bottom: 0; }
 	.mini-btn {
 		background: rgba(255,255,255,0.05); border: none; border-radius: 4px;
@@ -1343,6 +1378,7 @@
 	.mini-btn.outliner-eye-btn {
 		padding: 0; width: 22px; height: 22px;
 		background: transparent;
+		color: rgba(255,255,255,0.35);   /* Dimmer than the .mini-btn 0.5 default */
 		display: inline-flex; align-items: center; justify-content: center;
 	}
 	.mini-btn.outliner-eye-btn:hover { background: transparent; color: #e6e6ea; }
@@ -2354,8 +2390,10 @@
 		border-radius: 4px; cursor: pointer; color: rgba(255,255,255,0.4);
 		display: flex; align-items: center; justify-content: center;
 		font-size: 11px; line-height: 1; font-family: inherit;
+		padding: 0;
 	}
 	.out-vis:hover, .out-lock:hover { background: rgba(255,255,255,0.06); color: #e6e6ea; }
+	.out-vis svg { width: 12px; height: 12px; display: block; }
 	.out-row.locked .out-lock { color: #ffb454; }
 	.out-row.locked .out-name { opacity: 0.55; }
 	.out-row.locked .out-color { opacity: 0.55; }
@@ -2811,16 +2849,20 @@
 		width: 24px; height: 24px; padding: 0; border: none; cursor: pointer;
 		background: transparent;
 		display: inline-flex; align-items: center; justify-content: center;
-		color: rgba(255,255,255,0.28);
+		/* OFF/inactive baseline dimmed to 0.18 so the disabled/other-view
+		   glyph reads as strongly secondary — active toggle stands out at
+		   the 50% base without needing a bright 85%. */
+		color: rgba(255,255,255,0.18);
 	}
 	/* Author-CSS display:inline-flex on .vpm-btn overrides the user-agent
 	   [hidden]{display:none}. Force it back so hidden left-half toggle in
 	   single view actually disappears. */
 	.vpm-btn[hidden] { display: none; }
-	.vpm-btn:hover { color: rgba(255,255,255,0.7); }
-	/* Active state = brightened glyph only. No outline; dim vs light color
-	   alone carries the on/off read. */
-	.vpm-btn.active { color: rgba(255,255,255,0.85); }
+	.vpm-btn:hover { color: rgba(255,255,255,0.55); }
+	/* Active state dimmed further — still clearly brighter than the 0.18
+	   off state but sitting well below full white so the corner controls
+	   never dominate the viewport content behind them. */
+	.vpm-btn.active { color: rgba(255,255,255,0.38); }
 	.vpm-btn svg { width: 14px; height: 14px; display: block; }
 	/* Suppress the click-focus ring entirely — no amber flash on click/tab. */
 	.vpm-btn:focus, .vpm-btn:focus-visible { outline: none; }
@@ -3555,6 +3597,9 @@
 	   only the LEFT panel's AI Agent zone reacts to the .no-agent class. */
 	#rp-zone-top-header {
 		flex: 0 0 40px;
+		/* Padding-right 20 — matches padding-left. The eye + × sit at the
+		   same visual inset from the right edge that OUTLINER sits from the
+		   left, so the header reads as symmetric. */
 		padding: 0 20px;
 		display: flex; align-items: center; gap: 6px;
 		white-space: nowrap;
@@ -3699,7 +3744,11 @@
 	}
 	#rp-header {
 		flex: 0 0 45px;
-		padding: 0 20px;
+		/* Padding-right 24 compensates for the 4px scrollbar gutter in
+		   #rp-body below — the PROPERTIES : LABEL header ends exactly where
+		   the property control rows below end. Left stays at 20 to match
+		   the OUTLINER header + LEFT panel columns. */
+		padding: 0 24px 0 20px;
 		display: flex; align-items: center; gap: 6px;
 		white-space: nowrap; overflow: hidden;
 		cursor: grab; user-select: none;
@@ -3711,6 +3760,11 @@
 		margin-left: auto;
 		display: inline-flex; align-items: center; gap: 8px;
 	}
+	/* Outliner controls (eye + ×) sit closer together than the shared 8px
+	   default — they're a pair of glyph-only icons and the extra gap made
+	   them feel disconnected. Properties/AI-Agent header ends keep the
+	   default gap because they mix statuses + buttons. */
+	#rp-zone-top-controls { gap: 2px; }
 	.rp-header-end[hidden] { display: none; }
 	.rp-kicker, .rp-sep, #rp-title {
 		font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
@@ -3764,14 +3818,18 @@
 	#panel { border-right: none !important; }
 </style>
 <script>
-// Pre-boot layout restore — runs synchronously so the panel splits paint at
-// their SAVED sizes on the very first frame. Without this, the CSS defaults
-// (--lp-agent-h: 145px, --rp-top-basis: 35%) render for one tick before the
-// deferred module script reads localStorage and snaps the layout to the
-// user's saved values — the "columns look wider for a split second" flash
-// on app restart. Injecting the override into <head> BEFORE the body parses
-// means #panel + #right-panel pick up the correct custom-property values on
-// their first layout pass.
+// Pre-boot layout restore + full-screen curtain — runs synchronously so the
+// panel splits paint at their SAVED sizes on the very first frame AND the
+// user never sees the mid-boot layout shift while the module script deferreds
+// its way to running. Two things happen here:
+//   1) Emit a <style> that overrides #panel + #right-panel CSS custom
+//      properties from localStorage BEFORE the body parses — so the initial
+//      layout matches the settled one.
+//   2) Add a `.cb-preboot` class to <html> so a fixed-position full-viewport
+//      curtain covers EVERYTHING (panels + viewport + top header) until the
+//      module boot IIFE flips the class off after deserialize resolves. The
+//      existing #init-overlay only covered the viewport area, so the panel
+//      column flash on refresh was visible underneath.
 (function () {
 	try {
 		const rules = [];
@@ -3781,15 +3839,41 @@
 		}
 		const rpTop = localStorage.getItem("cb.rightPanel.topBasis");
 		if (rpTop) {
-			// Accept either a % string ("35.00%") or raw px number, matching
-			// what the drag persistence writes.
 			rules.push(`#right-panel { --rp-top-basis: ${rpTop}; }`);
 		}
-		if (rules.length) {
-			const s = document.createElement("style");
-			s.textContent = rules.join("\n");
-			document.head.appendChild(s);
-		}
+		// Full-viewport curtain: opaque solid over everything with a small
+		// spinner in the middle. Uses CSS custom-properties for the fade
+		// transition so we don't need transitions on the panels themselves.
+		rules.push(`
+			.cb-preboot::before {
+				content: "";
+				position: fixed; inset: 0;
+				background: #0a0a0e;
+				z-index: 9998;
+				pointer-events: auto;
+			}
+			.cb-preboot::after {
+				content: "";
+				position: fixed; top: 50%; left: 50%;
+				margin: -13px 0 0 -13px;
+				width: 26px; height: 26px; border-radius: 50%;
+				border: 2px solid rgba(255,255,255,0.14);
+				border-top-color: #ffb454;
+				animation: cb-preboot-spin 0.9s linear infinite;
+				z-index: 9999;
+				pointer-events: none;
+			}
+			@keyframes cb-preboot-spin { to { transform: rotate(360deg); } }
+			.cb-preboot.cb-preboot-fade::before,
+			.cb-preboot.cb-preboot-fade::after {
+				opacity: 0;
+				transition: opacity 0.28s ease-out;
+			}
+		`);
+		const s = document.createElement("style");
+		s.textContent = rules.join("\n");
+		document.head.appendChild(s);
+		document.documentElement.classList.add("cb-preboot");
 	} catch (e) { /* localStorage disabled — fall back to CSS defaults */ }
 })();
 </script>
@@ -5954,7 +6038,7 @@
 			if (assetSelectAnchor && !present.has(assetSelectAnchor)) assetSelectAnchor = null;
 			assetsEmpty.hidden = filtered.length > 0;
 			if (filtered.length === 0) {
-				const kindLabel = { image: "images", video: "videos", "3d": "3D assets" }[assetsFilter] || assetsFilter;
+				const kindLabel = { image: "images", video: "videos", "3d": "3D assets", blockout: "blockout snapshots" }[assetsFilter] || assetsFilter;
 				assetsEmpty.textContent = (assetsItems.length === 0)
 					? "No generated images yet — hit Generate to create some."
 					: `No ${kindLabel} yet.`;
@@ -10930,14 +11014,21 @@ function select(obj, opts = {}) {
 		selected = obj;
 	}
 	window.__selectedObj = selected;
-	// Auto-disarm Annotate — the tool creates + selects the container on
-	// activation, so as soon as the user hops to a different object we can
-	// assume they're done drawing for now. Second click on the tile re-arms.
-	// Guarded by `_annotateMode?.active` so this branch is silent when the
-	// tool wasn't on to begin with, and by primKind so hopping BETWEEN
-	// annotation containers (if we ever have more than one) doesn't disarm.
-	if (_annotateMode?.active && selected?.userData?.primKind !== "annotation") {
-		_setAnnotateMode?.(false);
+	// Auto-arm on annotation select — clicking an existing Annotations.NNN
+	// row in the outliner (or picking the container in the viewport) sets
+	// it as the active draw target so Ctrl+drag adds strokes to THAT group.
+	// If the tool wasn't armed yet, arm it now (without spawning a fresh
+	// container, since we already have one).
+	if (selected?.userData?.primKind === "annotation") {
+		_annotateMode.activeContainer = selected;
+		if (!_annotateMode.active) {
+			_annotateMode.active = true;
+			document.querySelector('.prim-btn[data-tool="annotate"]')?.classList.add("active");
+			_annotateSyncCursor?.();
+			if (typeof updateStatus === "function") {
+				updateStatus("Annotate — hold Ctrl (Cmd) + LMB to draw · plain drag/RMB orbits/pans as usual · Esc exits");
+			}
+		}
 	}
 	// Outline every set member — primary + additive members read the same.
 	for (const o of selectionSet) applySelectionTint(o);
@@ -11092,7 +11183,7 @@ function buildOutlinerRow(obj, { nested = false } = {}) {
 							? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`
 							: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0"/></svg>`}
 					</button>
-					<button class="out-vis" title="Show/hide">${obj.visible === false ? "○" : "◉"}</button>
+					<button class="out-vis" title="Show/hide">${obj.visible === false ? EYE_OFF_SVG : EYE_ON_SVG}</button>
 					<button class="out-expand-toggle" title="Expand for prompting context">▾</button>
 				</div>
 			</div>
@@ -11356,9 +11447,7 @@ function refreshOutliner() {
 		hideAllBtn.hidden = objects.length === 0;
 		const pickable = objects.filter(o => o !== renderCam);
 		const allHidden = pickable.length > 0 && pickable.every(o => o.visible === false);
-		hideAllBtn.innerHTML = allHidden
-			? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 0 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>`
-			: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>`;
+		hideAllBtn.innerHTML = allHidden ? EYE_OFF_SVG : EYE_ON_SVG;
 		hideAllBtn.title = allHidden ? "Show all objects" : "Hide all objects";
 	}
 	// Render camera — always present in the outliner so the user can jump
@@ -11389,7 +11478,7 @@ function refreshOutliner() {
 							? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`
 							: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0"/></svg>`}
 					</button>
-					<button class="out-vis" title="Show/hide wireframe">${camHidden ? "○" : "◉"}</button>
+					<button class="out-vis" title="Show/hide wireframe">${camHidden ? EYE_OFF_SVG : EYE_ON_SVG}</button>
 					<button class="out-expand-toggle" title="Open Camera properties">▾</button>
 				</div>
 			</div>
@@ -11490,7 +11579,7 @@ function refreshOutliner() {
 							? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`
 							: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0"/></svg>`}
 					</button>
-					<button class="out-vis" title="Show/hide group">${allHidden ? "○" : "◉"}</button>
+					<button class="out-vis" title="Show/hide group">${allHidden ? EYE_OFF_SVG : EYE_ON_SVG}</button>
 					<button class="out-group-ungroup" title="Ungroup (Ctrl+Shift+G)">×</button>
 				</div>
 			</div>
@@ -12071,11 +12160,10 @@ function _setAnnotateMode(on) {
 		// scene until the user deletes them explicitly.
 		const container = _annotateSpawnContainer();
 		if (container) select(container);
-	} else {
-		// Disarm: if the container we just spawned never received a stroke or
-		// text, drop it so a stray click doesn't leave a ghost row behind.
-		_annotatePruneEmptyContainer();
 	}
+	// (Auto-prune-on-disarm was removed — it risked deleting an empty
+	// container the user just selected from the outliner to add more strokes.
+	// Explicit delete via the outliner row is the only path to remove.)
 }
 // Swap cursor between crosshair (Ctrl held → next drag will paint) and the
 // default arrow (plain drag will orbit). Called from the keydown/up trackers
@@ -12524,10 +12612,14 @@ canvas.addEventListener("pointerdown", (e) => {
 	// RMB, MMB, Alt+LMB, Shift+LMB) passes through so orbit / pan / dolly /
 	// altCam all work uninterrupted.
 	if (e.button !== 0 || !(e.ctrlKey || e.metaKey) || e.altKey) return;
-	// Gizmo priority — if the pointer is over a TransformControls axis handle,
-	// yield the click so grabbing the gizmo still moves/rotates/scales the
-	// current selection even while Ctrl is held.
-	if (transform?.axis) return;
+	// Gizmo priority — only yield if a gizmo drag is already IN PROGRESS
+	// (transform.dragging). We used to also bail on `transform.axis` (hover),
+	// but a fresh container sits at world origin so its gizmo axes crossed
+	// the viewport middle — Ctrl+drag anywhere near center would hover an
+	// axis and get eaten before any ink appeared. Ctrl+LMB is now painting
+	// even when hovering the gizmo; user releases Ctrl first if they want
+	// to grab it.
+	if (transform?.dragging) return;
 	// Text tool — click-to-place with an inline HTML input (no browser prompt
 	// modal). Raycasts to find placement, opens a small floating <input>
 	// docked at the click position, focuses it so the user just starts
@@ -27250,6 +27342,26 @@ makeTrimHandle(pvTrimStart, pvScrubEl, () => trimStart, setTrimStart);
 makeTrimHandle(pvTrimEnd,   pvScrubEl, () => trimEnd,   setTrimEnd);
 refreshTrimUI();
 const tlTime = document.getElementById("tl-time");
+// Click the current-time readout to jump to Scene properties + scroll to
+// the Duration drag-num — quickest way to change scene length without
+// hunting through the pane. Brief amber pulse on the field signals where
+// the user landed.
+tlTime?.addEventListener("click", () => {
+	if (typeof forceRightPane === "function") forceRightPane("scene", "Scene");
+	requestAnimationFrame(() => {
+		const target = document.getElementById("duration-drag");
+		const body = document.getElementById("rp-body");
+		if (!target || !body) return;
+		const bRect = body.getBoundingClientRect();
+		const tRect = target.getBoundingClientRect();
+		body.scrollTo({ top: body.scrollTop + (tRect.top - bRect.top) - 24, behavior: "smooth" });
+		// Attention nudge — amber ring for ~900ms so the user sees which
+		// field they were routed to.
+		target.style.transition = "box-shadow 0.3s";
+		target.style.boxShadow = "0 0 0 2px rgba(255,180,84,0.6)";
+		setTimeout(() => { target.style.boxShadow = ""; }, 900);
+	});
+});
 const tlAddKey = document.getElementById("tl-addkey");
 const tlClearKey = document.getElementById("tl-clearkey");
 const tlPlay = document.getElementById("tl-play");
@@ -28935,9 +29047,44 @@ tlRec.addEventListener("click", toggleRecording);
 async function uploadImage(blob) {
 	const fd = new FormData();
 	fd.append("node_id", NODE_ID);
-	fd.append("image", blob, `comfy3d_${NODE_ID}.png`);
+	// Match the filename extension to the actual blob type so downstream
+	// consumers (thumbnails, /output writers) don't misidentify the encoding.
+	// Blockout snapshots are WebP now for size; AI-generated pushes still
+	// hit this same endpoint but pass their own PNG/JPEG blobs.
+	const ext = blob.type === "image/webp" ? "webp" : blob.type === "image/jpeg" ? "jpg" : "png";
+	fd.append("image", blob, `comfy3d_${NODE_ID}.${ext}`);
 	const r = await fetch("/comfyblockout/save_image", { method: "POST", body: fd });
 	return r.json();
+}
+
+// Throttled versioned blockout save — writes a timestamped copy to the
+// Output pane's Blockout tab. autoSnapshot fires on every scene tick
+// (debounced upstream, but still frequent), so without this throttle
+// dragging a slider for 30s would spawn 30+ archival files. 15s cadence
+// gives one save per stable-scene-state without flooding the pane.
+// Sentinel `-Infinity` so the FIRST call always proceeds (initializing to
+// 0 would incorrectly throttle the boot-time snapshot against a fresh
+// performance.now() of a few hundred ms).
+let _lastBlockoutHistoryMs = -Infinity;
+async function _saveBlockoutHistory(blob) {
+	const now = performance.now();
+	if (now - _lastBlockoutHistoryMs < 15000) return;
+	_lastBlockoutHistoryMs = now;
+	try {
+		const fd = new FormData();
+		fd.append("node_id", NODE_ID);
+		const ext = blob.type === "image/webp" ? "webp" : blob.type === "image/jpeg" ? "jpg" : "png";
+		fd.append("image", blob, `blockout.${ext}`);
+		const r = await fetch("/comfyblockout/save_blockout", { method: "POST", body: fd });
+		if (!r.ok) return;
+		// If the Output pane's Blockout tab is currently open, refresh so
+		// the tile appears without the user having to close+reopen. Cheap
+		// probe: only pull the assets list when Output is actually visible.
+		const outputOpen = !document.getElementById("rp-pane-assets")?.hidden;
+		if (outputOpen) window.refreshAssets?.();
+	} catch (e) {
+		console.warn("[ComfyBlockout] blockout history save failed:", e);
+	}
 }
 
 async function uploadVideo(blob) {
@@ -30040,7 +30187,7 @@ const EMPTY_SCENE = {
 	camera: { position: [2.5, 1.4, 2.5], target: [0, 0.5, 0], fov: 55 },
 	aspect: "16:9",
 	env: { preset: "studio", intensity: 0.4 },
-	viewport: { grid: true, guides: false, bg: "#07080b" },
+	viewport: { grid: true, guides: false, bg: "#020203" },
 	keyframes: [],
 	imports: [],
 	trim: { start: 0, end: 1 },
@@ -30975,9 +31122,22 @@ async function autoSnapshot() {
 		drawBgLayerToSnapshotCtx(snapshotCtx, w, h);
 		snapshotCtx.drawImage(snapshotSceneCanvas, 0, 0);
 
-		const blob = await new Promise(res => snapshotCanvas.toBlob(res, "image/png"));
+		// Blockout snapshots are viewport-preview only — not AI reference —
+		// so WebP at q=0.9 gives 5-10x smaller files with no perceptible
+		// quality loss on flat scene shading. Fall back to PNG if the
+		// browser rejects WebP for some reason (rare — all supported
+		// targets have WebP encoders).
+		const blob = await new Promise(res => {
+			snapshotCanvas.toBlob(res, "image/webp", 0.9);
+		}) || await new Promise(res => snapshotCanvas.toBlob(res, "image/png"));
 		if (!blob) return;
 		await uploadImage(blob);
+		// Versioned history — persist a copy to the Output pane's "Blockout"
+		// tab, throttled to at most one save per 15s so autoSnapshotDebounced's
+		// per-scene-tick firing doesn't flood the disk. autoSnapshot itself
+		// stays the source of truth for the always-current node preview via
+		// uploadImage() above; this is purely archival.
+		_saveBlockoutHistory(blob);
 	} catch (e) {
 		console.warn("[ComfyBlockout] autoSnapshot failed:", e);
 	}
@@ -31462,6 +31622,10 @@ document.getElementById("th-help")?.addEventListener("click", () => {
 			ov.classList.add("hidden");
 			setTimeout(() => ov.remove?.(), 400);
 		}
+		// Drop the fullscreen preboot curtain too — it's what covers the
+		// panel columns during the layout flash. Not dropping it would
+		// leave the user staring at an opaque page.
+		document.documentElement.classList.remove("cb-preboot", "cb-preboot-fade");
 	}, 5000);
 	try {
 	// Paint the empty-state placeholder immediately so the outliner doesn't show as a
@@ -31527,6 +31691,12 @@ document.getElementById("th-help")?.addEventListener("click", () => {
 	window._sceneReady = true;
 	const initOverlay = document.getElementById("init-overlay");
 	if (initOverlay) initOverlay.classList.add("hidden");
+	// Fade + drop the fullscreen preboot curtain (from the inline <head>
+	// script). Two-step: add fade class → opacity transitions → drop the
+	// preboot class entirely so the pseudo-elements stop rendering.
+	const preRoot = document.documentElement;
+	preRoot.classList.add("cb-preboot-fade");
+	setTimeout(() => preRoot.classList.remove("cb-preboot", "cb-preboot-fade"), 320);
 	// Signal downstream one-shot UIs (first-run onboarding modal, etc.) that
 	// the boot chain is complete and the curtain is dropping.
 	window.dispatchEvent(new CustomEvent("cb:boot-ready"));
@@ -31537,6 +31707,7 @@ document.getElementById("th-help")?.addEventListener("click", () => {
 		window._sceneReady = true;
 		const ov = document.getElementById("init-overlay");
 		if (ov) ov.classList.add("hidden");
+		document.documentElement.classList.remove("cb-preboot", "cb-preboot-fade");
 	} finally {
 		clearTimeout(_bootWatchdog);
 	}

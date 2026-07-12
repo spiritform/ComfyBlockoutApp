@@ -455,6 +455,27 @@ async def save_image_route(
     return JSONResponse({"success": True, "path": str(out_path), "bytes": len(file_bytes)})
 
 
+@app.post("/comfyblockout/save_blockout")
+async def save_blockout_route(
+    node_id: str = Form(...),
+    image: UploadFile = File(...),
+):
+    """Versioned blockout snapshot — lands in DATA_DIR as
+    `out_blockout_<node_id>_<epoch_ms>.<ext>` so the Output pane treats it
+    as a historical asset (filterable via the "Blockout" tab). Separate
+    from /save_image which just keeps the ONE current preview per node
+    for the ComfyUI graph."""
+    import time as _time
+    file_bytes = await image.read()
+    if not node_id or not file_bytes:
+        return JSONResponse({"success": False, "error": "Missing node_id or image"}, status_code=400)
+    suffix = Path(image.filename or "").suffix.lower() or ".webp"
+    ts = int(_time.time() * 1000)
+    fname = f"out_blockout_{node_id}_{ts}{suffix}"
+    (DATA_DIR / fname).write_bytes(file_bytes)
+    return JSONResponse({"success": True, "url": f"/output/{fname}", "filename": fname, "bytes": len(file_bytes)})
+
+
 @app.post("/comfyblockout/save_chat_image")
 async def save_chat_image_route(image: UploadFile = File(...)):
     """Save a chat-paste image under a unique name in DATA_DIR and return its
@@ -4640,7 +4661,12 @@ async def assets_list(limit: int = 200):
     for p in all_files:
         ext = p.suffix.lower().lstrip(".")
         kind = None
-        if ext in {"png", "jpg", "jpeg", "webp"}:
+        # Blockout snapshots get their own kind so the Output pane's
+        # Blockout tab can filter them from AI-generated images. Prefix
+        # `out_blockout_` is set by /save_blockout.
+        if p.name.startswith("out_blockout_") and ext in {"png", "jpg", "jpeg", "webp"}:
+            kind = "blockout"
+        elif ext in {"png", "jpg", "jpeg", "webp"}:
             kind = "image"
         elif ext in {"mp4", "webm", "mov"}:
             kind = "video"
@@ -4675,7 +4701,7 @@ async def assets_list(limit: int = 200):
     # JPEG posters instead of decoding full-res PNGs / video headers. 3D outputs
     # already have their own paired .thumb.<ext> attached above.
     for entry in items:
-        if entry["kind"] in ("image", "video") and "thumbUrl" not in entry:
+        if entry["kind"] in ("image", "video", "blockout") and "thumbUrl" not in entry:
             entry["thumbUrl"] = f"/api/assets/thumb?path={entry['url'].split('/output/', 1)[1]}&size=256"
     total = len(items)
     n = max(1, min(500, int(limit)))
