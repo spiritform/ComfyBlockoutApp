@@ -34,15 +34,30 @@ Windows only for now. Requires Python 3.10+ on PATH.
 
 ## Features
 
-### Scene building
+### Objects
 
-- **Primitives** — cube, sphere, capsule, cylinder, cone, plane, text, particles, clouds, splats. Drop directly from the Objects panel.
-- **Particles with presets** — snow, rain, sparks, fireflies as ready-made styles.
-- **Skybox** — spawn a giant inverted sphere and drop / generate a 360° equirectangular panorama onto it.
-- **Terrain** — procedural fBM plane, or generate a heightmap via Comfy Cloud and apply it directly.
-- **Lights** — directional, spot, point, softbox. VSM shadows + Contact Shadow.
-- **Mannequin** — Xbot-rigged skinned GLB with drag-poseable joints and per-joint keyframes.
-- **Imports** — drag `.glb / .gltf / .fbx / .obj / .ply / .splat / .spz / .ksplat` files onto the viewport.
+Left panel · top grid. Click to spawn.
+
+- **Primitives** — cube, sphere, cylinder, cone, plane, text.
+- **Particles** — GPU shader particle system with agent-facing presets (snow, rain, sparks, fireflies).
+- **Skybox** — inverted sphere backdrop; drop / generate a 360° equirectangular panorama onto it.
+- **Clouds** — volumetric FX with Mask + Evolve controls, wind-driven mask, snapshot grid.
+- **Import** — click the ↓ tile or drag `.glb / .gltf / .fbx / .obj / .ply / .splat / .spz / .ksplat` files onto the viewport.
+
+### Tools
+
+Left panel · middle grid. Each tool spawns / operates on the current scene.
+
+- **Video Preprocessors** — run a video through Lotus depth, OpenPose, DepthCrafter, or Depth Pro. Result becomes an AR-rectangle overlay + a per-frame video output.
+- **MediaPipe** — webcam pose / hand / face tracking. Record a sequence, take stills, or use the feed as a live viewport source.
+- **Boolean** — union / subtract / intersect two or more selected meshes into one.
+- **Scatter** — pick a source object + optional surface mesh; the tool sprays instanced copies with configurable count, scale range, jitter, and rotation.
+- **TripoSplat** — generate a 3D gaussian splat from a source image (Comfy Cloud).
+- **Mannequin** — spawn a ~1.72m human-scale Xbot-rigged figure. Drag-poseable joints, per-joint keyframes via `S` when a joint is selected.
+- **AnimoFlow** — text prompt → animated motion clip that drives the mannequin. Docker-based MoMask container + MediaPipe retarget on the frontend.
+- **Light** — spawn a directional / spot / point / softbox light. VSM shadows + Contact Shadow. First user light auto-kills the built-in scene fill.
+- **Terrain** — displaced plane. Drives with fBM noise or a grayscale heightmap you upload / generate via Comfy Cloud.
+- **Turntable** — bake a 360° (or partial arc) rotation on the selection, or an orbit on the camera, as keyframes. Adjustable ease.
 
 ### Camera + framing
 
