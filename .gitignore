@@ -20,3 +20,7 @@ tools/
 
 # Early-stage prototype HTMLs — kept locally for reference but not shipped.
 mockups/
+
+# Personal onboarding-emulator wrapper — used locally to re-test the first-run
+# flow (?firstrun=1 clears the "seen" flag). Not something to distribute.
+firstrun.bat

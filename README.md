@@ -16,12 +16,6 @@ First launch creates a `.venv`, installs deps (FastAPI + `comfy-cli` + ffmpeg sh
 
 Windows only for now. Requires Python 3.10+ on PATH.
 
-## First-run walkthrough
-
-`firstrun.bat` opens the app with `?firstrun=1` — clears the "you've seen this before" flag and drops you into the onboarding modal (Setup → Quick Tour → Visit Help). Useful for re-testing the new-user experience without editing localStorage.
-
----
-
 ## Auth
 
 **Comfy Cloud (required for cloud workflows):** open **Settings** (gear icon, top-right), hit **Sign in with Comfy Cloud** — the API keys page opens in a new tab at `platform.comfy.org/profile/api-keys`. Sign up first via the "New to Comfy?" link if you don't have an account. Copy the key, paste it into the input below the button, hit Save.
@@ -143,7 +137,6 @@ comfyblockout-app/
 ├── web/
 │   ├── editor.html          the whole editor (~30k LOC single-file build)
 │   └── icons/               brand + button glyphs
-├── firstrun.bat             onboarding-emulator wrapper (?firstrun=1)
 ├── run.bat                  standard launcher
 └── .env                     Comfy Cloud + Anthropic keys (auto-written by Settings)
 ```
