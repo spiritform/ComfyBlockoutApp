@@ -12000,19 +12000,21 @@ window._annotateMode = _annotateMode;
 // activation reuses the same object so the outliner never gets flooded
 // with per-stroke rows. If the user deletes the container, the next
 // Annotate click spawns a new one automatically.
+// Called from pointerdown / text-place / anywhere mid-draw — must return the
+// container that's currently receiving strokes. Falls back to spawning a fresh
+// one only if _setAnnotateMode wasn't the entry point (defensive; shouldn't
+// happen in normal flow).
 function _annotateEnsureContainer() {
-	// Reuse the cached one if it's still alive in the scene.
 	if (_annotateMode.activeContainer && objects.includes(_annotateMode.activeContainer)) {
 		return _annotateMode.activeContainer;
 	}
-	// Fall back to any existing container in the scene (e.g. from a loaded
-	// scene where activeContainer wasn't set yet).
-	const existing = objects.find(o => o.userData?.primKind === "annotation");
-	if (existing) {
-		_annotateMode.activeContainer = existing;
-		return existing;
-	}
-	// None yet — spawn one at world origin, empty.
+	return _annotateSpawnContainer();
+}
+// Always creates a fresh empty container and registers it as the active one.
+// Called from _setAnnotateMode(true) so each Annotate click produces a new
+// outliner object rather than reusing the last one. Old containers stay in
+// the scene as-is until the user deletes them.
+function _annotateSpawnContainer() {
 	snapshotForUndo();
 	primCounters.annotation = (primCounters.annotation || 0) + 1;
 	const g = new THREE.Group();
@@ -12030,6 +12032,26 @@ function _annotateEnsureContainer() {
 	if (typeof saveScene === "function") saveScene();
 	return g;
 }
+// If the active container has zero drawn content (no Line2 strokes, no text
+// sprites), remove it. Called on disarm so a click-Annotate-then-immediately-
+// click-again to disarm doesn't leave an empty ghost row in the outliner.
+function _annotatePruneEmptyContainer() {
+	const g = _annotateMode.activeContainer;
+	if (!g) return;
+	const kids = g.children || [];
+	const hasContent = kids.some(c => c.userData?._isAnnotationLine || c.userData?._isAnnotationText);
+	if (hasContent) return;
+	// Drop from scene + objects. deselect first so the gizmo detaches cleanly.
+	if (selected === g) select(null);
+	scene.remove(g);
+	const idx = objects.indexOf(g);
+	if (idx >= 0) objects.splice(idx, 1);
+	_annotateMode.activeContainer = null;
+	// Roll back the counter so a follow-up click doesn't skip a number.
+	if ((primCounters.annotation || 0) > 0) primCounters.annotation -= 1;
+	refreshOutliner?.();
+	if (typeof saveScene === "function") saveScene();
+}
 function _setAnnotateMode(on) {
 	_annotateMode.active = !!on;
 	const btn = document.querySelector('.prim-btn[data-tool="annotate"]');
@@ -12044,15 +12066,16 @@ function _setAnnotateMode(on) {
 			: "Annotate mode off");
 	}
 	if (_annotateMode.active) {
-		// Spawn (or reuse) the single container and select it so the user's
-		// Properties pane immediately shows the annotation controls (color /
-		// width / opacity / shape toolbar). No hidden state — the container
-		// is a real outliner row even when empty.
-		const container = _annotateEnsureContainer();
+		// Every activation spawns a FRESH empty container so each Annotate
+		// session becomes its own outliner object. Old containers stay in the
+		// scene until the user deletes them explicitly.
+		const container = _annotateSpawnContainer();
 		if (container) select(container);
+	} else {
+		// Disarm: if the container we just spawned never received a stroke or
+		// text, drop it so a stray click doesn't leave a ghost row behind.
+		_annotatePruneEmptyContainer();
 	}
-	// Turning off is a no-op for the container — it stays in the scene until
-	// the user deletes it explicitly.
 }
 // Swap cursor between crosshair (Shift held → next drag will paint) and the
 // default arrow (plain drag will orbit). Called from the keydown/up trackers
@@ -12275,6 +12298,75 @@ function _annotateFinishStroke() {
 	cleanupState();
 }
 
+// Floating text input overlay for the Text tool — no browser prompt() modal.
+// Docks a small styled <input> right at the click position so the user just
+// starts typing. Enter commits (spawns a Sprite at worldPos), Esc cancels,
+// blur commits if non-empty. Only one instance at a time — a fresh call
+// nukes any prior one.
+function _annotateOpenTextInput({ worldPos, screenX, screenY, container }) {
+	document.getElementById("_anno-text-input")?.remove();
+	const input = document.createElement("input");
+	input.id = "_anno-text-input";
+	input.type = "text";
+	input.placeholder = "Type & press Enter…";
+	Object.assign(input.style, {
+		position: "fixed",
+		left: `${screenX}px`,
+		top: `${screenY - 14}px`,
+		transform: "translate(-4px, -50%)",
+		background: "rgba(10,12,18,0.94)",
+		color: (container?.userData?.annotation?.color || "#ffb454"),
+		border: "1px solid rgba(255,180,84,0.55)",
+		borderRadius: "4px",
+		padding: "6px 10px",
+		font: `600 14px "Inter", system-ui, sans-serif`,
+		outline: "none",
+		boxShadow: "0 6px 20px rgba(0,0,0,0.5)",
+		zIndex: "10000",
+		minWidth: "160px",
+		pointerEvents: "auto",
+		caretColor: "#fff",
+	});
+	document.body.appendChild(input);
+	// Focus on the next frame so any lingering pointer capture / focus
+	// bubbles have settled first.
+	requestAnimationFrame(() => input.focus());
+	let done = false;
+	const commit = () => {
+		if (done) return;
+		done = true;
+		const text = input.value.trim();
+		input.remove();
+		if (!text || !container) return;
+		snapshotForUndo();
+		container.updateMatrixWorld(true);
+		const cfg = container.userData.annotation;
+		const sprite = _annotateBuildTextSprite({
+			text,
+			color: cfg.color,
+			opacity: cfg.opacity,
+		});
+		const local = container.worldToLocal(worldPos.clone());
+		sprite.position.copy(local);
+		container.add(sprite);
+		refreshObjectInspector?.();
+		if (typeof saveScene === "function") saveScene();
+	};
+	const cancel = () => {
+		if (done) return;
+		done = true;
+		input.remove();
+	};
+	input.addEventListener("keydown", (ev) => {
+		if (ev.key === "Enter") { ev.preventDefault(); commit(); }
+		else if (ev.key === "Escape") { ev.preventDefault(); cancel(); }
+		ev.stopPropagation();   // don't fire app shortcuts while typing
+	});
+	// Small delay on blur so a click on the input itself doesn't wrongly
+	// dismiss (some browsers fire blur before focus lands).
+	input.addEventListener("blur", () => setTimeout(commit, 60));
+}
+
 // Build a text sprite for the annotation container — a Sprite with a
 // CanvasTexture rendered from the given text. Auto-faces the camera, so
 // it stays readable regardless of orbit. Sized so the text height is about
@@ -12357,6 +12449,13 @@ function _annotateBuildStrokeLine({ pointsFlat, color, widthPx, opacity }) {
 	// segment attributes. Copy to a plain array so mutations don't cross-
 	// contaminate a shared buffer.
 	line.userData._pts = Array.from(pointsFlat);
+	// Frustum culling on Line2 relies on the geometry's bounding sphere, which
+	// is set once from the initial setPositions call and doesn't auto-refresh
+	// when we hot-swap points during a drag. Disable culling on strokes so
+	// the preview + live-updated committed lines always render — the perf
+	// cost is negligible (a Line2 has one draw call), and the alternative
+	// (recompute bounds every setPositions) is error-prone.
+	line.frustumCulled = false;
 	return line;
 }
 
@@ -12426,10 +12525,10 @@ canvas.addEventListener("pointerdown", (e) => {
 	// yield the click so grabbing the gizmo still moves/rotates/scales the
 	// current selection even while Shift is held.
 	if (transform?.axis) return;
-	// Text tool — click-to-place, no drag needed. Raycast to find placement
-	// point, prompt for the label, spawn a Sprite as a container child. We
-	// consume the event here (stopImmediatePropagation below runs regardless
-	// via the shared exit path) so the same click doesn't also start a stroke.
+	// Text tool — click-to-place with an inline HTML input (no browser prompt
+	// modal). Raycasts to find placement, opens a small floating <input>
+	// docked at the click position, focuses it so the user just starts
+	// typing. Enter commits, Esc cancels, blur commits (if non-empty).
 	if (_annotateMode.shape === "text") {
 		const container = _annotateEnsureContainer();
 		if (!container) return;
@@ -12455,26 +12554,7 @@ canvas.addEventListener("pointerdown", (e) => {
 				.multiplyScalar(dist)
 				.add(raycaster.ray.origin);
 		}
-		// Defer the prompt() so the current pointer gesture ends first — a
-		// modal prompt() blocks the main thread and can leave the pointer
-		// capture in a weird state on some browsers.
-		setTimeout(() => {
-			const text = window.prompt("Text:", "");
-			if (!text || !text.trim()) return;
-			snapshotForUndo();
-			container.updateMatrixWorld(true);
-			const cfg = container.userData.annotation;
-			const sprite = _annotateBuildTextSprite({
-				text: text.trim(),
-				color: cfg.color,
-				opacity: cfg.opacity,
-			});
-			const local = container.worldToLocal(worldPos.clone());
-			sprite.position.copy(local);
-			container.add(sprite);
-			refreshObjectInspector?.();
-			if (typeof saveScene === "function") saveScene();
-		}, 0);
+		_annotateOpenTextInput({ worldPos, screenX: e.clientX, screenY: e.clientY, container });
 		e.stopImmediatePropagation();
 		e.preventDefault();
 		return;
