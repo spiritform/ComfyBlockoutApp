@@ -4184,6 +4184,21 @@ def _format_scene_context(ctx: dict) -> str:
             parts.append(f"  - {name} ({kind}){ref}{notes}")
     else:
         parts.append("Objects in scene (0): NONE — the scene is empty.")
+    # Selection state — the user's current pointer of intent. When they say
+    # "make this red" or "apply this as a skybox" without naming a target,
+    # THIS is what they mean. Scene selection wins over asset selection since
+    # scene edits are the more common action; both are surfaced.
+    sel = ctx.get("selected")
+    if sel and sel.get("name"):
+        parts.append(f"Currently selected in scene: [{sel['name']}] ({sel.get('kind') or 'object'})")
+    sel_assets = ctx.get("selectedAssets") or []
+    if sel_assets:
+        first = sel_assets[0]
+        extra = f" (+{len(sel_assets)-1} more)" if len(sel_assets) > 1 else ""
+        parts.append(
+            f"Currently selected in Output panel: {first.get('filename') or '?'} "
+            f"({first.get('kind') or 'asset'}, url={first.get('url') or '?'}){extra}"
+        )
     # Camera state — target lock, hand-held shake, procedural orbit. Emitted
     # so the agent doesn't ask "is a turntable running?" or clobber an active
     # target with clear_camera_target it didn't know was needed.
@@ -4633,9 +4648,103 @@ async def assets_list(limit: int = 200):
                 pass
         items.append(entry)
     items.sort(key=lambda x: x["mtime"], reverse=True)
+    # Populate a thumbUrl for image + video items so the grid renders lightweight
+    # JPEG posters instead of decoding full-res PNGs / video headers. 3D outputs
+    # already have their own paired .thumb.<ext> attached above.
+    for entry in items:
+        if entry["kind"] in ("image", "video") and "thumbUrl" not in entry:
+            entry["thumbUrl"] = f"/api/assets/thumb?path={entry['url'].split('/output/', 1)[1]}&size=256"
     total = len(items)
     n = max(1, min(500, int(limit)))
     return {"assets": items[:n], "total": total}
+
+
+# ---------- lazy asset thumbnails ----------
+#
+# The assets grid used to load full-res PNGs (multi-MB each) + force <video>
+# elements to fetch metadata just to poster the tile. This endpoint generates
+# a small JPEG once per source and caches it under output/.thumbs/<size>/,
+# so subsequent grid loads are ~50–100 kB per tile instead of megabytes.
+
+_THUMB_ROOT = DATA_DIR / ".thumbs"
+
+def _thumb_cache_path(rel: str, size: int) -> Path:
+    # Same basename as the source, .jpg extension — reader can trace tiles
+    # back to originals easily when spelunking on disk.
+    stem = Path(rel).stem
+    # Include the immediate parent (images/videos/3d) to avoid same-stem
+    # collisions across the type-partitioned subfolders.
+    parent = Path(rel).parent.as_posix() if Path(rel).parent.as_posix() != "." else "root"
+    d = _THUMB_ROOT / str(int(size)) / parent
+    d.mkdir(parents=True, exist_ok=True)
+    return d / f"{stem}.jpg"
+
+def _make_image_thumb(src: Path, dst: Path, size: int) -> None:
+    from PIL import Image
+    with Image.open(src) as im:
+        im = im.convert("RGB") if im.mode not in ("RGB", "L") else im
+        im.thumbnail((size, size), Image.LANCZOS)
+        im.save(dst, "JPEG", quality=82, optimize=True)
+
+def _make_video_thumb(src: Path, dst: Path, size: int) -> None:
+    # cv2 is already a dep (opencv-python in requirements.txt). Grab a frame
+    # ~0.5s in to skip black lead-ins that a lot of our recordings ship with.
+    import cv2
+    cap = cv2.VideoCapture(str(src))
+    try:
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(fps * 0.5))
+        ok, frame = cap.read()
+        if not ok or frame is None:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            ok, frame = cap.read()
+        if not ok or frame is None:
+            raise RuntimeError("no frames")
+    finally:
+        cap.release()
+    # OpenCV reads BGR — convert to RGB for PIL. Also resize proportionally
+    # so the thumb never exceeds `size` on its longest edge.
+    from PIL import Image
+    import numpy as np
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    im = Image.fromarray(rgb)
+    im.thumbnail((size, size), Image.LANCZOS)
+    im.save(dst, "JPEG", quality=82, optimize=True)
+
+@app.get("/api/assets/thumb")
+async def assets_thumb(path: str, size: int = 256):
+    from fastapi.responses import FileResponse
+    # Sanity-clamp size so a bad query can't ask for a 4K thumb.
+    size = max(64, min(1024, int(size)))
+    # Reject anything trying to escape DATA_DIR — path traversal guard.
+    src = (DATA_DIR / path).resolve()
+    try:
+        src.relative_to(DATA_DIR.resolve())
+    except ValueError:
+        raise HTTPException(400, "path outside output directory")
+    if not src.exists() or not src.is_file():
+        raise HTTPException(404, "source not found")
+    dst = _thumb_cache_path(path, size)
+    # Regenerate if the source was modified after the cached thumb, or if
+    # there's no cache yet.
+    needs_rebuild = (not dst.exists()) or (dst.stat().st_mtime < src.stat().st_mtime)
+    if needs_rebuild:
+        try:
+            ext = src.suffix.lower().lstrip(".")
+            if ext in {"png", "jpg", "jpeg", "webp"}:
+                _make_image_thumb(src, dst, size)
+            elif ext in {"mp4", "webm", "mov"}:
+                _make_video_thumb(src, dst, size)
+            else:
+                raise HTTPException(415, f"cannot thumbnail .{ext}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            # Best-effort — if the source is a partial file or codec is
+            # unsupported, we surface a 500 and let the frontend fall back
+            # to asset.url via its onerror handler.
+            raise HTTPException(500, f"thumb failed: {e}")
+    return FileResponse(dst, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.delete("/api/assets/{filename}")

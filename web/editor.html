@@ -188,8 +188,8 @@
 	.modal-backdrop {
 		position: fixed; inset: 0; z-index: 500;
 		background: rgba(0,0,0,0.55); backdrop-filter: blur(6px);
-		display: none; align-items: flex-start; justify-content: center;
-		padding-top: 22vh; overflow-y: auto;
+		display: none; align-items: center; justify-content: center;
+		padding: 20px; overflow-y: auto;
 	}
 	.modal-backdrop.open { display: flex; }
 	.modal-card {
@@ -286,7 +286,7 @@
 	}
 	.modal-col-title {
 		font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
-		text-transform: uppercase; color: rgba(255,255,255,0.4);
+		text-transform: uppercase; color: rgba(255,255,255,0.65);
 		padding-bottom: 8px; margin-bottom: 14px;
 		border-bottom: 1px solid rgba(255,255,255,0.06);
 	}
@@ -1367,10 +1367,13 @@
 		width: 18px; height: 18px; margin-left: 6px; padding: 0;
 		background: transparent; border: none; border-radius: 3px;
 		color: rgba(255,255,255,0.4); cursor: pointer;
-		display: none; align-items: center; justify-content: center;
+		display: inline-flex; align-items: center; justify-content: center;
 		flex: 0 0 auto;
+		/* Reserved space always — hidden via visibility, not display, so the
+		   row layout doesn't shift height/width when hover reveals it. */
+		visibility: hidden;
 	}
-	.gen-add-item:hover .gen-add-del { display: inline-flex; }
+	.gen-add-item:hover .gen-add-del { visibility: visible; }
 	.gen-add-item .gen-add-del:hover { background: rgba(255,80,80,0.22); color: #ff8a8a; }
 	.gen-add-item .gen-add-del svg { width: 12px; height: 12px; }
 	.gen-cell:focus { outline: none; }
@@ -2234,11 +2237,13 @@
 	.out-row .out-lock { width: 22px; height: 22px; }
 	.out-lock svg { width: 12px; height: 12px; }
 	.out-row .out-expand-toggle { width: 22px; height: 22px; font-size: 18px; }
-	/* Expand panel — image slot (square) sits left of the prompt textarea,
-	   aligned to the top so a taller prompt doesn't stretch the slot. */
+	/* Expand panel — image slot (square) sits left of the prompt textarea.
+	   Sized to match the textarea's min-height (60px) so both cells read as
+	   the same height at rest. Textarea grows vertically on resize; slot
+	   stays a fixed square (deliberate — a stretched square would look off). */
 	.out-row .out-expand { flex-direction: row; align-items: flex-start; gap: 8px; }
 	.out-row .out-expand .out-img {
-		width: 48px; height: 48px; flex: 0 0 48px;
+		width: 60px; height: 60px; flex: 0 0 60px;
 	}
 	.out-row .out-expand .out-context { flex: 1; min-width: 0; }
 	/* Match the row's horizontal padding (8px) on the bottom when expanded
@@ -3027,22 +3032,30 @@
 		opacity: 0; transition: opacity 0.12s; pointer-events: none;
 	}
 	.assets-tile:hover .badge { opacity: 1; }
+	/* Actions bar — slides in from the bottom on hover, dark gradient over the
+	   media so the buttons stay legible against any tile content. Full-width
+	   so the two actions get room to breathe instead of stacking as tiny
+	   corner chips. */
 	.assets-tile .actions {
-		position: absolute; top: 6px; right: 6px;
-		display: flex; gap: 4px; opacity: 0;
-		transition: opacity 0.12s;
+		position: absolute; left: 0; right: 0; bottom: 0;
+		display: flex; align-items: center; justify-content: flex-end;
+		gap: 4px; padding: 6px 8px;
+		background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0) 100%);
+		opacity: 0; transform: translateY(4px);
+		transition: opacity 0.12s, transform 0.12s;
+		pointer-events: none;
 	}
-	.assets-tile:hover .actions { opacity: 1; }
+	.assets-tile:hover .actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
 	.assets-tile .actions button {
-		width: 22px; height: 22px;
-		background: rgba(0,0,0,0.7); border: none; border-radius: 4px;
-		color: rgba(255,255,255,0.8); cursor: pointer;
+		width: 26px; height: 26px;
+		background: rgba(255,255,255,0.08); border: none; border-radius: 4px;
+		color: rgba(255,255,255,0.85); cursor: pointer;
 		display: flex; align-items: center; justify-content: center;
 		padding: 0;
 	}
-	.assets-tile .actions button:hover { background: rgba(255,180,84,0.3); color: #fff; }
-	.assets-tile .actions button.del:hover { background: rgba(255,80,80,0.3); color: #ff8a8a; }
-	.assets-tile .actions svg { width: 12px; height: 12px; }
+	.assets-tile .actions button:hover { background: rgba(255,180,84,0.35); color: #fff; }
+	.assets-tile .actions button.del:hover { background: rgba(255,80,80,0.35); color: #ff8a8a; }
+	.assets-tile .actions svg { width: 13px; height: 13px; }
 	.assets-tile .actions button.del { font: 700 18px/1 ui-sans-serif, system-ui, sans-serif; padding-bottom: 2px; }
 	.assets-empty {
 		padding: 32px; text-align: center; color: rgba(255,255,255,0.4);
@@ -3881,30 +3894,12 @@
 						</div>
 						<div class="modal-hint">Powers the in-editor Assistant. Get yours at <a href="https://platform.claude.com/" target="_blank">platform.claude.com</a></div>
 					</div>
-					<div class="modal-section">
-						<label class="modal-toggle-row" for="tooltips-toggle">
-							<span class="toggle-labels">
-								<span class="toggle-title">Show hints</span>
-								<span class="toggle-sub">Tooltips on hover across the editor</span>
-							</span>
-							<input type="checkbox" id="tooltips-toggle" checked>
-						</label>
-					</div>
 					<div class="modal-section" id="llm-usage-section">
 						<div class="section-label">AI Agent Usage</div>
-						<div class="modal-hint" id="llm-usage-body" style="font-size:11px; line-height:1.6; color:rgba(255,255,255,0.6)">Loading…</div>
-					</div>
-					<div class="modal-section">
-						<div class="section-label">MCP Servers (Agent)</div>
-						<div class="modal-status" id="mcp-status"></div>
-						<div id="mcp-servers-list"></div>
-						<div id="mcp-add-form" style="margin-top:10px; display:flex; flex-direction:column; gap:6px">
-							<input class="modal-input" type="text" id="mcp-add-name" placeholder="Name (e.g. my-tools)" autocomplete="off" spellcheck="false">
-							<input class="modal-input" type="text" id="mcp-add-url" placeholder="https://example.com/mcp" autocomplete="off" spellcheck="false">
-							<input class="modal-input" type="password" id="mcp-add-token" placeholder="Authorization token (optional)" autocomplete="off" spellcheck="false">
-							<button type="button" class="modal-btn-primary" id="mcp-add-btn" style="align-self:flex-start">Add server</button>
-						</div>
-						<div class="modal-hint">Extend the AI Agent with any HTTP MCP server. Anthropic connects to it directly — stdio/local-process servers aren't supported here.</div>
+						<!-- min-height reserves space for the 3 lines the loaded state
+						     renders (today + lifetime + pricing note) so the modal
+						     doesn't jump in height when the fetch resolves. -->
+						<div class="modal-hint" id="llm-usage-body" style="font-size:11px; line-height:1.6; color:rgba(255,255,255,0.6); min-height:62px">Loading…</div>
 					</div>
 				</div>
 
@@ -3935,6 +3930,15 @@
 						<button class="modal-btn-primary" id="paths-save">Save</button>
 					</div>
 					<div class="modal-hint">Point at the ComfyUI install you actually run. Leave blank to fall back to auto-detection.</div>
+					<div class="modal-section" style="margin-top:24px">
+						<label class="modal-toggle-row" for="tooltips-toggle">
+							<span class="toggle-labels">
+								<span class="toggle-title">Show hints</span>
+								<span class="toggle-sub">Tooltips on hover across the editor</span>
+							</span>
+							<input type="checkbox" id="tooltips-toggle" checked>
+						</label>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -5718,13 +5722,16 @@
 			// works.
 			let media;
 			if (asset.kind === "video") {
-				// Media fragment `#t=0.5` tells the browser to render the frame
-				// at ~0.5s as the poster instead of the very first frame — many
-				// clips (including our recordings) open on a black lead-in, so
-				// without this the tile shows solid black. Preload="metadata"
-				// (kicked in by the IntersectionObserver) is enough for the
-				// browser to decode + show that seeked poster frame.
-				media = `<video src="${asset.url}#t=0.5" muted preload="none" data-pending="1"></video>`;
+				// Prefer a static JPEG poster from /api/assets/thumb — swapping
+				// out the <video> element for an <img> means N tiles no longer
+				// force N video-header fetches just to show a frame. If the
+				// thumb endpoint 404s or errors, onerror falls back to a
+				// preload="none" <video src> so the user still sees something.
+				if (asset.thumbUrl) {
+					media = `<img src="${asset.thumbUrl}" alt="" loading="lazy" decoding="async" onerror="this.outerHTML='&lt;video src=\\'${asset.url}#t=0.5\\' muted preload=\\'none\\' data-pending=\\'1\\'&gt;&lt;/video&gt;'">`;
+				} else {
+					media = `<video src="${asset.url}#t=0.5" muted preload="none" data-pending="1"></video>`;
+				}
 			} else if (asset.kind === "3d") {
 				const ext = (asset.ext || asset.filename.split(".").pop() || "").toUpperCase();
 				if (asset.thumbUrl) {
@@ -5736,7 +5743,12 @@
 					media = `<div class="asset-3d-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 16l9 5 9-5"/></svg><span class="asset-3d-ext">${ext}</span></div>`;
 				}
 			} else {
-				media = `<img src="${asset.url}" alt="" loading="lazy" decoding="async">`;
+				// Prefer server-generated thumbnail (256px longest edge, JPEG q82)
+				// to avoid loading multi-MB source PNGs in the grid. Fall back to
+				// asset.url on error so a broken thumb endpoint doesn't blank the tile.
+				const src = asset.thumbUrl || asset.url;
+				const fallback = asset.thumbUrl ? ` onerror="this.onerror=null;this.src='${asset.url}'"` : "";
+				media = `<img src="${src}" alt="" loading="lazy" decoding="async"${fallback}>`;
 			}
 			tile.innerHTML = `
 				${media}
@@ -5840,6 +5852,10 @@
 				for (const t of assetsGrid.querySelectorAll(".assets-tile")) {
 					t.classList.toggle("selected", assetSelection.has(t.dataset.filename));
 				}
+				// Reflect the new asset selection in the AI Agent's CONTEXT bar
+				// (same treatment as scene selection). The chip reads from the
+				// selected tiles' dataset directly, so no scope crossing needed.
+				refreshChatContextChip?.();
 			});
 			// Register pending video for on-demand metadata load. Falls back gracefully
 			// on browsers without IntersectionObserver — video just stays preload="none".
@@ -10191,6 +10207,19 @@ document.getElementById("mcp-add-btn")?.addEventListener("click", async () => {
 	if (lpPanel && lpSaved) {
 		const px = parseFloat(lpSaved);
 		if (Number.isFinite(px) && px > 0) setAgentHeight(px);
+	} else if (lpPanel) {
+		// First-run / no saved height — open with the AI Agent already expanded
+		// to ~55% of the panel so new users see the chat surface right away
+		// (it sits just under Tools/Workflows). Once they drag the handle to
+		// adjust, LP_AGENT_H_KEY persists and this branch stops firing.
+		// requestAnimationFrame so the panel has laid out before we measure.
+		requestAnimationFrame(() => {
+			const rect = lpPanel.getBoundingClientRect();
+			if (rect.height > 200) {
+				const startPx = Math.max(AGENT_MIN_PX, Math.round(rect.height * 0.55));
+				setAgentHeight(startPx);
+			}
+		});
 	}
 	if (lpPanel) {
 		let dragging = false;
@@ -18253,7 +18282,7 @@ fetchWorkflowModules();
 			del.type = "button";
 			del.className = "gen-add-del";
 			del.title = `Delete "${m.label}" permanently`;
-			del.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 4h10M6 4V2.5h4V4M4.5 4l.5 9a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l.5-9M7 7v5M9 7v5"/></svg>`;
+			del.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>`;
 			del.addEventListener("click", async (e) => {
 				e.stopPropagation();
 				const ok = await window.showConfirm?.(
@@ -18628,8 +18657,18 @@ function assistantSceneContext() {
 		name: selected.name,
 		kind: selected.userData?.primKind || "object",
 	} : null;
+	// Selected Output-panel tiles flow to the agent too — same as scene
+	// selection, so "apply this as a skybox" / "make this the reference"
+	// works without the user typing the filename. Read from the DOM to avoid
+	// crossing into the assets IIFE scope.
+	const selAssets = [...document.querySelectorAll(".assets-tile.selected")].map(t => ({
+		filename: t.dataset.filename || null,
+		url: t.dataset.url || null,
+		kind: t.dataset.kind || null,
+	}));
 	return {
 		selected: sel,
+		selectedAssets: selAssets.length ? selAssets : null,
 		objects: objects.map(o => ({
 			name: o.name,
 			kind: o.userData.primKind || "object",
@@ -18717,6 +18756,19 @@ function refreshChatContextChip() {
 		target.textContent = chatAttachments.length === 1
 			? first
 			: `${first} · +${chatAttachments.length - 1}`;
+		if (clearBtn) clearBtn.hidden = false;
+		return;
+	}
+	// Selected asset tiles in the Output panel — surfaced so the user can ask
+	// "apply this as a skybox" / "use this as reference" and the agent has the
+	// filename already. Read from the DOM (.assets-tile.selected) so we don't
+	// have to cross the scope boundary into the assets IIFE.
+	const selTiles = document.querySelectorAll(".assets-tile.selected");
+	if (selTiles.length) {
+		const first = selTiles[0].dataset.filename || "asset";
+		target.textContent = selTiles.length === 1
+			? `${first} · asset`
+			: `${first} · +${selTiles.length - 1} · asset`;
 		if (clearBtn) clearBtn.hidden = false;
 		return;
 	}
@@ -21220,8 +21272,9 @@ document.getElementById("cam-path-clear")?.addEventListener("click", () => {
 	{ id: "ao-falloff",       format: v => `${v.toFixed(2)}`,       sens: 0.004 },
 	{ id: "ao-samples",       format: v => `${v.toFixed(0)}`,       sens: 0.24 },
 	{ id: "ao-denoise",       format: v => `${v.toFixed(0)}`,       sens: 0.06 },
-	{ id: "duration",         format: v => `${v.toFixed(1)}s`,      sens: 0.04 },
-	{ id: "fps",              format: v => `${v.toFixed(0)}`,       sens: 0.2 },
+	// #duration and #fps are type="hidden" and already have manual .drag-num
+	// widgets (#duration-drag / #fps-drag) set up further down; enhancing them
+	// here inserted a SECOND unlabeled .drag-num below the labeled row.
 	{ id: "mp-video-opacity", format: v => `${v.toFixed(0)}%`,      sens: 0.4 },
 	{ id: "mp-video-blur",    format: v => `${v.toFixed(0)}`,       sens: 0.16 },
 ].forEach(cfg => {
@@ -21405,9 +21458,9 @@ setupDragField(document.getElementById("obj-pz"), { get: () => selected ? select
 setupDragField(document.getElementById("obj-rx"), { get: () => selected ? deg(selected.rotation.x) : 0, set: v => setObjAxis("rotation", "x", v * RAD), sens: 0.5, format: v => `${v.toFixed(0)}°` });
 setupDragField(document.getElementById("obj-ry"), { get: () => selected ? deg(selected.rotation.y) : 0, set: v => setObjAxis("rotation", "y", v * RAD), sens: 0.5, format: v => `${v.toFixed(0)}°` });
 setupDragField(document.getElementById("obj-rz"), { get: () => selected ? deg(selected.rotation.z) : 0, set: v => setObjAxis("rotation", "z", v * RAD), sens: 0.5, format: v => `${v.toFixed(0)}°` });
-setupDragField(document.getElementById("obj-sx"), { get: () => selected ? selected.scale.x : 1, set: v => setObjAxis("scale", "x", v), sens: 0.01, min: 0.001 });
-setupDragField(document.getElementById("obj-sy"), { get: () => selected ? selected.scale.y : 1, set: v => setObjAxis("scale", "y", v), sens: 0.01, min: 0.001 });
-setupDragField(document.getElementById("obj-sz"), { get: () => selected ? selected.scale.z : 1, set: v => setObjAxis("scale", "z", v), sens: 0.01, min: 0.001 });
+setupDragField(document.getElementById("obj-sx"), { get: () => selected ? selected.scale.x : 1, set: v => setObjAxis("scale", "x", v), sens: 0.005, min: 0.001 });
+setupDragField(document.getElementById("obj-sy"), { get: () => selected ? selected.scale.y : 1, set: v => setObjAxis("scale", "y", v), sens: 0.005, min: 0.001 });
+setupDragField(document.getElementById("obj-sz"), { get: () => selected ? selected.scale.z : 1, set: v => setObjAxis("scale", "z", v), sens: 0.005, min: 0.001 });
 
 function objImageUrl(img) { return refImageThumbUrl(img); }
 
