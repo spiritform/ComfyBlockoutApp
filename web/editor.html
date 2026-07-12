@@ -2530,7 +2530,12 @@
 		/* Contain so a portrait clip in a landscape aspect frame gets
 		   pillar-bars instead of being blown up to the wider dimension
 		   and cropped to just a middle stripe. Background:#000 fills the
-		   letterbox area cleanly. */
+		   letterbox area cleanly. Absolute positioning + inset:0 pins
+		   these to the overlay's exact rect — otherwise the render img/
+		   vid render inline and can pick up a 1px offset from the
+		   blockout underlay (which IS position:absolute) so a sliver of
+		   the underlay peeks through at the top edge of the render. */
+		position: absolute; inset: 0;
 		width: 100%; height: 100%; object-fit: contain; background: #000; display: block;
 	}
 	/* Re-enable pointer events on the image + video so drag (Blockout /
@@ -2611,15 +2616,14 @@
 	   same 0.28s cubic-bezier the right-panel panes fade with. */
 	#result-overlay.compare-mode:hover .compare-handle,
 	#result-overlay.compare-mode .compare-handle.dragging { opacity: 1; }
-	/* Solid light-grey tab — reads clearly against both the render and the
-	   blockout underlay. Inverted arrows (dark on light) for legibility. */
+	/* Solid light-grey tab — rounded perfect square (28x28) with no shadow.
+	   Inverted arrows inside (dark on light) for direction legibility. */
 	#result-overlay.compare-mode .compare-handle::before {
 		content: ""; position: absolute;
 		left: 50%; top: 50%;
-		width: 24px; height: 36px; border-radius: 8px;
+		width: 28px; height: 28px; border-radius: 8px;
 		background: rgb(230,230,236);
 		transform: translate(-50%, -50%);
-		box-shadow: 0 4px 14px rgba(0,0,0,0.6);
 	}
 	/* Two outward-pointing triangles via inline SVG — deterministic at any
 	   size, no font-rendering quirks. Fill is dark now that the tab is
@@ -2968,8 +2972,13 @@
 	.vt-save-render:hover { background: rgba(255,255,255,0.1) !important; color: #fff !important; }
 	/* Assets modal */
 	.assets-grid {
-		display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;
-		padding: 4px 2px;
+		/* Three columns for smaller thumbnails; padding matches the sort-tag
+		   row above (18px left / 20px right) so the grid's left edge lines up
+		   with "RECENT" and the tile row breathes evenly. Gap matches the
+		   left inset so between-tile spacing reads as the same rhythm as the
+		   frame margins. */
+		display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+		padding: 6px 20px 12px 18px;
 	}
 	/* Assets pane, when mounted in the top zone via the Output button, needs
 	   scroll on the pane itself — parent #rp-zone-top-body has overflow:hidden
@@ -3014,22 +3023,54 @@
 	.projects-row .remove-x { visibility: hidden; }
 	.projects-row:hover .remove-x { visibility: visible; }
 	.assets-filter {
-		display: flex; align-items: baseline; gap: 4px;
-		margin-left: auto;
+		/* Own row below #rp-header. Extra top padding gives the tags room
+		   to breathe under the OUTPUT kicker; left padding shifted 20→18
+		   to visually align the "RECENT" glyph with the OUTPUT text
+		   above (the header uses padding 0 20px on its own container
+		   while the tags are drawn from a slightly larger font metric). */
+		display: flex; align-items: baseline; gap: 3px;
+		padding: 10px 20px 8px 18px;
 	}
 	.assets-filter[hidden] { display: none; }
+	/* Object-pane subheader — reads like the top header ("PROPERTIES") but
+	   scoped to the current selection: <KIND> : <NAME>. Sits between the
+	   properties header and the scrollable body so it stays pinned as the
+	   section list scrolls. Font matches .rp-kicker / #rp-title exactly
+	   (11px, 0.08em tracking, uppercase, 500 weight) so the two rows read
+	   as a single header block. */
+	.obj-pane-name {
+		display: flex; align-items: baseline; gap: 6px;
+		padding: 0 20px 10px;
+		font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+		font-weight: 500; line-height: 26px;
+	}
+	.obj-pane-name[hidden] { display: none; }
+	.obj-pane-name-kind { color: rgba(255,255,255,0.6); }
+	.obj-pane-name-sep { color: rgba(255,255,255,0.25); }
+	.obj-pane-name-title { color: #e6e6ea; }
+	/* Close X for the Output pane — quiet grey, hovers amber, sits on the
+	   right of the top zone header while Output is showing. */
+	#assets-close-x {
+		margin-left: auto;
+		width: 18px; height: 18px;
+		display: inline-flex; align-items: center; justify-content: center;
+		padding: 0; background: none; border: none;
+		color: rgba(255,255,255,0.4); cursor: pointer;
+	}
+	#assets-close-x svg { width: 12px; height: 12px; }
+	#assets-close-x:hover { color: rgba(255,255,255,0.85); }
 	.assets-filter-btn {
 		background: none; border: none; padding: 0 2px;
-		font-family: inherit; font-size: 9px; font-weight: 400;
-		text-transform: uppercase; letter-spacing: 0.08em;
+		font-family: inherit; font-size: 8px; font-weight: 400;
+		text-transform: uppercase; letter-spacing: 0.06em;
 		color: rgba(255,255,255,0.35); cursor: pointer;
-		line-height: 26px;
+		line-height: 18px;
 	}
 	.assets-filter-btn:hover { color: rgba(255,255,255,0.7); }
 	.assets-filter-btn.active { color: #ffd28a; }
 	.assets-filter-sep {
-		color: rgba(255,255,255,0.18); font-size: 9px;
-		user-select: none; line-height: 26px;
+		color: rgba(255,255,255,0.18); font-size: 8px;
+		user-select: none; line-height: 18px;
 	}
 	.assets-tile {
 		position: relative; aspect-ratio: 1;
@@ -3462,15 +3503,13 @@
 	#rp-pane-outliner { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 0; }
 	#rp-pane-outliner #outliner {
 		flex: 1 1 auto; min-height: 0; overflow-y: auto;
-		/* Container padding pulled in from 20px → 12px on each side so the
-		   selected-row amber tint (which fills each row's own box) extends
-		   further out past the content. The row's own padding (8px each side)
-		   re-inflates the content position so the Camera icon still lines up
-		   with the "OUTLINER" header text at 20px from the pane edge, and the
-		   trailing lock/vis/expand icons sit 8px in from the right edge —
-		   giving them the same amber halo as the color box on the other side.
-		   Top padding reduced 16 → 10 to lift the rows closer to the header. */
-		padding: 10px 12px 12px;
+		/* Left padding inflated (12px) so the selected/hover row background
+		   doesn't run flush against the panel edge — reads as a narrower
+		   inset highlight. Right padding stays tight (4px) so the trailing
+		   icons hug the right edge. The row's own padding is re-inflated
+		   below to keep the color swatch aligned with the "OUTLINER"
+		   kicker (20px from panel edge). */
+		padding: 10px 4px 12px 12px;
 		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
 		/* Right-side gutter only — content stays flush-left with the
 		   OUTLINER label in #rp-zone-top-header above (which sits outside
@@ -3479,8 +3518,14 @@
 		scrollbar-gutter: stable;
 	}
 	#rp-pane-outliner .out-row {
+		/* Container has 12px left / 4px right padding (asymmetric — left
+		   inflated to narrow the hover highlight from the panel edge,
+		   right kept tight so trailing icons hug the edge). Row padding
+		   compensates: 8px left keeps the color swatch at 20px from the
+		   panel edge (12+8=20, same as the OUTLINER kicker above); 5px
+		   right pushes the trailing icons ~3px further right. */
 		padding-left: 8px;
-		padding-right: 8px;
+		padding-right: 5px;
 	}
 	#rp-pane-outliner #outliner::-webkit-scrollbar { width: 4px; }
 	#rp-pane-outliner #outliner::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
@@ -3498,11 +3543,11 @@
 		display: flex; align-items: center; gap: 6px;
 		white-space: nowrap;
 		user-select: none;
-		/* Match the panel bg — dark #131318 with a hair-line divider under it,
-		   so both top headers (LEFT: OBJECTS, RIGHT: OUTLINER) read as the
-		   same dark strip lined up with the 40px viewport toolbar. */
+		/* Match the panel bg — dark #131318 so both top headers (LEFT:
+		   OBJECTS, RIGHT: OUTLINER) read as the same dark strip lined up
+		   with the 40px viewport toolbar. Hairline divider dropped so the
+		   header blends into the outliner rows below without a seam. */
 		background: #131318;
-		border-bottom: 1px solid rgba(255,255,255,0.06);
 	}
 	.rp-zone-caret {
 		font-size: 10px; color: rgba(255,255,255,0.35);
@@ -3598,9 +3643,9 @@
 	#rp-zone-top-body > .rp-pane { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 	#rp-zone-bottom {
 		flex: 1 1 auto;
-		/* Same 40px min as the drag clamp — lets the switcher shrink to just
-		   the header row when the agent zone is dragged all the way up. */
-		min-height: 40px;
+		/* Matches the JS PROPS_MIN_PX so the flex min is honored when the
+		   handle drags to its clamp: 45px header + 7px breathing room. */
+		min-height: 52px;
 		display: flex; flex-direction: column;
 		overflow: hidden;
 	}
@@ -3637,7 +3682,7 @@
 		animation: cb-split-pulse 1.2s ease-in-out 1;
 	}
 	#rp-header {
-		flex: 0 0 40px;
+		flex: 0 0 45px;
 		padding: 0 20px;
 		display: flex; align-items: center; gap: 6px;
 		white-space: nowrap; overflow: hidden;
@@ -4016,6 +4061,15 @@
 					</div>
 					<div class="modal-hint">Point at the ComfyUI install you actually run. Leave blank to fall back to auto-detection.</div>
 					<div class="modal-section" style="margin-top:24px">
+						<label class="modal-toggle-row" for="autosave-media-toggle">
+							<span class="toggle-labels">
+								<span class="toggle-title">Auto-save media</span>
+								<span class="toggle-sub">Persist every render + blockout to /output. Off = save manually via the download icon.</span>
+							</span>
+							<input type="checkbox" id="autosave-media-toggle" checked>
+						</label>
+					</div>
+					<div class="modal-section" style="margin-top:16px">
 						<label class="modal-toggle-row" for="tooltips-toggle">
 							<span class="toggle-labels">
 								<span class="toggle-title">Show hints</span>
@@ -4458,15 +4512,26 @@
 			     they sit on the same baseline as the "AI AGENT" kicker instead of
 			     appearing in a second header row below. -->
 			<span class="rp-header-end" id="rp-header-end" hidden></span>
-			<div class="assets-filter" id="assets-filter" hidden>
-				<button class="assets-filter-btn active" data-filter="recent">Recent</button>
-				<span class="assets-filter-sep">|</span>
-				<button class="assets-filter-btn" data-filter="image">Images</button>
-				<span class="assets-filter-sep">|</span>
-				<button class="assets-filter-btn" data-filter="video">Videos</button>
-				<span class="assets-filter-sep">|</span>
-				<button class="assets-filter-btn" data-filter="3d">3D</button>
-			</div>
+		</div>
+		<!-- Object-pane subheader — kind + name pair for the current selection.
+		     Sits between the properties header and the scrollable body so it
+		     stays visible when the section list scrolls. Populated by
+		     forceRightPane() alongside the pane swap; hidden for all
+		     non-object panes. -->
+		<div class="obj-pane-name" id="obj-pane-name" hidden></div>
+		<!-- Sort tags — sit on their own row directly under the Output header
+		     when the Assets pane is active. Hidden by default; the pane
+		     wiring flips this on/off alongside its rp-title label. -->
+		<div class="assets-filter" id="assets-filter" hidden>
+			<button class="assets-filter-btn active" data-filter="recent">Recent</button>
+			<span class="assets-filter-sep">|</span>
+			<button class="assets-filter-btn" data-filter="image">Images</button>
+			<span class="assets-filter-sep">|</span>
+			<button class="assets-filter-btn" data-filter="video">Videos</button>
+			<span class="assets-filter-sep">|</span>
+			<button class="assets-filter-btn" data-filter="3d">3D</button>
+			<span class="assets-filter-sep">|</span>
+			<button class="assets-filter-btn" data-filter="blockout">Blockout</button>
 		</div>
 
 		<div id="rp-body">
@@ -5281,8 +5346,8 @@
 					<div class="param-grid cols-2">
 						<div class="slider-row">
 							<label>Opacity</label>
-							<input type="range" id="grid-opacity" min="0" max="100" step="1" value="11">
-							<span class="slider-val" id="grid-opacity-val">11</span>
+							<input type="range" id="grid-opacity" min="0" max="100" step="1" value="15">
+							<span class="slider-val" id="grid-opacity-val">15</span>
 						</div>
 					</div>
 				</div>
@@ -5654,13 +5719,28 @@
 			const topHeader = document.getElementById("rp-zone-top-header");
 			if (filter && topHeader) {
 				_prevFilterParent = filter.parentElement;
-				// Insert the pill row directly into the header (peer of the
-				// kicker) — the .rp-header-end span was too narrow to lay out
-				// the 4-button row alongside the hidden Outliner controls.
-				topHeader.appendChild(filter);
+				// Insert the filter row as the top zone's SECOND row — after
+				// the header, before the body — so the sort tags sit under
+				// the Output kicker on their own line instead of crowding
+				// into the header slot.
+				topHeader.insertAdjacentElement("afterend", filter);
 				filter.hidden = false;
 				filter.style.display = "flex";
 			}
+			// Close X — sits on the right of the top header while Output is
+			// showing. Click returns to the Outliner. Reused across
+			// mount/unmount cycles; created lazily on first mount.
+			if (topHeader && !document.getElementById("assets-close-x")) {
+				const x = document.createElement("button");
+				x.id = "assets-close-x";
+				x.type = "button";
+				x.title = "Close Output — back to Outliner";
+				x.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>`;
+				x.addEventListener("click", () => closeAssets());
+				topHeader.appendChild(x);
+			}
+			const xBtn = document.getElementById("assets-close-x");
+			if (xBtn) xBtn.style.display = "";
 			zoneTop?.classList.add("showing-assets");
 		}
 		function _unmountAssetsFromTop() {
@@ -5683,6 +5763,8 @@
 			if (clearBtn) clearBtn.style.display = _prevClearBtnDisplay || "";
 			_prevHideAllDisplay = null;
 			_prevClearBtnDisplay = null;
+			const xBtn = document.getElementById("assets-close-x");
+			if (xBtn) xBtn.style.display = "none";
 			const filter = document.getElementById("assets-filter");
 			if (filter && _prevFilterParent) {
 				_prevFilterParent.appendChild(filter);
@@ -6927,21 +7009,48 @@ function _scrollPropsToTransform() {
 }
 window._scrollPropsToTransform = _scrollPropsToTransform;
 
-// Ground grid — plain THREE.GridHelper. Previously used a shader-based
-// PlaneGeometry with `fwidth`-based AA + distance fade, but the shader
-// path drew visibly different line thickness/density in the blockout
-// snapshot vs the live viewport because `fwidth` scales with pixel
-// density and the two render passes had different physical resolutions.
-// GridHelper is line-based (no fragment-derivative math), so identical
-// rasterization in both passes → identical appearance.
+// Ground grid — THREE.GridHelper with a custom onBeforeCompile that adds
+// a horizon-fade based on distance from the camera. Line-based (no
+// fwidth), so rendering is pixel-identical in the viewport and blockout
+// (autoSnapshot renders to the same canvas). The fade fixes the "grid
+// runs solid all the way to the horizon" look of the vanilla GridHelper
+// — lines quietly dissolve into the far distance instead of stopping
+// hard at GRID_SIZE / 2.
 //
-// `.material.opacity` is exposed as the grid opacity slider's target
-// (see _setGridOpacity below). The uBaseOpacity uniform previously
-// used by the shader is emulated by mapping 0..1 → material.opacity.
-let grid = new THREE.GridHelper(200, 200, 0xd0d0d8, 0x888888);
+// `.material.opacity` is exposed as the grid opacity slider's target;
+// the shader multiplies uBaseOpacity × fade for the final alpha so a
+// user tweak of the slider still scales the whole grid uniformly.
+const GRID_SIZE = 200;
+let grid = new THREE.GridHelper(GRID_SIZE, GRID_SIZE, 0xd0d0d8, 0x888888);
 grid.material.transparent = true;
-grid.material.opacity = 0.11;
+grid.material.opacity = 0.15;
 grid.material.depthWrite = false;
+grid.material.onBeforeCompile = (shader) => {
+	// Range picked to hide the plane's hard 200x200 edge without dimming
+	// the near-camera lines the user actually reads. 5..80 world units
+	// gives a soft horizon blend at typical scene scales.
+	shader.vertexShader = shader.vertexShader
+		.replace(`#include <common>`, `#include <common>\nvarying vec3 vWorldPos;`)
+		.replace(
+			`#include <project_vertex>`,
+			`#include <project_vertex>\nvWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;`
+		);
+	shader.fragmentShader = shader.fragmentShader
+		.replace(`#include <common>`, `#include <common>\nvarying vec3 vWorldPos;`)
+		.replace(
+			`#include <opaque_fragment>`,
+			`#include <opaque_fragment>
+			float _gridDist = length(vWorldPos.xz - cameraPosition.xz);
+			// Tighter fade so the grid dissolves well before the horizon
+			// — reads as "editor floor around the camera" instead of the
+			// full "forever grid" look that runs solid to infinity. 8..55
+			// with a stronger gamma gives a clear central pool of grid
+			// and a soft edge past it.
+			float _gridFade = 1.0 - smoothstep(8.0, 55.0, _gridDist);
+			_gridFade = pow(_gridFade, 1.6);
+			gl_FragColor.a *= _gridFade;`
+		);
+};
 grid.name = "GroundGrid";
 grid.renderOrder = -1;
 grid.frustumCulled = false;
@@ -8305,9 +8414,14 @@ const undoStack = [];
 const redoStack = [];
 const MAX_UNDO = 50;
 let isUndoing = false;
+// Set to true to suppress per-mutation undo snapshots inside a bulk edit
+// (e.g. Clear All in the outliner deletes N objects — we want one atomic
+// snapshot taken at the start so Ctrl+Z restores them all in one shot,
+// not one object per Ctrl+Z).
+let _undoSuppress = false;
 
 function snapshotForUndo() {
-	if (isUndoing || restoringScene) return;
+	if (isUndoing || restoringScene || _undoSuppress) return;
 	try {
 		const json = JSON.stringify(serializeScene());
 		if (undoStack.length && undoStack[undoStack.length - 1] === json) return;
@@ -9806,6 +9920,8 @@ function forceRightPane(which, label) {
 		titleEl.style.display = (isFullPane || isBlank) ? "none" : "";
 		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : which === "gencell" ? "Generator" : which === "workflowcell" ? "Workflow" : which === "mediapipe" ? "MediaPipe" : which === "bool" ? "Boolean" : which === "util" ? "Util" : which === "turntable" ? "Turntable" : "Object");
 	}
+	const namePillEl = document.getElementById("obj-pane-name");
+	if (namePillEl) { namePillEl.hidden = true; namePillEl.innerHTML = ""; }
 	// Keep top-header + viewport-toolbar buttons in sync with whichever full-pane
 	// view is active. Assistant button now toggles agent-zone collapse (wired
 	// below in the split-handle IIFE) rather than swapping the switcher pane.
@@ -10155,10 +10271,15 @@ document.getElementById("mcp-add-btn")?.addEventListener("click", async () => {
 	// handle all the way to the top and give Properties the full column
 	// (matches the AI Agent zone's drag-collapse-to-header behavior).
 	const OUTLINER_MIN_PX = 40;
-	// Properties mirrors Outliner's collapse — it can shrink to a 40px header
-	// strip sitting right above the transport, giving Outliner the full column
-	// when the user is arranging the scene and doesn't need per-object edits.
-	const PROPS_MIN_PX = 40;
+	// Properties minimum height — 45px header + ~7px breathing room so
+	// the collapsed "PROPERTIES : CUBE.001" pill sits just off the
+	// transport bar without a big gap.
+	const PROPS_MIN_PX = 52;
+	// The split handle itself takes real space between the two zones —
+	// counted in every clamp so the top zone never eats into it. Without
+	// this, dragging to max would leave the properties zone 5px shy of
+	// PROPS_MIN_PX and clip the header text at the bottom edge.
+	const RP_HANDLE_PX = 5;
 	// Release-glide inertia — track velocity during drag, animate a short
 	// easeOut glide on release if the user was moving fast. Precise slow
 	// drops (velocity ≈ 0) land exactly where the mouse was let go; quick
@@ -10238,7 +10359,7 @@ document.getElementById("mcp-add-btn")?.addEventListener("click", async () => {
 			if (!dragging) return;
 			const rect = rpPanel.getBoundingClientRect();
 			const dy = e.clientY - grabCursorY;
-			const outlinerPx = Math.max(OUTLINER_MIN_PX, Math.min(rect.height - PROPS_MIN_PX, grabSplitPx + dy));
+			const outlinerPx = Math.max(OUTLINER_MIN_PX, Math.min(rect.height - PROPS_MIN_PX - RP_HANDLE_PX, grabSplitPx + dy));
 			const pct = ((outlinerPx / rect.height) * 100).toFixed(2) + "%";
 			rpPanel.style.setProperty("--rp-top-basis", pct);
 			const now = performance.now();
@@ -10247,13 +10368,48 @@ document.getElementById("mcp-add-btn")?.addEventListener("click", async () => {
 			lastMoveY = e.clientY;
 			lastMoveT = now;
 		});
-		window.addEventListener("mouseup", () => {
+		// Toggle-collapse — click the properties header (no drag) to snap
+		// Properties to its minimum height, or restore the previous size if
+		// it's already collapsed. Mirrors the AI Agent header's tap-to-
+		// collapse behavior on the left panel.
+		function togglePropsCollapse() {
+			const rect = rpPanel.getBoundingClientRect();
+			const cur = rpPanel.style.getPropertyValue("--rp-top-basis").trim();
+			const curOutlinerPx = cur.endsWith("%")
+				? (parseFloat(cur) / 100) * rect.height
+				: (parseFloat(cur) || rect.height * 0.35);
+			const propsPx = rect.height - curOutlinerPx;
+			const AT_MIN = propsPx <= PROPS_MIN_PX + 2;
+			if (AT_MIN) {
+				// Restore — pop back to the saved outliner size (default ~35%).
+				const savedPx = parseFloat(rpPanel.dataset.savedOutlinerPx || "") || (rect.height * 0.35);
+				const clamped = Math.max(OUTLINER_MIN_PX, Math.min(rect.height - PROPS_MIN_PX - RP_HANDLE_PX, savedPx));
+				const pct = ((clamped / rect.height) * 100).toFixed(2) + "%";
+				rpPanel.style.setProperty("--rp-top-basis", pct);
+				try { localStorage.setItem(RP_TOP_KEY, pct); } catch {}
+			} else {
+				// Collapse — save the current outliner size so we can bounce
+				// back on the next tap, then push the split all the way down.
+				rpPanel.dataset.savedOutlinerPx = String(curOutlinerPx);
+				const target = rect.height - PROPS_MIN_PX - RP_HANDLE_PX;
+				const pct = ((target / rect.height) * 100).toFixed(2) + "%";
+				rpPanel.style.setProperty("--rp-top-basis", pct);
+				try { localStorage.setItem(RP_TOP_KEY, pct); } catch {}
+			}
+		}
+		window.addEventListener("mouseup", (e) => {
 			const hadPending = pendingDown !== null;
 			pendingDown = null;
 			// Clear the header-press amber-glow even if the user just tapped
 			// the header without moving (no drag started).
 			if (!dragging && hadPending) rpHandle.classList.remove("dragging");
-			if (!dragging) return;
+			if (!dragging) {
+				// No drag started → treat as a tap on the properties header:
+				// toggle collapse. Only counts when the mousedown landed on
+				// the header itself (pendingDown was set by its listener).
+				if (hadPending) togglePropsCollapse();
+				return;
+			}
 			dragging = false;
 			rpHandle.classList.remove("dragging");
 			document.body.style.cursor = "";
@@ -10272,11 +10428,11 @@ document.getElementById("mcp-add-btn")?.addEventListener("click", async () => {
 					return parseFloat(cur) || 0;
 				},
 				setPx: (px) => {
-					const clamped = Math.max(OUTLINER_MIN_PX, Math.min(rect.height - PROPS_MIN_PX, px));
+					const clamped = Math.max(OUTLINER_MIN_PX, Math.min(rect.height - PROPS_MIN_PX - RP_HANDLE_PX, px));
 					rpPanel.style.setProperty("--rp-top-basis", ((clamped / rect.height) * 100).toFixed(2) + "%");
 				},
 				minPx: OUTLINER_MIN_PX,
-				maxPx: rect.height - PROPS_MIN_PX,
+				maxPx: rect.height - PROPS_MIN_PX - RP_HANDLE_PX,
 				velocityPxPerSec: lastVel,
 				onEnd: persistPct,
 			});
@@ -21131,7 +21287,17 @@ transform.addEventListener("objectChange", () => {
 });
 
 document.getElementById("clear-btn").addEventListener("click", () => {
-	while (objects.length) deleteObject(objects[0]);
+	// One snapshot for the whole clear so Ctrl+Z restores every object at
+	// once. Suppress mid-loop snapshots (each deleteObject would otherwise
+	// push its own intermediate state) and re-enable on exit.
+	if (!objects.length) return;
+	snapshotForUndo();
+	_undoSuppress = true;
+	try {
+		while (objects.length) deleteObject(objects[0]);
+	} finally {
+		_undoSuppress = false;
+	}
 });
 // Bulk visibility toggle for the outliner — flips every object between
 // visible and hidden in one click. If any object is currently visible the
@@ -24193,8 +24359,16 @@ function syncCompareMode() {
 }
 if (_compareHandle) {
 	let dragging = false;
+	// Offset from the pointer to the handle's current position when the drag
+	// started, in overlay-fraction units. Preserving this means grabbing the
+	// tab off-center doesn't snap it under the cursor on the first pointermove
+	// — the handle stays where the fingers land and slides 1:1 from there.
+	let grabOffsetPct = 0;
 	_compareHandle.addEventListener("pointerdown", (e) => {
 		dragging = true;
+		const rect = resultOverlay.getBoundingClientRect();
+		const pointerPct = ((e.clientX - rect.left) / rect.width) * 100;
+		grabOffsetPct = _comparePct - pointerPct;
 		// .dragging keeps the handle visible while the pointer briefly leaves
 		// the overlay during a fast wipe — otherwise the hover-only opacity
 		// would flicker to 0 mid-drag.
@@ -24205,8 +24379,15 @@ if (_compareHandle) {
 	_compareHandle.addEventListener("pointermove", (e) => {
 		if (!dragging) return;
 		const rect = resultOverlay.getBoundingClientRect();
-		const x = e.clientX - rect.left;
-		_setCompareTarget((x / rect.width) * 100);
+		const pointerPct = ((e.clientX - rect.left) / rect.width) * 100;
+		const targetPct = Math.max(0, Math.min(100, pointerPct + grabOffsetPct));
+		// Active drag is 1:1 with the pointer — bypass the RAF ease loop so
+		// the tab tracks the fingers without perceived lag. Ease is reserved
+		// for release / dblclick / any non-drag setter that wants a glide.
+		if (_compareRAF) { cancelAnimationFrame(_compareRAF); _compareRAF = null; }
+		_comparePct = targetPct;
+		_compareTarget = targetPct;
+		resultOverlay.style.setProperty("--compare-x", `${targetPct}%`);
 	});
 	const end = () => {
 		dragging = false;
@@ -24215,7 +24396,8 @@ if (_compareHandle) {
 	_compareHandle.addEventListener("pointerup", end);
 	_compareHandle.addEventListener("pointercancel", end);
 	// Double-click resets the handle to center — cheap escape hatch if the
-	// user parks it near an edge and wants a neutral 50/50 preview.
+	// user parks it near an edge and wants a neutral 50/50 preview. Uses
+	// the eased setter so the reset glides visibly rather than snapping.
 	_compareHandle.addEventListener("dblclick", (e) => {
 		e.preventDefault();
 		_setCompareTarget(50);

@@ -52,6 +52,9 @@ Left panel · middle grid. Each tool spawns / operates on the current scene.
 - **Scatter** — pick a source object + optional surface mesh; the tool sprays instanced copies with configurable count, scale range, jitter, and rotation.
 - **TripoSplat** — generate a 3D gaussian splat from a source image (Comfy Cloud).
 - **Mannequin** — spawn a ~1.72m human-scale Xbot-rigged figure. Drag-poseable joints, per-joint keyframes via `S` when a joint is selected.
+
+![Mannequin joint posing over a reference image](docs/screenshots/mannequin-ballet.png)
+
 - **AnimoFlow** — text prompt → animated motion clip that drives the mannequin. Docker-based MoMask container + MediaPipe retarget on the frontend.
 - **Light** — spawn a directional / spot / point / softbox light. VSM shadows + Contact Shadow. First user light auto-kills the built-in scene fill.
 - **Terrain** — displaced plane. Drives with fBM noise or a grayscale heightmap you upload / generate via Comfy Cloud.
