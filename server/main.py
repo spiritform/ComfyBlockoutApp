@@ -2765,6 +2765,7 @@ async def run_module(module_id: str, request: Request):
             lines.append("Camera: " + "; ".join(cam_bits) + ".")
         checker_objs = []
         mannequin_objs = []
+        annotation_objs = []
         for o in objs:
             name = o.get("name") or "?"
             kind = o.get("kind") or "object"
@@ -2779,14 +2780,17 @@ async def run_module(module_id: str, request: Request):
             notes_note = f" — notes: {notes}" if notes else ""
             checker_note = " — the checkerboard on this surface is a reference GRID (perspective / vanishing points only); completely disregard the black-and-white texture in the output" if o.get("checker") else ""
             mannequin_note = " — mannequin: loose placement/scale reference for a human figure; treat the pose as approximate guidance, not a strict pose lock" if kind == "mannequin" else ""
+            annotation_note = " — grease-pencil annotation: user's drawn guidance/notes, NOT content to render" if kind == "annotation" else ""
             lines.append(
                 f"- {name} ({color} {kind}): centered at x={x}% y={y}% "
-                f"of frame, occupies ~{w}%×{h}% of frame{ref_note}{notes_note}{checker_note}{mannequin_note}"
+                f"of frame, occupies ~{w}%×{h}% of frame{ref_note}{notes_note}{checker_note}{mannequin_note}{annotation_note}"
             )
             if o.get("checker"):
                 checker_objs.append(name)
             if kind == "mannequin":
                 mannequin_objs.append(name)
+            if kind == "annotation":
+                annotation_objs.append(name)
         if checker_objs:
             names = ", ".join(checker_objs)
             lines.append(
@@ -2812,6 +2816,19 @@ async def run_module(module_id: str, request: Request):
                 "Do NOT render the mannequin's flat grey blocky body, joint "
                 "spheres, or stiff articulated look — replace it with the "
                 "human subject described in the user prompt."
+            )
+        if annotation_objs:
+            names = ", ".join(annotation_objs)
+            lines.append(
+                f"ANNOTATION STROKES — {names}: Any hand-drawn colored line strokes "
+                "in image 1 are the user's grease-pencil ANNOTATIONS — notes, doodles, "
+                "arrows, and structural guidance about what should appear, where "
+                "boundaries lie, or emphasis on particular areas. Treat them as "
+                "GUIDANCE ONLY. Do NOT render the stroke lines themselves in the "
+                "output image. Interpret their intent (composition hints, area "
+                "highlights, directional cues, callouts) and let that shape the "
+                "generated scene, but the final image must not contain any of the "
+                "raw drawn lines."
             )
         lines.append(
             "Use the screen-space %s above as the exact pixel footprint for each "

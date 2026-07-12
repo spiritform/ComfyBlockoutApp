@@ -4183,6 +4183,14 @@
 				     mannequin is always the target, so consolidating them
 				     avoided the standalone tool + auto-spawn dance. -->
 				<button class="prim-btn" data-tool="mannequin" data-label="Mannequin" title="Mannequin — spawn a ~1.72m human-scale block figure for reference (Animation / AnimoFlow lives inside the properties pane)"><svg viewBox="3 3 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6"/><path d="m6 8 6 2 6-2"/><path d="M12 10v4"/></svg></button>
+				<!-- Annotate — grease-pencil style 3D stroke tool. Click to
+				     activate draw mode (cursor → crosshair), click-drag in the
+				     viewport to paint a stroke onto the plane at the raycast
+				     hit point. Strokes are regular scene objects (Line2 mesh
+				     wrapped in a Group) so gizmo + keyframes + outliner all
+				     work; backend generation treats them as guidance overlays
+				     and doesn't render them literally. -->
+				<button class="prim-btn" data-tool="annotate" data-label="Annotate" title="Annotate — draw grease-pencil strokes in 3D as guidance/notes; each stroke is a selectable, keyframable scene object that the generator treats as reference only"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3H8"/><path d="m15.007 5.008 3.987 3.986"/><path d="M20 15v4"/><path d="M21.174 6.813a2.82 2.82 0 0 0-3.986-3.987L3.842 16.175a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="M22 17h-4"/><path d="M4 5v4"/><path d="M6 7H2"/><path d="M9 2v2"/></svg></button>
 				<!-- Light — Directional / Point / Spot / Softbox picker in the
 				     object inspector; VSM shadows on Directional+Spot, Point +
 				     Softbox as ambient / fill options. -->
@@ -4704,6 +4712,26 @@
 					<div class="drag-row" id="obj-light-shadow-soft-row" style="margin-top:6px;display:none">
 						<div class="drag-num" id="obj-light-shadow-soft" style="flex:1"><span class="drag-label">Softness</span><span class="drag-val">8.0</span></div>
 					</div>
+				</div>
+				<!-- Annotation — appears when the selection is a grease-pencil
+				     stroke (primKind="annotation"). Live-edit color / width /
+				     opacity; opacity is keyframable via the timeline transport
+				     (auto-key when recording is on). Backend generation treats
+				     annotations as guidance overlays, not content — see the
+				     annotation branch in server/main.py. -->
+				<div class="section" id="obj-annotation-section" style="display:none">
+					<div class="section-label">Annotation</div>
+					<div class="drag-row" style="margin-top:6px;position:relative">
+						<label for="obj-annotation-color" id="obj-annotation-color-btn" title="Stroke color" style="flex:0 0 auto;width:34px;padding:0;border:1px solid rgba(255,255,255,0.08);border-radius:5px;background:#ffb454;cursor:pointer;align-self:stretch;display:block"></label>
+						<input type="color" id="obj-annotation-color" value="#ffb454" style="position:absolute;left:0;top:0;width:34px;height:100%;opacity:0;pointer-events:none">
+						<div class="drag-num" id="obj-annotation-width" style="flex:1"><span class="drag-label">Width</span><span class="drag-val">4</span></div>
+					</div>
+					<div class="sub-label" style="margin-top:10px">Opacity</div>
+					<div class="slider-row">
+						<input type="range" id="obj-annotation-opacity" min="0" max="1" step="0.01" value="1">
+						<span class="slider-val" id="obj-annotation-opacity-val">1.00</span>
+					</div>
+					<div class="hint" style="margin-top:6px;font-size:9px;color:rgba(255,255,255,0.4);line-height:1.5">Annotation strokes are guidance overlays. Move / rotate / scale with the gizmo. Opacity animates via the timeline (record + move the slider to keyframe).</div>
 				</div>
 				<!-- TripoSplat representation toggle — appears on TripoSplat
 				     results (splat OR resampled points with the pcResult flag
@@ -6548,6 +6576,12 @@ import { HorizontalBlurShader } from "three/addons/shaders/HorizontalBlurShader.
 import { VerticalBlurShader } from "three/addons/shaders/VerticalBlurShader.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { RectAreaLightHelper } from "three/addons/helpers/RectAreaLightHelper.js";
+// Fat-line trio for the Annotate grease-pencil tool — LineMaterial takes
+// pixel-space linewidth (survives distance/scale), LineGeometry takes flat
+// XYZXYZ point arrays, Line2 is the render mesh.
+import { Line2 } from "three/addons/lines/Line2.js";
+import { LineGeometry } from "three/addons/lines/LineGeometry.js";
+import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 // RectAreaLight needs its LTC (linearly transformed cosines) lookup textures
 // initialized once before any RectAreaLight participates in the scene. Cheap
 // one-shot — no reason to defer.
@@ -11514,6 +11548,10 @@ function updateStatus(extra) {
 
 const raycaster = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
+// Line2 fat lines have their own raycast threshold (pixels) — without this
+// annotation strokes aren't clickable because the default 0 requires a pixel-
+// perfect ray hit. 5px is generous enough that thin strokes stay pickable.
+raycaster.params.Line2 = { threshold: 5 };
 let pointerDownX = 0, pointerDownY = 0;
 canvas.addEventListener("pointerdown", e => { pointerDownX = e.clientX; pointerDownY = e.clientY; });
 
@@ -11526,6 +11564,10 @@ canvas.addEventListener("pointerdown", e => { pointerDownX = e.clientX; pointerD
 // TransformControls own every subsequent click so its arrows and center handle work
 // without our pickBox intercepting them.
 canvas.addEventListener("pointerdown", e => {
+	// Annotate draw mode owns the pointer — skip the camera-wireframe picker
+	// so a click near the frustum doesn't jump the selection to renderCam
+	// mid-stroke.
+	if (_annotateMode.active) return;
 	if (!renderCamHelper.visible) return;
 	// Outliner lock — treat renderCam like any locked object: picks don't
 	// route to it and the gizmo can't attach. Users can still hit the row
@@ -11818,9 +11860,442 @@ function runTool(kind) {
 		_turntableRefreshHint?.();
 		return;
 	}
+	if (kind === "annotate") {
+		// Toggle grease-pencil draw mode. Second click exits so the tile
+		// doubles as the off-switch (same pattern as MediaPipe / Boolean).
+		_setAnnotateMode(!_annotateMode.active);
+		return;
+	}
 	if (kind && kind.startsWith("soon-")) return;
 	updateStatus(`${kind[0].toUpperCase() + kind.slice(1)} tool — coming soon`);
 }
+
+// ── Annotate (grease-pencil) tool ─────────────────────────────────
+// State + helpers for the 3D annotation stroke tool. Draw mode is a modal
+// state: while active, the viewport cursor is a crosshair and pointerdown
+// starts a stroke instead of selecting / orbiting. Strokes commit as normal
+// scene objects (Group root → Line2 child) so gizmo + keyframes + outliner
+// all work uncustomized. Backend generation reads `primKind==="annotation"`
+// and appends a system-prompt suffix telling the model to treat strokes as
+// guidance, not content — see server/main.py annotation branch.
+const _annotateMode = {
+	active: false,
+	drawing: false,           // true between pointerdown and pointerup
+	plane: null,              // THREE.Plane the current stroke is glued to
+	worldOrigin: null,        // hit point (or ray * dist) used as the stroke's group origin
+	pointsWorld: [],          // Vector3[] appended per mousemove
+	// Default look for a fresh stroke. Persisted on the last-used side too so
+	// consecutive strokes share the visual identity by default.
+	color: "#ffb454",         // amber-orange matches the app accent
+	widthPx: 4,               // world-consistent pixel width (LineMaterial handles projection)
+	opacity: 1.0,
+};
+window._annotateMode = _annotateMode;
+// Counter for annotation.NNN naming — kept alongside primCounters so autosave/
+// scene-load can restore continuity.
+function _annotateNextName() {
+	primCounters.annotation = (primCounters.annotation || 0) + 1;
+	return `annotation.${String(primCounters.annotation).padStart(3, "0")}`;
+}
+function _setAnnotateMode(on) {
+	_annotateMode.active = !!on;
+	const btn = document.querySelector('.prim-btn[data-tool="annotate"]');
+	btn?.classList.toggle("active", _annotateMode.active);
+	const cw = document.getElementById("canvas-wrap");
+	if (cw) cw.style.cursor = _annotateMode.active ? "crosshair" : "";
+	// Give the user a nudge in the status bar so they see the mode change
+	// (matches how other modal tools like Boolean report themselves).
+	if (typeof updateStatus === "function") {
+		updateStatus(_annotateMode.active
+			? "Annotate — click-drag in the viewport to draw. Click Annotate again or press Esc to exit."
+			: "Annotate mode off");
+	}
+	// Suspend orbit while drawing so the user's drag paints instead of
+	// tumbling. Restore on exit.
+	if (typeof orbit !== "undefined" && orbit) {
+		orbit.enabled = !_annotateMode.active;
+	}
+}
+// Esc exits draw mode — matches the "second click = off" toggle so users
+// have two ways out.
+window.addEventListener("keydown", (e) => {
+	if (e.key === "Escape" && _annotateMode.active) {
+		e.preventDefault();
+		_setAnnotateMode(false);
+	}
+});
+
+// Point-thinning threshold: don't append a new stroke point unless the ray-
+// projected world position moved at least this far from the last one. Keeps
+// the geometry lean when the user drags slowly; without it a 1s slow drag
+// can produce hundreds of near-identical vertices.
+const _ANNOTATE_MIN_STEP_WORLD = 0.02;
+
+// Screen→world projection for the current stroke. Raycasts from the active
+// camera through the pointer NDC and intersects the plane we locked in at
+// stroke-begin. Returns null if the ray is parallel to the plane (rare — only
+// happens if the user rotates orbit mid-drag past 90° which we prevented via
+// orbit.enabled=false, but guarded anyway).
+function _annotateProjectToPlane(clientX, clientY) {
+	if (!_annotateMode.plane) return null;
+	const rect = canvas.getBoundingClientRect();
+	const nx = ((clientX - rect.left) / rect.width) * 2 - 1;
+	const ny = -((clientY - rect.top) / rect.height) * 2 + 1;
+	ndc.set(nx, ny);
+	raycaster.setFromCamera(ndc, camera);
+	const hit = new THREE.Vector3();
+	const ok = raycaster.ray.intersectPlane(_annotateMode.plane, hit);
+	return ok ? hit : null;
+}
+
+// Begin a stroke: raycast to find a hit surface, build a camera-facing plane
+// at that hit (or at orbit.target distance if the ray missed), stash it, and
+// seed the points buffer with the first point.
+function _annotateBeginStroke(clientX, clientY) {
+	const rect = canvas.getBoundingClientRect();
+	const nx = ((clientX - rect.left) / rect.width) * 2 - 1;
+	const ny = -((clientY - rect.top) / rect.height) * 2 + 1;
+	ndc.set(nx, ny);
+	raycaster.setFromCamera(ndc, camera);
+	// Prefer a real surface hit — user's intent is usually "annotate ON that
+	// object". Filter out splats + locked + invisible so raycasts feel the
+	// same as a normal pick. Skip previous annotations too so drawing over an
+	// existing stroke doesn't stick the new one to the old one's plane
+	// (which is usually not what the user wants — you want fresh strokes on
+	// the underlying scene geometry).
+	const candidates = objects.filter(o =>
+		o.userData?.primKind !== "splat"
+		&& o.userData?.primKind !== "annotation"
+		&& o.visible !== false
+		&& !o.userData?.locked
+	);
+	const hits = raycaster.intersectObjects(candidates, true);
+	let origin;
+	if (hits.length) {
+		origin = hits[0].point.clone();
+	} else {
+		// No surface — drop the stroke on a camera-facing plane at the orbit
+		// target's distance. That matches what you'd get sketching in "air"
+		// with the eyeball attached to the current pivot.
+		const dist = camera.position.distanceTo(orbit.target);
+		origin = new THREE.Vector3()
+			.copy(raycaster.ray.direction)
+			.multiplyScalar(dist)
+			.add(raycaster.ray.origin);
+	}
+	// Plane normal = camera forward (so the stroke plane always faces the
+	// user for the duration of THIS drag). Using camera.getWorldDirection
+	// picks up any camera parenting / mid-frame changes.
+	const normal = new THREE.Vector3();
+	camera.getWorldDirection(normal);
+	_annotateMode.plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, origin);
+	_annotateMode.worldOrigin = origin.clone();
+	_annotateMode.pointsWorld = [origin.clone()];
+	_annotateMode.drawing = true;
+}
+
+// Append a point if it moved far enough from the last one. Cheap distance
+// check keeps the stroke geometry compact without the user having to draw
+// deliberately.
+function _annotateAppendPoint(clientX, clientY) {
+	const p = _annotateProjectToPlane(clientX, clientY);
+	if (!p) return;
+	const last = _annotateMode.pointsWorld[_annotateMode.pointsWorld.length - 1];
+	if (last && last.distanceTo(p) < _ANNOTATE_MIN_STEP_WORLD) return;
+	_annotateMode.pointsWorld.push(p);
+}
+
+// Finalize the current stroke: build the Line2 mesh, wrap in a Group so the
+// gizmo has a top-level target that keyframes cleanly, add to the scene +
+// objects[], and select. Discards degenerate strokes (< 2 points) so a
+// stray click doesn't leave a zero-length invisible object behind.
+function _annotateFinishStroke() {
+	const pts = _annotateMode.pointsWorld;
+	_annotateMode.drawing = false;
+	if (!pts || pts.length < 2) {
+		_annotateMode.pointsWorld = [];
+		_annotateMode.worldOrigin = null;
+		_annotateMode.plane = null;
+		return;
+	}
+	// Store LOCAL coords relative to the group's world position. That lets
+	// the user grab the gizmo and move / rotate / scale the whole stroke as
+	// one object without the line drifting relative to its own pivot.
+	const origin = _annotateMode.worldOrigin.clone();
+	const flat = [];
+	for (const p of pts) {
+		flat.push(p.x - origin.x, p.y - origin.y, p.z - origin.z);
+	}
+	const group = _annotateBuildObject({
+		originArr: origin.toArray(),
+		pointsFlat: flat,
+		color: _annotateMode.color,
+		widthPx: _annotateMode.widthPx,
+		opacity: _annotateMode.opacity,
+	});
+	snapshotForUndo();
+	group.name = _annotateNextName();
+	scene.add(group);
+	objects.push(group);
+	select(group);
+	refreshOutliner?.();
+	if (typeof saveScene === "function") saveScene();
+	_annotateMode.pointsWorld = [];
+	_annotateMode.worldOrigin = null;
+	_annotateMode.plane = null;
+}
+
+// Shared Line2 builder — used by both finalize (fresh stroke) and scene load
+// (deserialize). Returns a Group with the Line2 child; the group's world
+// position IS the stroke's pivot. Caller assigns `.name` + adds to scene.
+function _annotateBuildObject({ originArr, pointsFlat, color, widthPx, opacity }) {
+	const geom = new LineGeometry();
+	geom.setPositions(pointsFlat);
+	const mat = new LineMaterial({
+		color: new THREE.Color(color),
+		linewidth: widthPx,          // in pixels — LineMaterial handles projection
+		worldUnits: false,
+		transparent: true,
+		opacity: opacity,
+		depthWrite: false,           // stops opacity from carving holes in what's behind
+		dashed: false,
+	});
+	// LineMaterial needs the current canvas size to project pixel widths
+	// correctly. Keep it in sync on resize via the same _annotateSyncResolution
+	// helper called from the renderer resize path.
+	_annotateSyncMaterialResolution(mat);
+	const line = new Line2(geom, mat);
+	line.computeLineDistances();
+	line.userData._isAnnotationLine = true;
+	// Wrap in Group so the gizmo, keyframes, and outliner see a single top-
+	// level object. Group world position = stroke pivot (first point).
+	const group = new THREE.Group();
+	group.position.fromArray(originArr);
+	group.add(line);
+	group.userData.primKind = "annotation";
+	group.userData.annotation = {
+		origin: originArr.slice(),
+		points: Array.from(pointsFlat),
+		color: color,
+		widthPx: widthPx,
+		opacity: opacity,
+	};
+	return group;
+}
+
+// Record an opacity keyframe on an annotation at the current playhead — only
+// while `recording` is on. Called from the properties-pane slider so live-
+// scrubbing the opacity while recording drops key markers along the timeline
+// like moving the gizmo does for pos/rot/scale. Silent no-op when recording
+// is off (the slider still writes to userData.annotation.opacity so the fresh
+// value sticks as the object's static opacity).
+function _annotationRecordOpacityKey(obj, opacity) {
+	if (!obj || obj.userData?.primKind !== "annotation") return;
+	if (typeof recording === "undefined" || !recording) return;
+	if (!Array.isArray(obj.userData.keyframes)) obj.userData.keyframes = [];
+	const t = (typeof playhead === "number") ? playhead : 0;
+	// Merge into an existing key at this playhead — matches how addObjectKeyframe
+	// dedups within 0.005 of the timestamp, so opacity-during-recording plays
+	// nicely with a pos/rot/scale key you already dropped at the same instant.
+	const nearIdx = obj.userData.keyframes.findIndex(k => Math.abs(k.t - t) <= 0.005);
+	if (nearIdx >= 0) {
+		obj.userData.keyframes[nearIdx].opacity = opacity;
+	} else {
+		const cap = captureObjectState(obj);
+		cap.opacity = opacity;
+		const k = { t, pos: cap.pos, quat: cap.quat, scale: cap.scale, ease: "easeInOut", opacity };
+		obj.userData.keyframes.push(k);
+		obj.userData.keyframes.sort((a, b) => a.t - b.t);
+	}
+	// Re-render the timeline dots so the new/updated key shows up immediately
+	// (otherwise it only appears after the next selection or S press).
+	if (typeof renderKeyframeMarkers === "function") renderKeyframeMarkers();
+	if (typeof saveSceneDebounced === "function") saveSceneDebounced();
+}
+
+// Push canvas size into a LineMaterial so pixel widths render correctly. Kept
+// as a helper so window-resize handlers can call it against every annotation
+// material without duplicating the math.
+function _annotateSyncMaterialResolution(mat) {
+	const rect = canvas.getBoundingClientRect();
+	const dpr = window.devicePixelRatio || 1;
+	mat.resolution?.set(rect.width * dpr, rect.height * dpr);
+}
+// Re-sync every annotation stroke's material resolution on canvas resize —
+// without this, dragging the app window would leave old strokes with
+// pre-resize pixel widths (visually wrong scaling until you draw a new one).
+window.addEventListener("resize", () => {
+	for (const o of objects) {
+		if (o?.userData?.primKind !== "annotation") continue;
+		o.traverse(child => {
+			if (child.userData?._isAnnotationLine) _annotateSyncMaterialResolution(child.material);
+		});
+	}
+});
+
+// Capture-phase pointer handlers — install BEFORE the existing viewport
+// pointerdown / pointerup handlers see the event, so a stroke drag never
+// leaks into the select-on-click logic or the orbit controls. All three
+// gate on _annotateMode.active + left button; other buttons (right / middle)
+// fall through so the user can still Alt-orbit / RMB-context out of draw
+// mode if needed. capture: true + stopImmediatePropagation keeps this the
+// only listener that acts on the gesture.
+canvas.addEventListener("pointerdown", (e) => {
+	if (!_annotateMode.active) return;
+	if (e.button !== 0 || e.altKey) return;
+	_annotateBeginStroke(e.clientX, e.clientY);
+	// Rebuild + attach the in-progress preview so the user sees ink as they
+	// drag, not just after mouseup. Preview is separate from the finalized
+	// object — same builder, but not registered in objects[] yet.
+	if (_annotatePreview) {
+		scene.remove(_annotatePreview);
+		_annotatePreview.traverse(c => c.material?.dispose?.());
+		_annotatePreview = null;
+	}
+	_annotatePreview = _annotateBuildObject({
+		originArr: _annotateMode.worldOrigin.toArray(),
+		pointsFlat: [0, 0, 0],   // seed with the origin; move handler will refresh
+		color: _annotateMode.color,
+		widthPx: _annotateMode.widthPx,
+		opacity: _annotateMode.opacity,
+	});
+	scene.add(_annotatePreview);
+	canvas.setPointerCapture?.(e.pointerId);
+	e.stopImmediatePropagation();
+	e.preventDefault();
+}, true);
+canvas.addEventListener("pointermove", (e) => {
+	if (!_annotateMode.active || !_annotateMode.drawing) return;
+	_annotateAppendPoint(e.clientX, e.clientY);
+	// Refresh the preview geometry from the growing pointsWorld buffer. Same
+	// local-space transform as finalize so the preview matches the committed
+	// stroke pixel-for-pixel.
+	if (_annotatePreview) {
+		const origin = _annotateMode.worldOrigin;
+		const flat = [];
+		for (const p of _annotateMode.pointsWorld) {
+			flat.push(p.x - origin.x, p.y - origin.y, p.z - origin.z);
+		}
+		const line = _annotatePreview.children.find(c => c.userData?._isAnnotationLine);
+		line?.geometry?.setPositions(flat);
+		line?.computeLineDistances?.();
+	}
+	e.stopImmediatePropagation();
+}, true);
+canvas.addEventListener("pointerup", (e) => {
+	if (!_annotateMode.active || !_annotateMode.drawing) return;
+	if (_annotatePreview) {
+		scene.remove(_annotatePreview);
+		_annotatePreview.traverse(c => c.material?.dispose?.());
+		_annotatePreview = null;
+	}
+	_annotateFinishStroke();
+	canvas.releasePointerCapture?.(e.pointerId);
+	e.stopImmediatePropagation();
+}, true);
+// Preview stroke — drawn while the user's mouse is still down. Not part of
+// objects[] (not selectable / not serialized) — pure visual feedback that
+// gets replaced by the real Group on mouseup.
+let _annotatePreview = null;
+
+// Apply color / width / opacity to the Line2 material inside an annotation
+// group. Shared by the properties pane setters + keyframe interpolation +
+// scene load. Guards on child existence so a partially-built group (during
+// deserialize) doesn't throw.
+function _annotationApplyLook(group, { color, widthPx, opacity } = {}) {
+	if (!group) return;
+	const line = group.children?.find(c => c.userData?._isAnnotationLine);
+	if (!line || !line.material) return;
+	if (color !== undefined) {
+		line.material.color.set(color);
+		group.userData.annotation.color = color;
+	}
+	if (widthPx !== undefined) {
+		line.material.linewidth = widthPx;
+		group.userData.annotation.widthPx = widthPx;
+	}
+	if (opacity !== undefined) {
+		line.material.opacity = Math.max(0, Math.min(1, opacity));
+		group.userData.annotation.opacity = line.material.opacity;
+	}
+	line.material.needsUpdate = true;
+}
+// Push current userData.annotation values into the properties pane controls.
+// Called from refreshObjectInspector when the selection is an annotation.
+function _annotationSyncPaneFromSelection(group) {
+	const cfg = group?.userData?.annotation;
+	if (!cfg) return;
+	const colorIn = document.getElementById("obj-annotation-color");
+	const colorBtn = document.getElementById("obj-annotation-color-btn");
+	const widthEl = document.getElementById("obj-annotation-width");
+	const opIn = document.getElementById("obj-annotation-opacity");
+	const opVal = document.getElementById("obj-annotation-opacity-val");
+	if (colorIn) colorIn.value = cfg.color || "#ffb454";
+	if (colorBtn) colorBtn.style.background = cfg.color || "#ffb454";
+	if (widthEl) {
+		const valEl = widthEl.querySelector(".drag-val");
+		if (valEl) valEl.textContent = String(cfg.widthPx);
+	}
+	if (opIn) opIn.value = String(cfg.opacity);
+	if (opVal) opVal.textContent = Number(cfg.opacity).toFixed(2);
+}
+// Wire the annotation pane controls once at boot. Handlers pull the currently
+// selected group and route through _annotationApplyLook so live-driving stays
+// consistent with programmatic keyframe application.
+(() => {
+	const colorIn = document.getElementById("obj-annotation-color");
+	const colorBtn = document.getElementById("obj-annotation-color-btn");
+	const opIn = document.getElementById("obj-annotation-opacity");
+	const opVal = document.getElementById("obj-annotation-opacity-val");
+	const widthEl = document.getElementById("obj-annotation-width");
+	// Native color input is invisible; the label acts as the clickable swatch.
+	// Wire input event so drag-hueing the picker previews live.
+	colorIn?.addEventListener("input", () => {
+		if (colorBtn) colorBtn.style.background = colorIn.value;
+		if (selected?.userData?.primKind === "annotation") {
+			_annotationApplyLook(selected, { color: colorIn.value });
+			// Remember the last color as the default for the next fresh stroke —
+			// mirrors how the light-color sticks between spawns.
+			_annotateMode.color = colorIn.value;
+			if (typeof saveScene === "function") saveScene();
+		}
+	});
+	// Width drag-num — 1..30 pixel widths. Fine range keeps the on-screen
+	// stroke readable without letting the user paint a slab.
+	if (widthEl && typeof setupDragField === "function") {
+		setupDragField(widthEl, {
+			get: () => (selected?.userData?.annotation?.widthPx ?? _annotateMode.widthPx),
+			set: (v) => {
+				const w = Math.max(1, Math.min(30, Math.round(v)));
+				if (selected?.userData?.primKind === "annotation") {
+					_annotationApplyLook(selected, { widthPx: w });
+					_annotateMode.widthPx = w;
+					if (typeof saveScene === "function") saveScene();
+				}
+			},
+			format: (v) => String(Math.round(v)),
+			sens: 0.2,
+			min: 1,
+			max: 30,
+		});
+	}
+	// Opacity slider — 0..1. Also the keyframable channel: while `recording`
+	// is on, moving the slider records a keyframe at the playhead (handled
+	// in the keyframe integration below).
+	opIn?.addEventListener("input", () => {
+		const v = parseFloat(opIn.value);
+		if (opVal) opVal.textContent = v.toFixed(2);
+		if (selected?.userData?.primKind === "annotation") {
+			_annotationApplyLook(selected, { opacity: v });
+			_annotateMode.opacity = v;
+			// Signal the keyframe layer so recording can capture the change.
+			if (typeof _annotationRecordOpacityKey === "function") {
+				_annotationRecordOpacityKey(selected, v);
+			}
+			if (typeof saveScene === "function") saveScene();
+		}
+	});
+})();
 
 // ── Boolean tool ──────────────────────────────────────────────────
 // Lazy-loaded CSG via three-bvh-csg. Uses the current multi-selection —
@@ -21957,6 +22432,16 @@ function refreshObjectInspector() {
 			_mountMannequinAnimoFlow();
 		}
 	}
+	// Annotation section — visible when the selection is a grease-pencil
+	// stroke. Sync color / width / opacity from userData.annotation so the
+	// pane reflects THIS stroke, not the last-edited one. Live edits mutate
+	// userData + Line2 material directly.
+	const isAnnotation = selected.userData?.primKind === "annotation";
+	const annoSection = document.getElementById("obj-annotation-section");
+	if (annoSection) {
+		annoSection.style.display = isAnnotation ? "" : "none";
+		if (isAnnotation) _annotationSyncPaneFromSelection(selected);
+	}
 	// Terrain section — visible when the selected object is a terrain. Syncs
 	// pane control state (source pill, preset dropdown, drag-nums, heightmap
 	// thumb) from the object's terrainConfig so re-selecting a terrain shows
@@ -22086,7 +22571,7 @@ function refreshObjectInspector() {
 	// meshes. Excluded for splats, particles, clouds, and Points (their `side`
 	// property exists but has no visible effect — a Points cloud has no
 	// polygons to flip).
-	const sidedMats = (isSplatObj || isPoints || isLightObj || selected.userData?.primKind === "particles" || selected.userData?.primKind === "clouds")
+	const sidedMats = (isSplatObj || isPoints || isLightObj || selected.userData?.primKind === "particles" || selected.userData?.primKind === "clouds" || selected.userData?.primKind === "annotation")
 		? []
 		: collectSidedMaterials(selected);
 	if (sidedMats.length) {
@@ -26259,11 +26744,19 @@ function applyCameraState(state) {
 // Object animation — per-object track on userData.keyframes.
 // Each key: { t, pos: Vector3, quat: Quaternion, scale: Vector3, ease }
 function captureObjectState(obj) {
-	return {
+	const state = {
 		pos: obj.position.clone(),
 		quat: obj.quaternion.clone(),
 		scale: obj.scale.clone(),
 	};
+	// Annotations carry an animatable opacity channel — capture the current
+	// Line2 material opacity so keyframes can interpolate fade-in / fade-out.
+	// Optional field; non-annotation objects don't get it (undefined).
+	if (obj.userData?.primKind === "annotation") {
+		const line = obj.children?.find(c => c.userData?._isAnnotationLine);
+		if (line?.material) state.opacity = line.material.opacity;
+	}
+	return state;
 }
 function applyObjectState(obj, state) {
 	obj.position.copy(state.pos);
@@ -26273,6 +26766,12 @@ function applyObjectState(obj, state) {
 	// pre-render traversal, but spark's SplatMesh occasionally lags a frame if
 	// matrixAutoUpdate has been touched anywhere in its chain.
 	obj.updateMatrixWorld(true);
+	// Annotation-only: push the sampled opacity into the Line2 material so
+	// timeline scrubbing / playback drives the fade. Silent no-op for objects
+	// without an opacity field.
+	if (typeof state.opacity === "number" && obj.userData?.primKind === "annotation") {
+		_annotationApplyLook(obj, { opacity: state.opacity });
+	}
 }
 // Catmull-Rom (tension=0.5) on a single component — produces a smooth curve through
 // p1 and p2 with tangents determined by the neighbors p0 and p3.
@@ -26352,11 +26851,23 @@ function sampleObjectAt(obj, t) {
 				: (segPoints.length === 2)
 					? sampleKeyPosCurved(ks, startIdx, eased)
 					: sampleMultiCatmullRom(segPoints, eased);
-			return {
+			const sampled = {
 				pos,
 				quat: new THREE.Quaternion().slerpQuaternions(a.quat, c.quat, eased),
 				scale: new THREE.Vector3().lerpVectors(a.scale, c.scale, eased),
 			};
+			// Opacity — optional per-key channel for annotations. Interpolate
+			// only when BOTH endpoints define it; if only one side has it, hold
+			// the defined value (avoids fading to 0/1 through a segment where
+			// the user hadn't yet keyed the other end).
+			if (typeof a.opacity === "number" && typeof c.opacity === "number") {
+				sampled.opacity = a.opacity + (c.opacity - a.opacity) * eased;
+			} else if (typeof a.opacity === "number") {
+				sampled.opacity = a.opacity;
+			} else if (typeof c.opacity === "number") {
+				sampled.opacity = c.opacity;
+			}
+			return sampled;
 		}
 	}
 	return timed[timed.length - 1];
@@ -27227,6 +27738,9 @@ function addObjectKeyframe(obj) {
 		&& t < others[others.length - 1].t;
 	const defaultEase = isBetween ? "through" : "easeInOut";
 	const k = { t, pos: cap.pos, quat: cap.quat, scale: cap.scale, ease: defaultEase };
+	// Carry the optional opacity channel through (annotations only — undefined
+	// on every other primKind so the field just doesn't get added).
+	if (typeof cap.opacity === "number") k.opacity = cap.opacity;
 	obj.userData.keyframes.push(k);
 	justAddedKeys.add(k);
 	obj.userData.keyframes.sort((a, b) => a.t - b.t);
@@ -27880,23 +28394,33 @@ function notifyParentSaved() {
 function serializeObjectKeyframes(o) {
 	const ks = o.userData?.keyframes;
 	if (!Array.isArray(ks) || ks.length === 0) return undefined;
-	return ks.map(k => ({
-		t: k.t,
-		pos: k.pos.toArray(),
-		quat: [k.quat.x, k.quat.y, k.quat.z, k.quat.w],
-		scale: k.scale.toArray(),
-		ease: k.ease || "easeInOut",
-	}));
+	return ks.map(k => {
+		const out = {
+			t: k.t,
+			pos: k.pos.toArray(),
+			quat: [k.quat.x, k.quat.y, k.quat.z, k.quat.w],
+			scale: k.scale.toArray(),
+			ease: k.ease || "easeInOut",
+		};
+		// Annotation opacity — optional field. Round to keep the JSON tidy;
+		// 4 decimals is 0.0001 precision which is finer than the eye can see.
+		if (typeof k.opacity === "number") out.opacity = Math.round(k.opacity * 10000) / 10000;
+		return out;
+	});
 }
 function deserializeObjectKeyframes(arr) {
 	if (!Array.isArray(arr)) return [];
-	return arr.map(k => ({
-		t: k.t,
-		pos: new THREE.Vector3().fromArray(k.pos),
-		quat: new THREE.Quaternion(k.quat[0], k.quat[1], k.quat[2], k.quat[3]),
-		scale: new THREE.Vector3().fromArray(k.scale),
-		ease: k.ease || "easeInOut",
-	}));
+	return arr.map(k => {
+		const out = {
+			t: k.t,
+			pos: new THREE.Vector3().fromArray(k.pos),
+			quat: new THREE.Quaternion(k.quat[0], k.quat[1], k.quat[2], k.quat[3]),
+			scale: new THREE.Vector3().fromArray(k.scale),
+			ease: k.ease || "easeInOut",
+		};
+		if (typeof k.opacity === "number") out.opacity = k.opacity;
+		return out;
+	});
 }
 
 function serializeScene() {
@@ -28017,6 +28541,28 @@ function serializeScene() {
 			config: o.userData.scatterFx.config,
 			keyframes: serializeObjectKeyframes(o),
 		})),
+		annotations: objects.filter(o => o.userData.primKind === "annotation").map(o => {
+			const cfg = o.userData.annotation || {};
+			return {
+				name: o.name,
+				position: o.position.toArray(),
+				rotation: [o.rotation.x, o.rotation.y, o.rotation.z],
+				scale: o.scale.toArray(),
+				visible: o.visible !== false,
+				locked: o.userData.locked || undefined,
+				notes: o.userData.notes || undefined,
+				// Stroke data — origin was the world-space pivot at draw time
+				// (points below are relative to it), color/width/opacity are
+				// the pre-keyframe base look. Keyframes carry any animated
+				// opacity states on top.
+				origin: cfg.origin?.slice(),
+				points: Array.from(cfg.points || []),
+				color: cfg.color,
+				widthPx: cfg.widthPx,
+				opacity: cfg.opacity,
+				keyframes: serializeObjectKeyframes(o),
+			};
+		}),
 		mannequins: objects.filter(o => o.userData.primKind === "mannequin").map(o => ({
 			name: o.name,
 			poseName: o.userData.mannequinPoseName || undefined,
@@ -28346,6 +28892,39 @@ async function deserializeScene(state, opts = {}) {
 		if (tt.notes) obj.userData.notes = tt.notes;
 		if (typeof tt.color === "number") obj.material?.color?.setHex(tt.color);
 		if (Array.isArray(tt.keyframes)) obj.userData.keyframes = deserializeObjectKeyframes(tt.keyframes);
+	}
+
+	// Annotations — grease-pencil strokes. No cross-object deps, just rebuild
+	// Line2 from the persisted origin + local points using the same builder
+	// the live draw finalize uses. Keyframes carry the animated opacity track.
+	for (const ar of (state.annotations || [])) {
+		try {
+			const group = _annotateBuildObject({
+				originArr: ar.origin || [0, 0, 0],
+				pointsFlat: ar.points || [],
+				color: ar.color || "#ffb454",
+				widthPx: typeof ar.widthPx === "number" ? ar.widthPx : 4,
+				opacity: typeof ar.opacity === "number" ? ar.opacity : 1,
+			});
+			if (ar.name) group.name = ar.name;
+			if (ar.position) group.position.fromArray(ar.position);
+			if (ar.rotation) group.rotation.set(ar.rotation[0], ar.rotation[1], ar.rotation[2]);
+			if (ar.scale) group.scale.fromArray(ar.scale);
+			if (ar.visible === false) group.visible = false;
+			if (ar.locked) group.userData.locked = true;
+			if (ar.notes) group.userData.notes = ar.notes;
+			if (Array.isArray(ar.keyframes)) group.userData.keyframes = deserializeObjectKeyframes(ar.keyframes);
+			// Bump the annotation counter so freshly drawn strokes don't reuse
+			// numbers from restored ones ("annotation.003" already exists).
+			const num = parseInt(String(ar.name || "").split(".").pop(), 10);
+			if (Number.isFinite(num)) {
+				primCounters.annotation = Math.max(primCounters.annotation || 0, num);
+			}
+			scene.add(group);
+			objects.push(group);
+		} catch (e) {
+			console.error("[annotation] restore failed:", e);
+		}
 	}
 
 	// Scatters hydrate LAST so their sourceName references resolve — every
