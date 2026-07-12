@@ -5182,6 +5182,30 @@
 			     Object (or renderCamTarget as fallback) at the current radius +
 			     height. Both modes set the scene duration to the chosen length
 			     so one loop = one revolution. -->
+			<!-- Annotate tool pane — appears in the right panel while draw mode
+			     is active AND no annotation is currently selected. Same
+			     controls (color / width / opacity) as the per-stroke section,
+			     but writes to _annotateMode defaults so the next fresh stroke
+			     picks them up. Once the user draws a stroke, select() flips
+			     the pane to the Object view and the per-stroke section takes
+			     over — this pane comes back the moment nothing (or a
+			     non-annotation) is selected and draw mode is still on. -->
+			<div class="rp-pane" id="rp-pane-annotate" hidden>
+				<div class="section">
+					<div class="section-label">Brush</div>
+					<div class="drag-row" style="margin-top:6px;position:relative">
+						<label for="annotate-tool-color" id="annotate-tool-color-btn" title="Stroke color" style="flex:0 0 auto;width:34px;padding:0;border:1px solid rgba(255,255,255,0.08);border-radius:5px;background:#ffb454;cursor:pointer;align-self:stretch;display:block"></label>
+						<input type="color" id="annotate-tool-color" value="#ffb454" style="position:absolute;left:0;top:0;width:34px;height:100%;opacity:0;pointer-events:none">
+						<div class="drag-num" id="annotate-tool-width" style="flex:1"><span class="drag-label">Width</span><span class="drag-val">4</span></div>
+					</div>
+					<div class="sub-label" style="margin-top:10px">Opacity</div>
+					<div class="slider-row">
+						<input type="range" id="annotate-tool-opacity" min="0" max="1" step="0.01" value="1">
+						<span class="slider-val" id="annotate-tool-opacity-val">1.00</span>
+					</div>
+					<div class="hint" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5);line-height:1.5"><strong>LMB</strong> paints a stroke onto the plane at the raycast hit. Every stroke becomes a selectable, keyframable scene object; the generator treats them as guidance overlays, not content. Hold <strong>Ctrl</strong> (or use <strong>RMB</strong>) to orbit / pan the camera between strokes without exiting. Grabbing the gizmo still moves the selection. Click <strong>Annotate</strong> again or press <strong>Esc</strong> to exit.</div>
+				</div>
+			</div>
 			<div class="rp-pane" id="rp-pane-turntable" hidden>
 				<div class="section">
 					<div class="section-label">Mode</div>
@@ -5442,7 +5466,10 @@
 					<div class="hint">Fake soft ground shadow beneath objects — independent of any Light. Works when other shadow techniques fail.</div>
 				</div>
 
-				<div class="section" id="postfx-section">
+				<!-- Hidden for now — AO/postfx wiring stays intact so re-enabling
+				     is a one-line style flip, but the chip was cluttering the
+				     Scene pane while the shipped scene shader is fine without it. -->
+				<div class="section" id="postfx-section" style="display:none">
 					<div class="section-label">Post FX</div>
 					<div class="postfx-list">
 						<!-- Ambient Occlusion chip -->
@@ -9936,6 +9963,7 @@ function forceRightPane(which, label) {
 	const boolPane = document.getElementById("rp-pane-bool");
 	const utilPane = document.getElementById("rp-pane-util");
 	const ttPane = document.getElementById("rp-pane-turntable");
+	const annoPane = document.getElementById("rp-pane-annotate");
 	const prjPane = document.getElementById("rp-pane-projects");
 	const titleEl = document.getElementById("rp-title");
 	const kickerEl = document.getElementById("rp-kicker");
@@ -9953,6 +9981,7 @@ function forceRightPane(which, label) {
 	if (boolPane) boolPane.hidden = which !== "bool";
 	if (utilPane) utilPane.hidden = which !== "util";
 	if (ttPane) ttPane.hidden = which !== "turntable";
+	if (annoPane) annoPane.hidden = which !== "annotate";
 	if (prjPane) prjPane.hidden = which !== "projects";
 	// Assets + Projects own the kicker label with no sub-title. Object / Scene /
 	// Camera / GenCell / WorkflowCell use "Properties : <label>". "none" hides
@@ -9968,7 +9997,7 @@ function forceRightPane(which, label) {
 	if (sepEl) sepEl.style.display = (isFullPane || isBlank) ? "none" : "";
 	if (titleEl) {
 		titleEl.style.display = (isFullPane || isBlank) ? "none" : "";
-		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : which === "gencell" ? "Generator" : which === "workflowcell" ? "Workflow" : which === "mediapipe" ? "MediaPipe" : which === "bool" ? "Boolean" : which === "util" ? "Util" : which === "turntable" ? "Turntable" : "Object");
+		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : which === "gencell" ? "Generator" : which === "workflowcell" ? "Workflow" : which === "mediapipe" ? "MediaPipe" : which === "bool" ? "Boolean" : which === "util" ? "Util" : which === "turntable" ? "Turntable" : which === "annotate" ? "Annotate" : "Object");
 	}
 	const namePillEl = document.getElementById("obj-pane-name");
 	if (namePillEl) { namePillEl.hidden = true; namePillEl.innerHTML = ""; }
@@ -11907,13 +11936,34 @@ function _setAnnotateMode(on) {
 	// (matches how other modal tools like Boolean report themselves).
 	if (typeof updateStatus === "function") {
 		updateStatus(_annotateMode.active
-			? "Annotate — click-drag in the viewport to draw. Click Annotate again or press Esc to exit."
+			? "Annotate — LMB draws · Ctrl+LMB or RMB orbits/pans · gizmo drag still moves the selection · Esc exits"
 			: "Annotate mode off");
 	}
-	// Suspend orbit while drawing so the user's drag paints instead of
-	// tumbling. Restore on exit.
-	if (typeof orbit !== "undefined" && orbit) {
-		orbit.enabled = !_annotateMode.active;
+	// Orbit stays ENABLED during draw mode — LMB alone still paints
+	// (capture-phase handler stopImmediatePropagation's before orbit sees
+	// the event), but Ctrl+LMB / RMB / MMB pass through so the user can
+	// reframe between strokes without exiting the tool. Matches Photoshop
+	// / Procreate conventions of "hold a modifier for camera".
+	// Pane switching — turning the tool on opens the Annotate brush pane
+	// (color / width / opacity for the NEXT stroke) unless the user already
+	// has an annotation selected (in which case the per-object Annotation
+	// section is already showing and switching away would be jarring).
+	// Turning it off reverts to whatever the current selection would show.
+	if (_annotateMode.active) {
+		const selIsAnno = selected?.userData?.primKind === "annotation";
+		if (!selIsAnno) {
+			forceRightPane?.("annotate", "Annotate");
+			_annotateToolSyncPane?.();
+		}
+	} else {
+		// Bounce back — if we're currently on the annotate pane, restore
+		// the selection-driven default. If the user had already navigated
+		// to another pane manually, leave it alone.
+		const paneNow = document.getElementById("rp-pane-annotate");
+		if (paneNow && !paneNow.hidden) {
+			if (selected) forceRightPane?.("object", objectPaneLabel(selected));
+			else forceRightPane?.(typeof defaultRightPane === "function" ? defaultRightPane() : "none");
+		}
 	}
 }
 // Esc exits draw mode — matches the "second click = off" toggle so users
@@ -12142,8 +12192,20 @@ window.addEventListener("resize", () => {
 // only listener that acts on the gesture.
 canvas.addEventListener("pointerdown", (e) => {
 	if (!_annotateMode.active) return;
-	if (e.button !== 0 || e.altKey) return;
-	_annotateBeginStroke(e.clientX, e.clientY);
+	// Only plain LMB with no modifier keys triggers a stroke. Ctrl/Meta/Alt +
+	// LMB, or any other mouse button, pass through so the user can orbit
+	// (Ctrl+LMB or MMB), pan (RMB), or use the existing Alt-cam without
+	// exiting draw mode. Camera reframing between strokes is a first-class
+	// need — this is the "hold-modifier-for-camera" UX the user asked for.
+	if (e.button !== 0 || e.altKey || e.ctrlKey || e.metaKey) return;
+	// Gizmo priority — if the pointer is over a TransformControls axis handle,
+	// yield the click so the user can move/rotate/scale the current selection
+	// (typically the just-drawn stroke) instead of starting a fresh stroke on
+	// top of it. TransformControls' pointermove keeps `transform.axis` in sync
+	// with hover state, so by pointerdown-time it already reflects "am I on a
+	// handle?". We DON'T stopPropagation in this branch — the gizmo needs the
+	// event.
+	if (transform?.axis) return;
 	// Rebuild + attach the in-progress preview so the user sees ink as they
 	// drag, not just after mouseup. Preview is separate from the finalized
 	// object — same builder, but not registered in objects[] yet.
@@ -12239,6 +12301,25 @@ function _annotationSyncPaneFromSelection(group) {
 	if (opIn) opIn.value = String(cfg.opacity);
 	if (opVal) opVal.textContent = Number(cfg.opacity).toFixed(2);
 }
+// Push current _annotateMode defaults into the Annotate tool pane's controls.
+// Called on tool activation so the pane opens reflecting the last-used brush
+// look (or the initial amber/4px/1.0 defaults on first-open).
+function _annotateToolSyncPane() {
+	const colorIn = document.getElementById("annotate-tool-color");
+	const colorBtn = document.getElementById("annotate-tool-color-btn");
+	const widthEl = document.getElementById("annotate-tool-width");
+	const opIn = document.getElementById("annotate-tool-opacity");
+	const opVal = document.getElementById("annotate-tool-opacity-val");
+	if (colorIn) colorIn.value = _annotateMode.color;
+	if (colorBtn) colorBtn.style.background = _annotateMode.color;
+	if (widthEl) {
+		const valEl = widthEl.querySelector(".drag-val");
+		if (valEl) valEl.textContent = String(_annotateMode.widthPx);
+	}
+	if (opIn) opIn.value = String(_annotateMode.opacity);
+	if (opVal) opVal.textContent = Number(_annotateMode.opacity).toFixed(2);
+}
+
 // Wire the annotation pane controls once at boot. Handlers pull the currently
 // selected group and route through _annotationApplyLook so live-driving stays
 // consistent with programmatic keyframe application. The whole thing is
@@ -12297,6 +12378,34 @@ queueMicrotask(() => {
 			}
 			if (typeof saveScene === "function") saveScene();
 		}
+	});
+
+	// ── Annotate TOOL pane (brush defaults for the next stroke) ─────
+	// Same controls, but write to _annotateMode.* instead of a selected
+	// stroke. Used while the tool is active with no annotation selected.
+	const tColorIn = document.getElementById("annotate-tool-color");
+	const tColorBtn = document.getElementById("annotate-tool-color-btn");
+	const tWidthEl = document.getElementById("annotate-tool-width");
+	const tOpIn = document.getElementById("annotate-tool-opacity");
+	const tOpVal = document.getElementById("annotate-tool-opacity-val");
+	tColorIn?.addEventListener("input", () => {
+		_annotateMode.color = tColorIn.value;
+		if (tColorBtn) tColorBtn.style.background = tColorIn.value;
+	});
+	if (tWidthEl && typeof setupDragField === "function") {
+		setupDragField(tWidthEl, {
+			get: () => _annotateMode.widthPx,
+			set: (v) => { _annotateMode.widthPx = Math.max(1, Math.min(30, Math.round(v))); },
+			format: (v) => String(Math.round(v)),
+			sens: 0.2,
+			min: 1,
+			max: 30,
+		});
+	}
+	tOpIn?.addEventListener("input", () => {
+		const v = parseFloat(tOpIn.value);
+		_annotateMode.opacity = v;
+		if (tOpVal) tOpVal.textContent = v.toFixed(2);
 	});
 });
 
