@@ -3763,6 +3763,36 @@
 	/* Strip the strokes on the left panel to match the no-borders direction */
 	#panel { border-right: none !important; }
 </style>
+<script>
+// Pre-boot layout restore — runs synchronously so the panel splits paint at
+// their SAVED sizes on the very first frame. Without this, the CSS defaults
+// (--lp-agent-h: 145px, --rp-top-basis: 35%) render for one tick before the
+// deferred module script reads localStorage and snaps the layout to the
+// user's saved values — the "columns look wider for a split second" flash
+// on app restart. Injecting the override into <head> BEFORE the body parses
+// means #panel + #right-panel pick up the correct custom-property values on
+// their first layout pass.
+(function () {
+	try {
+		const rules = [];
+		const agentH = parseFloat(localStorage.getItem("cb.leftPanel.agentH") || "");
+		if (Number.isFinite(agentH) && agentH > 0) {
+			rules.push(`#panel { --lp-agent-h: ${agentH}px; }`);
+		}
+		const rpTop = localStorage.getItem("cb.rightPanel.topBasis");
+		if (rpTop) {
+			// Accept either a % string ("35.00%") or raw px number, matching
+			// what the drag persistence writes.
+			rules.push(`#right-panel { --rp-top-basis: ${rpTop}; }`);
+		}
+		if (rules.length) {
+			const s = document.createElement("style");
+			s.textContent = rules.join("\n");
+			document.head.appendChild(s);
+		}
+	} catch (e) { /* localStorage disabled — fall back to CSS defaults */ }
+})();
+</script>
 </head>
 <body>
 
