@@ -74,6 +74,111 @@
 	}
 	.th-icon-btn:hover { background: rgba(255,255,255,0.08); color: #e6e6ea; }
 	.th-icon-btn svg { width: 16px; height: 16px; }
+
+	/* ---- Help view (full-page, under header) ----
+	   Two-column layout matching the editor: left nav ~= left panel width,
+	   main content fills the rest. Not a modal — the top header stays and
+	   clicking "ComfyBlockout" in the brand row exits back to the editor.
+	   Designed to scale as help content grows. */
+	#help-view {
+		position: fixed;
+		top: 52px; left: 0; right: 0; bottom: 0;
+		display: flex; flex-direction: row;
+		background: #06070a;
+		z-index: 350;
+	}
+	#help-view[hidden] { display: none; }
+	#help-nav {
+		width: 320px; flex: 0 0 320px;
+		background: #0a0b0e;
+		border-right: 1px solid rgba(255,255,255,0.05);
+		padding: 24px 12px;
+		overflow-y: auto;
+	}
+	.help-nav-title {
+		font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+		color: rgba(255,255,255,0.4);
+		padding: 0 12px 12px;
+	}
+	.help-nav-item {
+		display: block; padding: 8px 12px; border-radius: 5px;
+		font-size: 12px; color: rgba(255,255,255,0.7); text-decoration: none;
+		transition: background 120ms, color 120ms;
+	}
+	.help-nav-item:hover { background: rgba(255,255,255,0.04); color: #fff; }
+	.help-nav-item.active {
+		color: #ffb454;
+		background: rgba(255,180,84,0.06);
+	}
+	.help-nav-sep { height: 1px; background: rgba(255,255,255,0.06); margin: 12px 8px; }
+	#help-main {
+		flex: 1;
+		padding: 40px 48px 96px;
+		overflow-y: auto;
+		scroll-behavior: smooth;
+	}
+	.help-section {
+		max-width: 720px;
+		margin-bottom: 44px;
+	}
+	.help-section:last-child { margin-bottom: 0; }
+	.help-section h2 {
+		font-size: 20px; font-weight: 600; color: #e6e6ea;
+		margin: 0 0 14px;
+	}
+	.help-section p {
+		font-size: 12px; color: rgba(255,255,255,0.72); line-height: 1.7;
+		margin: 0 0 10px;
+	}
+	.help-section strong { color: #e6e6ea; font-weight: 600; }
+	.help-section a { color: #ffb454; text-decoration: none; }
+	.help-section a:hover { text-decoration: underline; }
+	.help-section kbd {
+		display: inline-block;
+		padding: 1px 5px; margin: 0 1px;
+		background: rgba(255,255,255,0.06);
+		border: 1px solid rgba(255,255,255,0.1);
+		border-radius: 3px;
+		font-family: inherit; font-size: 10px; color: #e6e6ea;
+	}
+	.help-section code {
+		font-size: 11px; color: #ffd28a;
+		background: rgba(255,180,84,0.06);
+		padding: 1px 4px; border-radius: 3px;
+	}
+	.help-shortcut-grid {
+		display: grid; grid-template-columns: max-content 1fr;
+		gap: 8px 20px; margin: 8px 0 4px;
+	}
+	.help-shortcut-grid .keys { font-size: 11px; color: rgba(255,255,255,0.55); }
+	.help-shortcut-grid .desc { font-size: 12px; color: rgba(255,255,255,0.75); }
+	/* Custom scrollbars for the help view — match the rest of the editor. */
+	#help-main::-webkit-scrollbar { width: 8px; }
+	#help-main::-webkit-scrollbar-track { background: transparent; }
+	#help-main::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+	#help-main::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.16); }
+	#help-main::-webkit-scrollbar-button { display: none; }
+	#help-nav::-webkit-scrollbar { width: 6px; }
+	#help-nav::-webkit-scrollbar-track { background: transparent; }
+	#help-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 3px; }
+	#help-nav::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.12); }
+	#help-nav::-webkit-scrollbar-button { display: none; }
+
+	/* Header while help is open: hide editor actions, swap project name to
+	   "Get Started", swap the ? popover for a Close button. Editor-side state
+	   (currentProjectName etc.) keeps updating in the background, invisible. */
+	body.help-open #project-new,
+	body.help-open #project-open,
+	body.help-open #project-save,
+	body.help-open #project-save-as,
+	body.help-open #th-assets,
+	body.help-open #th-help,
+	body.help-open #project-name { display: none; }
+	body.help-open #help-mode-label { display: inline; }
+	body.help-open #th-help-close { display: inline-flex; }
+	/* Brand label doubles as "back to editor" when help is open. */
+	body.help-open .th-brand > span:first-child { cursor: pointer; }
+	body.help-open .th-brand > span:first-child:hover { color: #ffb454; }
 	/* Comfy Cloud shortcut — uses the site favicon, kept slightly dimmed until hover */
 	.th-comfy-cloud { text-decoration: none; }
 	.th-comfy-cloud img { display: block; opacity: 0.75; transition: opacity 120ms; }
@@ -94,6 +199,15 @@
 		box-shadow: 0 30px 80px rgba(0,0,0,0.55);
 	}
 	.modal-card.wide { width: min(720px, 94vw); }
+	/* Welcome modal — slightly wider than the 340px default so the three CTA
+	   cards + wordmark header breathe. Wordmark caps at 260px so it reads as
+	   an accent, not a hero. */
+	#firstrun-modal .modal-card { width: min(440px, 92vw); }
+	#firstrun-modal .fr-wordmark {
+		display: block;
+		width: 100%; max-width: 192px; height: auto;
+		opacity: 0.95;
+	}
 	/* MediaPipe viewport overlay — positioned/sized to the AR rectangle by
 	   the aspect-frame layout, same as #result-overlay. Video + canvas
 	   share a grid cell so landmarks paint on top of the mirrored feed.
@@ -316,23 +430,24 @@
 	#tour-root[hidden] { display: none; }
 	#tour-backdrop {
 		position: absolute; inset: 0;
-		background: rgba(10,12,18,0.62);
+		/* No background of our own — the spotlight rect's outward box-shadow
+		   handles the dim of the surround, so painting a dim here on TOP of
+		   the highlighted region would dim it too. This layer exists purely
+		   to catch stray pointer events outside the spotlight. */
+		background: transparent;
 		pointer-events: auto;
-		/* Cut-out is applied via a large box-shadow inset that surrounds the
-		   spotlight rect — the rect itself is transparent, so the highlighted
-		   region stays fully visible while everything else darkens. */
-		box-shadow:
-			0 0 0 9999px rgba(10,12,18,0.62) inset;
-		transition: none;
 	}
 	/* The actual spotlight rect — sized/positioned via inline style each step.
 	   Uses a big outward box-shadow to create the dark surround, plus an
-	   amber-tinted glow at the border so the highlighted region reads clearly. */
+	   amber-tinted glow at the border so the highlighted region reads clearly.
+	   z-index sits UNDER the tooltip so the tooltip's opaque background wins
+	   against this element's huge box-shadow (which would otherwise dim it). */
 	#tour-spotlight {
 		position: absolute; pointer-events: none;
 		border-radius: 8px;
+		z-index: 1;
 		box-shadow:
-			0 0 0 9999px rgba(10,12,18,0.62),
+			0 0 0 9999px rgba(10,12,18,0.72),
 			0 0 0 2px rgba(255,180,84,0.85),
 			0 0 24px 4px rgba(255,180,84,0.35);
 		transition: top 0.28s cubic-bezier(0.4, 0, 0.2, 1),
@@ -349,6 +464,9 @@
 		padding: 14px 16px 12px;
 		box-shadow: 0 20px 50px rgba(0,0,0,0.55);
 		pointer-events: auto;
+		/* Above the spotlight so its box-shadow surround can't visually dim
+		   the tooltip's opaque background. */
+		z-index: 2;
 		transition: top 0.28s cubic-bezier(0.4, 0, 0.2, 1),
 		            left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 	}
@@ -967,12 +1085,20 @@
 		overflow: hidden;
 		background: #191922;
 	}
-	/* When the AI Agent is disabled, keep the bottom zone visible but swap in
-	   an empty-state CTA instead of the chat surface. Hides the real assistant
-	   pane + the fixed context/input band, and reveals #lp-agent-empty. */
+	/* When the AI Agent is disabled, keep the whole bottom-zone layout intact
+	   so the panel reads exactly like the enabled version — same header,
+	   same empty middle region (in place of the chat log), same CONTEXT bar
+	   above a same-height input row. The input row is dimmed + unclickable
+	   since chat isn't reachable without a key; CONTEXT bar's embedded
+	   Settings chip is the way to enable it. */
 	#panel.no-agent #lp-pane-assistant { display: none; }
-	#panel.no-agent #lp-fixed-bottom { display: none; }
+	#panel.no-agent #lp-fixed-bottom .assistant-input-row {
+		opacity: 0.35; pointer-events: none;
+	}
 	#panel.no-agent #lp-agent-empty { display: flex; }
+	/* Hide the context bar's "clear" × while agent is off — nothing to clear
+	   yet, and the Open Settings chip on the right reads cleaner on its own. */
+	#panel.no-agent .assistant-context-clear { display: none; }
 	#lp-agent-empty { display: none; }
 	#lp-agent-empty {
 		flex: 1 1 auto; min-height: 0;
@@ -3450,6 +3576,7 @@
 				<span>ComfyBlockout</span>
 				<small class="th-sep">:</small>
 				<small id="project-name" class="th-project-name">Untitled</small>
+				<small id="help-mode-label" class="th-project-name" hidden style="color:#ffd28a; cursor:default; pointer-events:none">Get Started</small>
 			</div>
 		</div>
 		<div class="th-right">
@@ -3458,6 +3585,14 @@
 			<button class="th-btn-mini" id="project-save" title="Save (Ctrl+S)">Save</button>
 			<button class="th-btn-mini" id="project-save-as" title="Save as a new project">Save As</button>
 			<button class="th-btn-mini th-btn-assets" id="th-assets" title="Output — generated images, videos, meshes">Output</button>
+			<button class="th-icon-btn" id="th-help" title="Help — Get Started guide">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+					<circle cx="12" cy="12" r="10"/>
+					<path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+					<line x1="12" y1="17" x2="12.01" y2="17"/>
+				</svg>
+			</button>
+			<button class="th-btn-mini" id="th-help-close" hidden title="Close help">Close</button>
 			<button class="th-icon-btn" id="th-settings" title="Settings">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
 					<circle cx="12" cy="12" r="3"/>
@@ -3467,6 +3602,86 @@
 		</div>
 	</header>
 
+	<!-- Help view: full-page overlay under the header, not a modal.
+	     Left column = nav (matches editor's left panel width), right = content.
+	     Header stays; clicking "ComfyBlockout" brand exits back to the editor.
+	     Content stays in-tree so future FAQ sections just append here. -->
+	<div id="help-view" hidden>
+		<aside id="help-nav">
+			<div class="help-nav-title">Get Started</div>
+			<a href="#help-sec-keys" class="help-nav-item">1. Keys & paths</a>
+			<a href="#help-sec-blockout" class="help-nav-item">2. Build your blockout</a>
+			<a href="#help-sec-shot" class="help-nav-item">3. Frame the shot</a>
+			<a href="#help-sec-render" class="help-nav-item">4. Generate a render</a>
+			<a href="#help-sec-timeline" class="help-nav-item">5. Animate on the timeline</a>
+			<a href="#help-sec-agent" class="help-nav-item">6. AI Agent (optional)</a>
+			<div class="help-nav-sep"></div>
+			<div class="help-nav-title">Reference</div>
+			<a href="#help-sec-shortcuts" class="help-nav-item">Keyboard shortcuts</a>
+			<a href="#help-sec-tour" class="help-nav-item">Take the Quick Tour</a>
+		</aside>
+		<main id="help-main">
+			<section id="help-sec-keys" class="help-section">
+				<h2>1. Configure keys & paths</h2>
+				<p>Open <strong>Settings</strong> (gear, top-right). Under <strong>Comfy Cloud</strong>, click <a href="https://platform.comfy.org/profile/api-keys" target="_blank">Sign in with Comfy Cloud</a> — the platform page opens in a new tab. Copy your API key from your profile and paste it back into the input below the sign-in button. New to Comfy? <a href="https://platform.comfy.org" target="_blank">Sign up for an account</a> first.</p>
+				<p>To enable the in-editor AI Agent, add your <a href="https://platform.claude.com/" target="_blank">Anthropic API key</a> in the same Settings modal and flip <strong>Enable AI Agent</strong> on.</p>
+				<p>If you want to run <strong>local ComfyUI workflows</strong> too, fill in the Local ComfyUI paths on the right side of Settings. <strong>Auto-detect</strong> tries to find a working install for you.</p>
+			</section>
+			<section id="help-sec-blockout" class="help-section">
+				<h2>2. Build your blockout</h2>
+				<p>The left panel's <strong>Objects</strong> grid spawns primitives — cube, sphere, cylinder, cone, plane, text, particles, sky, clouds, and file import. Click an icon to add it at the origin.</p>
+				<p>Drag any object in the viewport with <kbd>W</kbd> (move), <kbd>E</kbd> (rotate), or <kbd>R</kbd> (scale). Hold <kbd>Q</kbd> to toggle the origin/pivot. Drop <strong>.glb / .gltf / .fbx / .obj / .ply / .splat</strong> files onto the viewport to import them.</p>
+				<p><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd> duplicates any object — primitives, lights, imports, mannequins.</p>
+			</section>
+			<section id="help-sec-shot" class="help-section">
+				<h2>3. Frame the shot</h2>
+				<p>The <strong>Camera</strong> row in the Outliner is the render camera — what actually gets rendered by workflows. Toggle between the free-orbit <strong>Viewport</strong> and the framed <strong>Blockout</strong> camera in the top-right of the viewport. Blockout view snaps to the render camera's POV.</p>
+				<p>Use <strong>Reset</strong> in the Camera's Transform section to snap it back to the default rig. Turntable Arc + Start pills below let you sweep less than a full 360° when animating.</p>
+			</section>
+			<section id="help-sec-render" class="help-section">
+				<h2>4. Generate a render</h2>
+				<p>The <strong>Workflows</strong> list on the left panel starts with <strong>Nano Banana</strong> (image) and <strong>Seedance</strong> (video). Click <strong>+ Add</strong> to bring in Tripo/Rodin (3D), Flux 2, Meshy, or a local ComfyUI workflow.</p>
+				<p>Click a workflow row to make it active, then type a prompt in the Properties panel and hit <strong>Generate</strong> (top-right). Renders drop into the <strong>Output</strong> panel (button in the header) and to disk under <code>output/images</code>, <code>output/videos</code>, <code>output/3d</code>.</p>
+			</section>
+			<section id="help-sec-timeline" class="help-section">
+				<h2>5. Animate on the timeline</h2>
+				<p>Select an object, scrub the playhead at the bottom, then hit <kbd>S</kbd> (or <kbd>+</kbd>) to add a keyframe at that time. Camera has its own always-visible track above the object tracks. Ease is set per-keyframe (linear / in / out / in+out). Delete keys with the × transport button when a key is selected.</p>
+				<p>Hit the red record button to record a viewport blockout render. This video reference can be used for models like Seedance.</p>
+			</section>
+			<section id="help-sec-agent" class="help-section">
+				<h2>6. AI Agent (optional)</h2>
+				<p>Bottom-left panel. Off by default — flip <a href="#" data-help-open-settings>Enable AI Agent</a> in Settings and paste your <a href="https://platform.claude.com/" target="_blank">Anthropic API key</a>. Once on, the agent can inspect your scene, drive Comfy MCP tools, generate workflows, and answer questions in a chat.</p>
+			</section>
+			<section id="help-sec-shortcuts" class="help-section">
+				<h2>Keyboard shortcuts</h2>
+				<div class="help-shortcut-grid">
+					<div class="keys"><kbd>W</kbd> / <kbd>E</kbd> / <kbd>R</kbd></div>
+					<div class="desc">Move / Rotate / Scale gizmo</div>
+					<div class="keys"><kbd>Q</kbd></div>
+					<div class="desc">Toggle pivot / origin mode</div>
+					<div class="keys"><kbd>S</kbd> or <kbd>+</kbd></div>
+					<div class="desc">Add keyframe at playhead</div>
+					<div class="keys"><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>V</kbd></div>
+					<div class="desc">Copy / paste selected object</div>
+					<div class="keys"><kbd>Ctrl</kbd>+<kbd>X</kbd></div>
+					<div class="desc">Cut selected object</div>
+					<div class="keys"><kbd>Ctrl</kbd>+<kbd>S</kbd></div>
+					<div class="desc">Save project</div>
+					<div class="keys"><kbd>Del</kbd></div>
+					<div class="desc">Delete selected object</div>
+					<div class="keys"><kbd>Esc</kbd></div>
+					<div class="desc">Close help / cancel drag / exit tour</div>
+					<div class="keys">Drop file</div>
+					<div class="desc">Import .glb / .fbx / .ply / .splat / image / video</div>
+				</div>
+			</section>
+			<section id="help-sec-tour" class="help-section">
+				<h2>Take the Quick Tour</h2>
+				<p>An interactive spotlight walkthrough of every panel — six short steps. <a href="#" id="help-launch-tour">Start the Quick Tour →</a></p>
+			</section>
+		</main>
+	</div>
+
 	<!-- First-run welcome modal: appears once (localStorage "cb.firstRunSeen").
 	     Three paths for the new user: Install (opens Settings for API keys +
 	     ComfyUI paths), Get Started Guide (in-app doc modal), Quick Tour
@@ -3474,11 +3689,14 @@
 	<div class="modal-backdrop" id="firstrun-modal">
 		<div class="modal-card">
 			<div class="modal-head">
-				<span class="modal-title">Welcome to ComfyBlockout</span>
+				<img class="fr-wordmark" src="/extensions/ComfyBlockout/icons/comfyblockout-wordmark.png" alt="ComfyBlockout">
 				<button class="modal-close" id="firstrun-close" title="Skip">×</button>
 			</div>
-			<div style="font-size:11px;color:rgba(255,255,255,0.75);line-height:1.55;margin-bottom:16px">
+			<div style="font-size:11px;color:rgba(255,255,255,0.75);line-height:1.55;margin-bottom:10px">
 				A blockout-to-render editor for <strong style="color:#e6e6ea">Comfy Cloud</strong> and local <strong style="color:#e6e6ea">ComfyUI</strong>. Pick one to get going — you can always come back to the others.
+			</div>
+			<div style="font-size:10px;color:rgba(255,255,255,0.55);margin-bottom:16px">
+				New to Comfy Cloud? <a href="https://platform.comfy.org" target="_blank" style="color:rgba(255,180,84,0.85);text-decoration:none">Sign up for an account →</a>
 			</div>
 			<div class="firstrun-choices">
 				<button type="button" class="fr-choice" data-fr-action="install">
@@ -3490,15 +3708,6 @@
 						<span class="fr-choice-sub">Add API keys + local ComfyUI paths in Settings</span>
 					</span>
 				</button>
-				<button type="button" class="fr-choice" data-fr-action="guide">
-					<span class="fr-choice-icon">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-					</span>
-					<span class="fr-choice-text">
-						<span class="fr-choice-title">Get Started Guide</span>
-						<span class="fr-choice-sub">Read a short walkthrough of the main flows</span>
-					</span>
-				</button>
 				<button type="button" class="fr-choice" data-fr-action="tour">
 					<span class="fr-choice-icon">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
@@ -3506,6 +3715,15 @@
 					<span class="fr-choice-text">
 						<span class="fr-choice-title">Quick Tour</span>
 						<span class="fr-choice-sub">Interactive highlights of every panel</span>
+					</span>
+				</button>
+				<button type="button" class="fr-choice" data-fr-action="help">
+					<span class="fr-choice-icon">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+					</span>
+					<span class="fr-choice-text">
+						<span class="fr-choice-title">Visit Help</span>
+						<span class="fr-choice-sub">Guide, tips, and keyboard shortcuts</span>
 					</span>
 				</button>
 			</div>
@@ -3587,14 +3805,18 @@
 				<div>
 					<div class="modal-col-title">Cloud &amp; Assistant</div>
 					<div class="modal-section">
-						<div class="section-label">Comfy Cloud API Key</div>
+						<div class="section-label">Comfy Cloud</div>
 						<div class="modal-status" id="settings-status"></div>
+						<button type="button" class="modal-btn-primary" id="settings-signin" style="width:100%; padding:10px 14px; margin-bottom:8px">Sign in with Comfy Cloud</button>
+						<div class="modal-hint" style="margin-top:0; margin-bottom:14px">
+							New to Comfy? <a href="https://platform.comfy.org" target="_blank">Sign up for an account →</a>
+						</div>
 						<div class="modal-input-row">
-							<input class="modal-input" type="password" id="settings-key" placeholder="comfyui-…" autocomplete="off" spellcheck="false">
+							<input class="modal-input" type="password" id="settings-key" placeholder="Paste your API key (comfyui-…)" autocomplete="off" spellcheck="false">
 							<button class="modal-btn-secondary" id="settings-clear">Clear</button>
 							<button class="modal-btn-primary" id="settings-save">Save</button>
 						</div>
-						<div class="modal-hint">Get yours at <a href="https://platform.comfy.org/profile/api-keys" target="_blank">platform.comfy.org/profile/api-keys</a></div>
+						<div class="modal-hint">After signing in, copy the API key from your profile page and paste it above.</div>
 					</div>
 					<div class="modal-section">
 						<label class="modal-toggle-row" for="assistant-toggle">
@@ -3613,7 +3835,16 @@
 							<button class="modal-btn-secondary" id="llm-key-clear">Clear</button>
 							<button class="modal-btn-primary" id="llm-key-save">Save</button>
 						</div>
-						<div class="modal-hint">Powers the in-editor Assistant. Get yours at <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com/settings/keys</a></div>
+						<div class="modal-hint">Powers the in-editor Assistant. Get yours at <a href="https://platform.claude.com/" target="_blank">platform.claude.com</a></div>
+					</div>
+					<div class="modal-section">
+						<label class="modal-toggle-row" for="tooltips-toggle">
+							<span class="toggle-labels">
+								<span class="toggle-title">Show hints</span>
+								<span class="toggle-sub">Tooltips on hover across the editor</span>
+							</span>
+							<input type="checkbox" id="tooltips-toggle" checked>
+						</label>
 					</div>
 				</div>
 
@@ -3814,8 +4045,7 @@
 				     turn it on and enter their Anthropic API key. -->
 				<div id="lp-agent-empty">
 					<div class="lae-title">AI Agent is off</div>
-					<div class="lae-body">Chat with Claude about your scene and drive Comfy MCP tools.<br>Turn it on and add your Anthropic API key in Settings.</div>
-					<button type="button" class="lae-open-settings" id="lp-agent-empty-open">Open Settings</button>
+					<div class="lae-body">Chat with Claude, drive Comfy MCP tools.</div>
 				</div>
 			</div>
 			<!-- CONTEXT chip + CHAT INPUT are hoisted here at boot from inside
@@ -3835,7 +4065,7 @@
 					     section header next to the MCP status. -->
 					<button type="button" id="assistant-import-btn" class="assistant-icon-btn" title="Import a Comfy workflow JSON and let the agent hook it up as a module" aria-label="Import workflow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></button>
 					<input type="file" id="assistant-import-file" accept=".json,application/json" hidden>
-					<span class="assistant-status" id="assistant-status">MCP · idle</span>
+					<span class="assistant-status" id="assistant-status">DISABLED</span>
 				</span>
 			</div>
 			<div class="assistant-shell">
@@ -5198,6 +5428,7 @@
 		const settingsSave = document.getElementById("settings-save");
 		const settingsClear = document.getElementById("settings-clear");
 		const settingsStatus = document.getElementById("settings-status");
+		const settingsSignin = document.getElementById("settings-signin");
 
 		// ---------- assets pane (lives in the right properties panel) ----------
 		const assetsGrid = document.getElementById("assets-grid");
@@ -5639,7 +5870,17 @@
 			}
 			setTimeout(() => settingsKey.focus(), 50);
 		}
-		function closeSettings() { settingsModal.classList.remove("open"); }
+		function closeSettings() {
+			settingsModal.classList.remove("open");
+			// If the user landed in Settings from the welcome modal's "Setup" card,
+			// drop them back on the welcome menu so Guide + Quick Tour stay a
+			// click away. Flag is set by the welcome click handler (see the
+			// firstrun IIFE) and consumed exactly once.
+			if (window.__cbReturnToWelcomeAfterSettings) {
+				window.__cbReturnToWelcomeAfterSettings = false;
+				setTimeout(() => window.showFirstRunModal?.(), 180);
+			}
+		}
 		function flashSettingsStatus(kind, text, hideMs = 1800) {
 			settingsStatus.className = `modal-status ${kind}`;
 			settingsStatus.textContent = text;
@@ -5654,6 +5895,14 @@
 		settingsBtn.addEventListener("click", openSettings);
 		settingsClose.addEventListener("click", closeSettings);
 		settingsModal.addEventListener("click", (e) => { if (e.target === settingsModal) closeSettings(); });
+		// "Sign in with Comfy Cloud" — Comfy Cloud has no public OAuth flow for
+		// third-party apps (their docs: X-API-Key only), so this opens the API
+		// keys page in a new tab and focuses the paste field so the user's next
+		// action is Ctrl+V. Swap the URL / handler when a real OAuth flow ships.
+		settingsSignin?.addEventListener("click", () => {
+			window.open("https://platform.comfy.org/profile/api-keys", "_blank", "noopener");
+			setTimeout(() => settingsKey?.focus(), 100);
+		});
 		document.addEventListener("keydown", (e) => {
 			if (e.key === "Escape" && settingsModal.classList.contains("open")) closeSettings();
 		});
@@ -9421,16 +9670,6 @@ function applyAssistantEnablement() {
 	// that the assistant lives in a dedicated zone instead of the switcher.
 }
 window.isAssistantEnabled = isAssistantEnabled;
-// Empty-state CTA — when the AI Agent is off, the bottom zone shows an
-// #lp-agent-empty card whose "Open Settings" button routes to the gear icon
-// in the top-right header (same as first-run's Open Settings action). We
-// listen at document level so this survives the boot-time DOM hoist that
-// moves #assistant-section into #lp-pane-assistant.
-document.addEventListener("click", (e) => {
-	if (e.target.closest("#lp-agent-empty-open")) {
-		document.getElementById("th-settings")?.click();
-	}
-});
 // Toggle wiring: change instantly persists and re-applies. No reload needed.
 document.getElementById("assistant-toggle")?.addEventListener("change", (e) => {
 	localStorage.setItem(ASSISTANT_ENABLED_KEY, e.target.checked ? "1" : "0");
@@ -9440,6 +9679,70 @@ document.getElementById("assistant-toggle")?.addEventListener("change", (e) => {
 	window.__syncAgentZoneVisibility?.();
 });
 applyAssistantEnablement();
+
+// Tooltip / hint toggle — many UI elements carry native `title="…"` hover
+// hints. Some users find them noisy. This toggle strips every `title` attr
+// (parking the value in `data-title`) and, while off, watches new nodes so
+// dynamically-added UI stays quiet too. Default: on.
+const TOOLTIPS_KEY = "cb.tooltipsEnabled";
+let _tooltipsEnabled = localStorage.getItem(TOOLTIPS_KEY) !== "0";
+let _tooltipMO = null;
+function _stripTitles(root) {
+	if (!root) return;
+	if (root.nodeType === 1 && root.hasAttribute && root.hasAttribute("title")) {
+		root.setAttribute("data-title", root.getAttribute("title"));
+		root.removeAttribute("title");
+	}
+	root.querySelectorAll?.("[title]").forEach(el => {
+		el.setAttribute("data-title", el.getAttribute("title"));
+		el.removeAttribute("title");
+	});
+}
+function _restoreTitles(root) {
+	if (!root) return;
+	if (root.nodeType === 1 && root.hasAttribute && root.hasAttribute("data-title")) {
+		root.setAttribute("title", root.getAttribute("data-title"));
+		root.removeAttribute("data-title");
+	}
+	root.querySelectorAll?.("[data-title]").forEach(el => {
+		el.setAttribute("title", el.getAttribute("data-title"));
+		el.removeAttribute("data-title");
+	});
+}
+function applyTooltipsSetting() {
+	if (_tooltipsEnabled) {
+		_tooltipMO?.disconnect();
+		_tooltipMO = null;
+		_restoreTitles(document.body);
+	} else {
+		_stripTitles(document.body);
+		if (!_tooltipMO) {
+			_tooltipMO = new MutationObserver(muts => {
+				for (const m of muts) {
+					m.addedNodes.forEach(n => _stripTitles(n));
+					if (m.type === "attributes" && m.attributeName === "title" && m.target?.hasAttribute?.("title")) {
+						_stripTitles(m.target);
+					}
+				}
+			});
+			_tooltipMO.observe(document.body, {
+				subtree: true, childList: true,
+				attributes: true, attributeFilter: ["title"],
+			});
+		}
+	}
+}
+document.getElementById("tooltips-toggle")?.addEventListener("change", (e) => {
+	_tooltipsEnabled = e.target.checked;
+	localStorage.setItem(TOOLTIPS_KEY, _tooltipsEnabled ? "1" : "0");
+	applyTooltipsSetting();
+});
+// Reflect the persisted setting on the checkbox at boot + apply it.
+(() => {
+	const t = document.getElementById("tooltips-toggle");
+	if (t) t.checked = _tooltipsEnabled;
+	applyTooltipsSetting();
+})();
 
 // Layout hoist at boot: Outliner → right-panel top zone, Assistant → left-
 // panel bottom zone. Both sections are declared in the left #panel HTML (with
@@ -9783,6 +10086,11 @@ applyAssistantEnablement();
 		if (!lpPanel) return;
 		const on = !!isAssistantEnabled?.();
 		lpPanel.classList.toggle("no-agent", !on);
+		// Swap the header status label — "DISABLED" reads clearer than
+		// "MCP · idle" when the agent hasn't been enabled. On enable, restore
+		// idle text so the live MCP status logic can drive it from there.
+		const st = document.getElementById("assistant-status");
+		if (st) st.textContent = on ? "MCP · idle" : "DISABLED";
 	}
 	syncAgentZoneVisibility();
 	window.__syncAgentZoneVisibility = syncAgentZoneVisibility;
@@ -19672,9 +19980,17 @@ updateViewToggleIcon(typeof activeView !== "undefined" ? activeView : "scene");
 		// canvas-bg-layer bleed. Force opaque black so the inset is a self-
 		// contained preview of the scene through renderCam.
 		if (prevClearAlpha < 1) renderer.setClearColor(0x000000, 1);
+		// Ground grid's distance fade centers on uCameraPos — the main loop
+		// keeps that pinned to the currently-active viewport camera, so the
+		// inset would inherit sceneCam's fade circle instead of renderCam's.
+		// Swap it to renderCam's position for the inset pass and restore after.
+		const _gridU = grid?.material?.uniforms?.uCameraPos;
+		const _prevGridCam = _gridU ? _gridU.value.clone() : null;
+		if (_gridU) _gridU.value.copy(renderCam.getWorldPosition(new THREE.Vector3()));
 		try { renderer.render(scene, renderCam); }
 		finally {
 			// Restore
+			if (_prevGridCam && _gridU) _gridU.value.copy(_prevGridCam);
 			renderer.setScissorTest(prevScissorTest);
 			renderer.setScissor(_prevScissor);
 			renderer.setViewport(_prevViewport);
@@ -27607,7 +27923,12 @@ document.getElementById("project-new").addEventListener("click", async () => {
 	try {
 		await deserializeScene(EMPTY_SCENE, { skipSave: true });
 		const cube = addPrimitive("cube");
-		if (cube) cube.position.set(0, 0.5, 0);
+		if (cube) {
+			cube.position.set(0, 0.5, 0);
+			// Fresh scenes get a random cube tint — small delight, and it makes
+			// the starter object obviously a placeholder rather than a fixture.
+			cube.material?.color?.setHSL(Math.random(), 0.55, 0.55);
+		}
 		applyProjectName(null);
 	} finally {
 		restoringScene = false;
@@ -28406,6 +28727,7 @@ document.getElementById("sys-prompt-reset")?.addEventListener("click", async () 
 			localStorage.removeItem("cb.viewport.insetOn");
 			localStorage.removeItem("cb.viewport.snapEnabled");
 			localStorage.removeItem("cb.assistantEnabled");
+			localStorage.removeItem("cb.tooltipsEnabled");
 			url.searchParams.delete("firstrun");
 			history.replaceState(null, "", url.toString());
 		}
@@ -28436,9 +28758,16 @@ document.getElementById("sys-prompt-reset")?.addEventListener("click", async () 
 		const action = choice.dataset.frAction;
 		closeWelcome();
 		if (action === "install") {
+			// Consumed by closeSettings — pops the welcome menu back up when
+			// the user finishes / closes Settings so Guide + Quick Tour stay one
+			// click away instead of stranding them on an empty scene.
+			window.__cbReturnToWelcomeAfterSettings = true;
 			setTimeout(() => document.getElementById("th-settings")?.click(), 120);
-		} else if (action === "guide") {
-			setTimeout(openGuide, 120);
+		} else if (action === "guide" || action === "help") {
+			// "Visit Help" opens the full-page help view (not the modal).
+			// Content lives at #help-view and is the fuller doc surface —
+			// same left/main layout as the editor so it reads as a mode.
+			setTimeout(() => window.openHelpView?.(), 120);
 		} else if (action === "tour") {
 			setTimeout(startTour, 120);
 		}
@@ -28483,8 +28812,21 @@ document.getElementById("sys-prompt-reset")?.addEventListener("click", async () 
 	const TOUR_STEPS = [
 		{
 			sel: "#lp-zone-top-body",
+			// Extend the highlight UP to include the fixed OBJECTS header band
+			// (sits above the scroll area, not inside it), and DOWN-CLAMP so
+			// it doesn't run under the AI Agent overlay.
+			topSel: "#lp-zone-top-header",
+			bottomSel: "#lp-zone-bottom",
 			title: "Objects, Tools, Workflows",
 			body: "This left panel is where you build the blockout. Click any Object icon to spawn a primitive, use Tools for capture/pose/etc., and pick a Workflow to render your scene through the cloud or local ComfyUI.",
+		},
+		{
+			// #viewport-area wraps the top toolbar (scene/grid/snap, gizmo mode
+			// buttons, Viewport/Blockout toggle, Generate) AND the canvas below,
+			// so the spotlight covers the whole main workspace at once.
+			sel: "#viewport-area",
+			title: "Viewport",
+			body: "The main 3D view. Drag to orbit, wheel to zoom. The toolbar above sets the gizmo mode (Move/Rotate/Scale), toggles the grid/snap, and switches between Viewport (free orbit) and Blockout (framed by the render camera). Blockout view previews exactly what the workflow will render before you hit Generate.",
 		},
 		{
 			sel: "#rp-pane-outliner",
@@ -28492,7 +28834,10 @@ document.getElementById("sys-prompt-reset")?.addEventListener("click", async () 
 			body: "Every scene object shows up here. Click a row to select, click the eye to hide, and drag the split-handle above to resize this against Properties below.",
 		},
 		{
-			sel: "#rp-body",
+			// #rp-zone-bottom wraps both the PROPERTIES header AND the body,
+			// so the spotlight covers the whole Properties surface, not just
+			// the scroll region below the header.
+			sel: "#rp-zone-bottom",
 			title: "Properties",
 			body: "Edit whatever's selected. Drag any value sideways to scrub, or click to type. Sections change based on what's selected — object, camera, or scene.",
 		},
@@ -28504,12 +28849,12 @@ document.getElementById("sys-prompt-reset")?.addEventListener("click", async () 
 		{
 			sel: "#lp-zone-bottom",
 			title: "AI Agent",
-			body: "Off by default. Turn it on in Settings and add your Anthropic API key — it can inspect your scene and drive Comfy MCP tools from a chat.",
+			body: "Enable in the Settings by adding an Anthropic API key. The AI Agent can help you blockout a scene, create tools, add and inspect workflows from chat. Click the header to expand the panel and freely adjust the height.",
 		},
 		{
-			sel: "header",
-			title: "New · Open · Save · Output · Generate",
-			body: "Top-right runs the active workflow (Generate). Save your scene as a Project. Output opens the panel with every render you've made.",
+			sel: ".th-right",
+			title: "New · Open · Save · Output",
+			body: "New starts a fresh scene, Open loads a saved project, Save/Save As write to disk. Output opens the panel with every render you've made — customize the output folder in Settings. Hit the ? for the Get Started guide with more info.",
 		},
 	];
 
@@ -28579,7 +28924,24 @@ document.getElementById("sys-prompt-reset")?.addEventListener("click", async () 
 		if (tourIdx >= TOUR_STEPS.length) { endTour(); return; }
 		const step = TOUR_STEPS[tourIdx];
 		const el = document.querySelector(step.sel);
-		const rect = el.getBoundingClientRect();
+		let rect = el.getBoundingClientRect();
+		// Optional per-step extend/clamp — some target elements' bbox doesn't
+		// match the visual region we actually want to highlight (fixed header
+		// bands above, overlays below). `topSel` pulls the top up to the
+		// referenced element's top; `bottomSel` clamps the bottom to that
+		// element's top.
+		if (step.topSel || step.bottomSel) {
+			let top = rect.top, bottom = rect.bottom;
+			if (step.topSel) {
+				const startAt = document.querySelector(step.topSel);
+				if (startAt) top = Math.min(top, startAt.getBoundingClientRect().top);
+			}
+			if (step.bottomSel) {
+				const stopAt = document.querySelector(step.bottomSel);
+				if (stopAt) bottom = Math.min(bottom, stopAt.getBoundingClientRect().top);
+			}
+			rect = { top, left: rect.left, right: rect.right, bottom, width: rect.width, height: bottom - top };
+		}
 		positionSpotlight(rect);
 		ttStep.textContent = `${tourIdx + 1} / ${TOUR_STEPS.length}`;
 		ttTitle.textContent = step.title;
@@ -28624,6 +28986,115 @@ document.getElementById("sys-prompt-reset")?.addEventListener("click", async () 
 	});
 })();
 
+// Header "?" — direct entry point to the Get Started help view. Formerly a
+// dropdown of onboarding actions; simplified to a single-target link since
+// the Quick Tour + Welcome affordances live inside the help view itself.
+document.getElementById("th-help")?.addEventListener("click", () => {
+	window.openHelpView?.();
+});
+
+// Help view — full-page (not a modal) overlay under the header. Two-column
+// layout matches the editor shell so it feels like a "mode" rather than a popup.
+// Header stays; the "ComfyBlockout" brand becomes a click-to-exit affordance
+// while help is open, and the project name flips to "Get Started". Scales as
+// help content grows — future FAQ sections just append inside #help-main.
+(() => {
+	const view = document.getElementById("help-view");
+	const nav = document.getElementById("help-nav");
+	const main = document.getElementById("help-main");
+	const brandRow = document.querySelector("#top-header .th-brand");
+	const brandLabel = brandRow?.querySelector("span:first-child");
+	if (!view || !nav || !main || !brandLabel) return;
+
+	function open() {
+		if (!view.hidden) return;
+		document.body.classList.add("help-open");
+		view.hidden = false;
+		main.scrollTop = 0;
+		refreshActiveNavItem();
+	}
+	function close() {
+		if (view.hidden) return;
+		view.hidden = true;
+		document.body.classList.remove("help-open");
+	}
+
+	// Brand click while help is open = back to editor. When help is closed
+	// the click is a no-op (no accidental double-click behavior).
+	brandLabel.addEventListener("click", () => { if (!view.hidden) close(); });
+	document.getElementById("th-help-close")?.addEventListener("click", close);
+
+	// Esc closes help unless the tour or a modal is currently in front.
+	document.addEventListener("keydown", (e) => {
+		if (e.key !== "Escape" || view.hidden) return;
+		// Yield to modals + tour — if any of those are up, they handle Esc.
+		if (document.querySelector(".modal-backdrop.open")) return;
+		const tourRoot = document.getElementById("tour-root");
+		if (tourRoot && !tourRoot.hidden) return;
+		close();
+	});
+
+	// Nav → smooth scroll to section (browser handles via href="#…"). Also
+	// eagerly mark the clicked item active so the highlight doesn't wait for
+	// scroll-linked detection to catch up.
+	nav.addEventListener("click", (e) => {
+		const item = e.target.closest(".help-nav-item");
+		if (!item) return;
+		setActiveNavItem(item);
+	});
+
+	// Highlight the current section as the user scrolls through the content.
+	// Simple: pick whichever section's top edge is closest above the scroll
+	// position + a small offset. Runs on scroll, throttled via rAF.
+	let scrollRafPending = false;
+	main.addEventListener("scroll", () => {
+		if (scrollRafPending) return;
+		scrollRafPending = true;
+		requestAnimationFrame(() => {
+			scrollRafPending = false;
+			refreshActiveNavItem();
+		});
+	});
+
+	function refreshActiveNavItem() {
+		const y = main.scrollTop + 60;
+		const sections = main.querySelectorAll(".help-section");
+		let best = null;
+		sections.forEach(s => {
+			if (s.offsetTop <= y) best = s;
+		});
+		if (!best) best = sections[0];
+		if (!best) return;
+		const targetHref = `#${best.id}`;
+		const targetItem = nav.querySelector(`.help-nav-item[href="${targetHref}"]`);
+		if (targetItem) setActiveNavItem(targetItem);
+	}
+	function setActiveNavItem(item) {
+		nav.querySelectorAll(".help-nav-item.active").forEach(i => i.classList.remove("active"));
+		item.classList.add("active");
+	}
+
+	// In-content "Start the Quick Tour →" link closes help + kicks the tour.
+	document.getElementById("help-launch-tour")?.addEventListener("click", (e) => {
+		e.preventDefault();
+		close();
+		setTimeout(() => window.startTour?.(), 120);
+	});
+
+	// In-content links that route to the Settings modal — close help first
+	// so Settings lands on top of the editor, not on top of the help view.
+	main.addEventListener("click", (e) => {
+		const link = e.target.closest("[data-help-open-settings]");
+		if (!link) return;
+		e.preventDefault();
+		close();
+		setTimeout(() => document.getElementById("th-settings")?.click(), 120);
+	});
+
+	window.openHelpView = open;
+	window.closeHelpView = close;
+})();
+
 (async () => {
 	const bootStart = performance.now();
 	// Safety net — force curtain-drop after a hard timeout so a silent runtime
@@ -28665,6 +29136,7 @@ document.getElementById("sys-prompt-reset")?.addEventListener("click", async () 
 		const cube = addPrimitive("cube");
 		if (cube) {
 			cube.position.set(0, 0.5, 0);
+			cube.material?.color?.setHSL(Math.random(), 0.55, 0.55);
 			await saveScene();
 		}
 	}
