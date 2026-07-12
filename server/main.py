@@ -956,6 +956,79 @@ async def llm_status():
     return {"api_key_set": bool(os.environ.get("ANTHROPIC_API_KEY"))}
 
 
+# ---------- LLM usage tracking ----------
+#
+# Every /api/llm/chat turn already returns per-turn usage in the response
+# (input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens).
+# We roll those into data/llm_usage.json so the user can see today's spend +
+# lifetime total across app restarts. Cost estimates use Sonnet 4.6 pricing
+# (per Anthropic's docs, 2026-07); update _PRICING when the default model changes.
+
+_USAGE_PATH = APP_DIR / "data" / "llm_usage.json"
+# USD per 1M tokens — Sonnet 4.6 rates. Cache-write is priced higher than
+# regular input (25% premium); cache-read is a 90% discount.
+_PRICING = {
+    "input_per_M":       3.00,
+    "output_per_M":     15.00,
+    "cache_read_per_M":  0.30,
+    "cache_write_per_M": 3.75,
+}
+
+def _load_usage() -> dict:
+    try:
+        if not _USAGE_PATH.exists():
+            return {"total": _zero_usage(), "by_day": {}}
+        d = json.loads(_USAGE_PATH.read_text(encoding="utf-8"))
+        d.setdefault("total", _zero_usage())
+        d.setdefault("by_day", {})
+        return d
+    except Exception:
+        return {"total": _zero_usage(), "by_day": {}}
+
+def _zero_usage() -> dict:
+    return {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0, "turns": 0}
+
+def _save_usage(d: dict) -> None:
+    _USAGE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _USAGE_PATH.write_text(json.dumps(d, indent=2), encoding="utf-8")
+
+def _record_turn_usage(u: dict) -> None:
+    """Merge one turn's usage into today's bucket + the lifetime total."""
+    from datetime import date
+    today = date.today().isoformat()
+    data = _load_usage()
+    day_bucket = data["by_day"].setdefault(today, _zero_usage())
+    for k in ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"):
+        v = int(u.get(k) or 0)
+        day_bucket[k] += v
+        data["total"][k] += v
+    day_bucket["turns"] += 1
+    data["total"]["turns"] += 1
+    _save_usage(data)
+
+def _estimate_cost_usd(u: dict) -> float:
+    return (
+        u.get("input_tokens", 0)                / 1_000_000 * _PRICING["input_per_M"]
+      + u.get("output_tokens", 0)               / 1_000_000 * _PRICING["output_per_M"]
+      + u.get("cache_read_input_tokens", 0)     / 1_000_000 * _PRICING["cache_read_per_M"]
+      + u.get("cache_creation_input_tokens", 0) / 1_000_000 * _PRICING["cache_write_per_M"]
+    )
+
+@app.get("/api/llm/usage")
+async def llm_usage():
+    """Return today's + lifetime AI Agent token usage with estimated USD cost."""
+    from datetime import date
+    data = _load_usage()
+    today_key = date.today().isoformat()
+    today = data["by_day"].get(today_key, _zero_usage())
+    total = data["total"]
+    return {
+        "today": {**today, "estimated_usd": round(_estimate_cost_usd(today), 4)},
+        "total": {**total, "estimated_usd": round(_estimate_cost_usd(total), 4)},
+        "pricing": _PRICING,
+    }
+
+
 # ---------- user MCP servers ----------
 #
 # Users can extend the agent's tool surface by registering HTTP MCP servers
@@ -3315,6 +3388,11 @@ EDITOR_TOOLS = [
                     "minItems": 3, "maxItems": 3,
                     "description": "Optional [x,y,z] world position",
                 },
+                "preset": {
+                    "type": "string",
+                    "enum": ["snow", "rain", "sparks", "fireflies"],
+                    "description": "Only relevant when kind='particles'. Applies a canned particle configuration — 'snow' spawns a wide overhead volume of soft slow-drifting flakes, 'rain' fast falling streaks, 'sparks' short-lived warm additive bursts, 'fireflies' slow-drifting warm additive points. USE THIS when the user names a weather/effect ('add some snow', 'make it rain', 'sparks flying'); skip it for generic particle emitters.",
+                },
             },
             "required": ["kind"],
         },
@@ -3347,6 +3425,11 @@ EDITOR_TOOLS = [
                                 "minItems": 1, "maxItems": 3,
                                 "description": "Optional [x,y,z] or [uniform] scale",
                             },
+                            "preset": {
+                                "type": "string",
+                                "enum": ["snow", "rain", "sparks", "fireflies"],
+                                "description": "Only for kind='particles'. Same preset catalog as add_primitive.",
+                            },
                         },
                         "required": ["kind"],
                     },
@@ -3374,6 +3457,75 @@ EDITOR_TOOLS = [
         "name": "get_scene_summary",
         "description": "High-level scene digest: object count grouped by kind, active workflow modules, total keyframe count, and scene duration in seconds. Cheaper than list_objects for a broad 'what's in this scene' answer.",
         "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "set_scene_duration",
+        "description": "Set the total scene / timeline duration in seconds. All keyframe times are relative to this duration (playhead is stored 0..1 internally, so existing keys stay at their relative position when duration changes).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "seconds": {"type": "number", "minimum": 0.5, "maximum": 300, "description": "Duration in seconds (0.5–300)."},
+            },
+            "required": ["seconds"],
+        },
+    },
+    {
+        "name": "set_playhead",
+        "description": "Move the timeline playhead to a specific time. Called before add_keyframe to place the next key at that moment. Use this + add_keyframe to compose animations one beat at a time.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "time_s": {"type": "number", "minimum": 0, "description": "Playhead time in seconds. Clamped to scene duration."},
+            },
+            "required": ["time_s"],
+        },
+    },
+    {
+        "name": "add_keyframe",
+        "description": "Add a keyframe on the CAMERA track or an OBJECT track at a given time. Captures whatever the current pose/transform is (so the caller should set position/rotation/scale FIRST via set_object_position etc., then call this). If time_s is omitted, uses the current playhead. `target` is 'camera' for the render camera track, or an object name for that object's track. `ease` defaults to easeInOut for boundary keys and 'through' (positional-only waypoint) for keys inserted between existing ones.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "target": {"type": "string", "description": "'camera' for the render camera track, or the exact name of a scene object."},
+                "time_s": {"type": "number", "minimum": 0, "description": "Optional time in seconds. Omit to use the current playhead."},
+                "ease": {"type": "string", "enum": ["linear", "easeIn", "easeOut", "easeInOut", "through"], "description": "Optional ease curve. Default easeInOut (or 'through' when inserted between existing keys)."},
+            },
+            "required": ["target"],
+        },
+    },
+    {
+        "name": "remove_keyframe",
+        "description": "Remove any keyframe on the target track at or near the given time (within 0.5% of duration).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "target": {"type": "string", "description": "'camera' or object name."},
+                "time_s": {"type": "number", "minimum": 0, "description": "Time of the key to remove, in seconds."},
+            },
+            "required": ["target", "time_s"],
+        },
+    },
+    {
+        "name": "list_keyframes",
+        "description": "Return the keyframes on the given track: [{time_s, ease}]. Use to inspect an animation before editing.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "target": {"type": "string", "description": "'camera' or object name."},
+            },
+            "required": ["target"],
+        },
+    },
+    {
+        "name": "play_preview",
+        "description": "Start or stop timeline playback preview. action='play' begins playback from the current playhead; action='stop' halts and holds position.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["play", "stop"], "description": "'play' or 'stop'."},
+            },
+            "required": ["action"],
+        },
     },
     {
         "name": "set_skybox_image",
@@ -4277,16 +4429,23 @@ async def llm_chat(request: Request):
     # Persist the turn so a server restart doesn't drop the conversation.
     _save_chat_history(node_id)
 
+    usage = {
+        "input_tokens": getattr(response.usage, "input_tokens", 0),
+        "output_tokens": getattr(response.usage, "output_tokens", 0),
+        "cache_read_input_tokens": getattr(response.usage, "cache_read_input_tokens", 0),
+        "cache_creation_input_tokens": getattr(response.usage, "cache_creation_input_tokens", 0),
+    }
+    # Persist against today's bucket + lifetime total so the Settings surface
+    # can show cumulative spend without needing the frontend to keep count.
+    try:
+        _record_turn_usage(usage)
+    except Exception:
+        pass  # never fail a chat turn because usage logging hiccuped
     return {
         "reply": reply_text,
         "pending_tools": pending_tools,
         "stop_reason": getattr(response, "stop_reason", None),
-        "usage": {
-            "input_tokens": getattr(response.usage, "input_tokens", 0),
-            "output_tokens": getattr(response.usage, "output_tokens", 0),
-            "cache_read_input_tokens": getattr(response.usage, "cache_read_input_tokens", 0),
-            "cache_creation_input_tokens": getattr(response.usage, "cache_creation_input_tokens", 0),
-        },
+        "usage": usage,
     }
 
 

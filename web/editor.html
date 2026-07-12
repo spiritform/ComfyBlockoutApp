@@ -3890,6 +3890,10 @@
 							<input type="checkbox" id="tooltips-toggle" checked>
 						</label>
 					</div>
+					<div class="modal-section" id="llm-usage-section">
+						<div class="section-label">AI Agent Usage</div>
+						<div class="modal-hint" id="llm-usage-body" style="font-size:11px; line-height:1.6; color:rgba(255,255,255,0.6)">Loading…</div>
+					</div>
 					<div class="modal-section">
 						<div class="section-label">MCP Servers (Agent)</div>
 						<div class="modal-status" id="mcp-status"></div>
@@ -5928,6 +5932,7 @@
 			// changed under us (manual edit, another tab), and this is a small
 			// fetch anyway.
 			refreshMcpServers?.();
+			refreshLlmUsage?.();
 			setTimeout(() => settingsKey.focus(), 50);
 		}
 		function closeSettings() {
@@ -7261,6 +7266,50 @@ const DEFAULT_PARTICLE_CONFIG = {
 };
 
 const particleSystems = []; // active emitters; we only bump their uTime per frame
+
+// Agent-facing particle presets — canned config bundles so `add_primitive`
+// with `preset: "snow"` produces something the user immediately recognizes as
+// snow. Values are hand-tuned; each includes a suggested emitter volume via
+// `_scale` (applied to the Points transform after spawn since the emitter
+// box/sphere is unit-sized). Not exposed in the UI; UI users edit sliders.
+const PARTICLE_PRESETS = {
+	snow: {
+		count: 600, rate: 80, lifetime: 8.0,
+		initialSpeed: 0.15, spread: 0.4,
+		gravity: -0.3, wind: [0.2, 0, 0.15], turbulence: 0.25,
+		size: 0.03, random: 0.5, color: 0xffffff,
+		style: "soft", blending: "normal",
+		emitter: "box", direction: "omni",
+		_scale: [12, 0.5, 12], _y: 5,
+	},
+	rain: {
+		count: 900, rate: 500, lifetime: 1.5,
+		initialSpeed: 0.4, spread: 0.08,
+		gravity: -8.5, wind: [0.4, 0, 0], turbulence: 0.05,
+		size: 0.008, random: 0.2, color: 0xa8c8ff,
+		style: "solid", blending: "normal",
+		emitter: "box", direction: "directional",
+		_scale: [10, 0.2, 10], _y: 5,
+	},
+	sparks: {
+		count: 220, rate: 300, lifetime: 0.9,
+		initialSpeed: 3.5, spread: 1.4,
+		gravity: -6.0, wind: [0, 0, 0], turbulence: 0.4,
+		size: 0.02, random: 0.6, color: 0xffb04a,
+		style: "solid", blending: "additive",
+		emitter: "point", direction: "omni",
+		_scale: [1, 1, 1], _y: 0.5,
+	},
+	fireflies: {
+		count: 60, rate: 12, lifetime: 5.0,
+		initialSpeed: 0.35, spread: Math.PI,
+		gravity: 0.02, wind: [0, 0, 0], turbulence: 0.55,
+		size: 0.025, random: 0.4, color: 0xffdc7a,
+		style: "soft", blending: "additive",
+		emitter: "sphere", direction: "omni",
+		_scale: [4, 2, 4], _y: 1.5,
+	},
+};
 
 const PARTICLE_VERT = `
 attribute float aSeed;          // per-particle stable random (0..1)
@@ -9875,6 +9924,30 @@ async function refreshMcpServers() {
 	}
 }
 window.refreshMcpServers = refreshMcpServers;
+
+// AI Agent usage — reads backend's rolling total (data/llm_usage.json) and
+// renders today + lifetime tokens + estimated USD cost. Non-blocking; if the
+// endpoint fails the section just hides.
+async function refreshLlmUsage() {
+	const el = document.getElementById("llm-usage-body");
+	if (!el) return;
+	try {
+		const r = await fetch("/api/llm/usage");
+		if (!r.ok) throw new Error("failed");
+		const j = await r.json();
+		const t = j.today || {}, tot = j.total || {};
+		const fmt = n => (n || 0).toLocaleString();
+		const fmtUsd = n => "$" + Number(n || 0).toFixed(n >= 1 ? 2 : 4);
+		el.innerHTML = `
+			<div><strong style="color:#e6e6ea">Today:</strong> ${fmt(t.input_tokens)} in / ${fmt(t.output_tokens)} out · ${fmt(t.cache_read_input_tokens)} cache-read · ${t.turns || 0} turns · <span style="color:#ffd28a">${fmtUsd(t.estimated_usd)}</span></div>
+			<div style="margin-top:4px"><strong style="color:#e6e6ea">Lifetime:</strong> ${fmt(tot.input_tokens)} in / ${fmt(tot.output_tokens)} out · ${tot.turns || 0} turns · <span style="color:#ffd28a">${fmtUsd(tot.estimated_usd)}</span></div>
+			<div style="margin-top:4px; font-size:10px; opacity:0.6">Estimates use Sonnet 4.6 pricing ($3/M in, $15/M out).</div>
+		`;
+	} catch {
+		el.textContent = "Usage data unavailable.";
+	}
+}
+window.refreshLlmUsage = refreshLlmUsage;
 document.getElementById("mcp-add-btn")?.addEventListener("click", async () => {
 	const name = document.getElementById("mcp-add-name").value.trim();
 	const url  = document.getElementById("mcp-add-url").value.trim();
@@ -18695,15 +18768,35 @@ function findObjByName(name) {
 }
 
 const ASSISTANT_TOOLS = {
-	add_primitive({ kind, color, position }) {
+	add_primitive({ kind, color, position, preset }) {
 		if (!kind) return "error: kind is required";
 		const allowed = ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "text", "particles", "clouds"];
 		if (!allowed.includes(kind)) return `error: unknown kind '${kind}'`;
-		const obj = addPrimitive(kind);
+		let obj;
+		if (kind === "particles" && preset) {
+			const p = PARTICLE_PRESETS[preset];
+			if (!p) return `error: unknown particle preset '${preset}' — try snow, rain, sparks, or fireflies`;
+			// Preset overrides get baked in AT SPAWN time so the shader uniforms
+			// + attributes reflect them from frame 0. Explicit color arg still
+			// wins over the preset color.
+			const cfg = { ...p };
+			if (color) {
+				try { cfg.color = parseInt(String(color).replace("#", ""), 16); } catch {}
+			}
+			obj = addParticleEmitter(cfg);
+			if (obj && Array.isArray(p._scale)) obj.scale.set(p._scale[0], p._scale[1], p._scale[2]);
+			// Presets have a suggested Y (snow/rain want to spawn overhead) —
+			// use it unless the caller pinned an explicit position.
+			if (obj && !(Array.isArray(position) && position.length === 3) && typeof p._y === "number") {
+				obj.position.set(0, p._y, 0);
+			}
+		} else {
+			obj = addPrimitive(kind);
+		}
 		if (!obj) return "error: addPrimitive returned null";
 		if (Array.isArray(position) && position.length === 3) {
 			obj.position.set(+position[0] || 0, +position[1] || 0, +position[2] || 0);
-		} else {
+		} else if (!(kind === "particles" && preset)) {
 			obj.position.set(0, 0.5, 0);
 		}
 		if (color && obj.material?.color) {
@@ -18711,7 +18804,8 @@ const ASSISTANT_TOOLS = {
 		}
 		refreshOutliner();
 		saveScene?.();
-		return `added ${obj.name} (${kind}) at (${obj.position.x.toFixed(2)}, ${obj.position.y.toFixed(2)}, ${obj.position.z.toFixed(2)})`;
+		const presetTag = (kind === "particles" && preset) ? ` [${preset}]` : "";
+		return `added ${obj.name} (${kind}${presetTag}) at (${obj.position.x.toFixed(2)}, ${obj.position.y.toFixed(2)}, ${obj.position.z.toFixed(2)})`;
 	},
 
 	batch_add_primitives({ items }) {
@@ -18722,10 +18816,26 @@ const ASSISTANT_TOOLS = {
 		for (let i = 0; i < items.length; i++) {
 			const it = items[i] || {};
 			if (!allowed.includes(it.kind)) { errors.push(`#${i}: bad kind '${it.kind}'`); continue; }
-			const obj = addPrimitive(it.kind);
+			let obj;
+			let presetY = null;
+			if (it.kind === "particles" && it.preset) {
+				const p = PARTICLE_PRESETS[it.preset];
+				if (!p) { errors.push(`#${i}: unknown preset '${it.preset}'`); continue; }
+				const cfg = { ...p };
+				if (it.color) { try { cfg.color = parseInt(String(it.color).replace("#", ""), 16); } catch {} }
+				obj = addParticleEmitter(cfg);
+				if (obj && Array.isArray(p._scale) && !(Array.isArray(it.scale) && it.scale.length >= 1)) {
+					obj.scale.set(p._scale[0], p._scale[1], p._scale[2]);
+				}
+				if (typeof p._y === "number") presetY = p._y;
+			} else {
+				obj = addPrimitive(it.kind);
+			}
 			if (!obj) { errors.push(`#${i}: addPrimitive returned null`); continue; }
 			if (Array.isArray(it.position) && it.position.length === 3) {
 				obj.position.set(+it.position[0] || 0, +it.position[1] || 0, +it.position[2] || 0);
+			} else if (presetY !== null) {
+				obj.position.set(0, presetY, 0);
 			} else {
 				obj.position.set(0, 0.5, 0);
 			}
@@ -19530,6 +19640,106 @@ const ASSISTANT_TOOLS = {
 			keyframe_count: kfCount,
 			scene_duration_s: (typeof _tlDuration === "number") ? _tlDuration : null,
 		});
+	},
+
+	// ─── Timeline / animation ─────────────────────────────────────────
+	// Playhead is stored 0..1 internally; duration is on #duration input in
+	// seconds. Tools convert between seconds ⇄ normalized so the agent sees
+	// natural seconds. Keys live in module-level `keyframes` (camera) or
+	// `obj.userData.keyframes` (per-object).
+
+	set_scene_duration({ seconds }) {
+		const s = Math.max(0.5, Math.min(300, +seconds || 0));
+		if (!s) return "error: seconds must be > 0";
+		const el = document.getElementById("duration");
+		if (!el) return "error: duration input missing";
+		el.value = s;
+		el.dispatchEvent(new Event("input", { bubbles: true }));
+		saveSceneDebounced?.();
+		return `scene duration = ${s.toFixed(2)}s`;
+	},
+
+	set_playhead({ time_s }) {
+		const dur = parseFloat(document.getElementById("duration")?.value) || 4;
+		const t = Math.max(0, Math.min(dur, +time_s || 0));
+		setPlayhead(t / dur);
+		return `playhead = ${t.toFixed(2)}s (${(t/dur*100).toFixed(1)}%)`;
+	},
+
+	add_keyframe({ target, time_s, ease }) {
+		if (!target) return "error: target is required ('camera' or object name)";
+		const dur = parseFloat(document.getElementById("duration")?.value) || 4;
+		// Optional playhead move first so addKeyframe/addObjectKeyframe capture
+		// the pose at the intended moment.
+		if (typeof time_s === "number") {
+			const t = Math.max(0, Math.min(dur, time_s));
+			setPlayhead(t / dur);
+		}
+		if (target === "camera") {
+			addKeyframe();
+			if (ease && keyframes.length) {
+				const k = keyframes[keyframes.length - 1];
+				k.ease = ease;
+				renderKeyframeMarkers?.();
+			}
+			return `camera keyframe at ${(playhead * dur).toFixed(2)}s (ease=${ease || "easeInOut"})`;
+		}
+		const obj = findObjByName(target);
+		if (!obj) return `error: no object named '${target}'`;
+		addObjectKeyframe(obj);
+		if (ease && Array.isArray(obj.userData?.keyframes) && obj.userData.keyframes.length) {
+			const arr = obj.userData.keyframes;
+			const k = arr[arr.length - 1];
+			k.ease = ease;
+			renderKeyframeMarkers?.();
+		}
+		return `[${obj.name}] keyframe at ${(playhead * dur).toFixed(2)}s (ease=${ease || (obj.userData.keyframes?.length > 2 ? "through" : "easeInOut")})`;
+	},
+
+	remove_keyframe({ target, time_s }) {
+		if (!target) return "error: target is required";
+		if (typeof time_s !== "number") return "error: time_s is required";
+		const dur = parseFloat(document.getElementById("duration")?.value) || 4;
+		const tNorm = Math.max(0, Math.min(1, time_s / dur));
+		const tol = 0.005;
+		if (target === "camera") {
+			const before = keyframes.length;
+			keyframes = keyframes.filter(k => Math.abs(k.t - tNorm) > tol);
+			renderKeyframeMarkers?.();
+			saveSceneDebounced?.();
+			return before === keyframes.length ? "no camera key near that time" : `removed camera key at ${time_s.toFixed(2)}s`;
+		}
+		const obj = findObjByName(target);
+		if (!obj) return `error: no object named '${target}'`;
+		const arr = obj.userData?.keyframes;
+		if (!Array.isArray(arr)) return "no keys on that object";
+		const before = arr.length;
+		obj.userData.keyframes = arr.filter(k => Math.abs(k.t - tNorm) > tol);
+		renderKeyframeMarkers?.();
+		saveSceneDebounced?.();
+		return before === obj.userData.keyframes.length ? "no key near that time" : `removed [${obj.name}] key at ${time_s.toFixed(2)}s`;
+	},
+
+	list_keyframes({ target }) {
+		if (!target) return "error: target is required";
+		const dur = parseFloat(document.getElementById("duration")?.value) || 4;
+		const fmt = arr => arr.map(k => ({ time_s: +(k.t * dur).toFixed(3), ease: k.ease || "easeInOut" }));
+		if (target === "camera") return JSON.stringify(fmt(keyframes));
+		const obj = findObjByName(target);
+		if (!obj) return `error: no object named '${target}'`;
+		return JSON.stringify(fmt(obj.userData?.keyframes || []));
+	},
+
+	async play_preview({ action }) {
+		if (action === "play") {
+			if (typeof playPreview === "function") await playPreview();
+			return "playing";
+		}
+		if (action === "stop") {
+			stopPreview?.();
+			return "stopped";
+		}
+		return "error: action must be 'play' or 'stop'";
 	},
 
 	set_skybox_image({ url }) {
@@ -28180,13 +28390,11 @@ document.getElementById("project-new").addEventListener("click", async () => {
 	restoringScene = true;
 	try {
 		await deserializeScene(EMPTY_SCENE, { skipSave: true });
-		const cube = addPrimitive("cube");
-		if (cube) {
-			cube.position.set(0, 0.5, 0);
-			// Fresh scenes get a random cube tint — small delight, and it makes
-			// the starter object obviously a placeholder rather than a fixture.
-			cube.material?.color?.setHSL(Math.random(), 0.55, 0.55);
-		}
+		// EMPTY_SCENE.primitives already seeds the starter Cube — tint it with
+		// a random hue instead of spawning a second cube on top (which used to
+		// leak into the outliner as "Cube" + "Cube.007").
+		const cube = objects.find(o => o.userData?.primKind === "cube") || null;
+		if (cube) cube.material?.color?.setHSL(Math.random(), 0.5 + Math.random() * 0.35, 0.4 + Math.random() * 0.25);
 		applyProjectName(null);
 	} finally {
 		restoringScene = false;
@@ -29382,6 +29590,10 @@ document.getElementById("th-help")?.addEventListener("click", () => {
 	let loaded;
 	if (window.__cbForceFreshBoot) {
 		await deserializeScene(EMPTY_SCENE, { skipSave: true });
+		// Same random-tint treatment as the New Scene handler — the seeded
+		// Cube ships with a plain default color otherwise.
+		const seededCube = objects.find(o => o.userData?.primKind === "cube") || null;
+		if (seededCube) seededCube.material?.color?.setHSL(Math.random(), 0.5 + Math.random() * 0.35, 0.4 + Math.random() * 0.25);
 		loaded = false;
 	} else {
 		loaded = await loadScene();
@@ -29394,7 +29606,7 @@ document.getElementById("th-help")?.addEventListener("click", () => {
 		const cube = addPrimitive("cube");
 		if (cube) {
 			cube.position.set(0, 0.5, 0);
-			cube.material?.color?.setHSL(Math.random(), 0.55, 0.55);
+			cube.material?.color?.setHSL(Math.random(), 0.5 + Math.random() * 0.35, 0.4 + Math.random() * 0.25);
 			await saveScene();
 		}
 	}
