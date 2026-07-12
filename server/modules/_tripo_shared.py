@@ -102,83 +102,16 @@ async def run_workflow_and_fetch_glb(workflow: dict, module_id: str, data_dir: P
     """Submit a patched workflow to Cloud, wait for it, download the .glb, and
     stash it under data_dir with the standard out_<module>_<ts>_<uuid>.glb name
     so it lands in the Assets pane. Returns the {path, filename, ext} envelope
-    the module contract expects."""
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as tf:
-        json.dump(workflow, tf)
-        patched_path = Path(tf.name)
+    the module contract expects.
 
-    try:
-        # Submit only — no --wait. `comfy run --wait` holds a single long HTTP
-        # request/stream that Cloud will drop after a few minutes of Tripo's
-        # meshing/texturing quiet time, and the CLI then blows up mid-request
-        # with urllib CannotSendHeader / NotConnected. Splitting submit from
-        # completion means each HTTP call is short-lived.
-        code, out, err = await run_cli([
-            comfy_bin(), "--json", "run",
-            "--workflow", str(patched_path),
-            *WHERE_CLOUD,
-        ], timeout=300)
-        env = _parse_envelope(out)
-        if code != 0 or not env or not env.get("ok"):
-            detail = (env or {}).get("error") if env else None
-            raise RuntimeError(f"comfy run failed (rc={code}): {detail or err.strip() or out.strip()[:800]}")
-
-        prompt_id = ((env.get("data") or {}).get("prompt_id")) or _extract_prompt_id(out)
-        if not prompt_id:
-            raise RuntimeError(f"couldn't parse prompt_id from `comfy run` output. First 500 chars: {out[:500]}")
-
-        # Poll for completion — `jobs wait` short-polls (default every 5s), so
-        # a transient socket drop just misses one tick and recovers on the next.
-        code, out, err = await run_cli([
-            comfy_bin(), "--json", "jobs", "wait", prompt_id,
-            "--poll-interval", "5",
-            "--timeout", "1500",
-            *WHERE_CLOUD,
-        ], timeout=1600)
-        env = _parse_envelope(out)
-        if code != 0 or not env or not env.get("ok"):
-            detail = (env or {}).get("error") if env else None
-            raise RuntimeError(f"comfy jobs wait failed (rc={code}): {detail or err.strip() or out.strip()[:800]}")
-
-        # Fetch outputs into a scratch dir so we can grab the specific .glb file.
-        # `download_no_outputs` can pop for a few seconds after `run --wait` returns —
-        # Cloud registers the workflow as complete before the output files are indexed
-        # for download. Retry with backoff instead of hard-failing on the first attempt.
-        scratch = Path(tempfile.mkdtemp(prefix=f"{module_id}_"))
-        last_env = None
-        for attempt in range(8):  # ~60s max, with the sleeps below
-            code, out, err = await run_cli([
-                comfy_bin(), "--json", "download", prompt_id,
-                "-o", str(scratch),
-                *WHERE_CLOUD,
-            ], timeout=300)
-            last_env = _parse_envelope(out)
-            if code == 0 and last_env and last_env.get("ok"):
-                break
-            err_code = ((last_env or {}).get("error") or {}).get("code")
-            if err_code != "download_no_outputs":
-                detail = (last_env or {}).get("error") if last_env else None
-                raise RuntimeError(f"comfy download failed (rc={code}): {detail or err.strip() or out.strip()[:800]}")
-            await asyncio.sleep(min(2 + attempt * 2, 12))
-        else:
-            detail = (last_env or {}).get("error") if last_env else None
-            raise RuntimeError(f"comfy download kept reporting no outputs after 8 tries: {detail}")
-
-        glb_files = sorted(scratch.rglob("*.glb"), key=lambda p: p.stat().st_mtime, reverse=True)
-        # Some SaveGLB flavors emit .gltf — accept that too, the frontend loader
-        # takes either extension.
-        if not glb_files:
-            glb_files = sorted(scratch.rglob("*.gltf"), key=lambda p: p.stat().st_mtime, reverse=True)
-        if not glb_files:
-            raise RuntimeError(f"no .glb/.gltf output found under {scratch}")
-
-        src = glb_files[0]
-        ext = src.suffix.lstrip(".").lower()
-        dst = new_output_path(data_dir, module_id, ext)
-        shutil.move(str(src), str(dst))
-        return {"path": str(dst), "filename": dst.name, "ext": ext}
-    finally:
-        try:
-            patched_path.unlink()
-        except OSError:
-            pass
+    Delegates to `_workflow_shared._submit_wait_download` — a straight
+    sequential `run → jobs wait → download` used to work here but hangs on
+    Tripo H3.1 partner-node jobs when `jobs wait` stalls at 99% (the CLI's
+    urllib call drops mid-poll even though Cloud has finalized the job). The
+    shared helper races `jobs wait` against a filesystem poller and short-
+    circuits as soon as the file lands, matching the pattern already used by
+    Rodin / Meshy / other partner nodes."""
+    # Inline import — `_workflow_shared` imports names from this module at
+    # module load, so a top-level import here would create a cycle.
+    from ._workflow_shared import _submit_wait_download
+    return await _submit_wait_download(workflow, module_id, ["glb", "gltf"], data_dir)

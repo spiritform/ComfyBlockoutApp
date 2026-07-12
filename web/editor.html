@@ -3174,6 +3174,27 @@
 		box-shadow: 0 20px 60px rgba(0,0,0,0.7);
 		border-radius: 4px;
 	}
+	/* Download button anchored in the viewer's top-right corner. Sits on top
+	   of the backdrop so it's visible whether the media is a photo or a video
+	   (video controls occupy the bottom edge already). Cursor stays default
+	   pointer even though the backdrop is zoom-out — the button owns its
+	   hover ring. */
+	.asset-viewer-download {
+		position: absolute; top: 16px; right: 16px;
+		width: 36px; height: 36px; padding: 0;
+		background: rgba(0,0,0,0.55);
+		border: 1px solid rgba(255,255,255,0.12);
+		border-radius: 6px;
+		color: rgba(255,255,255,0.85);
+		display: inline-flex; align-items: center; justify-content: center;
+		cursor: pointer;
+	}
+	.asset-viewer-download:hover {
+		background: rgba(255,180,84,0.22);
+		color: #ffb454;
+		border-color: rgba(255,180,84,0.4);
+	}
+	.asset-viewer-download svg { width: 16px; height: 16px; }
 	.assets-tile img, .assets-tile video {
 		width: 100%; height: 100%; object-fit: cover; display: block;
 		pointer-events: none;
@@ -4124,16 +4145,34 @@
 					<div class="modal-section">
 						<div class="section-label">Comfy Cloud</div>
 						<div class="modal-status" id="settings-status"></div>
-						<button type="button" class="modal-btn-primary" id="settings-signin" style="width:100%; padding:10px 14px; margin-bottom:8px">Sign in with Comfy Cloud</button>
-						<div class="modal-hint" style="margin-top:0; margin-bottom:14px">
-							New to Comfy? <a href="https://platform.comfy.org" target="_blank">Sign up for an account →</a>
-						</div>
+						<button type="button" class="modal-btn-secondary" id="settings-signin" style="width:100%; padding:10px 14px; margin-bottom:8px">Sign in with Comfy Cloud</button>
+						<!-- New-user CTA — this is the affiliate slot. Only shown
+						     when no Comfy Cloud key is set (openSettings() toggles
+						     via #settings-signup-link). Links through the sjv.io
+						     redirect so the affiliate cookie drops before the user
+						     lands on Comfy Cloud's pricing page. Existing subscribers
+						     wouldn't earn attribution — they see #settings-manage-account
+						     lower in the section instead. -->
+						<a id="settings-signup-link" class="modal-btn-primary" href="https://comfyui.sjv.io/0GnWDN" target="_blank" rel="noopener noreferrer" style="display:none;width:100%;box-sizing:border-box;justify-content:center;align-items:center;gap:8px;padding:10px 14px;margin-bottom:14px;text-decoration:none">
+							<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/></svg>
+							<span>Sign up for Comfy Cloud</span>
+						</a>
 						<div class="modal-input-row">
 							<input class="modal-input" type="password" id="settings-key" placeholder="Paste your API key (comfyui-…)" autocomplete="off" spellcheck="false">
 							<button class="modal-btn-secondary" id="settings-clear">Clear</button>
 							<button class="modal-btn-primary" id="settings-save">Save</button>
 						</div>
 						<div class="modal-hint">After signing in, copy the API key from your profile page and paste it above.</div>
+						<!-- Signed-in users see a plain account/credits link
+						     instead of the affiliate CTA above (they already
+						     have a subscription; affiliate wouldn't attribute
+						     credit purchases). Points at platform.comfy.org
+						     directly so it's a normal outbound link, no
+						     tracking redirect. -->
+						<a id="settings-manage-account" href="https://platform.comfy.org" target="_blank" rel="noopener noreferrer" style="display:none;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:rgba(255,255,255,0.5);text-decoration:none">
+							<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+							<span>Manage account & credits →</span>
+						</a>
 					</div>
 					<div class="modal-section">
 						<label class="modal-toggle-row" for="assistant-toggle">
@@ -4287,11 +4326,14 @@
 				     open. Result replaces the source objects in place. -->
 				<button class="prim-btn" data-tool="bool" data-label="Boolean" title="Boolean — union / subtract / intersect two or more selected objects into a single mesh."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 22a2 2 0 0 1-2-2"/><path d="M16 22h-2"/><path d="M16 4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3a1 1 0 0 0 1-1v-5a2 2 0 0 1 2-2h5a1 1 0 0 0 1-1z"/><path d="M20 8a2 2 0 0 1 2 2"/><path d="M22 14v2"/><path d="M22 20a2 2 0 0 1-2 2"/></svg></button>
 				<button class="prim-btn" data-fx="scatter" data-label="Scatter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="18.5" cy="5.5" r=".5" fill="currentColor"/><circle cx="11.5" cy="11.5" r=".5" fill="currentColor"/><circle cx="7.5" cy="16.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="14.5" r=".5" fill="currentColor"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/></svg></button>
-				<!-- TripoSplat util — image → gaussian splat (.ply) via a local
-				     ComfyUI TripoSplat workflow. Hardcoded so the astroid glyph
-				     paints at boot instead of the button popping in after the
-				     /api/modules fetch resolves. -->
-				<button class="prim-btn" data-tool="util:triposplat-local" data-hardcoded="1" data-label="TripoSplat" title="TripoSplat — generate a 3D gaussian splat from a source image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.983 21.186a1 1 0 0 1-1.966 0 10 10 0 0 0-8.203-8.203 1 1 0 0 1 0-1.966 10 10 0 0 0 8.203-8.203 1 1 0 0 1 1.966 0 10 10 0 0 0 8.203 8.203 1 1 0 0 1 0 1.966 10 10 0 0 0-8.203 8.203"/></svg></button>
+				<!-- Tripo 3D util — Comfy Cloud Tripo H3.1 text-OR-image → 3D mesh
+				     (.glb). Spawns a placeholder cube in the scene; its
+				     properties pane exposes a Text/Image mode toggle, the
+				     matching input, and a Generate button. Local TripoSplat
+				     still exists as a workflow (Workflows list) for offline
+				     splat generation. Hardcoded so the box glyph paints at
+				     boot rather than popping in after /api/modules resolves. -->
+				<button class="prim-btn" data-tool="util:tripo-h31" data-hardcoded="1" data-label="Tripo 3D" title="Tripo 3D — generate a .glb mesh from a text prompt or source image (Comfy Cloud · Tripo H3.1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></button>
 				<!-- Mannequin — procedural block-figure at real-world 1.72m scale.
 				     Reference for blockouts (door frames, couches, camera height).
 				     AnimoFlow (text-to-motion) lives inside the Mannequin
@@ -4692,6 +4734,45 @@
 					</div>
 					<div class="hint" id="obj-pc-status" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5)">Idle</div>
 					<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Upload a still image or leave empty to use the current Blockout snapshot. Object mode isolates the subject; Scene mode keeps the full frame.</div>
+				</div>
+				<!-- Tripo 3D placeholder section — visible only when the
+				     selection is a tripo3dPlaceholder object dropped by the
+				     "Tripo 3D" Tools tile. Segmented Text/Image toggle picks
+				     which underlying Tripo H3.1 endpoint runs. Text mode
+				     shows a prompt textarea; image mode shows an upload +
+				     viewport-snapshot thumb. Generate calls tripo-h31 which
+				     dispatches on the server. On success the placeholder is
+				     swapped for the loaded .glb at the same transform. -->
+				<div class="section" id="obj-tripo3d-source-section" style="display:none">
+					<div class="section-label">Mode</div>
+					<div class="pill-toggle" style="margin-bottom:8px">
+						<button type="button" id="obj-tripo3d-mode-image" class="active">Image</button>
+						<button type="button" id="obj-tripo3d-mode-text">Text</button>
+					</div>
+					<!-- Image-mode body: reuse the shared .gen-slot chip so this
+					     matches the object-level "Image ref" slot visually and
+					     interactively. Click anywhere on the row → file picker;
+					     empty state shows the upload glyph + "Using viewport
+					     snapshot" hint. -->
+					<div id="obj-tripo3d-image-body" style="margin-bottom:8px">
+						<div class="gen-slot" id="obj-tripo3d-slot" title="Click to upload an image · leave empty to use the viewport snapshot">
+							<div class="gen-slot-thumb" id="obj-tripo3d-thumb">
+								<svg class="gen-slot-upload" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2"/><path d="M8 9V2.5"/><path d="m5 5 3-3 3 3"/></svg>
+							</div>
+							<div class="gen-slot-label" id="obj-tripo3d-label">Using viewport snapshot</div>
+						</div>
+						<input type="file" id="obj-tripo3d-upload-file" accept="image/*" hidden>
+					</div>
+					<!-- Text-mode body: prompt textarea. Kept short (3 rows)
+					     to fit the properties pane without dominating it —
+					     users can drag longer prompts and the field grows to
+					     fit its content via native textarea behavior. -->
+					<div id="obj-tripo3d-text-body" style="display:none">
+						<textarea id="obj-tripo3d-prompt" rows="3" placeholder="Describe the 3D model — e.g. 'armored knight kneeling with sword, ornate silver-gold plate armor'" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.28);color:rgba(255,255,255,0.9);border:1px solid rgba(255,255,255,0.08);border-radius:3px;padding:6px 8px;font-size:11px;font-family:inherit;resize:vertical;margin-bottom:8px"></textarea>
+					</div>
+					<button type="button" id="obj-tripo3d-generate-btn" class="mp-still-btn" style="width:100%">Generate</button>
+					<div class="hint" id="obj-tripo3d-status" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5)">Idle</div>
+					<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Comfy Cloud · Tripo H3.1. Image mode: uses the current viewport snapshot or an uploaded still. Text mode: describe the model. Output is a .glb mesh dropped at the placeholder's position.</div>
 				</div>
 				<!-- Skybox panorama controls — visible only when the selection
 				     is a skybox object. Upload picks a 360° equirectangular
@@ -6140,15 +6221,12 @@
 				const fallback = asset.thumbUrl ? ` onerror="this.onerror=null;this.src='${asset.url}'"` : "";
 				media = `<img src="${src}" alt="" loading="lazy" decoding="async"${fallback}>`;
 			}
+			// Tiles are display-only surfaces now: no inline download/delete
+			// icons. Del key + selection handles removal, double-click opens
+			// the full-size viewer (which owns its own download button).
 			tile.innerHTML = `
 				${media}
 				<span class="badge">${asset.kind}</span>
-				<div class="actions">
-					<button class="dl" title="Download to disk">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-					</button>
-					<button class="del" title="Delete">×</button>
-				</div>
 			`;
 			tile.addEventListener("dragstart", e => {
 				tile.classList.add("dragging");
@@ -6191,27 +6269,8 @@
 				}
 				openAssetViewer(asset);
 			});
-			tile.querySelector(".dl").addEventListener("click", async (e) => {
-				e.stopPropagation();
-				// Trigger a download by adding download attribute + clicking
-				const a = document.createElement("a");
-				a.href = asset.url; a.download = asset.filename;
-				document.body.appendChild(a); a.click(); a.remove();
-			});
-			// Single-tile delete → straight DELETE, no confirm. Bulk cleanup
-			// is the whole point of the multi-select flow (shift/ctrl-click
-			// + keyboard Del below); a modal per click made that unusable.
-			tile.querySelector(".del").addEventListener("click", async (e) => {
-				e.stopPropagation();
-				assetSelection.delete(asset.filename);
-				if (assetSelectAnchor === asset.filename) assetSelectAnchor = null;
-				try {
-					await fetch(`/api/assets/${encodeURIComponent(asset.filename)}`, { method: "DELETE" });
-					await refreshAssets();
-				} catch (err) {
-					window.showAlert?.("Delete failed", err.message);
-				}
-			});
+			// (inline .dl / .del handlers removed — the viewer owns download
+			// and Del-key + selection owns removal.)
 			// Selection click: plain = single-select, ctrl/⌘ = toggle, shift =
 			// range from the last anchor. Ignored on drags (dragstart fires
 			// before click, and the tile-level click below skips when the target
@@ -6273,10 +6332,21 @@
 				const names = [...assetSelection];
 				assetSelection.clear();
 				assetSelectAnchor = null;
-				await Promise.all(names.map(n =>
+				// Optimistic: strip tiles + state IMMEDIATELY so the grid
+				// updates on keystroke, then fire DELETE requests without
+				// blocking the UI. If any request fails, the next refresh
+				// resurrects that tile — cheaper than a spinner+await.
+				const gone = new Set(names);
+				assetsItems = assetsItems.filter(a => !gone.has(a.filename));
+				assetsFiltered = assetsFiltered.filter(a => !gone.has(a.filename));
+				for (const n of names) {
+					const tile = assetsGrid.querySelector(`.assets-tile[data-filename="${CSS.escape(n)}"]`);
+					if (tile) tile.remove();
+				}
+				refreshChatContextChip?.();
+				Promise.all(names.map(n =>
 					fetch(`/api/assets/${encodeURIComponent(n)}`, { method: "DELETE" }).catch(() => {})
 				));
-				await refreshAssets();
 			}
 		});
 
@@ -6290,15 +6360,27 @@
 			document.querySelectorAll(".asset-viewer-backdrop").forEach(el => el.remove());
 			const backdrop = document.createElement("div");
 			backdrop.className = "asset-viewer-backdrop";
-			backdrop.innerHTML = asset.kind === "video"
+			const media = asset.kind === "video"
 				? `<video src="${asset.url}" controls autoplay loop></video>`
 				: `<img src="${asset.url}" alt="${asset.filename}">`;
+			backdrop.innerHTML = `
+				${media}
+				<button class="asset-viewer-download" title="Download to disk">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+				</button>
+			`;
 			const close = () => {
 				backdrop.remove();
 				document.removeEventListener("keydown", onKey);
 			};
 			const onKey = (e) => { if (e.key === "Escape") close(); };
 			backdrop.addEventListener("click", e => { if (e.target === backdrop) close(); });
+			backdrop.querySelector(".asset-viewer-download").addEventListener("click", (e) => {
+				e.stopPropagation();
+				const a = document.createElement("a");
+				a.href = asset.url; a.download = asset.filename;
+				document.body.appendChild(a); a.click(); a.remove();
+			});
 			document.addEventListener("keydown", onKey);
 			document.body.appendChild(backdrop);
 		}
@@ -6312,6 +6394,27 @@
 			// opens, so users see the current state even after a reload.
 			const asstToggle = document.getElementById("assistant-toggle");
 			if (asstToggle) asstToggle.checked = window.isAssistantEnabled?.() ?? false;
+			// Gate the affiliate CTA on whether a Comfy Cloud key is already set.
+			// No key = the user is a candidate for the "Get Comfy Cloud" affiliate
+			// funnel (new-customer conversion earns). Key set = existing subscriber,
+			// affiliate wouldn't attribute, so just show a plain account link.
+			// Fire-and-forget — modal renders instantly, the toggle just lands a
+			// tick later once the auth-status fetch resolves.
+			(async () => {
+				const signupBtn = document.getElementById("settings-signup-link");
+				const mgmtLink = document.getElementById("settings-manage-account");
+				try {
+					const r = await fetch("/api/auth/status");
+					const s = r.ok ? await r.json() : null;
+					const ready = !!s?.ready;
+					if (signupBtn) signupBtn.style.display = ready ? "none" : "inline-flex";
+					if (mgmtLink) mgmtLink.style.display = ready ? "inline-flex" : "none";
+				} catch {
+					// Fail-open toward the affiliate — if we can't tell, show the CTA.
+					if (signupBtn) signupBtn.style.display = "inline-flex";
+					if (mgmtLink) mgmtLink.style.display = "none";
+				}
+			})();
 			// Hydrate the ComfyUI paths column — pre-fill whatever the backend
 			// currently has, so the user can either edit or leave-and-detect.
 			// First-run emulator (window.__cbFirstRunEmulator, set by the
@@ -15321,6 +15424,28 @@ function runUtilTool(moduleId) {
 		refreshObjectInspector?.();
 		return;
 	}
+	if (moduleId === "tripo-h31") {
+		// Tripo 3D (Comfy Cloud) — mirrors the TripoSplat flow but for meshes.
+		// Spawn (or reselect) a tagged placeholder cube; its properties pane
+		// exposes a Text/Image mode toggle + prompt/image input + Generate.
+		// On success the placeholder is swapped for the loaded .glb at the
+		// same transform.
+		let box = objects.find(o => o.userData?.tripo3dSource === true && !o.userData?.tripo3dConsumed && o.visible !== false);
+		if (!box) {
+			box = spawnTripo3dPlaceholder();
+		} else {
+			select(box);
+		}
+		// Tools tile is a one-shot spawn — the actual UI lives in the object
+		// inspector now, not the util pane. Peel the .active class + clear
+		// _activeUtilId so the tile doesn't sit lit up like it's the current
+		// tool. Runs still work: _tripo3dGenerate re-sets _activeUtilId when
+		// the user hits Generate.
+		document.querySelector(`button[data-tool="util:${moduleId}"]`)?.classList.remove("active");
+		_activeUtilId = null;
+		refreshObjectInspector?.();
+		return;
+	}
 	// Prefer a hardcoded label for the motion util so the header reads
 	// "AnimoFlow" even if the server module is on an older label ("Motion")
 	// and hasn't been restarted since the rename. Keeps the pane header
@@ -15356,6 +15481,50 @@ function spawnEmptyPcPlane() {
 	// image + Generate) instead of generic plane properties.
 	mesh.userData.primKind = "pcPlaceholder";
 	mesh.userData.pcSource = true;
+	stashInitialTransform(mesh);
+	scene.add(mesh);
+	objects.push(mesh);
+	select(mesh);
+	refreshOutliner();
+	updateStatus();
+	if (typeof saveScene === "function") saveScene();
+	return mesh;
+}
+
+// Tripo 3D placeholder: a 1×1×1 amber-tinted wireframe cube standing at
+// origin +1y — matches the visual weight of the PC placeholder (2×2 plane)
+// but reads as a volume rather than a picture-frame, since the Tripo 3D tool
+// outputs a mesh. Tagged with userData.tripo3dSource so the upload handler +
+// generate flow can find it, and userData.tripo3dConsumed flips to true on
+// successful swap so a re-click on the Tools tile spawns a fresh one instead
+// of reusing a slot whose mesh has already loaded.
+let _tripo3dCounter = 0;
+function spawnTripo3dPlaceholder() {
+	snapshotForUndo();
+	_tripo3dCounter += 1;
+	const size = 1;
+	const geom = new THREE.BoxGeometry(size, size, size);
+	const mat = new THREE.MeshBasicMaterial({
+		color: 0xffb454,
+		transparent: true,
+		opacity: 0.18,
+		side: THREE.DoubleSide,
+	});
+	const mesh = new THREE.Mesh(geom, mat);
+	// Wireframe overlay — a thin edge overlay reads better than a bare
+	// translucent cube, and matches the amber "waiting to be generated"
+	// language of the PC placeholder.
+	const edges = new THREE.LineSegments(
+		new THREE.EdgesGeometry(geom),
+		new THREE.LineBasicMaterial({ color: 0xffb454, transparent: true, opacity: 0.6 }),
+	);
+	edges.userData._helper = true;
+	mesh.add(edges);
+	mesh.name = `Tripo3D.${String(_tripo3dCounter).padStart(3, "0")}`;
+	mesh.position.set(0, 0.5, 0);
+	mesh.userData.primKind = "tripo3dPlaceholder";
+	mesh.userData.tripo3dSource = true;
+	mesh.userData.tripo3dMode = "image";
 	stashInitialTransform(mesh);
 	scene.add(mesh);
 	objects.push(mesh);
@@ -17116,6 +17285,289 @@ function _setPcRunButton(phase) {
 		});
 		document.getElementById("obj-pc-generate-btn")?.addEventListener("click", async () => {
 			await _pcGenerate();
+		});
+	};
+	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hook, { once: true });
+	else hook();
+})();
+
+// ─── Tripo 3D tool ───────────────────────────────────────────────────
+// Comfy Cloud Tripo H3.1 dispatcher — the placeholder cube spawned by the
+// Tools tile exposes a Text/Image mode toggle in its properties pane; on
+// Generate we POST to /api/run/tripo-h31 which routes to tripo-i2m or
+// tripo-t2m under the hood and returns a .glb. On success we load the
+// mesh, normalize its scale to a 2m footprint (matches the placeholder's
+// visual weight), and drop it at the placeholder's transform.
+
+// Separate uploaded-image slot from _utilUploadedImageUrl so PC's upload
+// and Tripo 3D's upload don't stomp each other in a mixed session.
+let _tripo3dUploadedUrl = null;
+// If set, the run body sends this as `image_url` and backend resolves it
+// directly (drop-from-Assets flow). Local uploads leave this null and go
+// through the /comfyblockout/save_image → _image_store path instead.
+let _tripo3dRemoteImageUrl = null;
+let _tripo3dRunPhase = "idle";
+
+function _setTripo3dStatus(text, kind) {
+	const el = document.getElementById("obj-tripo3d-status");
+	if (!el) return;
+	el.textContent = text;
+	const color = kind === "error" ? "#ff8a8a"
+		: kind === "busy" ? "rgba(255,180,84,0.9)"
+		: kind === "ok" ? "rgba(102,204,255,0.9)"
+		: "rgba(255,255,255,0.5)";
+	el.style.color = color;
+}
+
+function _setTripo3dRunButton(phase) {
+	_tripo3dRunPhase = phase;
+	const btn = document.getElementById("obj-tripo3d-generate-btn");
+	const slot = document.getElementById("obj-tripo3d-slot");
+	if (!btn) return;
+	const busy = phase !== "idle";
+	btn.disabled = busy;
+	// Slot IS the upload trigger now, so dim + disable pointer events
+	// during a run so clicks don't queue a file picker mid-generate.
+	if (slot) {
+		slot.style.pointerEvents = busy ? "none" : "";
+		slot.style.opacity = busy ? "0.5" : "";
+	}
+	btn.innerHTML = busy
+		? `<span style="display:inline-flex;align-items:center;gap:6px;justify-content:center">${_UTIL_SPINNER_SVG}<span>Running…</span></span>`
+		: "Generate";
+}
+
+// Sync the placeholder's rendered state to the current userData — mode
+// toggle button classes, body visibility (Text vs Image), thumb source
+// (uploaded image URL wins over the viewport-snapshot fallback message).
+function _refreshTripo3dPlaceholder(box) {
+	if (!box) return;
+	const mode = box.userData?.tripo3dMode === "text" ? "text" : "image";
+	const btnImage = document.getElementById("obj-tripo3d-mode-image");
+	const btnText = document.getElementById("obj-tripo3d-mode-text");
+	btnImage?.classList.toggle("active", mode === "image");
+	btnText?.classList.toggle("active", mode === "text");
+	const imageBody = document.getElementById("obj-tripo3d-image-body");
+	const textBody = document.getElementById("obj-tripo3d-text-body");
+	if (imageBody) imageBody.style.display = mode === "image" ? "" : "none";
+	if (textBody) textBody.style.display = mode === "text" ? "" : "none";
+	const promptEl = document.getElementById("obj-tripo3d-prompt");
+	if (promptEl && box.userData?.tripo3dPrompt !== undefined) {
+		promptEl.value = box.userData.tripo3dPrompt;
+	}
+	// Slot state matches the shared gen-slot pattern: filled = uploaded
+	// image, empty = using viewport snapshot. `.has-image` on the inner
+	// thumb hides the upload glyph automatically.
+	const slot = document.getElementById("obj-tripo3d-slot");
+	const thumb = document.getElementById("obj-tripo3d-thumb");
+	const label = document.getElementById("obj-tripo3d-label");
+	if (thumb && label && slot) {
+		if (_tripo3dUploadedUrl) {
+			thumb.style.backgroundImage = `url("${_tripo3dUploadedUrl}")`;
+			thumb.classList.add("has-image");
+			slot.classList.add("filled");
+			label.textContent = "Uploaded image";
+		} else {
+			thumb.style.backgroundImage = "";
+			thumb.classList.remove("has-image");
+			slot.classList.remove("filled");
+			label.textContent = "Using viewport snapshot";
+		}
+	}
+}
+
+// Image upload — pushes to /comfyblockout/save_image so /api/run/tripo-h31
+// resolves scene-image to it. Same endpoint as PC uploads (both share the
+// NODE_ID slot in _image_store); users only run one tool at a time, so
+// stomping the slot is fine.
+async function _tripo3dHandleUpload(file) {
+	if (!file) return;
+	_setTripo3dStatus?.(`uploading ${file.name}…`, "busy");
+	try {
+		let uploadFile = file;
+		let isImage = (file.type || "").startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
+		if (!isImage) {
+			_setTripo3dStatus?.(`extracting first frame from ${file.name}…`, "busy");
+			const blob = await _extractFirstVideoFrame(file);
+			if (blob) {
+				uploadFile = new File([blob], (file.name.replace(/\.[^.]+$/, "") + "_frame.png"), { type: "image/png" });
+				isImage = true;
+			}
+		}
+		const j = await uploadImage(uploadFile);
+		if (!j?.success) throw new Error(j?.error || "upload failed");
+		if (_tripo3dUploadedUrl) { try { URL.revokeObjectURL(_tripo3dUploadedUrl); } catch {} }
+		_tripo3dUploadedUrl = URL.createObjectURL(uploadFile);
+		// Local upload wins over any prior drop — clear the remote URL so
+		// the run uses _image_store (populated by uploadImage above), not
+		// a stale /output/... path.
+		_tripo3dRemoteImageUrl = null;
+		_setTripo3dStatus?.(`image saved — ready to generate`, "ok");
+		const box = objects.find(o => o.userData?.tripo3dSource === true && !o.userData?.tripo3dConsumed && o.visible !== false);
+		_refreshTripo3dPlaceholder(box);
+	} catch (err) {
+		console.error("[tripo3d] upload failed:", err);
+		_setTripo3dStatus?.(`upload failed · ${String(err.message || err).slice(0, 120)}`, "error");
+	}
+}
+
+// After a successful run, load the GLB and swap the placeholder cube for
+// the real mesh at the same transform. Scale is normalized to a 2m largest
+// dim so a whale and a doorknob both drop into the scene at a working
+// size; user's still free to rescale after the fact.
+async function _replaceTripo3dPlaneWithMesh(glbUrl) {
+	const box = objects.find(o => o.userData?.tripo3dSource === true && !o.userData?.tripo3dConsumed && o.visible !== false);
+	if (!box) return;
+	try {
+		const r = await fetch(glbUrl);
+		const buf = await r.arrayBuffer();
+		const filename = glbUrl.split("/").pop() || "tripo3d.glb";
+		const TARGET_SIZE = 2;
+		const root = await loadGLB(buf, filename, {
+			savedName: box.name.replace(/^Tripo3D\./, "Mesh."),
+			// restoring:true suppresses loadGLB's default auto-fit-and-center
+			// so we can apply our own placement (relative to the placeholder's
+			// position). We still normalize scale below.
+			restoring: true,
+		});
+		if (!root) throw new Error("loadGLB returned null");
+		const bbox = new THREE.Box3().setFromObject(root);
+		const size = bbox.getSize(new THREE.Vector3());
+		const maxDim = Math.max(size.x, size.y, size.z);
+		const scale = (maxDim > 0 && isFinite(maxDim)) ? (TARGET_SIZE / maxDim) : 1;
+		root.scale.setScalar(scale);
+		root.position.copy(box.position);
+		box.visible = false;
+		box.userData.tripo3dConsumed = true;
+		root.userData.tripo3dResult = true;
+		root.userData.tripo3dPlaceholderRef = box;
+		select(root);
+		refreshOutliner();
+		if (typeof saveScene === "function") saveScene();
+	} catch (e) {
+		console.error("[tripo3d] GLB → mesh swap failed:", e);
+		_setTripo3dStatus?.(`swap failed · ${e.message || e}`, "error");
+	}
+}
+
+// Generate handler — routes to the right underlying Tripo module by
+// sending `mode` in the request body. Text mode also sets
+// `skip_source_image` so the runner doesn't hunt for a viewport snapshot
+// that doesn't need to exist.
+async function _tripo3dGenerate() {
+	if (_tripo3dRunPhase !== "idle") return;
+	const box = objects.find(o => o.userData?.tripo3dSource === true && !o.userData?.tripo3dConsumed && o.visible !== false);
+	if (!box) return;
+	const mode = box.userData?.tripo3dMode === "text" ? "text" : "image";
+	const prompt = (document.getElementById("obj-tripo3d-prompt")?.value || "").trim();
+	if (mode === "text" && !prompt) {
+		_setTripo3dStatus?.("enter a prompt first", "error");
+		return;
+	}
+	// Persist the prompt to userData so re-selecting the placeholder mid-run
+	// (or after a page reload — future work) restores what the user typed.
+	if (mode === "text") box.userData.tripo3dPrompt = prompt;
+	_activeUtilId = "tripo-h31";
+	try {
+		_setTripo3dRunButton("running");
+		_setTripo3dStatus(`running Tripo H3.1 · ${mode} mode…`, "busy");
+		const body = { node_id: NODE_ID, inputs: { mode } };
+		if (mode === "text") {
+			body.inputs.prompt = prompt;
+			body.inputs.skip_source_image = true;
+		} else if (_tripo3dRemoteImageUrl) {
+			// Drop-from-Assets path — backend fetches this URL directly.
+			body.inputs.image_url = _tripo3dRemoteImageUrl;
+		}
+		const r = await fetch(`/api/run/tripo-h31`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+		if (!r.ok) {
+			const err = await r.text();
+			throw new Error(err || `HTTP ${r.status}`);
+		}
+		const j = await r.json();
+		_setTripo3dStatus(`done · ${j.filename || "saved to Assets"}`, "ok");
+		window.refreshAssets?.();
+		if (j.filename) await _replaceTripo3dPlaneWithMesh(`/output/${j.filename}`);
+	} catch (err) {
+		console.error("[tripo3d] generate failed:", err);
+		_setTripo3dStatus(`failed · ${String(err.message || err).slice(0, 120)}`, "error");
+	} finally {
+		_setTripo3dRunButton("idle");
+	}
+}
+
+(function wireTripo3dObjectInspectorButtons() {
+	const hook = () => {
+		const btnImage = document.getElementById("obj-tripo3d-mode-image");
+		const btnText = document.getElementById("obj-tripo3d-mode-text");
+		const applyMode = (mode) => {
+			const box = objects.find(o => o.userData?.tripo3dSource === true && !o.userData?.tripo3dConsumed && o.visible !== false);
+			if (!box) return;
+			box.userData.tripo3dMode = mode;
+			_refreshTripo3dPlaceholder(box);
+		};
+		btnImage?.addEventListener("click", () => applyMode("image"));
+		btnText?.addEventListener("click", () => applyMode("text"));
+		// Slot chip IS the upload trigger — click anywhere on the row
+		// to open the file picker. Removing the separate Upload button
+		// tightens the pane's vertical footprint in Image mode.
+		const slot = document.getElementById("obj-tripo3d-slot");
+		slot?.addEventListener("click", () => {
+			document.getElementById("obj-tripo3d-upload-file")?.click();
+		});
+		// Also accept drags from the Assets pane — same
+		// application/x-cb-asset payload the gen-cell slots use. Drop
+		// stashes the /output/... URL so the run can pass it as
+		// `image_url` (backend fetches it directly, no re-upload).
+		slot?.addEventListener("dragover", (e) => {
+			if (!e.dataTransfer?.types?.includes("application/x-cb-asset")) return;
+			e.preventDefault();
+			e.dataTransfer.dropEffect = "copy";
+			slot.classList.add("drop-target");
+		});
+		slot?.addEventListener("dragleave", () => slot.classList.remove("drop-target"));
+		slot?.addEventListener("drop", (e) => {
+			slot.classList.remove("drop-target");
+			const raw = e.dataTransfer?.getData("application/x-cb-asset");
+			if (!raw) return;
+			e.preventDefault();
+			let asset;
+			try { asset = JSON.parse(raw); } catch { return; }
+			if (asset.kind !== "image") {
+				window.showAlert?.("Wrong kind", "This slot only accepts images.");
+				return;
+			}
+			// Drop wins over any prior local upload — swap in the
+			// remote URL for both display + run.
+			if (_tripo3dUploadedUrl && _tripo3dUploadedUrl.startsWith("blob:")) {
+				try { URL.revokeObjectURL(_tripo3dUploadedUrl); } catch {}
+			}
+			_tripo3dRemoteImageUrl = asset.url;
+			_tripo3dUploadedUrl = asset.url;
+			const box = objects.find(o => o.userData?.tripo3dSource === true && !o.userData?.tripo3dConsumed && o.visible !== false);
+			_refreshTripo3dPlaceholder(box);
+			slot.classList.add("just-dropped");
+			setTimeout(() => slot.classList.remove("just-dropped"), 700);
+			_setTripo3dStatus?.(`using ${asset.filename} — ready to generate`, "ok");
+		});
+		document.getElementById("obj-tripo3d-upload-file")?.addEventListener("change", async (e) => {
+			const f = e.target.files?.[0];
+			e.target.value = "";
+			await _tripo3dHandleUpload(f);
+		});
+		// Persist prompt edits to the placeholder as the user types — avoids
+		// losing the field if the user clicks off and back before hitting
+		// Generate (the section re-renders and reads from userData).
+		document.getElementById("obj-tripo3d-prompt")?.addEventListener("input", (e) => {
+			const box = objects.find(o => o.userData?.tripo3dSource === true && !o.userData?.tripo3dConsumed && o.visible !== false);
+			if (box) box.userData.tripo3dPrompt = e.target.value;
+		});
+		document.getElementById("obj-tripo3d-generate-btn")?.addEventListener("click", async () => {
+			await _tripo3dGenerate();
 		});
 	};
 	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hook, { once: true });
@@ -23019,6 +23471,17 @@ function refreshObjectInspector() {
 		pcSection.style.display = isPcPlaceholder ? "" : "none";
 		if (isPcPlaceholder) _refreshPcPlaceholderThumb(selected);
 	}
+	// Tripo 3D placeholder (pre-Generate) — same pattern as PC above but
+	// with a mode toggle (Text/Image) inside the section, because the
+	// underlying Tripo H3.1 tool accepts either input. Mode is persisted on
+	// the object's userData so re-selecting the placeholder restores the
+	// last-picked mode.
+	const isTripo3dPlaceholder = selected.userData?.primKind === "tripo3dPlaceholder";
+	const tripo3dSection = document.getElementById("obj-tripo3d-source-section");
+	if (tripo3dSection) {
+		tripo3dSection.style.display = isTripo3dPlaceholder ? "" : "none";
+		if (isTripo3dPlaceholder) _refreshTripo3dPlaceholder(selected);
+	}
 	// Skybox panorama section — visible only when the selection IS a skybox.
 	// Thumb reflects the currently applied texture (blob URL from upload OR
 	// /output/ path from a Flux 2 generation).
@@ -23182,7 +23645,7 @@ function refreshObjectInspector() {
 	// Both PC and Splat placeholders hide the generic Appearance / Transform /
 	// Input sections — they render their own dedicated sections above and the
 	// generic controls aren't meaningful pre-Generate.
-	const isPlaceholder = isPcPlaceholder;
+	const isPlaceholder = isPcPlaceholder || isTripo3dPlaceholder;
 	// Lights get their own Intensity & Color section with a dedicated color
 	// swatch that drives the actual light + helper appearance — the generic
 	// Appearance section here would pick up the helper-line material's color
@@ -25873,11 +26336,25 @@ function resetResultUI() {
 resultCloseBtn?.addEventListener("click", () => resetResultUI());
 
 for (const b of resultToggle.querySelectorAll("button")) {
-	b.addEventListener("click", () => {
+	b.addEventListener("click", async () => {
 		// Don't let the user click into "render" before a result exists
 		if (b.dataset.result === "render" && !lastResult) return;
 		resultMode = b.dataset.result;
 		applyResultMode();
+		// Explicit Blockout click → archive a versioned frame to the Output
+		// pane's Blockout tab. This is the ONLY place a history frame gets
+		// written now — autoSnapshot no longer auto-archives on every tick.
+		// applyResultMode kicked off showBlockoutSnapshot (which awaits
+		// autoSnapshot); grabbing a fresh blob here after Blockout is
+		// active means the archive shows exactly what the user just saw.
+		if (b.dataset.result === "blockout") {
+			try {
+				const blob = await autoSnapshot();
+				if (blob) _saveBlockoutHistory(blob);
+			} catch (e) {
+				console.warn("[ComfyBlockout] explicit blockout archive failed:", e);
+			}
+		}
 	});
 }
 
@@ -31132,12 +31609,13 @@ async function autoSnapshot() {
 		}) || await new Promise(res => snapshotCanvas.toBlob(res, "image/png"));
 		if (!blob) return;
 		await uploadImage(blob);
-		// Versioned history — persist a copy to the Output pane's "Blockout"
-		// tab, throttled to at most one save per 15s so autoSnapshotDebounced's
-		// per-scene-tick firing doesn't flood the disk. autoSnapshot itself
-		// stays the source of truth for the always-current node preview via
-		// uploadImage() above; this is purely archival.
-		_saveBlockoutHistory(blob);
+		// NOTE: no archival save here — autoSnapshot fires on every scene
+		// tick, so writing a versioned blockout on each call floods the
+		// Output pane's Blockout tab with near-duplicate frames the user
+		// didn't ask for. Archival is now explicit: only the top-bar
+		// Blockout toggle click saves a history frame (see
+		// resultToggle click handler in the result-toggle wiring).
+		return blob;
 	} catch (e) {
 		console.warn("[ComfyBlockout] autoSnapshot failed:", e);
 	}

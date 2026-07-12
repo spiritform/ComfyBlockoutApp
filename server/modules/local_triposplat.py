@@ -275,7 +275,12 @@ MODULE = ModuleDef(
          "help": "Runs the TripoSplat workflow on your local ComfyUI at 127.0.0.1:8188; result imports as a gaussian splat."},
     ],
     output_ext="ply",
-    util=True,
+    # Lives in the Workflows list, not the Tools grid — the Tools tile is now
+    # `tripo-h31` (Comfy Cloud, text-or-image → mesh). Local TripoSplat stays
+    # as a workflow so users on Comfy Desktop can still generate splats
+    # locally without paying cloud credits or hitting the subgraph converter
+    # bug that made it unusable on Cloud.
+    util=False,
     # Lucide "astroid" — a four-cusped concave diamond that reads as
     # "converging point cloud" better than the earlier asterisk placeholder.
     icon=(
