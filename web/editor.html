@@ -25523,6 +25523,22 @@ window.addEventListener("keydown", (e) => {
 			}
 		}
 		if (selectedKeys.size) deleteKeyframes();
+		else if (selectionSet.size > 1) {
+			// Multi-select bulk delete: one atomic undo snapshot at the top,
+			// then suppress per-object snapshots inside deleteObject via the
+			// existing _undoSuppress flag (same trick Clear All uses). One
+			// Ctrl+Z restores every deleted object at once, not one per press.
+			// Iterate a snapshot of the set — deleteObject mutates
+			// selectionSet as it clears the gizmo, so a live iteration
+			// would skip half the targets.
+			snapshotForUndo();
+			_undoSuppress = true;
+			try {
+				for (const o of Array.from(selectionSet)) deleteObject(o);
+			} finally {
+				_undoSuppress = false;
+			}
+		}
 		else deleteObject(selected);
 	}
 	else if (e.key === "d" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); duplicateObject(selected); }
