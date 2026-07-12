@@ -4721,7 +4721,20 @@
 				     annotation branch in server/main.py. -->
 				<div class="section" id="obj-annotation-section" style="display:none">
 					<div class="section-label">Annotation</div>
-					<div class="drag-row" style="margin-top:6px;position:relative">
+					<!-- Shape toolbar — Pen (freehand), Arrow, Box, Text (coming
+					     soon). The active shape decides what Shift+LMB drag
+					     paints into the container. State lives on the container
+					     itself (userData.annotation.shape) so it persists per-
+					     annotation-group rather than per-session. -->
+					<div class="sub-label" style="margin-top:2px">Tool</div>
+					<div class="pill-toggle" id="obj-annotation-shape" style="margin-top:4px">
+						<button type="button" data-anno-shape="freehand" class="active" title="Freehand pen — click-drag to sketch"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a2.82 2.82 0 0 0-3.986-3.987L3.842 16.175a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg></button>
+						<button type="button" data-anno-shape="arrow" title="Arrow — drag from tail to head"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></button>
+						<button type="button" data-anno-shape="box" title="Box — drag two opposite corners"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></button>
+						<button type="button" data-anno-shape="text" title="Text — coming soon" disabled style="opacity:0.4;cursor:not-allowed"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7V5h14v2"/><path d="M12 5v14"/><path d="M9 19h6"/></svg></button>
+					</div>
+					<div class="sub-label" style="margin-top:10px">Look</div>
+					<div class="drag-row" style="margin-top:4px;position:relative">
 						<label for="obj-annotation-color" id="obj-annotation-color-btn" title="Stroke color" style="flex:0 0 auto;width:34px;padding:0;border:1px solid rgba(255,255,255,0.08);border-radius:5px;background:#ffb454;cursor:pointer;align-self:stretch;display:block"></label>
 						<input type="color" id="obj-annotation-color" value="#ffb454" style="position:absolute;left:0;top:0;width:34px;height:100%;opacity:0;pointer-events:none">
 						<div class="drag-num" id="obj-annotation-width" style="flex:1"><span class="drag-label">Width</span><span class="drag-val">4</span></div>
@@ -4731,7 +4744,7 @@
 						<input type="range" id="obj-annotation-opacity" min="0" max="1" step="0.01" value="1">
 						<span class="slider-val" id="obj-annotation-opacity-val">1.00</span>
 					</div>
-					<div class="hint" style="margin-top:6px;font-size:9px;color:rgba(255,255,255,0.4);line-height:1.5">Annotation strokes are guidance overlays. Move / rotate / scale with the gizmo. Opacity animates via the timeline (record + move the slider to keyframe).</div>
+					<div class="hint" id="obj-annotation-count" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5);line-height:1.5">Empty — hold Shift and drag to draw. Camera controls stay unblocked when Shift isn't held.</div>
 				</div>
 				<!-- TripoSplat representation toggle — appears on TripoSplat
 				     results (splat OR resampled points with the pcResult flag
@@ -11900,78 +11913,125 @@ function runTool(kind) {
 }
 
 // ── Annotate (grease-pencil) tool ─────────────────────────────────
-// State + helpers for the 3D annotation stroke tool. Draw mode is a modal
-// state: while active, the viewport cursor is a crosshair and pointerdown
-// starts a stroke instead of selecting / orbiting. Strokes commit as normal
-// scene objects (Group root → Line2 child) so gizmo + keyframes + outliner
-// all work uncustomized. Backend generation reads `primKind==="annotation"`
-// and appends a system-prompt suffix telling the model to treat strokes as
-// guidance, not content — see server/main.py annotation branch.
+// Container-based model: one primKind="annotation" Group in the scene owns
+// every stroke as a Line2 child. Outliner shows a single "Annotations" row
+// no matter how many strokes the user paints. Draw mode is triggered by the
+// tile button; a stroke is committed only on Shift+LMB drag so plain LMB
+// still orbits the camera — the user asked for "hold a modifier to draw"
+// so camera reframing between strokes stays effortless. Backend generation
+// reads primKind==="annotation" and appends a system-prompt suffix telling
+// the model to treat strokes as guidance, not content.
 const _annotateMode = {
-	active: false,
-	drawing: false,           // true between pointerdown and pointerup
-	plane: null,              // THREE.Plane the current stroke is glued to
-	worldOrigin: null,        // hit point (or ray * dist) used as the stroke's group origin
-	pointsWorld: [],          // Vector3[] appended per mousemove
-	// Default look for a fresh stroke. Persisted on the last-used side too so
-	// consecutive strokes share the visual identity by default.
-	color: "#ffb454",         // amber-orange matches the app accent
-	widthPx: 4,               // world-consistent pixel width (LineMaterial handles projection)
+	active: false,              // annotate tool armed (tile is .active)
+	drawing: false,             // true between pointerdown and pointerup
+	shiftHeld: false,           // key tracker so we can swap cursor on keydown/up
+	plane: null,                // THREE.Plane the current stroke is glued to
+	worldOrigin: null,          // hit point (or ray * dist) used as stroke start
+	pointsWorld: [],            // Vector3[] appended per mousemove (freehand)
+	shape: "freehand",          // "freehand" | "arrow" | "box" — which shape a drag paints
+	activeContainer: null,      // the Group receiving new strokes this session
+	// Session defaults — seed values for a freshly spawned empty container.
+	// Persist across sessions so a re-open comes up with the last-used
+	// brush look. The container's userData.annotation is the source of
+	// truth once one exists; these just drive the initial values.
+	color: "#ffb454",
+	widthPx: 4,
 	opacity: 1.0,
 };
 window._annotateMode = _annotateMode;
-// Counter for annotation.NNN naming — kept alongside primCounters so autosave/
-// scene-load can restore continuity.
-function _annotateNextName() {
+// Find the current annotation container in the scene, or create a fresh
+// empty one and register it. Single-container model for now — every draw
+// activation reuses the same object so the outliner never gets flooded
+// with per-stroke rows. If the user deletes the container, the next
+// Annotate click spawns a new one automatically.
+function _annotateEnsureContainer() {
+	// Reuse the cached one if it's still alive in the scene.
+	if (_annotateMode.activeContainer && objects.includes(_annotateMode.activeContainer)) {
+		return _annotateMode.activeContainer;
+	}
+	// Fall back to any existing container in the scene (e.g. from a loaded
+	// scene where activeContainer wasn't set yet).
+	const existing = objects.find(o => o.userData?.primKind === "annotation");
+	if (existing) {
+		_annotateMode.activeContainer = existing;
+		return existing;
+	}
+	// None yet — spawn one at world origin, empty.
+	snapshotForUndo();
 	primCounters.annotation = (primCounters.annotation || 0) + 1;
-	return `annotation.${String(primCounters.annotation).padStart(3, "0")}`;
+	const g = new THREE.Group();
+	g.name = `Annotations.${String(primCounters.annotation).padStart(3, "0")}`;
+	g.userData.primKind = "annotation";
+	g.userData.annotation = {
+		color: _annotateMode.color,
+		widthPx: _annotateMode.widthPx,
+		opacity: _annotateMode.opacity,
+	};
+	scene.add(g);
+	objects.push(g);
+	_annotateMode.activeContainer = g;
+	refreshOutliner?.();
+	if (typeof saveScene === "function") saveScene();
+	return g;
 }
 function _setAnnotateMode(on) {
 	_annotateMode.active = !!on;
 	const btn = document.querySelector('.prim-btn[data-tool="annotate"]');
 	btn?.classList.toggle("active", _annotateMode.active);
-	const cw = document.getElementById("canvas-wrap");
-	if (cw) cw.style.cursor = _annotateMode.active ? "crosshair" : "";
-	// Give the user a nudge in the status bar so they see the mode change
-	// (matches how other modal tools like Boolean report themselves).
+	// Cursor is only a crosshair WHILE the user is holding Shift (or actively
+	// mid-stroke). Otherwise leave it default so the plain-LMB=camera path
+	// visually reads as "not drawing".
+	_annotateSyncCursor();
 	if (typeof updateStatus === "function") {
 		updateStatus(_annotateMode.active
-			? "Annotate — LMB draws · Ctrl+LMB or RMB orbits/pans · gizmo drag still moves the selection · Esc exits"
+			? "Annotate — hold Shift + LMB to draw · plain drag/RMB orbits/pans as usual · Esc exits"
 			: "Annotate mode off");
 	}
-	// Orbit stays ENABLED during draw mode — LMB alone still paints
-	// (capture-phase handler stopImmediatePropagation's before orbit sees
-	// the event), but Ctrl+LMB / RMB / MMB pass through so the user can
-	// reframe between strokes without exiting the tool. Matches Photoshop
-	// / Procreate conventions of "hold a modifier for camera".
-	// Pane switching — turning the tool on opens the Annotate brush pane
-	// (color / width / opacity for the NEXT stroke) unless the user already
-	// has an annotation selected (in which case the per-object Annotation
-	// section is already showing and switching away would be jarring).
-	// Turning it off reverts to whatever the current selection would show.
 	if (_annotateMode.active) {
-		const selIsAnno = selected?.userData?.primKind === "annotation";
-		if (!selIsAnno) {
-			forceRightPane?.("annotate", "Annotate");
-			_annotateToolSyncPane?.();
-		}
-	} else {
-		// Bounce back — if we're currently on the annotate pane, restore
-		// the selection-driven default. If the user had already navigated
-		// to another pane manually, leave it alone.
-		const paneNow = document.getElementById("rp-pane-annotate");
-		if (paneNow && !paneNow.hidden) {
-			if (selected) forceRightPane?.("object", objectPaneLabel(selected));
-			else forceRightPane?.(typeof defaultRightPane === "function" ? defaultRightPane() : "none");
-		}
+		// Spawn (or reuse) the single container and select it so the user's
+		// Properties pane immediately shows the annotation controls (color /
+		// width / opacity / shape toolbar). No hidden state — the container
+		// is a real outliner row even when empty.
+		const container = _annotateEnsureContainer();
+		if (container) select(container);
 	}
+	// Turning off is a no-op for the container — it stays in the scene until
+	// the user deletes it explicitly.
+}
+// Swap cursor between crosshair (Shift held → next drag will paint) and the
+// default arrow (plain drag will orbit). Called from the keydown/up trackers
+// and from _setAnnotateMode. Only affects the viewport canvas wrap.
+function _annotateSyncCursor() {
+	const cw = document.getElementById("canvas-wrap");
+	if (!cw) return;
+	cw.style.cursor = (_annotateMode.active && _annotateMode.shiftHeld) ? "crosshair" : "";
 }
 // Esc exits draw mode — matches the "second click = off" toggle so users
-// have two ways out.
+// have two ways out. Shift key just flips the cursor so the user gets a
+// visual cue that a Shift+drag will paint (vs a plain drag which orbits).
 window.addEventListener("keydown", (e) => {
 	if (e.key === "Escape" && _annotateMode.active) {
 		e.preventDefault();
 		_setAnnotateMode(false);
+		return;
+	}
+	if (e.key === "Shift" && _annotateMode.active && !_annotateMode.shiftHeld) {
+		_annotateMode.shiftHeld = true;
+		_annotateSyncCursor();
+	}
+});
+window.addEventListener("keyup", (e) => {
+	if (e.key === "Shift" && _annotateMode.shiftHeld) {
+		_annotateMode.shiftHeld = false;
+		_annotateSyncCursor();
+	}
+});
+// Window blur (Alt-tab) can strip a Shift keyup — reset so the cursor
+// doesn't stay stuck on crosshair after the user swaps apps.
+window.addEventListener("blur", () => {
+	if (_annotateMode.shiftHeld) {
+		_annotateMode.shiftHeld = false;
+		_annotateSyncCursor();
 	}
 });
 
@@ -12055,82 +12115,133 @@ function _annotateAppendPoint(clientX, clientY) {
 	_annotateMode.pointsWorld.push(p);
 }
 
-// Finalize the current stroke: build the Line2 mesh, wrap in a Group so the
-// gizmo has a top-level target that keyframes cleanly, add to the scene +
-// objects[], and select. Discards degenerate strokes (< 2 points) so a
-// stray click doesn't leave a zero-length invisible object behind.
-function _annotateFinishStroke() {
+// Convert the accumulated worldspace points into a shape-specific point list
+// (still worldspace). Freehand keeps them as-is; Arrow and Box synthesize
+// their canonical geometry from just the start + end world points.
+function _annotateBuildShapePoints() {
 	const pts = _annotateMode.pointsWorld;
+	if (!pts || pts.length < 2) return null;
+	const shape = _annotateMode.shape;
+	const start = pts[0];
+	const end = pts[pts.length - 1];
+	if (shape === "arrow") {
+		// Arrow: shaft from start → end, plus two wings from end. Encoded as
+		// a single polyline that revisits `end` so the whole arrow renders
+		// as one contiguous Line2 (no need for separate meshes).
+		// Wings sit in the drawing plane so they read correctly from the
+		// current camera angle; wing length is 20% of shaft or 4x the pixel
+		// width worth of world units — whichever is smaller — so a stubby
+		// arrow doesn't get comically large wings.
+		const shaft = new THREE.Vector3().subVectors(end, start);
+		const shaftLen = shaft.length();
+		if (shaftLen < 1e-4) return null;
+		const wingLen = Math.min(shaftLen * 0.2, 0.35);
+		const planeN = _annotateMode.plane?.normal || new THREE.Vector3(0, 0, 1);
+		// Perpendicular to the shaft AND lying in the drawing plane.
+		const perp = new THREE.Vector3().crossVectors(shaft, planeN).normalize();
+		const backDir = shaft.clone().normalize().multiplyScalar(-1);
+		const wing1 = new THREE.Vector3().copy(end)
+			.addScaledVector(backDir, wingLen)
+			.addScaledVector(perp, wingLen * 0.5);
+		const wing2 = new THREE.Vector3().copy(end)
+			.addScaledVector(backDir, wingLen)
+			.addScaledVector(perp, -wingLen * 0.5);
+		return [start.clone(), end.clone(), wing1, end.clone(), wing2];
+	}
+	if (shape === "box") {
+		// Axis-aligned rectangle in the drawing plane between start and end.
+		// Same perp trick as arrow — use the plane normal to define the two
+		// axes so the box sits flat on the raycast plane instead of a wonky
+		// world-XY rectangle.
+		const diag = new THREE.Vector3().subVectors(end, start);
+		const planeN = _annotateMode.plane?.normal || new THREE.Vector3(0, 0, 1);
+		// Two in-plane basis vectors: `right` is world-right projected into
+		// the plane; `up` is the perpendicular. Falls back to X/Y if the
+		// plane normal happens to be world-forward.
+		let right = new THREE.Vector3(1, 0, 0);
+		right.projectOnPlane(planeN);
+		if (right.lengthSq() < 1e-6) right.set(0, 1, 0).projectOnPlane(planeN);
+		right.normalize();
+		const up = new THREE.Vector3().crossVectors(planeN, right).normalize();
+		const dx = diag.dot(right);
+		const dy = diag.dot(up);
+		const c0 = start.clone();
+		const c1 = start.clone().addScaledVector(right, dx);
+		const c2 = start.clone().addScaledVector(right, dx).addScaledVector(up, dy);
+		const c3 = start.clone().addScaledVector(up, dy);
+		return [c0, c1, c2, c3, c0];
+	}
+	// Freehand: use the accumulated drag samples verbatim.
+	return pts.map(p => p.clone());
+}
+
+// Finalize the current stroke: build a Line2 mesh from the shape-generated
+// worldspace points, convert to the container's local space so gizmo moves
+// on the container carry the stroke along, and add as a CHILD (not a
+// top-level object). Discards degenerate strokes (< 2 points) so a stray
+// click doesn't leave zero-length invisible geometry behind.
+function _annotateFinishStroke() {
 	_annotateMode.drawing = false;
-	if (!pts || pts.length < 2) {
+	const worldPts = _annotateBuildShapePoints();
+	const cleanupState = () => {
 		_annotateMode.pointsWorld = [];
 		_annotateMode.worldOrigin = null;
 		_annotateMode.plane = null;
-		return;
-	}
-	// Store LOCAL coords relative to the group's world position. That lets
-	// the user grab the gizmo and move / rotate / scale the whole stroke as
-	// one object without the line drifting relative to its own pivot.
-	const origin = _annotateMode.worldOrigin.clone();
+	};
+	if (!worldPts || worldPts.length < 2) { cleanupState(); return; }
+	const container = _annotateEnsureContainer();
+	if (!container) { cleanupState(); return; }
+	// Convert world → container-local so the stroke sticks to the container
+	// when the user later moves / rotates / scales the group as a whole.
+	// worldToLocal uses the container's current matrixWorld so it handles
+	// mid-session transforms correctly.
+	container.updateMatrixWorld(true);
 	const flat = [];
-	for (const p of pts) {
-		flat.push(p.x - origin.x, p.y - origin.y, p.z - origin.z);
+	for (const p of worldPts) {
+		const local = container.worldToLocal(p.clone());
+		flat.push(local.x, local.y, local.z);
 	}
-	const group = _annotateBuildObject({
-		originArr: origin.toArray(),
-		pointsFlat: flat,
-		color: _annotateMode.color,
-		widthPx: _annotateMode.widthPx,
-		opacity: _annotateMode.opacity,
-	});
 	snapshotForUndo();
-	group.name = _annotateNextName();
-	scene.add(group);
-	objects.push(group);
-	select(group);
-	refreshOutliner?.();
+	const cfg = container.userData.annotation;
+	const line = _annotateBuildStrokeLine({
+		pointsFlat: flat,
+		color: cfg.color,
+		widthPx: cfg.widthPx,
+		opacity: cfg.opacity,
+	});
+	line.userData.annotationShape = _annotateMode.shape;
+	container.add(line);
+	// Poke the outliner + refresh the container's own properties pane in
+	// case any UI reads stroke count from the container.
+	if (selected === container) refreshObjectInspector?.();
 	if (typeof saveScene === "function") saveScene();
-	_annotateMode.pointsWorld = [];
-	_annotateMode.worldOrigin = null;
-	_annotateMode.plane = null;
+	cleanupState();
 }
 
-// Shared Line2 builder — used by both finalize (fresh stroke) and scene load
-// (deserialize). Returns a Group with the Line2 child; the group's world
-// position IS the stroke's pivot. Caller assigns `.name` + adds to scene.
-function _annotateBuildObject({ originArr, pointsFlat, color, widthPx, opacity }) {
+// Build just the Line2 mesh (no Group wrapper) — a stroke. Used by both
+// live finalize and scene-load deserialize. Caller parents to the container.
+function _annotateBuildStrokeLine({ pointsFlat, color, widthPx, opacity }) {
 	const geom = new LineGeometry();
 	geom.setPositions(pointsFlat);
 	const mat = new LineMaterial({
 		color: new THREE.Color(color),
-		linewidth: widthPx,          // in pixels — LineMaterial handles projection
+		linewidth: widthPx,          // pixels — LineMaterial projects it consistently
 		worldUnits: false,
 		transparent: true,
 		opacity: opacity,
-		depthWrite: false,           // stops opacity from carving holes in what's behind
+		depthWrite: false,           // opacity shouldn't punch holes in what's behind
 		dashed: false,
 	});
-	// LineMaterial needs the current canvas size to project pixel widths
-	// correctly. Keep it in sync on resize via the same _annotateSyncResolution
-	// helper called from the renderer resize path.
 	_annotateSyncMaterialResolution(mat);
 	const line = new Line2(geom, mat);
 	line.computeLineDistances();
 	line.userData._isAnnotationLine = true;
-	// Wrap in Group so the gizmo, keyframes, and outliner see a single top-
-	// level object. Group world position = stroke pivot (first point).
-	const group = new THREE.Group();
-	group.position.fromArray(originArr);
-	group.add(line);
-	group.userData.primKind = "annotation";
-	group.userData.annotation = {
-		origin: originArr.slice(),
-		points: Array.from(pointsFlat),
-		color: color,
-		widthPx: widthPx,
-		opacity: opacity,
-	};
-	return group;
+	// Cache the flat points so serializeScene can round-trip without having
+	// to reverse-engineer them from LineGeometry's internal instanceStart/End
+	// segment attributes. Copy to a plain array so mutations don't cross-
+	// contaminate a shared buffer.
+	line.userData._pts = Array.from(pointsFlat);
+	return line;
 }
 
 // Record an opacity keyframe on an annotation at the current playhead — only
@@ -12184,104 +12295,115 @@ window.addEventListener("resize", () => {
 });
 
 // Capture-phase pointer handlers — install BEFORE the existing viewport
-// pointerdown / pointerup handlers see the event, so a stroke drag never
-// leaks into the select-on-click logic or the orbit controls. All three
-// gate on _annotateMode.active + left button; other buttons (right / middle)
-// fall through so the user can still Alt-orbit / RMB-context out of draw
-// mode if needed. capture: true + stopImmediatePropagation keeps this the
-// only listener that acts on the gesture.
+// pointerdown / pointerup handlers see the event. Painting is Shift-gated:
+// plain LMB drag still orbits (no intercept), so camera reframing between
+// strokes is friction-free. This is the "hold Shift to draw" UX the user
+// asked for. Non-shift / non-LMB / gizmo-axis all pass through unmodified.
 canvas.addEventListener("pointerdown", (e) => {
 	if (!_annotateMode.active) return;
-	// Only plain LMB with no modifier keys triggers a stroke. Ctrl/Meta/Alt +
-	// LMB, or any other mouse button, pass through so the user can orbit
-	// (Ctrl+LMB or MMB), pan (RMB), or use the existing Alt-cam without
-	// exiting draw mode. Camera reframing between strokes is a first-class
-	// need — this is the "hold-modifier-for-camera" UX the user asked for.
-	if (e.button !== 0 || e.altKey || e.ctrlKey || e.metaKey) return;
+	// Painting requires plain LMB + Shift held. Every other combo (no Shift,
+	// RMB, MMB, Alt/Ctrl+LMB) passes through so orbit / pan / dolly / altCam
+	// all work uninterrupted. This inverts the earlier "always intercepts
+	// LMB" — camera control is now the DEFAULT during annotate mode.
+	if (e.button !== 0 || !e.shiftKey || e.altKey || e.ctrlKey || e.metaKey) return;
 	// Gizmo priority — if the pointer is over a TransformControls axis handle,
-	// yield the click so the user can move/rotate/scale the current selection
-	// (typically the just-drawn stroke) instead of starting a fresh stroke on
-	// top of it. TransformControls' pointermove keeps `transform.axis` in sync
-	// with hover state, so by pointerdown-time it already reflects "am I on a
-	// handle?". We DON'T stopPropagation in this branch — the gizmo needs the
-	// event.
+	// yield the click so grabbing the gizmo still moves/rotates/scales the
+	// current selection even while Shift is held.
 	if (transform?.axis) return;
-	// Rebuild + attach the in-progress preview so the user sees ink as they
-	// drag, not just after mouseup. Preview is separate from the finalized
-	// object — same builder, but not registered in objects[] yet.
+	// Draw begins here.
+	_annotateBeginStroke(e.clientX, e.clientY);
+	// Preview: for Freehand we build a live-updating polyline as the drag
+	// grows; for Arrow / Box we regenerate the shape from just start+current
+	// on every pointermove. Either way, the preview is a temporary Line2
+	// parented to the CONTAINER so the container's transform (if the user
+	// moved it) carries the ink correctly. Preview points are container-local.
 	if (_annotatePreview) {
-		scene.remove(_annotatePreview);
-		_annotatePreview.traverse(c => c.material?.dispose?.());
+		_annotatePreview.parent?.remove(_annotatePreview);
+		_annotatePreview.material?.dispose?.();
 		_annotatePreview = null;
 	}
-	_annotatePreview = _annotateBuildObject({
-		originArr: _annotateMode.worldOrigin.toArray(),
-		pointsFlat: [0, 0, 0],   // seed with the origin; move handler will refresh
-		color: _annotateMode.color,
-		widthPx: _annotateMode.widthPx,
-		opacity: _annotateMode.opacity,
+	const container = _annotateEnsureContainer();
+	const cfg = container?.userData?.annotation || { color: "#ffb454", widthPx: 4, opacity: 1 };
+	_annotatePreview = _annotateBuildStrokeLine({
+		pointsFlat: [0, 0, 0],   // degenerate seed; refreshed on first move
+		color: cfg.color,
+		widthPx: cfg.widthPx,
+		opacity: cfg.opacity,
 	});
-	scene.add(_annotatePreview);
+	container?.add(_annotatePreview);
 	canvas.setPointerCapture?.(e.pointerId);
 	e.stopImmediatePropagation();
 	e.preventDefault();
 }, true);
 canvas.addEventListener("pointermove", (e) => {
 	if (!_annotateMode.active || !_annotateMode.drawing) return;
+	// Freehand samples every move; Arrow / Box only need start + current
+	// endpoint, so we still append (buildShapePoints ignores intermediates
+	// for those shapes) and just refresh the preview from the shape output.
 	_annotateAppendPoint(e.clientX, e.clientY);
-	// Refresh the preview geometry from the growing pointsWorld buffer. Same
-	// local-space transform as finalize so the preview matches the committed
-	// stroke pixel-for-pixel.
 	if (_annotatePreview) {
-		const origin = _annotateMode.worldOrigin;
-		const flat = [];
-		for (const p of _annotateMode.pointsWorld) {
-			flat.push(p.x - origin.x, p.y - origin.y, p.z - origin.z);
+		const worldPts = _annotateBuildShapePoints();
+		const line = _annotatePreview;
+		const container = _annotateMode.activeContainer;
+		if (worldPts && worldPts.length >= 2 && container) {
+			container.updateMatrixWorld(true);
+			const flat = [];
+			for (const p of worldPts) {
+				const local = container.worldToLocal(p.clone());
+				flat.push(local.x, local.y, local.z);
+			}
+			line.geometry?.setPositions(flat);
+			line.computeLineDistances?.();
 		}
-		const line = _annotatePreview.children.find(c => c.userData?._isAnnotationLine);
-		line?.geometry?.setPositions(flat);
-		line?.computeLineDistances?.();
 	}
 	e.stopImmediatePropagation();
 }, true);
 canvas.addEventListener("pointerup", (e) => {
 	if (!_annotateMode.active || !_annotateMode.drawing) return;
 	if (_annotatePreview) {
-		scene.remove(_annotatePreview);
-		_annotatePreview.traverse(c => c.material?.dispose?.());
+		_annotatePreview.parent?.remove(_annotatePreview);
+		_annotatePreview.material?.dispose?.();
 		_annotatePreview = null;
 	}
 	_annotateFinishStroke();
 	canvas.releasePointerCapture?.(e.pointerId);
 	e.stopImmediatePropagation();
 }, true);
-// Preview stroke — drawn while the user's mouse is still down. Not part of
-// objects[] (not selectable / not serialized) — pure visual feedback that
-// gets replaced by the real Group on mouseup.
+// Preview stroke — drawn while the user's mouse is still down. Parented to
+// the active container (not scene) so any container transform mid-drag
+// carries the ink correctly. Not registered in objects[] — the finalize
+// step replaces it with the committed Line2 child.
 let _annotatePreview = null;
 
-// Apply color / width / opacity to the Line2 material inside an annotation
-// group. Shared by the properties pane setters + keyframe interpolation +
-// scene load. Guards on child existence so a partially-built group (during
-// deserialize) doesn't throw.
+// Apply color / width / opacity to EVERY Line2 stroke inside an annotation
+// container. Shared by the properties pane setters + keyframe interpolation
+// + scene load. Iterates all children with _isAnnotationLine so the whole
+// container updates in one edit (single-color-per-container model).
 function _annotationApplyLook(group, { color, widthPx, opacity } = {}) {
 	if (!group) return;
-	const line = group.children?.find(c => c.userData?._isAnnotationLine);
-	if (!line || !line.material) return;
-	if (color !== undefined) {
-		line.material.color.set(color);
-		group.userData.annotation.color = color;
+	const lines = (group.children || []).filter(c => c.userData?._isAnnotationLine);
+	if (!lines.length) {
+		// No strokes yet — just persist the future-default look on the
+		// container so freshly drawn lines pick it up.
+		if (group.userData?.annotation) {
+			if (color !== undefined) group.userData.annotation.color = color;
+			if (widthPx !== undefined) group.userData.annotation.widthPx = widthPx;
+			if (opacity !== undefined) group.userData.annotation.opacity = Math.max(0, Math.min(1, opacity));
+		}
+		return;
 	}
-	if (widthPx !== undefined) {
-		line.material.linewidth = widthPx;
-		group.userData.annotation.widthPx = widthPx;
+	if (color !== undefined) group.userData.annotation.color = color;
+	if (widthPx !== undefined) group.userData.annotation.widthPx = widthPx;
+	if (opacity !== undefined) group.userData.annotation.opacity = Math.max(0, Math.min(1, opacity));
+	for (const line of lines) {
+		if (!line.material) continue;
+		if (color !== undefined) line.material.color.set(color);
+		if (widthPx !== undefined) line.material.linewidth = widthPx;
+		if (opacity !== undefined) line.material.opacity = Math.max(0, Math.min(1, opacity));
+		line.material.needsUpdate = true;
 	}
-	if (opacity !== undefined) {
-		line.material.opacity = Math.max(0, Math.min(1, opacity));
-		group.userData.annotation.opacity = line.material.opacity;
-	}
-	line.material.needsUpdate = true;
 }
+
 // Push current userData.annotation values into the properties pane controls.
 // Called from refreshObjectInspector when the selection is an annotation.
 function _annotationSyncPaneFromSelection(group) {
@@ -12292,6 +12414,7 @@ function _annotationSyncPaneFromSelection(group) {
 	const widthEl = document.getElementById("obj-annotation-width");
 	const opIn = document.getElementById("obj-annotation-opacity");
 	const opVal = document.getElementById("obj-annotation-opacity-val");
+	const countEl = document.getElementById("obj-annotation-count");
 	if (colorIn) colorIn.value = cfg.color || "#ffb454";
 	if (colorBtn) colorBtn.style.background = cfg.color || "#ffb454";
 	if (widthEl) {
@@ -12300,6 +12423,20 @@ function _annotationSyncPaneFromSelection(group) {
 	}
 	if (opIn) opIn.value = String(cfg.opacity);
 	if (opVal) opVal.textContent = Number(cfg.opacity).toFixed(2);
+	// Shape toolbar — highlight the button matching the ACTIVE draw shape
+	// (which lives on _annotateMode, not on the container itself — user's
+	// shape choice is per-session, not per-container).
+	for (const b of document.querySelectorAll('#obj-annotation-shape [data-anno-shape]')) {
+		b.classList.toggle("active", b.dataset.annoShape === _annotateMode.shape);
+	}
+	// Stroke count hint — helps the user see how many strokes the group has
+	// without having to squint at the viewport.
+	if (countEl) {
+		const n = (group.children || []).filter(c => c.userData?._isAnnotationLine).length;
+		countEl.textContent = n === 0
+			? "Empty — hold Shift and drag to draw. Camera controls stay unblocked when Shift isn't held."
+			: `${n} stroke${n === 1 ? "" : "s"} — hold Shift and drag to add more. Plain drag orbits.`;
+	}
 }
 // Push current _annotateMode defaults into the Annotate tool pane's controls.
 // Called on tool activation so the pane opens reflecting the last-used brush
@@ -12371,7 +12508,6 @@ queueMicrotask(() => {
 		if (opVal) opVal.textContent = v.toFixed(2);
 		if (selected?.userData?.primKind === "annotation") {
 			_annotationApplyLook(selected, { opacity: v });
-			_annotateMode.opacity = v;
 			// Signal the keyframe layer so recording can capture the change.
 			if (typeof _annotationRecordOpacityKey === "function") {
 				_annotationRecordOpacityKey(selected, v);
@@ -12379,6 +12515,18 @@ queueMicrotask(() => {
 			if (typeof saveScene === "function") saveScene();
 		}
 	});
+	// Shape toolbar — Pen / Arrow / Box / Text (text disabled for now).
+	// Clicking a button updates the ACTIVE draw shape (_annotateMode.shape).
+	// The user's next Shift+LMB drag paints the new shape into the container.
+	for (const b of document.querySelectorAll('#obj-annotation-shape [data-anno-shape]')) {
+		b.addEventListener("click", () => {
+			if (b.disabled) return;
+			_annotateMode.shape = b.dataset.annoShape;
+			for (const other of document.querySelectorAll('#obj-annotation-shape [data-anno-shape]')) {
+				other.classList.toggle("active", other === b);
+			}
+		});
+	}
 
 	// ── Annotate TOOL pane (brush defaults for the next stroke) ─────
 	// Same controls, but write to _annotateMode.* instead of a selected
@@ -28671,6 +28819,26 @@ function serializeScene() {
 		})),
 		annotations: objects.filter(o => o.userData.primKind === "annotation").map(o => {
 			const cfg = o.userData.annotation || {};
+			// Container carries the shared color/widthPx/opacity + a list of
+			// per-stroke point buffers. Each stroke's points are in the
+			// container's LOCAL space so the container transform applies
+			// uniformly on restore.
+			const strokes = (o.children || [])
+				.filter(c => c.userData?._isAnnotationLine)
+				.map(line => {
+					const attr = line.geometry?.attributes?.instanceStart;
+					// LineGeometry stores segment pairs in instanceStart/End —
+					// pull the polyline back out by reading the .array we set
+					// via setPositions (LineGeometry keeps it as an internal
+					// property, but the safest source is the tag we cached
+					// when finalizing). Fall back to reading attribute data.
+					const pts = line.userData?._pts;
+					return {
+						points: pts ? Array.from(pts) : [],
+						shape: line.userData?.annotationShape || "freehand",
+					};
+				})
+				.filter(s => s.points.length >= 6);   // ≥2 xyz triples
 			return {
 				name: o.name,
 				position: o.position.toArray(),
@@ -28679,15 +28847,10 @@ function serializeScene() {
 				visible: o.visible !== false,
 				locked: o.userData.locked || undefined,
 				notes: o.userData.notes || undefined,
-				// Stroke data — origin was the world-space pivot at draw time
-				// (points below are relative to it), color/width/opacity are
-				// the pre-keyframe base look. Keyframes carry any animated
-				// opacity states on top.
-				origin: cfg.origin?.slice(),
-				points: Array.from(cfg.points || []),
 				color: cfg.color,
 				widthPx: cfg.widthPx,
 				opacity: cfg.opacity,
+				strokes,
 				keyframes: serializeObjectKeyframes(o),
 			};
 		}),
@@ -29027,13 +29190,14 @@ async function deserializeScene(state, opts = {}) {
 	// the live draw finalize uses. Keyframes carry the animated opacity track.
 	for (const ar of (state.annotations || [])) {
 		try {
-			const group = _annotateBuildObject({
-				originArr: ar.origin || [0, 0, 0],
-				pointsFlat: ar.points || [],
-				color: ar.color || "#ffb454",
-				widthPx: typeof ar.widthPx === "number" ? ar.widthPx : 4,
-				opacity: typeof ar.opacity === "number" ? ar.opacity : 1,
-			});
+			const color = ar.color || "#ffb454";
+			const widthPx = typeof ar.widthPx === "number" ? ar.widthPx : 4;
+			const opacity = typeof ar.opacity === "number" ? ar.opacity : 1;
+			// Container Group — one row in the outliner. Each persisted stroke
+			// becomes a Line2 child.
+			const group = new THREE.Group();
+			group.userData.primKind = "annotation";
+			group.userData.annotation = { color, widthPx, opacity };
 			if (ar.name) group.name = ar.name;
 			if (ar.position) group.position.fromArray(ar.position);
 			if (ar.rotation) group.rotation.set(ar.rotation[0], ar.rotation[1], ar.rotation[2]);
@@ -29042,8 +29206,17 @@ async function deserializeScene(state, opts = {}) {
 			if (ar.locked) group.userData.locked = true;
 			if (ar.notes) group.userData.notes = ar.notes;
 			if (Array.isArray(ar.keyframes)) group.userData.keyframes = deserializeObjectKeyframes(ar.keyframes);
-			// Bump the annotation counter so freshly drawn strokes don't reuse
-			// numbers from restored ones ("annotation.003" already exists).
+			for (const s of (ar.strokes || [])) {
+				if (!Array.isArray(s.points) || s.points.length < 6) continue;
+				const line = _annotateBuildStrokeLine({
+					pointsFlat: s.points,
+					color, widthPx, opacity,
+				});
+				line.userData.annotationShape = s.shape || "freehand";
+				group.add(line);
+			}
+			// Bump the annotation counter so freshly created containers don't
+			// reuse restored numbers ("Annotations.003" already exists).
 			const num = parseInt(String(ar.name || "").split(".").pop(), 10);
 			if (Number.isFinite(num)) {
 				primCounters.annotation = Math.max(primCounters.annotation || 0, num);
