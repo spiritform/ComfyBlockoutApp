@@ -2555,6 +2555,56 @@
 	}
 	#result-overlay.loading #result-overlay-spinner { display: block; }
 	#result-overlay.loading img { visibility: hidden; }
+	/* Compare slider — only wired up in Render mode. The blockout underlay
+	   sits behind the render img/vid at z-index 0; when compare-mode is on
+	   we clip the render's LEFT edge (via inset X% left) so the blockout
+	   shows through on the left of the handle. --compare-x is the handle's
+	   position from the left in %; defaults to 50% so it opens in the middle. */
+	/* Nested-ID selector so specificity (0,2,0,0) beats the general
+	   `#result-overlay img` rule (0,1,0,1) that would otherwise force
+	   display: block and show a blank/black underlay over Blockout mode. */
+	#result-overlay #result-overlay-blockout-img {
+		position: absolute; inset: 0;
+		width: 100%; height: 100%;
+		object-fit: contain; background: #000;
+		display: none; z-index: 0; pointer-events: none;
+	}
+	#result-overlay.compare-mode #result-overlay-blockout-img { display: block; }
+	#result-overlay .compare-handle { display: none; }
+	#result-overlay.compare-mode .compare-handle {
+		position: absolute; top: 0; bottom: 0;
+		width: 2px;
+		background: rgba(255,180,84,0.85);
+		box-shadow: 0 0 12px rgba(255,180,84,0.5);
+		z-index: 5;
+		pointer-events: auto; cursor: ew-resize;
+		left: var(--compare-x, 50%);
+		transform: translateX(-50%);
+		display: block;
+	}
+	#result-overlay.compare-mode .compare-handle::before {
+		content: ""; position: absolute;
+		left: 50%; top: 50%;
+		width: 34px; height: 34px; border-radius: 50%;
+		background: rgba(20,20,26,0.85);
+		border: 1.5px solid rgba(255,180,84,0.9);
+		transform: translate(-50%, -50%);
+		box-shadow: 0 4px 14px rgba(0,0,0,0.55);
+	}
+	#result-overlay.compare-mode .compare-handle::after {
+		content: "⇔"; position: absolute;
+		left: 50%; top: 50%;
+		font-size: 14px; color: #ffd28a; font-weight: 600;
+		transform: translate(-50%, -50%);
+		pointer-events: none;
+		text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+	}
+	/* Clip the render on the LEFT side up to the handle's X — everything to
+	   the left of the handle shows the blockout underneath. */
+	#result-overlay.compare-mode #result-overlay-img,
+	#result-overlay.compare-mode #result-overlay-vid {
+		clip-path: inset(0 0 0 var(--compare-x, 50%));
+	}
 	/* Result toggle — the Viewport / Blockout / Render pill group. Sits to the
 	   right of Generate in the viewport toolbar. Buttons now match .vt-btn
 	   sizing (26px tall, 10px 600-weight) so it visually pairs with Move /
@@ -4273,8 +4323,14 @@
 			     (or first frame of video) shown when "After" is selected. Save
 			     button floats top-right so the toolbar can stay lean. -->
 			<div id="result-overlay" hidden>
+				<!-- Underlay image for the compare slider — shows the blockout
+				     snapshot behind the render, revealed on the LEFT of the handle
+				     as the user drags the top layer's clip-path. Hidden by default;
+				     compare-mode class on #result-overlay activates the reveal. -->
+				<img id="result-overlay-blockout-img" alt="" aria-hidden="true">
 				<img id="result-overlay-img" alt="" draggable="true">
 				<video id="result-overlay-vid" loop muted playsinline draggable="true"></video>
+				<div class="compare-handle" id="result-compare-handle" aria-label="Drag to compare blockout vs render"></div>
 				<!-- Loading spinner — shown while the Blockout snapshot is being
 				     rendered + uploaded + preloaded. Bigger scenes take longer, and
 				     without a spinner the user would see a broken-image icon or
@@ -4713,30 +4769,16 @@
 					</div>
 				</div>
 
-				<div class="section" id="obj-transform-section">
-					<div class="section-head-row">
-						<span class="section-label">Transform</span>
-						<span class="head-end">
-							<button class="mini-btn" id="obj-transform-reset" title="Reset position, rotation, scale, and any pivot offset to defaults">Reset</button>
-						</span>
-					</div>
-					<div class="sub-label">Position</div>
-					<div class="drag-row">
-						<div class="drag-num" id="obj-px"><span class="drag-label">X</span><span class="drag-val">0.00</span></div>
-						<div class="drag-num" id="obj-py"><span class="drag-label">Y</span><span class="drag-val">0.00</span></div>
-						<div class="drag-num" id="obj-pz"><span class="drag-label">Z</span><span class="drag-val">0.00</span></div>
-					</div>
-					<div class="sub-label" style="margin-top:10px">Rotation</div>
-					<div class="drag-row">
-						<div class="drag-num" id="obj-rx"><span class="drag-label">X</span><span class="drag-val">0°</span></div>
-						<div class="drag-num" id="obj-ry"><span class="drag-label">Y</span><span class="drag-val">0°</span></div>
-						<div class="drag-num" id="obj-rz"><span class="drag-label">Z</span><span class="drag-val">0°</span></div>
-					</div>
-					<div class="sub-label" style="margin-top:10px">Scale</div>
-					<div class="drag-row">
-						<div class="drag-num" id="obj-sx"><span class="drag-label">X</span><span class="drag-val">1.00</span></div>
-						<div class="drag-num" id="obj-sy"><span class="drag-label">Y</span><span class="drag-val">1.00</span></div>
-						<div class="drag-num" id="obj-sz"><span class="drag-label">Z</span><span class="drag-val">1.00</span></div>
+				<div class="section" id="obj-particles-preset" hidden>
+					<div class="section-label">Preset</div>
+					<div class="select-row">
+						<select id="ps-preset">
+							<option value="">Choose preset…</option>
+							<option value="snow">Snow</option>
+							<option value="rain">Rain</option>
+							<option value="sparks">Sparks</option>
+							<option value="fireflies">Fireflies</option>
+						</select>
 					</div>
 				</div>
 
@@ -4870,6 +4912,37 @@
 						<span>Freeze pose</span>
 					</label>
 					<div class="hint">Locks the rig at the current playhead frame — scrub to find a pose, then freeze to prevent the transport from advancing it.</div>
+				</div>
+
+				<!-- Transform sits at the tail of the section list — every object
+				     kind cares about its transform, so anchoring it near the
+				     bottom (just above INPUT) keeps the kind-specific controls at
+				     the top where the user reaches first. -->
+				<div class="section" id="obj-transform-section">
+					<div class="section-head-row">
+						<span class="section-label">Transform</span>
+						<span class="head-end">
+							<button class="mini-btn" id="obj-transform-reset" title="Reset position, rotation, scale, and any pivot offset to defaults">Reset</button>
+						</span>
+					</div>
+					<div class="sub-label">Position</div>
+					<div class="drag-row">
+						<div class="drag-num" id="obj-px"><span class="drag-label">X</span><span class="drag-val">0.00</span></div>
+						<div class="drag-num" id="obj-py"><span class="drag-label">Y</span><span class="drag-val">0.00</span></div>
+						<div class="drag-num" id="obj-pz"><span class="drag-label">Z</span><span class="drag-val">0.00</span></div>
+					</div>
+					<div class="sub-label" style="margin-top:10px">Rotation</div>
+					<div class="drag-row">
+						<div class="drag-num" id="obj-rx"><span class="drag-label">X</span><span class="drag-val">0°</span></div>
+						<div class="drag-num" id="obj-ry"><span class="drag-label">Y</span><span class="drag-val">0°</span></div>
+						<div class="drag-num" id="obj-rz"><span class="drag-label">Z</span><span class="drag-val">0°</span></div>
+					</div>
+					<div class="sub-label" style="margin-top:10px">Scale</div>
+					<div class="drag-row">
+						<div class="drag-num" id="obj-sx"><span class="drag-label">X</span><span class="drag-val">1.00</span></div>
+						<div class="drag-num" id="obj-sy"><span class="drag-label">Y</span><span class="drag-val">1.00</span></div>
+						<div class="drag-num" id="obj-sz"><span class="drag-label">Z</span><span class="drag-val">1.00</span></div>
+					</div>
 				</div>
 
 				<!-- Object-level INPUT — one image-ref tile (workflow-input tile style)
@@ -7537,9 +7610,29 @@ function buildParticleSystem(initialConfig) {
 	// position/rotation/scale from Points every frame.
 	const helperGroup = new THREE.Group();
 	helperGroup.userData._isEmitterHelper = true;
-	const helperMat = new THREE.LineBasicMaterial({ color: 0xcccdd2, transparent: true, opacity: 0.55, depthTest: false });
+	// Dim emitter volume helper — the visual weight belongs to the particles,
+	// not the cage. Box stays as edges; sphere is drawn as two smooth great
+	// circles (equator + one meridian) instead of a wireframe icosahedron —
+	// reads unambiguously as "sphere-shaped volume" without noise. Opacity
+	// pulled down to 0.22 so the volume reads as a hint, not a fixture.
+	const helperMat = new THREE.LineBasicMaterial({ color: 0xcccdd2, transparent: true, opacity: 0.22, depthTest: false });
 	const boxHelper = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), helperMat);
-	const sphereHelper = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(0.5, 2)), helperMat);
+	function _buildSphereRingGeom(radius, segments, plane) {
+		// Ring in the specified plane ("xz" | "xy" | "yz"), radius r, `segments`
+		// vertices around. Returns a closable BufferGeometry consumed by LineLoop.
+		const pts = [];
+		for (let i = 0; i < segments; i++) {
+			const t = (i / segments) * Math.PI * 2;
+			const c = Math.cos(t) * radius, s = Math.sin(t) * radius;
+			if (plane === "xz") pts.push(new THREE.Vector3(c, 0, s));
+			else if (plane === "xy") pts.push(new THREE.Vector3(c, s, 0));
+			else pts.push(new THREE.Vector3(0, c, s));
+		}
+		return new THREE.BufferGeometry().setFromPoints(pts);
+	}
+	const sphereHelper = new THREE.Group();
+	sphereHelper.add(new THREE.LineLoop(_buildSphereRingGeom(0.5, 48, "xz"), helperMat));
+	sphereHelper.add(new THREE.LineLoop(_buildSphereRingGeom(0.5, 48, "xy"), helperMat));
 	boxHelper.renderOrder = 995;
 	sphereHelper.renderOrder = 995;
 	helperGroup.add(boxHelper);
@@ -21998,6 +22091,7 @@ document.getElementById("obj-anim-freeze")?.addEventListener("change", (e) => {
 // emitter is selected. The main object Appearance section (color + image) is
 // hidden for particles since particles have their own Appearance section.
 const psSections = [
+	"obj-particles-preset",
 	"obj-particles-emitter",
 	"obj-particles-appearance",
 	"obj-particles-particle",
@@ -22091,6 +22185,36 @@ psBlendingSel.addEventListener("change", () => {
 	c.blending = psBlendingSel.value;
 	pushParticleUniforms();
 	saveScene?.();
+});
+
+// Preset dropdown — same canned bundles the agent uses via add_primitive
+// preset param. Applies the preset config in-place (merges into ps.config,
+// rebuilds the per-particle attribute buffers, syncs uniforms) plus stamps
+// the preset's suggested scale + Y onto the object transform so snow spawns
+// overhead in a 12x12 sheet without the user having to fiddle after.
+// Resets the dropdown back to the placeholder so re-selecting the same
+// preset re-applies (each `change` event needs a new value).
+document.getElementById("ps-preset")?.addEventListener("change", (e) => {
+	const name = e.target.value;
+	if (!name) return;
+	const preset = PARTICLE_PRESETS[name];
+	if (!preset) return;
+	if (!selected || selected.userData?.primKind !== "particles") return;
+	const ps = selected.userData?.particleSystem;
+	if (!ps) return;
+	snapshotForUndo?.();
+	Object.assign(ps.config, preset);
+	// Wind array must be a fresh copy so later slider edits don't mutate the
+	// PARTICLE_PRESETS entry via shared reference.
+	if (Array.isArray(preset.wind)) ps.config.wind = [...preset.wind];
+	if (Array.isArray(preset._scale)) selected.scale.set(preset._scale[0], preset._scale[1], preset._scale[2]);
+	if (typeof preset._y === "number") selected.position.setY(preset._y);
+	rebuildParticleAttributes(selected);
+	syncParticleUniforms(selected);
+	if (typeof updateEmitterHelper === "function") updateEmitterHelper(selected);
+	refreshParticlesInspector();
+	saveScene?.();
+	e.target.value = "";
 });
 
 psStyleSel.addEventListener("change", () => {
@@ -23908,6 +24032,54 @@ function showRenderResult() {
 	updateResultOverlayPos();
 }
 
+// ── Compare slider (blockout ⇄ render) ────────────────────────────
+// In Render mode, the render img/vid sits on top of a blockout underlay img.
+// A draggable amber handle updates the render's clip-path so left of the
+// handle shows the blockout underneath, right shows the render on top.
+// Handle position is stored in a CSS var --compare-x on #result-overlay so
+// CSS wires the clip + handle location from the same source of truth.
+const _compareHandle = document.getElementById("result-compare-handle");
+const _blockoutUnderlay = document.getElementById("result-overlay-blockout-img");
+let _comparePct = 50;
+function syncCompareMode() {
+	if (!resultOverlay || !_blockoutUnderlay) return;
+	const active = (resultMode === "render") && !!lastResult;
+	resultOverlay.classList.toggle("compare-mode", active);
+	if (active) {
+		// Same URL that showBlockoutSnapshot loads into resultOverlayImg —
+		// pointing the underlay at it means the "before" side is always the
+		// current auto-composited scene. Cache-busting timestamp so a rebuild
+		// after a scene edit doesn't stick with a stale blockout.
+		const url = `/comfyblockout/image/${encodeURIComponent(NODE_ID)}?t=${Date.now()}`;
+		if (_blockoutUnderlay.dataset.src !== url) {
+			_blockoutUnderlay.dataset.src = url;
+			_blockoutUnderlay.src = url;
+		}
+		resultOverlay.style.setProperty("--compare-x", `${_comparePct}%`);
+	} else {
+		resultOverlay.style.removeProperty("--compare-x");
+	}
+}
+if (_compareHandle) {
+	let dragging = false;
+	_compareHandle.addEventListener("pointerdown", (e) => {
+		dragging = true;
+		_compareHandle.setPointerCapture(e.pointerId);
+		e.preventDefault();
+	});
+	_compareHandle.addEventListener("pointermove", (e) => {
+		if (!dragging) return;
+		const rect = resultOverlay.getBoundingClientRect();
+		const x = e.clientX - rect.left;
+		const pct = Math.max(0, Math.min(100, (x / rect.width) * 100));
+		_comparePct = pct;
+		resultOverlay.style.setProperty("--compare-x", `${pct}%`);
+	});
+	const end = () => { dragging = false; };
+	_compareHandle.addEventListener("pointerup", end);
+	_compareHandle.addEventListener("pointercancel", end);
+}
+
 // Show a preprocessor preview (depth map, canny edges, etc.) declared by the
 // workflow manifest. Same overlay treatment as the blockout — contain so the
 // image renders at its native AR without cropping.
@@ -23936,6 +24108,10 @@ function applyResultMode() {
 		// viewport — overlay hidden, live 3D scene visible
 		resultOverlay.hidden = true;
 	}
+	// Compare slider — only meaningful in Render mode, where a blockout
+	// snapshot exists on disk and the user wants to see "before/after". Any
+	// other mode drops the class so the underlay + handle hide.
+	syncCompareMode?.();
 	// The floating save-icon in the top-right of the overlay shows on both
 	// Blockout (the composited PNG uploaded to the model) and Render (the
 	// generated output) — both are download-worthy artifacts. Hidden on
