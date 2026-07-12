@@ -12241,8 +12241,11 @@ function _annotationSyncPaneFromSelection(group) {
 }
 // Wire the annotation pane controls once at boot. Handlers pull the currently
 // selected group and route through _annotationApplyLook so live-driving stays
-// consistent with programmatic keyframe application.
-(() => {
+// consistent with programmatic keyframe application. The whole thing is
+// deferred via queueMicrotask because setupDragField reads a `dragFields`
+// const declared LATER in the module — calling it at parse time hits TDZ and
+// blocks the init curtain forever. Same trick the object-inspector IIFEs use.
+queueMicrotask(() => {
 	const colorIn = document.getElementById("obj-annotation-color");
 	const colorBtn = document.getElementById("obj-annotation-color-btn");
 	const opIn = document.getElementById("obj-annotation-opacity");
@@ -12295,7 +12298,7 @@ function _annotationSyncPaneFromSelection(group) {
 			if (typeof saveScene === "function") saveScene();
 		}
 	});
-})();
+});
 
 // ── Boolean tool ──────────────────────────────────────────────────
 // Lazy-loaded CSG via three-bvh-csg. Uses the current multi-selection —
