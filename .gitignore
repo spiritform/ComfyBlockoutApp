@@ -16,7 +16,14 @@ output/
 
 # External tools installed by the app at runtime (AnimoFlow etc.) — cloned
 # fresh via /api/motion/install on user machines, don't commit the vendored copy.
-tools/
+# Use tools/* (not tools/) so git still descends into the folder and the
+# negations below can re-include child subtrees we author ourselves.
+tools/*
+# TripoSplat is our own Dockerfile + FastAPI wrapper around the upstream
+# repo, so it ships in-repo and gets built by the user's local
+# `docker compose up`.
+!tools/triposplat/
+!tools/triposplat/**
 
 # Early-stage prototype HTMLs — kept locally for reference but not shipped.
 mockups/

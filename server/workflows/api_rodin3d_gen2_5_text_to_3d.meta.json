@@ -1,0 +1,19 @@
+{
+  "id": "api_rodin3d_gen2_5_text_to_3d",
+  "label": "Rodin Gen2.5 \u00b7 T2M",
+  "kind": "3d",
+  "output_ext": "glb",
+  "runner": "cloud",
+  "inputs": [
+    {
+      "name": "prompt",
+      "type": "textarea",
+      "required": true,
+      "placeholder": "Describe the 3D model — e.g. 'armored knight kneeling with sword'",
+      "patch": {
+        "node_id": "684",
+        "widget_name": "prompt"
+      }
+    }
+  ]
+}

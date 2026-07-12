@@ -215,13 +215,30 @@ async def _submit_wait_download(
         # circuits the retry loop entirely when it hits, which is common
         # for cloud partner nodes that complete before their asset store
         # finalizes.
+        # Cloud CLI has been observed syncing partner-3D outputs to the
+        # local Comfy Desktop shared output folder (H:\Comfy-Desktop\
+        # ComfyUI-Shared\output\3d) rather than the app's data_dir. Include
+        # those known locations in the scan so a Rodin / Tripo / Meshy run
+        # can be picked up wherever the CLI decides to drop it. First
+        # existing candidate wins; missing dirs are silently skipped.
+        _EXTRA_SCAN_ROOTS: list[Path] = [
+            Path(r"H:\Comfy-Desktop\ComfyUI-Shared\output"),
+            Path(r"H:\ComfyUI-Easy-Install\ComfyUI\output"),
+            Path(r"H:\Comfy-Desktop\ComfyUI-Installs\ComfyDesktop\ComfyUI\output"),
+        ]
+
         def _scan_output_dir() -> list[Path]:
             found: list[Path] = []
-            for ext in output_exts:
-                for p in data_dir.rglob(f"*.{ext}"):
+            roots = [data_dir] + [p for p in _EXTRA_SCAN_ROOTS if p.exists()]
+            for root in roots:
+                for ext in output_exts:
                     try:
-                        if p.stat().st_mtime >= job_start:
-                            found.append(p)
+                        for p in root.rglob(f"*.{ext}"):
+                            try:
+                                if p.stat().st_mtime >= job_start:
+                                    found.append(p)
+                            except OSError:
+                                continue
                     except OSError:
                         continue
             return found
@@ -274,11 +291,42 @@ async def _submit_wait_download(
             # distinct phase so the frontend can show "Generated in Cloud —
             # not retrievable" rather than a generic failure.
             _emit("cloud_done_no_download", prompt_id=prompt_id)
-            raise RuntimeError(f"no output matching {output_exts} found under {scratch} or fresh in {data_dir}")
+            # Diagnostic — what DID land in scratch? If comfy download said
+            # ok=true, the file may just have a different extension than the
+            # manifest declared (Rodin/Tripo return signed URLs the CLI may
+            # save as .bin/.tmp, or the partner ships gltf instead of glb).
+            scratch_contents = []
+            try:
+                for p in scratch.rglob("*"):
+                    if p.is_file():
+                        scratch_contents.append(f"{p.relative_to(scratch)} ({p.stat().st_size}B)")
+            except OSError:
+                pass
+            listing = ", ".join(scratch_contents[:20]) if scratch_contents else "(empty)"
+            print(f"[cb-app] {module_id}: scratch contents = {listing}")
+            raise RuntimeError(
+                f"no {output_exts} output found. scratch had: {listing}. "
+                f"data_dir scan since {job_start:.0f} also empty."
+            )
         src = max(candidates, key=lambda p: p.stat().st_mtime)
         ext = src.suffix.lstrip(".").lower()
         dst = new_output_path(data_dir, module_id, ext)
-        shutil.move(str(src), str(dst))
+        # If the source lives inside our own scratch or data_dir, move it
+        # (it's ours to consume). If it came from an external shared output
+        # (Comfy Desktop), copy so we don't rip the file out from under
+        # another install that might want to keep its history.
+        def _is_ours(p: Path) -> bool:
+            for own in (scratch, data_dir):
+                try:
+                    p.relative_to(own)
+                    return True
+                except ValueError:
+                    continue
+            return False
+        if _is_ours(src):
+            shutil.move(str(src), str(dst))
+        else:
+            shutil.copy(str(src), str(dst))
         return {"path": str(dst), "filename": dst.name, "ext": ext}
     finally:
         try:

@@ -14219,12 +14219,18 @@ function setViewportGenerateBusy() {
 		if (labelEl) labelEl.textContent = "Running…";
 		if (cancelBtn) cancelBtn.hidden = false;
 		// Mirror busy state onto any properties-pane Generate buttons currently
-		// rendered — same visual language as the main viewport chip.
+		// rendered — same visual language as the main viewport chip and the
+		// Tools-grid Tripo 3D button: play-triangle → spinner, label → Generating….
 		for (const rpBtn of document.querySelectorAll(".rp-generate-btn")) {
 			const spanEl = rpBtn.querySelector("span");
+			const iconEl = rpBtn.querySelector("svg");
 			if (spanEl) {
 				rpBtn.dataset.savedLabel = spanEl.textContent || "Generate";
 				spanEl.textContent = "Generating…";
+			}
+			if (iconEl) {
+				rpBtn.dataset.savedIcon = iconEl.outerHTML;
+				iconEl.outerHTML = VP_SPINNER_SVG;
 			}
 			rpBtn.classList.add("busy");
 			rpBtn.disabled = true;
@@ -14250,7 +14256,12 @@ function clearViewportGenerateBusy() {
 		for (const rpBtn of document.querySelectorAll(".rp-generate-btn")) {
 			const spanEl = rpBtn.querySelector("span");
 			if (spanEl) spanEl.textContent = rpBtn.dataset.savedLabel || "Generate";
+			const iconEl = rpBtn.querySelector("svg");
+			if (iconEl && rpBtn.dataset.savedIcon) {
+				iconEl.outerHTML = rpBtn.dataset.savedIcon;
+			}
 			delete rpBtn.dataset.savedLabel;
+			delete rpBtn.dataset.savedIcon;
 			rpBtn.classList.remove("busy");
 			rpBtn.disabled = false;
 		}
@@ -15470,11 +15481,12 @@ function runUtilTool(moduleId) {
 			}).catch(e => console.warn("[motion] auto-spawn failed:", e));
 		}
 	}
-	if (moduleId === "triposplat-local") {
-		// TripoSplat is a one-shot Image → Splat tool: spawn (or reselect) a
-		// tagged placeholder plane, let the OBJECT properties inspector render
-		// its source-image + generate controls, and on generate swap the plane
-		// for a spark.js SplatMesh at the placeholder's transform.
+	if (moduleId === "triposplat-local" || moduleId === "triposplat-standalone") {
+		// TripoSplat (either runtime) is a one-shot Image → Splat tool:
+		// spawn (or reselect) a tagged placeholder plane, let the OBJECT
+		// properties inspector render its source-image + generate controls,
+		// and on generate swap the plane for a spark.js SplatMesh at the
+		// placeholder's transform.
 		let plane = objects.find(o => o.userData?.pcSource === true && !o.userData?.pcSourcePlane && o.visible !== false);
 		if (!plane) {
 			plane = spawnEmptyPcPlane();
@@ -17270,11 +17282,15 @@ async function _pcHandleUpload(file) {
 // without the user having visited the util pane first).
 async function _pcGenerate() {
 	if (_utilRunPhase && _utilRunPhase !== "idle") return; // guard double-clicks
-	_activeUtilId = "triposplat-local";
+	// Prefer the standalone Docker path — it's the current recommended
+	// TripoSplat runtime (no Comfy Desktop required). local_triposplat
+	// still ships in the Workflows list for users who prefer to run it
+	// through a ComfyUI they already have open.
+	_activeUtilId = "triposplat-standalone";
 	try {
 		_setPcRunButton?.("running");
 		_setPcStatus?.("running TripoSplat…", "busy");
-		const r = await fetch(`/api/run/triposplat-local`, {
+		const r = await fetch(`/api/run/triposplat-standalone`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ node_id: NODE_ID, inputs: {} }),

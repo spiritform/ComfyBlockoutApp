@@ -1,0 +1,52 @@
+# TripoSplat standalone inference service.
+#
+#   docker compose up --build -d       # first run (build + start)
+#   docker compose logs -f              # watch weight download + boot
+#   docker compose down                 # stop; volumes preserved
+#
+# Weights persist across container rebuilds via the named `ckpts` volume,
+# so a `docker compose build --no-cache` only pays the ~30s Python-dep
+# reinstall, not a multi-GB HF re-pull.
+#
+# Requires the NVIDIA Container Toolkit (Windows: Docker Desktop → Settings
+# → Resources → WSL Integration + Enable Nvidia GPU support).
+
+services:
+  triposplat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: triposplat
+    restart: unless-stopped
+    ports:
+      # Host:Container. Default host port 8004 keeps us clear of local
+      # ComfyUI (8188), MoMask (8003), and future AnimoFlow ports.
+      - "${TRIPOSPLAT_PORT:-8004}:8000"
+    environment:
+      # Optional — public repo download works without a token, but
+      # anonymous rate limits bite on repeat first-time boots.
+      - HF_TOKEN=${HF_TOKEN:-}
+      - TRIPOSPLAT_CKPTS=/app/ckpts
+    volumes:
+      - triposplat_ckpts:/app/ckpts
+      - triposplat_hf_cache:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      # Weights can take a few minutes to download on first boot on a
+      # slow connection. Start period 600s gives that room before the
+      # container gets marked unhealthy.
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 600s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  triposplat_ckpts:
+  triposplat_hf_cache:

@@ -1322,12 +1322,24 @@ async def list_modules():
 _ANIMOFLOW_DIR = APP_DIR / "tools" / "animoflow"
 _ANIMOFLOW_REPO_URL = "https://github.com/AnimoFlow/comfyui-animoflow"
 
+_TRIPOSPLAT_DIR = APP_DIR / "tools" / "triposplat"
+_TRIPOSPLAT_HOST = os.environ.get("TRIPOSPLAT_HOST", "127.0.0.1")
+_TRIPOSPLAT_PORT = int(os.environ.get("TRIPOSPLAT_PORT", "8004"))
+
 
 def _animoflow_installed() -> bool:
     """True if the AnimoFlow repo has been cloned into tools/animoflow.
     Checks for the .git subfolder rather than the parent — a bare mkdir
     shouldn't register as installed."""
     return (_ANIMOFLOW_DIR / ".git").exists()
+
+
+def _triposplat_scaffold_present() -> bool:
+    """True if the TripoSplat tool folder is on disk — we ship the Dockerfile
+    + server.py in-repo (unlike AnimoFlow which requires a separate clone),
+    so this is a sanity check that the user is on a build that includes it,
+    not a "did you clone it yet" prompt."""
+    return (_TRIPOSPLAT_DIR / "docker-compose.yml").exists()
 
 
 @app.get("/api/motion/requirements")
@@ -1411,6 +1423,149 @@ async def motion_requirements():
             "installed": node_ok,
         },
     }
+
+
+def _check_docker_state() -> tuple[bool, bool, str]:
+    """Shared docker probe — returns (running, installed, error_detail).
+    Split out so the TripoSplat + AnimoFlow requirements endpoints don't
+    duplicate the whole subprocess+timeout dance."""
+    import subprocess
+    try:
+        r = subprocess.run(
+            ["docker", "--version"],
+            capture_output=True, text=True, timeout=3,
+        )
+        installed = r.returncode == 0
+        if not installed:
+            return False, False, (r.stderr or r.stdout or "").strip()[:200] or "docker command failed"
+        r2 = subprocess.run(
+            ["docker", "version", "--format", "{{.Server.Version}}"],
+            capture_output=True, text=True, timeout=3,
+        )
+        running = r2.returncode == 0 and bool(r2.stdout.strip())
+        return running, installed, "" if running else "Installed, not running"
+    except FileNotFoundError:
+        return False, False, "docker command not on PATH"
+    except subprocess.TimeoutExpired:
+        return False, True, "docker daemon not responding"
+    except Exception as e:
+        return False, False, str(e)[:200]
+
+
+@app.get("/api/requirements/triposplat")
+async def triposplat_requirements():
+    """Requirements pane data for the TripoSplat standalone Tools tile.
+
+    Four gates, all must be green before /generate will succeed:
+      1. docker — daemon reachable
+      2. scaffold — tools/triposplat/ shipped with this build (should
+         always be true; guards against a stripped-down deployment)
+      3. container — the `triposplat` service is running
+      4. weights — the container's /health reports weights_ready
+    """
+    docker_ok, docker_installed, docker_detail = _check_docker_state()
+
+    scaffold_ok = _triposplat_scaffold_present()
+
+    container_ok = False
+    container_detail = ""
+    if docker_ok:
+        import subprocess
+        try:
+            r = subprocess.run(
+                ["docker", "ps", "--format", "{{.Names}}"],
+                capture_output=True, text=True, timeout=5,
+            )
+            names = [n.strip() for n in (r.stdout or "").splitlines() if n.strip()]
+            hit = next((n for n in names if n.lower() == "triposplat" or n.lower().startswith("triposplat")), None)
+            container_ok = hit is not None
+            container_detail = hit or ""
+        except Exception:
+            container_ok = False
+
+    # Container /health probe — done via httpx sync-in-async since the
+    # rest of this endpoint is synchronous subprocess work; a 3s cap
+    # keeps the whole endpoint under ~15s worst-case.
+    weights_ok = False
+    pipeline_ok = False
+    weights_detail = ""
+    if container_ok:
+        try:
+            async with httpx.AsyncClient() as client:
+                r = await client.get(
+                    f"http://{_TRIPOSPLAT_HOST}:{_TRIPOSPLAT_PORT}/health",
+                    timeout=3.0,
+                )
+                if r.status_code == 200:
+                    j = r.json()
+                    weights_ok = bool(j.get("weights_ready"))
+                    pipeline_ok = bool(j.get("pipeline_ready"))
+                    if not weights_ok:
+                        weights_detail = "downloading from HuggingFace…"
+                else:
+                    weights_detail = f"/health returned {r.status_code}"
+        except Exception as e:
+            weights_detail = f"container up but /health unreachable: {e}"[:200]
+
+    return {
+        "docker": {
+            "ok": docker_ok,
+            "installed": docker_installed,
+            "detail": docker_detail,
+            "install_url": "https://www.docker.com/products/docker-desktop/",
+        },
+        "scaffold": {
+            "ok": scaffold_ok,
+            "path": str(_TRIPOSPLAT_DIR),
+        },
+        "container": {
+            "ok": container_ok,
+            "detail": container_detail,
+            "compose_dir": str(_TRIPOSPLAT_DIR),
+        },
+        "weights": {
+            "ok": weights_ok,
+            # Pipeline-ready flips true after the first generate warms the
+            # model; not a blocker for showing the tile as available, but
+            # useful as a "next generate will be fast" indicator.
+            "pipeline_ready": pipeline_ok,
+            "detail": weights_detail,
+        },
+    }
+
+
+@app.post("/api/requirements/triposplat/start_container")
+async def triposplat_start_container():
+    """Convenience helper — `docker compose up --build -d` inside
+    tools/triposplat/. First run pulls the CUDA base image + installs deps
+    + downloads weights, which is 10-15 minutes on a fresh box; the pane
+    surfaces build progress via docker logs the user can tail themselves."""
+    import subprocess
+    if not _triposplat_scaffold_present():
+        raise HTTPException(500, f"scaffold missing at {_TRIPOSPLAT_DIR}")
+    docker_ok, _, docker_detail = _check_docker_state()
+    if not docker_ok:
+        raise HTTPException(400, f"Docker isn't running: {docker_detail}")
+    try:
+        # Detach with -d so this endpoint returns immediately; the build/
+        # download runs in the background and the requirements poll picks
+        # up state changes as they happen.
+        r = subprocess.run(
+            ["docker", "compose", "up", "--build", "-d"],
+            cwd=str(_TRIPOSPLAT_DIR),
+            capture_output=True, text=True, timeout=15,
+        )
+        # `up -d` returns quickly (build streams to logs); rc 0 = compose
+        # accepted the request. Not a build-succeeded signal — that comes
+        # later via the /health poll.
+        if r.returncode != 0:
+            return {"ok": False, "detail": (r.stderr or r.stdout).strip()[:500]}
+        return {"ok": True, "detail": (r.stdout or "").strip()[:500]}
+    except subprocess.TimeoutExpired:
+        # `up -d` shouldn't take this long — compose is probably chewing
+        # on a fresh build. Still fine to return ok:true since the build
+        # is now underway and health polling will surface completion.
+        return {"ok": True, "detail": "compose command timed out returning, build likely still running"}
 
 
 @app.post("/api/motion/start_containers")
@@ -2903,8 +3058,14 @@ async def run_module(module_id: str, request: Request):
     # Prepend BASE_PROMPT (immutable spatial-ControlNet directive) + SCENE INVENTORY
     # (per-object screen-space metadata + reference-image map) + any user-saved
     # tweaks + the actual user request.
+    #
+    # Only image/video generators want that framing — 3D text-to-model partners
+    # (Rodin, Tripo, Hunyuan) take a plain prompt describing the object, and
+    # Rodin in particular caps the prompt at 2500 chars so the injected block
+    # blows past the limit and the run fails validation. Skip augmentation for
+    # 3D and audio kinds so their prompts go through raw.
     user_prompt = (inputs.get("prompt") or "").strip()
-    if user_prompt:
+    if user_prompt and m.kind not in {"3d", "audio"}:
         # _prompt_store now holds the user's EDITED base prompt (full replace
         # of BASE_PROMPT), not appended tweaks. Empty / unset → server default.
         base_override = (_prompt_store.get(node_id) or "").strip()
