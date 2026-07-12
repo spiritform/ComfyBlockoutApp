@@ -36,23 +36,28 @@
 		color: rgba(255,255,255,0.4); font-weight: 400; font-size: 10px;
 		letter-spacing: 0.06em; text-transform: uppercase;
 	}
-	#top-header .th-brand .th-sep {
+	.th-sep {
 		color: rgba(255,255,255,0.25);
 		/* Extra breathing room on both sides so the gap logo→brand and the
 		   gap brand→colon→project title feel proportionally similar. Without
 		   this, the colon reads tight against the ComfyBlockout text. */
 		margin: 0 6px;
 	}
-	#top-header .th-brand .th-project-name {
+	/* Top-header colon is only meaningful when help-mode swaps the project
+	   name for "Get Started". Project name itself now lives in the left-panel
+	   SCENE band. */
+	#top-header .th-brand .th-sep { display: none; }
+	body.help-open #top-header .th-brand .th-sep { display: inline; }
+	.th-project-name {
 		text-transform: none; font-size: 11px; letter-spacing: 0.02em;
 		cursor: text; padding: 2px 4px; border-radius: 3px;
 		border: 1px solid transparent;
 	}
-	#top-header .th-brand .th-project-name:hover {
+	.th-project-name:hover {
 		background: rgba(255,255,255,0.04);
 		border-color: rgba(255,255,255,0.08);
 	}
-	#top-header .th-brand .th-project-name-input {
+	.th-project-name-input {
 		background: rgba(255,255,255,0.06); border: 1px solid rgba(255,180,84,0.4);
 		border-radius: 3px; color: #ffd28a;
 		font: inherit; padding: 2px 4px; outline: none;
@@ -1101,6 +1106,10 @@
 	#lp-zone-top-body {
 		flex: 1 1 auto; min-height: 0;
 		overflow-y: auto; overflow-x: hidden;
+		/* Matches #rp-zone-top so LEFT (Scene/Objects) and RIGHT (Outliner)
+		   top-zones read as the same inset panel color, distinct from the
+		   #131318 base surface. */
+		background: #191922;
 		padding: 0 20px calc(var(--lp-agent-h) + 28px);
 		scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
 		/* Reserve gutter on the RIGHT only so content doesn't shift when the
@@ -1273,40 +1282,21 @@
 		height: 100%; padding: 17px 12px 12px 32px;
 	}
 	#lp-pane-assistant .assistant-prompt-arrow { top: 15px; left: 18px; }
-	/* OBJECTS section's own head-row is redundant now that #lp-zone-top-header
-	   labels the zone. Hide it so the grid butts up against the fixed header. */
-	#lp-zone-top-body > .section:first-of-type > .section-head-row {
-		display: none;
-	}
-	#lp-zone-top-body > .section:first-of-type {
-		padding-top: 12px;
-	}
-	/* OBJECTS' head-row is hidden (its label lives in the 40px band above),
-	   so when the section collapses there's nothing visible inside — the
-	   default 12px bottom padding becomes a phantom gap that pushes TOOLS
-	   further from the OBJECTS label than TOOLS sits from WORKFLOWS.
-	   Zero it out so all three headers space evenly when collapsed. */
-	#lp-zone-top-body > .section:first-of-type.collapsed { padding: 0; }
-	/* Dim the OBJECTS kicker when its section is collapsed — matches the
-	   fade the other .section-label rows get via .collapsed. The label lives
-	   outside the section (in the fixed band), so :has() reaches into the
-	   sibling body to detect the state. */
-	#panel:has(#lp-zone-top-body > .section:first-of-type.collapsed) #lp-zone-top-header .rp-kicker {
-		color: rgba(255,255,255,0.32);
-	}
-	/* Left-panel top-zone header — mirrors #rp-zone-top-header. Fixed 40px
-	   band that sits OUTSIDE the scroll area so the scrollbar starts under
-	   it, not through it. */
+	/* Left-panel top-zone header — SCENE : {project name} band. Mirrors
+	   #rp-zone-top-header. Fixed 40px band that sits OUTSIDE the scroll
+	   area so the scrollbar starts under it, not through it. Objects /
+	   Tools / Workflows get their own section headers inside the scroll
+	   area now — the fixed band belongs to the scene as a whole. */
 	#lp-zone-top-header {
 		/* Fixed 40px band — always visible, matches the viewport toolbar
 		   height. AI Agent drag stops right under this header (top zone can
-		   shrink to just this header) so OBJECTS label stays put. Padding
-		   left matches #top-header's own 20px left padding so the OBJECTS
-		   label sits directly under the ComfyBlockout logo. Padding right
-		   is 24px to compensate for the 4px scrollbar-gutter reservation in
-		   #lp-zone-top-body below — right edges of the band and the section
-		   grids line up because both effective right-content edges sit at
-		   panel_width - 24. */
+		   shrink to just this header) so the SCENE label stays put. Padding
+		   left is 12px because the scene-props icon button carries its own
+		   left inset — the button + kicker together line up under the
+		   ComfyBlockout logo. Padding right is 24px to compensate for the
+		   4px scrollbar-gutter reservation in #lp-zone-top-body below —
+		   right edges of the band and the section grids line up because both
+		   effective right-content edges sit at panel_width - 24. */
 		flex: 0 0 40px;
 		padding: 0 24px 0 20px;
 		display: flex; align-items: center; gap: 6px;
@@ -1314,6 +1304,12 @@
 		user-select: none;
 		background: #131318;
 	}
+	/* SCENE kicker doubles as the Scene properties trigger — matches the
+	   right panel's "PROPERTIES : SCENE" header pattern (dim kicker + bright
+	   target). Kept intentionally chromeless: no icon, no background, no
+	   active state. Hover just lifts the word to full white. */
+	#lp-scene-header { cursor: pointer; }
+	#lp-scene-header:hover { color: #fff; }
 
 	.section { margin-bottom: 32px; }
 	.section:last-child { margin-bottom: 0; }
@@ -1323,7 +1319,9 @@
 		margin: 0 -20px 0;
 		padding: 12px 20px;
 	}
-	#lp-zone-top-body .section:first-of-type { padding-top: 0; }
+	/* Objects/Tools/Workflows all render the same 12px top padding + head-row
+	   pattern now that Objects has its own visible head-row inside the scroll
+	   area (was hidden behind the fixed SCENE band before). */
 	#lp-zone-top-body .section:last-child { padding-bottom: 28px; }
 
 	/* Collapsible sections — click the head-row to fold the body. Bumped
@@ -3933,7 +3931,6 @@
 			<div class="th-brand">
 				<span>ComfyBlockout</span>
 				<small class="th-sep">:</small>
-				<small id="project-name" class="th-project-name">Untitled</small>
 				<small id="help-mode-label" class="th-project-name" hidden style="color:#ffd28a; cursor:default; pointer-events:none">Get Started</small>
 			</div>
 		</div>
@@ -4299,10 +4296,15 @@
 		     lives in a fixed-basis bottom zone with a drag handle between.
 		     Outliner used to sit here — hoisted to the right panel at boot. -->
 		<!-- Fixed 40px header band sits ABOVE the scroll area so the scrollbar
-		     starts under it rather than running through the "OBJECTS" label
-		     (matches the right panel's OUTLINER header pattern). -->
+		     starts under it rather than running through the section labels
+		     (matches the right panel's OUTLINER header pattern). Displays the
+		     project name — used to live in #top-header next to the wordmark;
+		     hoisted here so it stays visible while the section list scrolls,
+		     with a click-to-open Scene properties button on the left. -->
 		<div id="lp-zone-top-header">
-			<span class="rp-kicker">Objects</span>
+			<span id="lp-scene-header" class="rp-kicker" title="Scene properties — environment, fog, post FX. Opens on the right without changing the view.">Scene</span>
+			<small class="th-sep">:</small>
+			<small id="project-name" class="th-project-name">Untitled</small>
 		</div>
 		<div id="lp-zone-top-body">
 
@@ -4350,14 +4352,16 @@
 				     open. Result replaces the source objects in place. -->
 				<button class="prim-btn" data-tool="bool" data-label="Boolean" title="Boolean — union / subtract / intersect two or more selected objects into a single mesh."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 22a2 2 0 0 1-2-2"/><path d="M16 22h-2"/><path d="M16 4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3a1 1 0 0 0 1-1v-5a2 2 0 0 1 2-2h5a1 1 0 0 0 1-1z"/><path d="M20 8a2 2 0 0 1 2 2"/><path d="M22 14v2"/><path d="M22 20a2 2 0 0 1-2 2"/></svg></button>
 				<button class="prim-btn" data-fx="scatter" data-label="Scatter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="18.5" cy="5.5" r=".5" fill="currentColor"/><circle cx="11.5" cy="11.5" r=".5" fill="currentColor"/><circle cx="7.5" cy="16.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="14.5" r=".5" fill="currentColor"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/></svg></button>
-				<!-- Tripo 3D util — Comfy Cloud Tripo H3.1 text-OR-image → 3D mesh
-				     (.glb). Spawns a placeholder cube in the scene; its
-				     properties pane exposes a Text/Image mode toggle, the
-				     matching input, and a Generate button. Local TripoSplat
-				     still exists as a workflow (Workflows list) for offline
-				     splat generation. Hardcoded so the box glyph paints at
-				     boot rather than popping in after /api/modules resolves. -->
-				<button class="prim-btn" data-tool="util:tripo-h31" data-hardcoded="1" data-label="Tripo 3D" title="Tripo 3D — generate a .glb mesh from a text prompt or source image (Comfy Cloud · Tripo H3.1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></button>
+				<!-- TripoSplat util — image → gaussian splat (.ply) via the
+				     standalone Docker container at tools/triposplat/. No
+				     Comfy Desktop / ComfyUI dependency; the container hosts
+				     the VAST-AI TripoSplat pipeline directly. Replaces the
+				     older Comfy Cloud Tripo 3D tile — Cloud partner-3D
+				     download is broken upstream right now. Local variant
+				     (triposplat-local) still ships in the Workflows list
+				     for users who prefer their existing ComfyUI. Hardcoded
+				     so the astroid glyph paints at boot. -->
+				<button class="prim-btn" data-tool="util:triposplat-standalone" data-hardcoded="1" data-label="TripoSplat" title="TripoSplat — generate a 3D gaussian splat from a source image (runs locally in Docker, no Comfy Desktop required)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.983 21.186a1 1 0 0 1-1.966 0 10 10 0 0 0-8.203-8.203 1 1 0 0 1 0-1.966 10 10 0 0 0 8.203-8.203 1 1 0 0 1 1.966 0 10 10 0 0 0 8.203 8.203 1 1 0 0 1 0 1.966 10 10 0 0 0-8.203 8.203"/></svg></button>
 				<!-- Mannequin — procedural block-figure at real-world 1.72m scale.
 				     Reference for blockouts (door frames, couches, camera height).
 				     AnimoFlow (text-to-motion) lives inside the Mannequin
@@ -4497,19 +4501,9 @@
 	<div id="viewport-area">
 		<div id="viewport-toolbar">
 			<div class="vt-group">
-				<!-- Scene properties pill — used to live top-left of the viewport
-				     overlay; hoisted into the toolbar so the XYZ axis legend can
-				     reclaim that corner. Snap + grid sit alongside it since they
-				     configure the whole viewport (not a per-object tool). -->
-				<!-- Scene properties pill — used to live top-left of the viewport
-				     overlay; hoisted into the toolbar so the XYZ axis legend can
-				     reclaim that corner. Snap + grid sit alongside it since they
-				     configure the whole viewport (not a per-object tool). Camera
-				     properties open via the outliner's Camera row instead — the
-				     dedicated toolbar button was redundant. -->
-				<button class="vt-btn vt-icon-btn" id="scene-props-btn" title="Scene properties — environment, fog, post FX. Opens on the right without changing the view.">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="17" cy="6" r="2"/><path d="M3 19l5-6 4 4 3-3 6 5"/><path d="M3 21h18"/></svg>
-				</button>
+				<!-- Scene properties entry point lives in the left-panel SCENE
+				     header now — the whole "🖼 Scene : Untitled" row acts as
+				     the trigger, so a duplicate toolbar pill here was noise. -->
 				<button class="vt-btn vt-icon-btn active" id="toggle-grid" title="Show/hide ground grid">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M3 12h18"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
 				</button>
@@ -4748,16 +4742,35 @@
 				     Upload picks a source image; Generate runs the workflow and
 				     swaps this object for a THREE.Points. Post-gen, the
 				     obj-points-section below takes over. -->
+					<!-- TripoSplat standalone environment requirements — only
+					     visible for a pcPlaceholder whose runtime is tagged
+					     "standalone" (Docker path). Same visual pattern as
+					     the AnimoFlow motion pane: amber-pulse dots while
+					     checking, green when ready, chip collapse once all
+					     rows are green. Populated by _refreshTripoSplatReqPane. -->
+					<div class="section" id="obj-triposplat-req-section" style="display:none"></div>
 					<div class="section" id="obj-pc-source-section" style="display:none">
 					<div class="section-label">Source Image</div>
-					<div id="obj-pc-thumb" style="width:100%;aspect-ratio:1;background:rgba(0,0,0,0.28) center/cover no-repeat;border:1px solid rgba(255,255,255,0.06);border-radius:4px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;color:rgba(255,180,84,0.75);font-size:10px;letter-spacing:0.04em;text-align:center;padding:8px;box-sizing:border-box">NO SOURCE — UPLOAD ONE</div>
-					<input type="file" id="obj-pc-upload-file" accept="image/*" hidden>
-					<div style="display:flex;gap:6px">
-						<button type="button" id="obj-pc-upload-btn" class="mp-still-btn" style="flex:1;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85)">Upload</button>
-						<button type="button" id="obj-pc-generate-btn" class="mp-still-btn" style="flex:1">Generate</button>
+					<!-- Compact .gen-slot chip — same visual/interactive shape
+					     as the Tripo 3D and object-level Image ref slots.
+					     Click anywhere on the row to open the file picker;
+					     empty state shows the upload glyph + "Using viewport
+					     snapshot" hint. Backing file input + upload logic is
+					     unchanged (obj-pc-upload-file). -->
+					<div class="gen-slot" id="obj-pc-slot" style="margin-bottom:8px" title="Click to upload an image · leave empty to use the current viewport snapshot">
+						<div class="gen-slot-thumb" id="obj-pc-thumb">
+							<svg class="gen-slot-upload" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2"/><path d="M8 9V2.5"/><path d="m5 5 3-3 3 3"/></svg>
+						</div>
+						<div class="gen-slot-label" id="obj-pc-label">Using viewport snapshot</div>
 					</div>
+					<input type="file" id="obj-pc-upload-file" accept="image/*" hidden>
+					<button type="button" id="obj-pc-generate-btn" class="mp-still-btn" style="width:100%">Generate</button>
 					<div class="hint" id="obj-pc-status" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5)">Idle</div>
-					<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Upload a still image or leave empty to use the current Blockout snapshot. Object mode isolates the subject; Scene mode keeps the full frame.</div>
+					<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Click the slot to upload a still, or leave empty to use the current viewport snapshot.</div>
+					<!-- Hidden legacy slot — the old Upload button used to
+					     live here. Kept as a hidden anchor because other UI
+					     wiring (e.g. record → run chains) looks it up by id. -->
+					<button type="button" id="obj-pc-upload-btn" hidden></button>
 				</div>
 				<!-- Tripo 3D placeholder section — visible only when the
 				     selection is a tripo3dPlaceholder object dropped by the
@@ -10303,13 +10316,11 @@ function forceRightPane(which, label) {
 	// below in the split-handle IIFE) rather than swapping the switcher pane.
 	document.getElementById("th-assets")?.classList.toggle("active", isAssets);
 	document.getElementById("project-open")?.classList.toggle("active", isProjects);
-	// Toolbar pills light amber ONLY while their pane is the visible one. That
-	// makes "lit" == "properties currently showing this".
-	// #scene-props-btn (top toolbar) is amber whenever the Scene properties
-	// pane is open. The old #mode-camera pill was folded into a single
+	// Scene properties entry point lives on the left-panel SCENE header now
+	// (#lp-scene-header). Kept chromeless by design — no active/amber state
+	// to sync here. The old #mode-camera pill was folded into a single
 	// #mode-view-toggle, whose glyph is driven from setActiveView instead of
 	// from the active properties pane, so no pane-side sync is needed here.
-	document.getElementById("scene-props-btn")?.classList.toggle("active", which === "scene");
 	// Outliner's camera row mirrors the Camera pane's open state — targeted
 	// class toggle instead of a full refreshOutliner() so pane switches don't
 	// tear down + rebuild every row.
@@ -10662,6 +10673,32 @@ document.getElementById("mcp-add-btn")?.addEventListener("click", async () => {
 	// swipes coast for ~200ms so the panel feels smooth. Shared helper
 	// below is reused by the left-panel AI Agent drag too.
 	function _cubicOut(t) { return 1 - Math.pow(1 - t, 3); }
+	// Animate a panel's size from its current value to a target using an
+	// easeOut curve — motion starts immediately at the click so there's no
+	// perceptible dead time, then decelerates into the target. EaseInOut
+	// felt slow to start; easeOut avoids the "did my click register?"
+	// pause. Cancels any prior animation on the same element (via a
+	// sentinel dataset key) so rapid clicks don't stack RAF loops fighting
+	// each other.
+	function _animatePanelTo(opts) {
+		const { getPx, setPx, targetPx, host, duration = 220, onEnd } = opts;
+		const startPx = getPx();
+		if (Math.abs(targetPx - startPx) < 0.5) { setPx(targetPx); onEnd?.(); return; }
+		// Sentinel key — bump the token so any in-flight step() from a prior
+		// call sees a mismatch and bails out on its next tick.
+		const key = "_animToken";
+		const token = ((host && host.dataset[key]) ? parseInt(host.dataset[key]) + 1 : 1) | 0;
+		if (host) host.dataset[key] = String(token);
+		const t0 = performance.now();
+		function step(now) {
+			if (host && host.dataset[key] !== String(token)) return;
+			const t = Math.min(1, (now - t0) / duration);
+			setPx(startPx + (targetPx - startPx) * _cubicOut(t));
+			if (t < 1) requestAnimationFrame(step);
+			else onEnd?.();
+		}
+		requestAnimationFrame(step);
+	}
 	function _glidePanelSize(opts) {
 		// opts: { getPx, setPx, minPx, maxPx, velocityPxPerSec, onEnd }
 		const { getPx, setPx, minPx, maxPx, onEnd } = opts;
@@ -10751,16 +10788,32 @@ document.getElementById("mcp-add-btn")?.addEventListener("click", async () => {
 			lastMoveY = e.clientY;
 			lastMoveT = now;
 		});
+		// Read/write helpers for the current outliner (top-zone) size in px.
+		// Split-basis is stored as a %; convert both directions against the
+		// live panel height so drag + animation math agree.
+		function _readOutlinerPx(rect) {
+			const cur = rpPanel.style.getPropertyValue("--rp-top-basis").trim();
+			return cur.endsWith("%")
+				? (parseFloat(cur) / 100) * rect.height
+				: (parseFloat(cur) || rect.height * 0.35);
+		}
+		function _writeOutlinerPx(rect, px) {
+			rpPanel.style.setProperty("--rp-top-basis", ((px / rect.height) * 100).toFixed(2) + "%");
+		}
+		function _persistRpBasis() {
+			try {
+				const current = rpPanel.style.getPropertyValue("--rp-top-basis").trim();
+				if (current) localStorage.setItem(RP_TOP_KEY, current);
+			} catch {}
+		}
 		// Toggle-collapse — click the properties header (no drag) to snap
 		// Properties to its minimum height, or restore the previous size if
 		// it's already collapsed. Mirrors the AI Agent header's tap-to-
-		// collapse behavior on the left panel.
+		// collapse behavior on the left panel. Animated so the split glides
+		// instead of jumping.
 		function togglePropsCollapse() {
 			const rect = rpPanel.getBoundingClientRect();
-			const cur = rpPanel.style.getPropertyValue("--rp-top-basis").trim();
-			const curOutlinerPx = cur.endsWith("%")
-				? (parseFloat(cur) / 100) * rect.height
-				: (parseFloat(cur) || rect.height * 0.35);
+			const curOutlinerPx = _readOutlinerPx(rect);
 			// Handle itself takes RP_HANDLE_PX between the zones — subtract it
 			// so propsPx matches the real rendered height. Without this, at min
 			// the check computes propsPx = PROPS_MIN_PX + RP_HANDLE_PX (57) which
@@ -10768,23 +10821,51 @@ document.getElementById("mcp-add-btn")?.addEventListener("click", async () => {
 			// restoring.
 			const propsPx = rect.height - curOutlinerPx - RP_HANDLE_PX;
 			const AT_MIN = propsPx <= PROPS_MIN_PX + 2;
+			let targetOutlinerPx;
 			if (AT_MIN) {
 				// Restore — pop back to the saved outliner size (default ~35%).
 				const savedPx = parseFloat(rpPanel.dataset.savedOutlinerPx || "") || (rect.height * 0.35);
-				const clamped = Math.max(OUTLINER_MIN_PX, Math.min(rect.height - PROPS_MIN_PX - RP_HANDLE_PX, savedPx));
-				const pct = ((clamped / rect.height) * 100).toFixed(2) + "%";
-				rpPanel.style.setProperty("--rp-top-basis", pct);
-				try { localStorage.setItem(RP_TOP_KEY, pct); } catch {}
+				targetOutlinerPx = Math.max(OUTLINER_MIN_PX, Math.min(rect.height - PROPS_MIN_PX - RP_HANDLE_PX, savedPx));
 			} else {
 				// Collapse — save the current outliner size so we can bounce
 				// back on the next tap, then push the split all the way down.
 				rpPanel.dataset.savedOutlinerPx = String(curOutlinerPx);
-				const target = rect.height - PROPS_MIN_PX - RP_HANDLE_PX;
-				const pct = ((target / rect.height) * 100).toFixed(2) + "%";
-				rpPanel.style.setProperty("--rp-top-basis", pct);
-				try { localStorage.setItem(RP_TOP_KEY, pct); } catch {}
+				targetOutlinerPx = rect.height - PROPS_MIN_PX - RP_HANDLE_PX;
 			}
+			_animatePanelTo({
+				host: rpPanel,
+				getPx: () => _readOutlinerPx(rect),
+				setPx: (px) => _writeOutlinerPx(rect, px),
+				targetPx: targetOutlinerPx,
+				onEnd: _persistRpBasis,
+			});
 		}
+		// Exposed for callers outside this IIFE (e.g. the SCENE header on the
+		// left panel needs to know whether Properties is collapsed so it can
+		// decide between "toggle closed" and "expand open" semantics).
+		window._isPropsCollapsed = function() {
+			if (!rpPanel) return false;
+			const rect = rpPanel.getBoundingClientRect();
+			const curOutlinerPx = _readOutlinerPx(rect);
+			const propsPx = rect.height - curOutlinerPx - RP_HANDLE_PX;
+			return propsPx <= PROPS_MIN_PX + 2;
+		};
+		// Exposed for callers outside this IIFE. No-op if Properties is
+		// already open. Same easeOut restore as the header-tap toggle.
+		window._restorePropsIfMinimized = function() {
+			if (!rpPanel) return;
+			if (!window._isPropsCollapsed()) return;
+			const rect = rpPanel.getBoundingClientRect();
+			const savedPx = parseFloat(rpPanel.dataset.savedOutlinerPx || "") || (rect.height * 0.35);
+			const targetOutlinerPx = Math.max(OUTLINER_MIN_PX, Math.min(rect.height - PROPS_MIN_PX - RP_HANDLE_PX, savedPx));
+			_animatePanelTo({
+				host: rpPanel,
+				getPx: () => _readOutlinerPx(rect),
+				setPx: (px) => _writeOutlinerPx(rect, px),
+				targetPx: targetOutlinerPx,
+				onEnd: _persistRpBasis,
+			});
+		};
 		window.addEventListener("mouseup", (e) => {
 			const hadPending = pendingDown !== null;
 			pendingDown = null;
@@ -10926,17 +11007,28 @@ document.getElementById("mcp-add-btn")?.addEventListener("click", async () => {
 		function toggleAgentCollapse() {
 			if (!lpPanel) return;
 			const isCollapsed = lpPanel.classList.contains("lp-agent-collapsed");
+			const currentH = parseFloat(lpPanel.style.getPropertyValue("--lp-agent-h")) || 145;
+			let targetH;
 			if (isCollapsed) {
-				const savedH = parseFloat(lpPanel.dataset.savedAgentH || "") || 145;
-				setAgentHeight(savedH);
+				targetH = parseFloat(lpPanel.dataset.savedAgentH || "") || 145;
+				// Drop the class up front so the kicker un-dims immediately as
+				// the panel starts easing open — visual feedback for the tap
+				// arrives before the height animation finishes.
 				lpPanel.classList.remove("lp-agent-collapsed");
-				try { localStorage.setItem(LP_AGENT_H_KEY, String(savedH)); } catch {}
 			} else {
-				const currentH = parseFloat(lpPanel.style.getPropertyValue("--lp-agent-h")) || 145;
 				lpPanel.dataset.savedAgentH = String(currentH);
-				setAgentHeight(AGENT_COLLAPSED_H);
+				targetH = AGENT_COLLAPSED_H;
 				lpPanel.classList.add("lp-agent-collapsed");
 			}
+			_animatePanelTo({
+				host: lpPanel,
+				getPx: () => parseFloat(lpPanel.style.getPropertyValue("--lp-agent-h")) || 145,
+				setPx: (px) => setAgentHeight(px),
+				targetPx: targetH,
+				onEnd: () => {
+					try { localStorage.setItem(LP_AGENT_H_KEY, String(targetH)); } catch {}
+				},
+			});
 		}
 		window.addEventListener("mouseup", (e) => {
 			const wasPending = pendingDown;
@@ -11048,7 +11140,6 @@ function clearSelectionTint() {
 
 function applySelectionTint(obj) {
 	if (!obj || obj === renderCam) return;
-	if (obj.userData?.primKind === "splat") return;
 	// Skybox is a 50m inverted sphere wrapping the whole scene — a Box3Helper
 	// cage at that scale would fill the viewport with amber lines and hide
 	// every other object. The user is "selecting" the skybox via the Outliner
@@ -11061,7 +11152,18 @@ function applySelectionTint(obj) {
 	// mesh — the box stays tight to the geometry through any transform.
 	// Twelve line segments, zero shaders, works on every geometry kind.
 	const localBox = new THREE.Box3();
-	if (obj.isMesh && obj.geometry) {
+	if (obj.userData?.primKind === "splat" && typeof obj.getBoundingBox === "function") {
+		// spark.js SplatMesh — no THREE.Geometry, but its own bbox helper
+		// returns a local-space Box3 covering every gaussian's position.
+		// Gives the same "grab me" affordance as primitives so users can
+		// find and drag a splat as easily as a cube.
+		try {
+			const bb = obj.getBoundingBox(true);
+			if (bb) localBox.copy(bb);
+		} catch (e) {
+			console.warn("[splat] getBoundingBox failed for selection cage:", e);
+		}
+	} else if (obj.isMesh && obj.geometry) {
 		obj.geometry.computeBoundingBox();
 		if (obj.geometry.boundingBox) localBox.copy(obj.geometry.boundingBox);
 	} else {
@@ -12132,21 +12234,10 @@ document.querySelectorAll(".prim-btn[data-tool]").forEach(b => {
 // "TOOLS : MEDIAPIPE" in the section head. Mouseleave restores the base
 // section label. Applied broadly to every prim-btn that has a data-label.
 (() => {
-	// Objects' own section-head-row is CSS display:none (the fixed
-	// #lp-zone-top-header labels the zone instead). When hovering an OBJECTS
-	// button, retarget the swap to the zone-header kicker so the "OBJECTS :
-	// CUBE" preview actually reads. Falls back to the section's label for
-	// TOOLS / WORKFLOWS which still show their own head-row.
-	const topKicker = document.querySelector("#lp-zone-top-header .rp-kicker");
 	for (const btn of document.querySelectorAll(".prim-btn[data-label]")) {
 		const section = btn.closest(".section");
-		const localLabel = section?.querySelector(".section-label");
-		if (!localLabel) continue;
-		// If this section IS the first-of-type (Objects) whose head is
-		// hidden by CSS, drive the zone kicker instead. Otherwise the
-		// visible section-label wins.
-		const isFirstSection = section === section?.parentElement?.querySelector(".section:first-of-type");
-		const labelEl = (isFirstSection && topKicker) ? topKicker : localLabel;
+		const labelEl = section?.querySelector(".section-label");
+		if (!labelEl) continue;
 		btn.addEventListener("mouseenter", () => {
 			if (labelEl.dataset._origLabel === undefined) {
 				labelEl.dataset._origLabel = labelEl.textContent;
@@ -15489,10 +15580,23 @@ function runUtilTool(moduleId) {
 		// placeholder's transform.
 		let plane = objects.find(o => o.userData?.pcSource === true && !o.userData?.pcSourcePlane && o.visible !== false);
 		if (!plane) {
+			// Fresh placeholder — reset any prior upload / snapshot state
+			// so the source-image slot shows the empty "Using viewport
+			// snapshot" chip instead of the last-generated splat's source.
+			if (_utilUploadedImageUrl && _utilUploadedImageUrl.startsWith("blob:")) {
+				try { URL.revokeObjectURL(_utilUploadedImageUrl); } catch {}
+			}
+			_utilUploadedImageUrl = null;
+			_utilSourceIsUpload = false;
 			plane = spawnEmptyPcPlane();
 		} else {
 			select(plane);
 		}
+		// Tag which runtime the placeholder is for so the object inspector
+		// knows whether to render the Docker-container requirements pane
+		// (standalone only — the local variant assumes the user's ComfyUI
+		// is already running and doesn't need a setup panel).
+		plane.userData.tripoSplatRuntime = moduleId === "triposplat-standalone" ? "standalone" : "local";
 		refreshObjectInspector?.();
 		return;
 	}
@@ -15866,7 +15970,15 @@ async function _replacePcPlaneWithSplat(plyUrl) {
 	if (!plane) return;
 	try {
 		const r = await fetch(plyUrl);
+		if (!r.ok) throw new Error(`PLY fetch failed: HTTP ${r.status} for ${plyUrl}`);
 		const buf = await r.arrayBuffer();
+		// Guard against silent empty-buffer swaps — an empty PLY parses
+		// fine but lands a zero-geometry SplatMesh at (0,0,0), which reads
+		// on-screen as "the splat didn't render." Loud failure means the
+		// user sees a status blip instead of an invisible mesh.
+		if (!buf || buf.byteLength < 1024) {
+			throw new Error(`PLY payload empty or truncated (${buf?.byteLength ?? 0} B) — check server log, /output/ route may not be serving the file`);
+		}
 		const filename = plyUrl.split("/").pop() || "splat.ply";
 		const TARGET_SIZE = 2; // match the 2×2 placeholder plane's footprint
 		const splat = await loadSplat(buf, filename, {
@@ -15895,11 +16007,16 @@ async function _replacePcPlaneWithSplat(plyUrl) {
 			},
 		});
 		if (!splat) throw new Error("loadSplat returned null");
-		plane.visible = false;
-		plane.userData.pcSourcePlane = true; // reuse the pc-side flag so the
-		// placeholder-lookup guards for future re-opens filter it out.
+		// Old behavior stashed the placeholder as an invisible mesh + kept
+		// a userData ref for a possible "revert" path. In practice the
+		// hidden PC.* rows piled up in the outliner every generate and
+		// nothing consumed the ref. Cleaner: fully remove the placeholder
+		// from scene + tracked objects list once the splat's in place.
+		scene.remove(plane);
+		const idx = objects.indexOf(plane);
+		if (idx !== -1) objects.splice(idx, 1);
+		try { plane.geometry?.dispose?.(); plane.material?.dispose?.(); } catch {}
 		splat.userData.pcResult = true;
-		splat.userData.pcPlaneRef = plane;
 		// Cache the source PLY URL on the splat so the Point-Cloud conversion
 		// section can re-fetch + resample it at a user-picked density without
 		// re-running the workflow. Filename kept alongside for display.
@@ -17221,23 +17338,248 @@ function _resetPcPlaneToEmpty(plane) {
 // X button posts here so /image_url stops returning the stale entry.
 // (Server endpoint added in server/main.py alongside the video DELETE.)
 
+// ─── TripoSplat standalone requirements pane ───────────────────────
+// Mirrors AnimoFlow's motion-req flow: amber-pulse dots during the
+// probe, green when a row is ready, red-with-fix when a row's blocked.
+// State lives on the section element so re-selection of the placeholder
+// (which fires refreshObjectInspector) doesn't reset spinners or wipe
+// the cached last-good status. localStorage cache means the first
+// paint after page reload doesn't flash "checking…" for known-green
+// requirements.
+let _tsReqPollHandle = null;
+let _tsReqStarting = false;
+let _tsReqLastError = null;
+
+function _tsReqSection() {
+	return document.getElementById("obj-triposplat-req-section");
+}
+
+function _tsReqRenderRow(label, ok, statusText, actionHtml, checking) {
+	const dotColor = ok ? "#66cc7a" : (checking ? "#ffb454" : "#ff5c5c");
+	const dotClass = (!ok && checking) ? " motion-req-dot-checking" : "";
+	const status = checking && !ok ? "Checking…" : (ok ? "Ready" : (statusText || "Missing"));
+	return `
+		<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+			<span class="motion-req-dot${dotClass}" style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex:0 0 auto;box-shadow:0 0 6px ${dotColor}55"></span>
+			<div style="flex:1;min-width:0">
+				<div style="font-size:11px;color:rgba(255,255,255,0.85);font-weight:500">${label}</div>
+				<div style="font-size:9px;color:rgba(255,255,255,0.45);letter-spacing:0.03em;margin-top:1px">${status}</div>
+			</div>
+			${actionHtml || ""}
+		</div>
+	`;
+}
+
+function _refreshTripoSplatReqPane(force) {
+	const section = _tsReqSection();
+	if (!section) return;
+	let cached = section._tsReqs;
+	if (!cached) {
+		try {
+			const raw = localStorage.getItem("cb.triposplat.reqs");
+			if (raw) cached = JSON.parse(raw);
+		} catch {}
+	}
+	const reqs = cached || {
+		docker:    { ok: false, detail: "checking…", install_url: "https://www.docker.com/products/docker-desktop/" },
+		container: { ok: false, detail: "checking…" },
+		weights:   { ok: false, detail: "checking…", pipeline_ready: false },
+	};
+	section._tsReqs = reqs;
+	const checking = !section._tsReqsFetchedOnce || !!section._tsReqsChecking;
+
+	const linkBtn = (label, href) => `<a href="${href}" target="_blank" rel="noopener" style="font-size:10px;color:#ffb454;background:rgba(255,180,84,0.1);border:1px solid rgba(255,180,84,0.25);border-radius:3px;padding:3px 8px;text-decoration:none;letter-spacing:0.04em">${label} ↗</a>`;
+	const startBtn = () => {
+		const busy = !!_tsReqStarting;
+		return `<button type="button" id="ts-req-start" ${busy ? "disabled" : ""} style="font-size:10px;color:#ffb454;background:rgba(255,180,84,0.1);border:1px solid rgba(255,180,84,0.25);border-radius:3px;padding:3px 8px;cursor:${busy ? "wait" : "pointer"};letter-spacing:0.04em;display:inline-flex;align-items:center;gap:5px">${busy ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;border:1.5px solid rgba(255,180,84,0.25);border-top-color:#ffb454;animation:spin 0.9s linear infinite"></span>Starting…` : "Start ↗"}</button>`;
+	};
+
+	// Docker just-installed hint mirrors the AnimoFlow pane — a fresh
+	// install won't be visible to the server until run.bat is relaunched.
+	const dockerNeedsRestart = !reqs.docker.ok && /not on PATH|command not found|cannot find/i.test(reqs.docker.detail || "");
+	const dockerRestartHint = dockerNeedsRestart
+		? `<div style="margin:-2px 0 6px 16px;font-size:9px;color:rgba(255,180,84,0.8);letter-spacing:0.03em">↻ Restart ComfyBlockout (Ctrl-C run.bat &amp; relaunch) so the server picks up Docker's PATH.</div>`
+		: "";
+	const dockerRow = _tsReqRenderRow(
+		"Docker Desktop",
+		reqs.docker.ok,
+		reqs.docker.ok ? "Running" : (reqs.docker.detail || "Not detected"),
+		reqs.docker.ok ? "" : linkBtn("Install", reqs.docker.install_url),
+		checking,
+	) + dockerRestartHint;
+
+	const canStartContainer = reqs.docker.ok && !reqs.container.ok;
+	const containerRow = _tsReqRenderRow(
+		"Container running",
+		reqs.container.ok,
+		reqs.container.ok
+			? `Running · ${reqs.container.detail || "triposplat"}`
+			: (_tsReqStarting
+				? "Starting container (first build pulls CUDA + deps — ~5 min)…"
+				: (reqs.docker.ok ? "Not started yet" : "Needs Docker first")),
+		canStartContainer ? startBtn() : "",
+		checking,
+	);
+
+	const weightsRow = _tsReqRenderRow(
+		"Model weights",
+		reqs.weights.ok,
+		reqs.weights.ok
+			? (reqs.weights.pipeline_ready ? "Downloaded · pipeline warm" : "Downloaded · pipeline cold (first Generate loads it)")
+			: (reqs.container.ok ? (reqs.weights.detail || "Downloading from HuggingFace…") : "Needs container first"),
+		"",
+		checking,
+	);
+
+	const allGreen = reqs.docker.ok && reqs.container.ok && reqs.weights.ok;
+	const showRequirements = !allGreen || !!section._tsReqsExpanded;
+
+	// Error dock (docks under the container row since Start is the only
+	// user-initiated action that can fail here).
+	const errBanner = _tsReqLastError ? `
+		<div style="margin:2px 0 6px 0;padding:8px 10px;background:rgba(255,80,80,0.08);border:1px solid rgba(255,80,80,0.25);border-radius:4px;display:flex;gap:8px;align-items:flex-start">
+			<div style="flex:1;font-size:10px;color:#ff8a8a;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;line-height:1.4;word-break:break-word;max-height:180px;overflow-y:auto">${_tsReqLastError.replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c])}</div>
+			<button type="button" id="ts-req-err-dismiss" style="background:transparent;border:none;color:rgba(255,138,138,0.6);cursor:pointer;font-size:12px;line-height:1;padding:0 2px;flex:0 0 auto">×</button>
+		</div>
+	` : "";
+
+	section.innerHTML = `
+		${allGreen ? `
+			<button type="button" id="ts-env-chip" title="Expand requirements" style="display:flex;align-items:center;gap:8px;width:100%;background:rgba(102,204,122,0.06);border:1px solid rgba(102,204,122,0.2);border-radius:4px;padding:6px 10px;cursor:pointer;color:rgba(255,255,255,0.75);font:inherit;font-size:11px;letter-spacing:0.04em">
+				<span style="width:8px;height:8px;border-radius:50%;background:#66cc7a;box-shadow:0 0 6px rgba(102,204,122,0.4);flex:0 0 auto"></span>
+				<span style="flex:1;text-align:left">Environment ready</span>
+				<span style="font-size:9px;color:rgba(255,255,255,0.4)">${showRequirements ? "hide ▲" : "details ▼"}</span>
+			</button>
+		` : ""}
+		${showRequirements ? `
+			<div class="section-label" style="display:flex;justify-content:space-between;align-items:center;margin-top:${allGreen ? "8px" : "0"}">
+				<span>Requirements</span>
+				<button type="button" id="ts-req-refresh" title="Re-check" style="font-size:10px;color:${checking ? "rgba(255,180,84,0.9)" : "rgba(255,255,255,0.55)"};background:transparent;border:1px solid ${checking ? "rgba(255,180,84,0.4)" : "rgba(255,255,255,0.1)"};border-radius:3px;padding:2px 6px;cursor:pointer;letter-spacing:0.04em;display:inline-flex;align-items:center;gap:5px">${checking ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;border:1.5px solid rgba(255,180,84,0.25);border-top-color:#ffb454;animation:spin 0.9s linear infinite"></span>` : ""}Re-check</button>
+			</div>
+			<div style="margin-top:6px">
+				${dockerRow}
+				${containerRow}
+				${errBanner}
+				${weightsRow}
+			</div>
+		` : ""}
+	`;
+
+	// Wire the reveal chip
+	section.querySelector("#ts-env-chip")?.addEventListener("click", () => {
+		section._tsReqsExpanded = !section._tsReqsExpanded;
+		_refreshTripoSplatReqPane();
+	});
+	// Re-check pulls fresh state now
+	section.querySelector("#ts-req-refresh")?.addEventListener("click", () => {
+		_probeTripoSplatReqs(true);
+	});
+	// Start container — POSTs /api/requirements/triposplat/start_container
+	// then aggressively re-polls so the container row flips as soon as
+	// docker ps shows the service.
+	section.querySelector("#ts-req-start")?.addEventListener("click", async () => {
+		if (_tsReqStarting) return;
+		_tsReqStarting = true;
+		_tsReqLastError = null;
+		_refreshTripoSplatReqPane();
+		try {
+			const r = await fetch("/api/requirements/triposplat/start_container", { method: "POST" });
+			if (!r.ok) {
+				const t = await r.text().catch(() => "");
+				throw new Error(t || `HTTP ${r.status}`);
+			}
+			const j = await r.json().catch(() => null);
+			if (j && !j.ok) throw new Error(j.detail || "start failed");
+		} catch (e) {
+			_tsReqLastError = String(e?.message || e).slice(0, 800);
+		} finally {
+			_tsReqStarting = false;
+			_refreshTripoSplatReqPane();
+			// Fire an immediate probe so the row flips as soon as the
+			// container is up. First build can take minutes; the poller
+			// keeps ticking, this is just the head start.
+			_probeTripoSplatReqs(false);
+		}
+	});
+	section.querySelector("#ts-req-err-dismiss")?.addEventListener("click", () => {
+		_tsReqLastError = null;
+		_refreshTripoSplatReqPane();
+	});
+}
+
+async function _probeTripoSplatReqs(showChecking) {
+	const section = _tsReqSection();
+	if (!section) return;
+	const wasReady = !!(section._tsReqs && section._tsReqs.docker?.ok && section._tsReqs.container?.ok && section._tsReqs.weights?.ok);
+	if (showChecking) {
+		section._tsReqsChecking = true;
+		_refreshTripoSplatReqPane();
+	}
+	try {
+		const r = await fetch("/api/requirements/triposplat");
+		if (!r.ok) throw new Error(`HTTP ${r.status}`);
+		const j = await r.json();
+		section._tsReqs = j;
+		section._tsReqsFetchedOnce = true;
+		try { localStorage.setItem("cb.triposplat.reqs", JSON.stringify(j)); } catch {}
+	} catch (e) {
+		// Server unreachable — leave whatever state we had, just clear the
+		// checking flag so dots stop pulsing forever.
+		console.warn("[triposplat] requirements probe failed:", e);
+	} finally {
+		section._tsReqsChecking = false;
+		_refreshTripoSplatReqPane();
+		// Always re-run refreshObjectInspector so the pcSection visibility
+		// gate picks up the latest reqs state — cheap enough to run on
+		// every poll (5s cadence), and avoids the "Environment ready" chip
+		// visible with no source-image controls underneath when the initial
+		// render fired before this probe resolved.
+		refreshObjectInspector?.();
+	}
+}
+
+function _startTripoSplatReqPolling() {
+	if (_tsReqPollHandle) return;
+	// First check fires immediately; subsequent every 5s while the pane
+	// is visible. Interval is stopped when the placeholder is deselected
+	// (see the hide branch in refreshObjectInspector).
+	_probeTripoSplatReqs(true);
+	_tsReqPollHandle = setInterval(() => _probeTripoSplatReqs(false), 5000);
+}
+function _stopTripoSplatReqPolling() {
+	if (_tsReqPollHandle) {
+		clearInterval(_tsReqPollHandle);
+		_tsReqPollHandle = null;
+	}
+}
+
 // Refresh the object-inspector's Source Image thumb + status to match the
 // current pcPlaceholder state — either a stashed upload URL, the plane's
 // live texture, or the "no source" fallback. Called from refreshObjectInspector
 // on selection and from the upload/generate helpers after they mutate state.
 function _refreshPcPlaceholderThumb(plane) {
+	// gen-slot chip: filled = uploaded/plane-textured image, empty =
+	// viewport snapshot will be used. `.has-image` on the inner thumb
+	// hides the upload glyph automatically; `.filled` on the outer slot
+	// swaps its border style + label color to the "picked" state.
+	const slot = document.getElementById("obj-pc-slot");
 	const thumb = document.getElementById("obj-pc-thumb");
-	if (!thumb) return;
+	const label = document.getElementById("obj-pc-label");
+	if (!slot || !thumb || !label) return;
 	// Priority: the fresh upload URL (client-side blob) wins over the
 	// plane texture (which may still be the amber empty-state placeholder).
 	const map = plane?.material?.map;
 	const src = _utilUploadedImageUrl || map?.image?.src || null;
 	if (src) {
 		thumb.style.backgroundImage = `url("${src}")`;
-		thumb.textContent = "";
+		thumb.classList.add("has-image");
+		slot.classList.add("filled");
+		label.textContent = "Uploaded image";
 	} else {
 		thumb.style.backgroundImage = "";
-		thumb.textContent = "NO SOURCE — UPLOAD ONE";
+		thumb.classList.remove("has-image");
+		slot.classList.remove("filled");
+		label.textContent = "Using viewport snapshot";
 	}
 }
 
@@ -17267,8 +17609,12 @@ async function _pcHandleUpload(file) {
 		if (_utilUploadedImageUrl) { try { URL.revokeObjectURL(_utilUploadedImageUrl); } catch {} }
 		_utilUploadedImageUrl = URL.createObjectURL(uploadFile);
 		_setPcStatus?.(`image saved — ready to generate`, "ok");
+		// Skip texturing the placeholder plane with the uploaded image —
+		// the flat billboard in-scene read as "here's the final 3D result"
+		// even though it's just a preview. The properties-pane slot chip
+		// carries the visual confirmation of what's queued; the plane
+		// stays as its plain amber "waiting" state until the splat lands.
 		const pcPlane = objects.find(o => o.userData?.pcSource === true && !o.userData?.pcSourcePlane && o.visible !== false);
-		if (pcPlane) _applyImageBlobToPcPlane(pcPlane, uploadFile);
 		_refreshPcPlaceholderThumb(pcPlane);
 	} catch (err) {
 		console.error("[pointcloud] upload failed:", err);
@@ -17303,8 +17649,14 @@ async function _pcGenerate() {
 		_setPcStatus?.(`done · ${j.filename || "saved to Assets"}`, "ok");
 		window.refreshAssets?.();
 		// One-shot: TripoSplat outputs a gaussian splat PLY, always render it
-		// as a spark.js SplatMesh at the placeholder's transform.
-		if (j.filename) await _replacePcPlaneWithSplat(`/output/${j.filename}`);
+		// as a spark.js SplatMesh at the placeholder's transform. Use j.url
+		// (which the backend has already built with the correct extension-
+		// routed subfolder like `/output/3d/…`) rather than assuming the
+		// PLY sits at the /output root — server-side new_output_path routes
+		// 3d assets under a subfolder, so /output/<filename> would 404 and
+		// hand loadSplat an empty buffer.
+		const swapUrl = j.url || (j.filename ? `/output/3d/${j.filename}` : null);
+		if (swapUrl) await _replacePcPlaneWithSplat(swapUrl);
 	} catch (err) {
 		console.error("[triposplat] generate failed:", err);
 		_setPcStatus?.(`failed · ${String(err.message || err).slice(0, 120)}`, "error");
@@ -17351,6 +17703,13 @@ function _setPcRunButton(phase) {
 // pass is enough — no rebuild each selection.
 (function wirePcObjectInspectorButtons() {
 	const hook = () => {
+		// Chip IS the upload trigger — click anywhere on the row opens
+		// the file picker. Legacy hidden button below stays wired so any
+		// downstream code (recorder → run chains) that still clicks it
+		// programmatically continues to work.
+		document.getElementById("obj-pc-slot")?.addEventListener("click", () => {
+			document.getElementById("obj-pc-upload-file")?.click();
+		});
 		document.getElementById("obj-pc-upload-btn")?.addEventListener("click", () => {
 			document.getElementById("obj-pc-upload-file")?.click();
 		});
@@ -20522,31 +20881,25 @@ for (const section of document.querySelectorAll("#panel .section.collapsible")) 
 		}
 	});
 }
-// The OBJECTS section's own head-row is now hidden (its label lives in the
-// dedicated #lp-zone-top-header band above). Wire that band to toggle the
-// section instead — and force-uncollapse on boot in case a stale
-// persisted-collapsed state would leave the grid hidden with no way to reopen.
-(() => {
-	const objSection = document.querySelector('#lp-zone-top-body [data-section="objects"]');
-	const header = document.getElementById("lp-zone-top-header");
-	if (!objSection) return;
-	// Purge any lingering collapsed state so the OBJECTS grid is always visible
-	// after the head-row hide — the persisted key had no fallback opener before.
-	objSection.classList.remove("collapsed");
-	if (collapsedSections.has("objects")) {
-		collapsedSections.delete("objects");
-		saveCollapsedSections();
+// SCENE header (icon + "Scene" label) toggles the Scene properties pane.
+// - Properties zone collapsed → always open Scene AND ease the zone back to
+//   the user's last saved height. Toggling closed while the zone is already
+//   at min would produce no visible change, so a click at that state has to
+//   read as "expand + show".
+// - Properties zone open + Scene pane already showing → second click closes
+//   back to the default pane (Object if something is selected, else empty).
+// - Properties zone open + some other pane showing → switch to Scene.
+// Project-name click enters the inline rename input, wired on #project-name.
+document.getElementById("lp-scene-header")?.addEventListener("click", () => {
+	const pane = document.getElementById("rp-pane-scene");
+	const propsCollapsed = window._isPropsCollapsed?.() ?? false;
+	if (pane && !pane.hidden && !propsCollapsed) {
+		forceRightPane(defaultRightPane());
+	} else {
+		forceRightPane("scene", "Scene");
+		if (propsCollapsed) window._restorePropsIfMinimized?.();
 	}
-	if (!header) return;
-	header.style.cursor = "pointer";
-	header.addEventListener("click", (e) => {
-		if (e.target.closest("button, input, textarea, select")) return;
-		objSection.classList.toggle("collapsed");
-		if (objSection.classList.contains("collapsed")) collapsedSections.add("objects");
-		else collapsedSections.delete("objects");
-		saveCollapsedSections();
-	});
-})();
+});
 
 // ── Assistant (LLM + Comfy MCP) ───────────────────────────────────
 const assistantLog = document.getElementById("assistant-log");
@@ -22655,14 +23008,10 @@ updateViewToggleIcon(typeof activeView !== "undefined" ? activeView : "scene");
 	if (boot) queueMicrotask(() => setInsetOn(true));
 })();
 
-// Top-left Scene-properties button — opens/closes the Scene pane without
-// touching the viewport view. Second click closes back to the default pane
-// (Object if something is selected, else nothing).
-document.getElementById("scene-props-btn")?.addEventListener("click", () => {
-	const pane = document.getElementById("rp-pane-scene");
-	if (pane && !pane.hidden) forceRightPane(defaultRightPane());
-	else forceRightPane("scene", "Scene");
-});
+// Scene-properties click handler now lives on the left-panel #lp-scene-header
+// (icon + "Scene" label together open/close the pane). The old #scene-props-btn
+// viewport-toolbar pill was removed — that entry point was redundant once the
+// SCENE header carried the same behavior.
 
 // Snap enablement persists at the workspace level so the transform gizmo's
 // snap state carries across sessions — matches the "workspace should be
@@ -23609,10 +23958,36 @@ function refreshObjectInspector() {
 	// not tweaking a plane. Post-Generate, this swaps to a Points object and
 	// the branch below handles that state.
 	const isPcPlaceholder = selected.userData?.primKind === "pcPlaceholder";
+	// TripoSplat standalone requirements pane — only shown when the
+	// selected placeholder was spawned for the Docker runtime (the local
+	// variant hits a running ComfyUI directly and has no setup panel).
+	// Polling starts on show, stops on hide so an idle scene doesn't fire
+	// /api/requirements every 5s forever.
+	const tsReqSection = document.getElementById("obj-triposplat-req-section");
+	const isTsStandalone = isPcPlaceholder && selected.userData?.tripoSplatRuntime === "standalone";
+	if (tsReqSection) {
+		tsReqSection.style.display = isTsStandalone ? "" : "none";
+		if (isTsStandalone) {
+			_refreshTripoSplatReqPane();
+			_startTripoSplatReqPolling();
+		} else {
+			_stopTripoSplatReqPolling();
+		}
+	}
 	const pcSection = document.getElementById("obj-pc-source-section");
 	if (pcSection) {
-		pcSection.style.display = isPcPlaceholder ? "" : "none";
-		if (isPcPlaceholder) _refreshPcPlaceholderThumb(selected);
+		// For the standalone runtime, keep the Source Image / Upload /
+		// Generate block hidden until the environment is green — otherwise
+		// users are staring at controls that would fail immediately. The
+		// requirements pane above surfaces the missing pieces. Local
+		// variant has no reqs, so it shows immediately.
+		const tsReqs = tsReqSection?._tsReqs;
+		const tsReady = !isTsStandalone || (
+			tsReqs && tsReqs.docker?.ok && tsReqs.container?.ok && tsReqs.weights?.ok
+		);
+		const show = isPcPlaceholder && tsReady;
+		pcSection.style.display = show ? "" : "none";
+		if (show) _refreshPcPlaceholderThumb(selected);
 	}
 	// Tripo 3D placeholder (pre-Generate) — same pattern as PC above but
 	// with a mode toggle (Text/Image) inside the section, because the
@@ -28974,11 +29349,16 @@ function addJointKeyframe(wrapper, boneName) {
 	const t = playhead;
 	const q = bone.quaternion;
 	const others = track.filter(k => Math.abs(k.t - t) > 0.005);
-	const isBetween = others.length >= 2 && t > others[0].t && t < others[others.length - 1].t;
+	// Every new joint key defaults to a plain linear anchor. Middle
+	// inserts used to default to "through" (positional waypoint that
+	// bends the path without pausing), but that surprised users who
+	// expected a normal timing anchor when scrubbing to a moment and
+	// pressing S. Users can still opt into "through" via the ease
+	// dropdown per key.
 	const key = {
 		t,
 		quat: [q.x, q.y, q.z, q.w],
-		ease: isBetween ? "through" : "linear",
+		ease: "linear",
 	};
 	others.push(key);
 	others.sort((a, b) => a.t - b.t);
@@ -29039,15 +29419,11 @@ function addObjectKeyframe(obj) {
 	// Replace any existing key at this time (within 0.5% — same dedup window as camera).
 	obj.userData.keyframes = obj.userData.keyframes.filter(k => Math.abs(k.t - t) > 0.005);
 	const cap = captureObjectState(obj);
-	// Keys inserted BETWEEN existing keys default to "through" (positional waypoint, no
-	// new timing anchor) — most of the time when you slot a key into an in-progress
-	// motion you want to bend the arc, not pause at it. Outer keys default to easeInOut.
-	const others = obj.userData.keyframes;
-	const isBetween = others.length >= 2
-		&& t > others[0].t
-		&& t < others[others.length - 1].t;
-	const defaultEase = isBetween ? "through" : "easeInOut";
-	const k = { t, pos: cap.pos, quat: cap.quat, scale: cap.scale, ease: defaultEase };
+	// Every new key defaults to easeInOut — the previous "middle keys get
+	// 'through'" auto-behaviour was surprising when users expected a normal
+	// timing anchor. Users can still opt into "through" per key via the
+	// ease dropdown when they want a positional waypoint.
+	const k = { t, pos: cap.pos, quat: cap.quat, scale: cap.scale, ease: "easeInOut" };
 	// Carry the optional opacity channel through (annotations only — undefined
 	// on every other primKind so the field just doesn't get added).
 	if (typeof cap.opacity === "number") k.opacity = cap.opacity;
