@@ -10914,8 +10914,18 @@ function select(obj, opts = {}) {
 		// tall property panes (Particles / Scatter / etc.) the Transform
 		// controls otherwise start below the fold, so users can't just
 		// grab a value without hunting. Deferred a frame so the pane has
-		// laid out its content first.
-		requestAnimationFrame(() => _scrollPropsToTransform?.());
+		// laid out its content first. Annotations override to scroll to
+		// the TOP instead so the tool toolbar (Pen/Arrow/Box) + Color/
+		// Width/Opacity read first — you clicked the tool to configure it,
+		// not to nudge Transform.
+		requestAnimationFrame(() => {
+			if (selected?.userData?.primKind === "annotation") {
+				const body = document.getElementById("rp-body");
+				body?.scrollTo({ top: 0, behavior: "smooth" });
+			} else {
+				_scrollPropsToTransform?.();
+			}
+		});
 	} else {
 		transform.detach();
 		if (anchorMode) pivotMarker.visible = false;
