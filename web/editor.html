@@ -4442,7 +4442,12 @@
 				     without a spinner the user would see a broken-image icon or
 				     the previous stale snapshot flashing until the fresh one lands. -->
 				<div id="result-overlay-spinner" hidden></div>
-				<button id="result-save-overlay" type="button" title="Download this render">
+				<!-- Hover save-icon removed — every generated render + blockout
+				     snapshot already lands in the Assets pane, so a per-image
+				     download button was redundant. Element left in the DOM
+				     hidden so the existing click wiring (line ~25563) survives
+				     without JS branches; flip display back if we want it back. -->
+				<button id="result-save-overlay" type="button" title="Download this render" style="display:none">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
 				</button>
 				<!-- Clear button — only visible when Blockout is showing a recorded
