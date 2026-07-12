@@ -248,6 +248,14 @@ if not FFMPEG_BIN:
 
 _video_store: dict[str, dict] = {}
 _image_store: dict[str, dict] = {}
+# Per-node run status — keyed by node_id, holds the current phase of an
+# in-flight generation ("submitting" | "generating" | "fetching" |
+# "downloaded" | "cloud_done_no_download" | "failed"). Modules that want to
+# report progress accept a `status_cb` kwarg and call it with a phase string;
+# the /api/run/status/{node_id} endpoint reads from here. Only the LATEST
+# run's status is retained (a new run overwrites, terminal states expire
+# once the frontend has seen them).
+_run_status: dict[str, dict] = {}
 _scene_store: dict[str, Any] = {}
 _prompt_store: dict[str, str] = {}
 
@@ -2654,6 +2662,28 @@ async def workflows_analyze(request: Request):
     )
 
 
+@app.get("/api/run/status/{node_id}")
+async def run_status(node_id: str):
+    """Return the current per-node run phase, if any. Frontend polls this
+    while a generation is in-flight so it can show 'Generated in Cloud ·
+    fetching…' as soon as the Cloud job completes, without waiting for the
+    /api/run response body (which only lands after the download loop
+    finishes — many minutes later for partner-3D nodes)."""
+    st = _run_status.get(node_id)
+    if not st:
+        return JSONResponse({"phase": None})
+    return JSONResponse(st)
+
+
+def _make_status_cb(node_id: str):
+    """Return a closure the module can pass into shared helpers to write
+    intermediate phase updates. Keeps the module code shape simple — a
+    one-arg callable, no direct import of `_run_status`."""
+    def _cb(phase: str, **extra):
+        _run_status[node_id] = {"phase": phase, **extra}
+    return _cb
+
+
 @app.post("/api/run/{module_id}")
 async def run_module(module_id: str, request: Request):
     m = MODULES.get(module_id)
@@ -2662,6 +2692,10 @@ async def run_module(module_id: str, request: Request):
     body = await request.json()
     node_id = str(body.get("node_id", "")).strip() or "default"
     inputs = dict(body.get("inputs") or {})
+    # Seed the per-node status early so a polling client sees "submitting"
+    # rather than a null phase during the (usually brief) upload + submit
+    # window. Modules that care about progress will overwrite via status_cb.
+    _run_status[node_id] = {"phase": "submitting"}
 
     # Client flag — user hit × on the viewport-blockout row (text-to-image mode).
     # Skips scene-image resolution below so no image_path gets injected, and
@@ -2939,16 +2973,29 @@ async def run_module(module_id: str, request: Request):
         parts.append(f"USER REQUEST: {user_prompt}")
         inputs["prompt"] = "\n\n".join(parts)
 
+    # Give the module a per-node status callback it can pass down into
+    # helpers so the frontend can poll intermediate progress. Modules that
+    # don't care about progress just ignore the kwarg (**_ absorbs it).
+    inputs["status_cb"] = _make_status_cb(node_id)
     try:
         result = await m.run(data_dir=DATA_DIR, **inputs)
     except ValueError as e:
+        _run_status[node_id] = {"phase": "failed", "detail": str(e)[:200]}
         raise HTTPException(400, str(e) or "bad input")
     except RuntimeError as e:
         msg = str(e) or "comfy generate failed (no stderr/stdout captured)"
         print(f"[cb-app] run_module {module_id} RuntimeError: {msg}")
+        # Preserve any richer phase that the module already wrote (e.g.
+        # "cloud_done_no_download") — only overwrite the generic in-flight
+        # phases. This lets the frontend surface Cloud-completed-but-not-
+        # downloadable as distinct from an early submit-time failure.
+        prev = _run_status.get(node_id, {}).get("phase")
+        if prev in (None, "submitting", "generating", "fetching"):
+            _run_status[node_id] = {"phase": "failed", "detail": msg[:200]}
         raise HTTPException(500, msg)
     except Exception as e:
         print(f"[cb-app] run_module {module_id} {type(e).__name__}: {e}")
+        _run_status[node_id] = {"phase": "failed", "detail": f"{type(e).__name__}: {e}"[:200]}
         raise HTTPException(500, f"{type(e).__name__}: {e}")
 
     out_path = Path(result["path"])

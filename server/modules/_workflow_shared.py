@@ -113,12 +113,24 @@ def _resolve_output_exts(manifest: dict) -> list[str]:
 
 async def _submit_wait_download(
     workflow: dict, module_id: str, output_exts: list[str], data_dir: Path,
+    status_cb=None,
 ) -> dict:
     """Submit → poll → download → move newest matching output into data_dir.
 
     Same three-stage pattern as `_tripo_shared.run_workflow_and_fetch_glb` — see
     the notes there for why we split submit from `jobs wait` (Cloud drops the
-    long-lived HTTP stream mid-run on quiet workflows)."""
+    long-lived HTTP stream mid-run on quiet workflows).
+
+    `status_cb(phase, **extra)` is optional; when provided we emit
+    "generating" (right after submit) and "fetching" (once jobs_wait returns)
+    so the frontend can update its running-state hint mid-run instead of
+    silently waiting for the whole flow to complete."""
+    def _emit(phase: str, **extra):
+        if status_cb:
+            try:
+                status_cb(phase, **extra)
+            except Exception:
+                pass  # never let a status hook take down a real run
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as tf:
         json.dump(workflow, tf)
         patched_path = Path(tf.name)
@@ -137,6 +149,7 @@ async def _submit_wait_download(
         prompt_id = ((env.get("data") or {}).get("prompt_id")) or _extract_prompt_id(out)
         if not prompt_id:
             raise RuntimeError(f"couldn't parse prompt_id from `comfy run`. First 500 chars: {out[:500]}")
+        _emit("generating", prompt_id=prompt_id)
 
         # Job started NOW — anything freshly landing in output/ from this point
         # forward is our artifact. 30s pad for clock drift. Kept here so the
@@ -187,6 +200,10 @@ async def _submit_wait_download(
             exc = t.exception()
             if exc is not None:
                 raise exc
+        # Cloud has completed the job (or the file already appeared on disk).
+        # Flip the frontend hint from "generating" to "fetching" so the user
+        # sees Cloud finished even if the download loop drags on for minutes.
+        _emit("fetching", prompt_id=prompt_id)
         # Either the CLI finished waiting OR the poller spotted a fresh file
         # on disk — both proceed the same way, running the pre-scan and (if
         # needed) the download retry loop. The parallel race is just a hedge
@@ -251,6 +268,12 @@ async def _submit_wait_download(
         if not candidates:
             candidates = _scan_output_dir()
         if not candidates:
+            # Cloud finished the job (jobs_wait returned ok) but no artifact
+            # ever landed. Common with partner-3D nodes whose files stay in
+            # Cloud's Media Assets and never populate job.outputs. Emit a
+            # distinct phase so the frontend can show "Generated in Cloud —
+            # not retrievable" rather than a generic failure.
+            _emit("cloud_done_no_download", prompt_id=prompt_id)
             raise RuntimeError(f"no output matching {output_exts} found under {scratch} or fresh in {data_dir}")
         src = max(candidates, key=lambda p: p.stat().st_mtime)
         ext = src.suffix.lstrip(".").lower()

@@ -98,7 +98,8 @@ async def upload_image_to_cloud(image_path: Path) -> str:
     return uploads[0]["cloud_name"]
 
 
-async def run_workflow_and_fetch_glb(workflow: dict, module_id: str, data_dir: Path) -> dict:
+async def run_workflow_and_fetch_glb(workflow: dict, module_id: str, data_dir: Path,
+                                      status_cb=None) -> dict:
     """Submit a patched workflow to Cloud, wait for it, download the .glb, and
     stash it under data_dir with the standard out_<module>_<ts>_<uuid>.glb name
     so it lands in the Assets pane. Returns the {path, filename, ext} envelope
@@ -114,4 +115,5 @@ async def run_workflow_and_fetch_glb(workflow: dict, module_id: str, data_dir: P
     # Inline import — `_workflow_shared` imports names from this module at
     # module load, so a top-level import here would create a cycle.
     from ._workflow_shared import _submit_wait_download
-    return await _submit_wait_download(workflow, module_id, ["glb", "gltf"], data_dir)
+    return await _submit_wait_download(workflow, module_id, ["glb", "gltf"], data_dir,
+                                        status_cb=status_cb)

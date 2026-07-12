@@ -22,13 +22,19 @@ from . import tripo_image_to_model, tripo_text_to_model
 
 
 async def run(*, mode: str = "image", prompt: str = "", image_path: Path | None = None,
-              data_dir: Path, **kw):
+              data_dir: Path, pbr: bool = False, texture_quality: str = "standard",
+              quad: bool = False, status_cb=None, **kw):
     mode = (mode or "image").strip().lower()
+    # Shared options — forwarded to whichever underlying module runs. Both
+    # modules accept the same three kwargs and patch them onto the Tripo
+    # widget set of their respective workflow.
+    opts = dict(pbr=bool(pbr), texture_quality=texture_quality, quad=bool(quad),
+                status_cb=status_cb)
     if mode == "text":
-        return await tripo_text_to_model.run(prompt=prompt, data_dir=data_dir, **kw)
+        return await tripo_text_to_model.run(prompt=prompt, data_dir=data_dir, **opts, **kw)
     if not image_path:
         raise ValueError("image mode requires a source image — snapshot the viewport first")
-    return await tripo_image_to_model.run(image_path=Path(image_path), data_dir=data_dir, **kw)
+    return await tripo_image_to_model.run(image_path=Path(image_path), data_dir=data_dir, **opts, **kw)
 
 
 MODULE = ModuleDef(

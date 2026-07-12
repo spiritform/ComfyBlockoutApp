@@ -2740,6 +2740,30 @@
 	}
 	.pill-toggle button:hover { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.85); }
 	.pill-toggle button.active { background: rgba(255,180,84,0.18); color: #ffb454; }
+	/* Inline option row — label on the left, inline text choices on the
+	   right. Used in the Tripo 3D pane's sub-settings so they read as
+	   secondary knobs, distinct from the bold pill-toggles used for Mode. */
+	.opt-row {
+		display: flex; align-items: center; justify-content: flex-start;
+		gap: 12px; padding: 5px 0;
+	}
+	.opt-row .opt-label {
+		font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+		color: rgba(255,255,255,0.5);
+	}
+	.opt-row .opt-choices {
+		display: inline-flex; align-items: center; gap: 2px;
+		font-size: 11px;
+	}
+	.opt-row .opt-choice {
+		background: transparent; border: none; padding: 2px 6px; border-radius: 3px;
+		color: rgba(255,255,255,0.4); font: inherit; font-size: 11px; cursor: pointer;
+	}
+	.opt-row .opt-choice:hover { color: rgba(255,255,255,0.85); }
+	.opt-row .opt-choice.active { color: #ffb454; }
+	.opt-row .opt-choice-sep {
+		color: rgba(255,255,255,0.15); user-select: none;
+	}
 	#result-toggle #result-close {
 		padding: 0 8px; font-size: 12px; font-weight: 600;
 		color: rgba(255,255,255,0.45);
@@ -4770,6 +4794,37 @@
 					<div id="obj-tripo3d-text-body" style="display:none">
 						<textarea id="obj-tripo3d-prompt" rows="3" placeholder="Describe the 3D model — e.g. 'armored knight kneeling with sword, ornate silver-gold plate armor'" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.28);color:rgba(255,255,255,0.9);border:1px solid rgba(255,255,255,0.08);border-radius:3px;padding:6px 8px;font-size:11px;font-family:inherit;resize:vertical;margin-bottom:8px"></textarea>
 					</div>
+					<!-- Shared sub-options for both modes — inline label/choice
+					     rows (label on the left, options on the right) so they
+					     read as secondary knobs, visually distinct from the
+					     bold Mode pill above. Persisted to the placeholder's
+					     userData; seeds are always randomized server-side. -->
+					<div style="margin:4px 0 8px">
+						<div class="opt-row">
+							<span class="opt-label">Materials:</span>
+							<div class="opt-choices">
+								<button type="button" class="opt-choice active" id="obj-tripo3d-pbr-matte">Normal</button>
+								<span class="opt-choice-sep">·</span>
+								<button type="button" class="opt-choice" id="obj-tripo3d-pbr-glossy">PBR</button>
+							</div>
+						</div>
+						<div class="opt-row">
+							<span class="opt-label">Texture:</span>
+							<div class="opt-choices">
+								<button type="button" class="opt-choice active" id="obj-tripo3d-texq-standard">Standard</button>
+								<span class="opt-choice-sep">·</span>
+								<button type="button" class="opt-choice" id="obj-tripo3d-texq-detailed">Detailed</button>
+							</div>
+						</div>
+						<div class="opt-row">
+							<span class="opt-label">Topology:</span>
+							<div class="opt-choices">
+								<button type="button" class="opt-choice active" id="obj-tripo3d-quad-tris">Tris</button>
+								<span class="opt-choice-sep">·</span>
+								<button type="button" class="opt-choice" id="obj-tripo3d-quad-quads">Quads</button>
+							</div>
+						</div>
+					</div>
 					<button type="button" id="obj-tripo3d-generate-btn" class="mp-still-btn" style="width:100%">Generate</button>
 					<div class="hint" id="obj-tripo3d-status" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5)">Idle</div>
 					<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Comfy Cloud · Tripo H3.1. Image mode: uses the current viewport snapshot or an uploaded still. Text mode: describe the model. Output is a .glb mesh dropped at the placeholder's position.</div>
@@ -5636,11 +5691,16 @@
 				</div>
 
 				<div class="section" id="fog-section">
-					<div class="section-head-row">
-						<label class="section-label" title="Enable scene fog" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">
-							<span>Fog</span>
-							<input type="checkbox" id="fog-enabled">
-						</label>
+					<div class="section-head-row" style="justify-content:space-between;align-items:center;gap:10px">
+						<span class="section-label">Fog</span>
+						<!-- Checkbox stays as the source of truth (all existing
+						     change listeners + refreshFogUI() read/write it),
+						     hidden and driven by the pill toggle below. -->
+						<input type="checkbox" id="fog-enabled" hidden>
+						<div class="pill-toggle" id="fog-toggle" style="width:110px;height:22px">
+							<button type="button" id="fog-off" class="active" data-fog="off">Off</button>
+							<button type="button" id="fog-on" data-fog="on">On</button>
+						</div>
 					</div>
 					<div class="rp-bg-pair">
 						<label class="rp-bg-row" id="fog-color-btn" title="Fog color">
@@ -17355,6 +17415,17 @@ function _refreshTripo3dPlaceholder(box) {
 	if (promptEl && box.userData?.tripo3dPrompt !== undefined) {
 		promptEl.value = box.userData.tripo3dPrompt;
 	}
+	// Shared-options pill-toggle sync — read persisted userData, default to
+	// Matte / Standard / Tris (also what the workflow JSON ships with).
+	const pbr = box.userData?.tripo3dPbr === true;
+	document.getElementById("obj-tripo3d-pbr-matte")?.classList.toggle("active", !pbr);
+	document.getElementById("obj-tripo3d-pbr-glossy")?.classList.toggle("active", pbr);
+	const texq = box.userData?.tripo3dTexQuality === "detailed" ? "detailed" : "standard";
+	document.getElementById("obj-tripo3d-texq-standard")?.classList.toggle("active", texq === "standard");
+	document.getElementById("obj-tripo3d-texq-detailed")?.classList.toggle("active", texq === "detailed");
+	const quad = box.userData?.tripo3dQuad === true;
+	document.getElementById("obj-tripo3d-quad-tris")?.classList.toggle("active", !quad);
+	document.getElementById("obj-tripo3d-quad-quads")?.classList.toggle("active", quad);
 	// Slot state matches the shared gen-slot pattern: filled = uploaded
 	// image, empty = using viewport snapshot. `.has-image` on the inner
 	// thumb hides the upload glyph automatically.
@@ -17450,6 +17521,39 @@ async function _replaceTripo3dPlaneWithMesh(glbUrl) {
 	}
 }
 
+// Poll /api/run/status/<node_id> while a Tripo run is in flight so the
+// status hint reflects Cloud phase (generating → fetching → done or
+// generated-but-not-downloadable), instead of a silent "Running…" for
+// the whole 5-10min the /api/run POST is open. Interval id lives on the
+// module scope so the finally block in _tripo3dGenerate can stop it.
+let _tripo3dStatusPoller = null;
+function _startTripo3dStatusPoll() {
+	if (_tripo3dStatusPoller) clearInterval(_tripo3dStatusPoller);
+	const tick = async () => {
+		try {
+			const r = await fetch(`/api/run/status/${encodeURIComponent(NODE_ID)}`);
+			if (!r.ok) return;
+			const j = await r.json();
+			const phase = j?.phase;
+			if (phase === "generating") {
+				_setTripo3dStatus?.("generating in Comfy Cloud…", "busy");
+			} else if (phase === "fetching") {
+				_setTripo3dStatus?.("generated · fetching mesh…", "busy");
+			} else if (phase === "cloud_done_no_download") {
+				_setTripo3dStatus?.("generated in Cloud · mesh not retrievable via CLI", "error");
+			}
+		} catch {}
+	};
+	tick();
+	_tripo3dStatusPoller = setInterval(tick, 2000);
+}
+function _stopTripo3dStatusPoll() {
+	if (_tripo3dStatusPoller) {
+		clearInterval(_tripo3dStatusPoller);
+		_tripo3dStatusPoller = null;
+	}
+}
+
 // Generate handler — routes to the right underlying Tripo module by
 // sending `mode` in the request body. Text mode also sets
 // `skip_source_image` so the runner doesn't hunt for a viewport snapshot
@@ -17471,6 +17575,7 @@ async function _tripo3dGenerate() {
 	try {
 		_setTripo3dRunButton("running");
 		_setTripo3dStatus(`running Tripo H3.1 · ${mode} mode…`, "busy");
+		_startTripo3dStatusPoll();
 		const body = { node_id: NODE_ID, inputs: { mode } };
 		if (mode === "text") {
 			body.inputs.prompt = prompt;
@@ -17479,6 +17584,12 @@ async function _tripo3dGenerate() {
 			// Drop-from-Assets path — backend fetches this URL directly.
 			body.inputs.image_url = _tripo3dRemoteImageUrl;
 		}
+		// Shared options — the backend patches them onto the Tripo node's
+		// widgets. Explicit booleans/strings avoid any "undefined ends up
+		// as null in JSON" surprises on the wire.
+		body.inputs.pbr = box.userData?.tripo3dPbr === true;
+		body.inputs.texture_quality = box.userData?.tripo3dTexQuality === "detailed" ? "detailed" : "standard";
+		body.inputs.quad = box.userData?.tripo3dQuad === true;
 		const r = await fetch(`/api/run/tripo-h31`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -17497,6 +17608,7 @@ async function _tripo3dGenerate() {
 		_setTripo3dStatus(`failed · ${String(err.message || err).slice(0, 120)}`, "error");
 	} finally {
 		_setTripo3dRunButton("idle");
+		_stopTripo3dStatusPoll();
 	}
 }
 
@@ -17512,6 +17624,21 @@ async function _tripo3dGenerate() {
 		};
 		btnImage?.addEventListener("click", () => applyMode("image"));
 		btnText?.addEventListener("click", () => applyMode("text"));
+		// Shared-options wiring — each toggle writes its choice back to the
+		// active placeholder's userData and re-renders so the .active class
+		// stays consistent.
+		const setSharedOption = (patch) => {
+			const box = objects.find(o => o.userData?.tripo3dSource === true && !o.userData?.tripo3dConsumed && o.visible !== false);
+			if (!box) return;
+			Object.assign(box.userData, patch);
+			_refreshTripo3dPlaceholder(box);
+		};
+		document.getElementById("obj-tripo3d-pbr-matte")?.addEventListener("click", () => setSharedOption({ tripo3dPbr: false }));
+		document.getElementById("obj-tripo3d-pbr-glossy")?.addEventListener("click", () => setSharedOption({ tripo3dPbr: true }));
+		document.getElementById("obj-tripo3d-texq-standard")?.addEventListener("click", () => setSharedOption({ tripo3dTexQuality: "standard" }));
+		document.getElementById("obj-tripo3d-texq-detailed")?.addEventListener("click", () => setSharedOption({ tripo3dTexQuality: "detailed" }));
+		document.getElementById("obj-tripo3d-quad-tris")?.addEventListener("click", () => setSharedOption({ tripo3dQuad: false }));
+		document.getElementById("obj-tripo3d-quad-quads")?.addEventListener("click", () => setSharedOption({ tripo3dQuad: true }));
 		// Slot chip IS the upload trigger — click anywhere on the row
 		// to open the file picker. Removing the separate Upload button
 		// tightens the pane's vertical footprint in Image mode.
@@ -25531,12 +25658,26 @@ function applyFog() {
 }
 function refreshFogUI() {
 	fogEnabled.checked = fogState.enabled;
+	// Sync the visible pill toggle to match the hidden source-of-truth
+	// checkbox — .active on Off when disabled, On when enabled.
+	document.getElementById("fog-off")?.classList.toggle("active", !fogState.enabled);
+	document.getElementById("fog-on")?.classList.toggle("active", !!fogState.enabled);
 	fogColorInput.value = "#" + fogState.color.toString(16).padStart(6, "0");
 	fogNear.value = fogState.near;
 	fogFar.value = fogState.far;
 	fogNearVal.textContent = fogState.near.toFixed(1);
 	fogFarVal.textContent = String(fogState.far);
 }
+// Pill toggle → hidden checkbox → the existing "change" listener below
+// applies the state to the scene fog and saves. One source of truth.
+document.getElementById("fog-toggle")?.addEventListener("click", (e) => {
+	const btn = e.target.closest("button[data-fog]");
+	if (!btn) return;
+	const next = btn.dataset.fog === "on";
+	if (fogEnabled.checked === next) return;
+	fogEnabled.checked = next;
+	fogEnabled.dispatchEvent(new Event("change"));
+});
 
 fogEnabled.addEventListener("change", () => {
 	fogState.enabled = fogEnabled.checked;
