@@ -3948,6 +3948,9 @@
 				</svg>
 			</button>
 			<button class="th-btn-mini" id="th-help-close" hidden title="Close help">Close</button>
+			<button class="th-icon-btn" id="th-debug" title="Debug — AI Agent token usage + tool call log">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-8"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+			</button>
 			<button class="th-icon-btn" id="th-settings" title="Settings">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
 					<circle cx="12" cy="12" r="3"/>
@@ -4268,6 +4271,46 @@
 							<input type="checkbox" id="tooltips-toggle" checked>
 						</label>
 					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Debug modal — AI Agent token usage + per-turn tool call log. Reads
+	     from /api/llm/usage (aggregate) + /api/llm/turns (per-turn detail).
+	     Opened via the top-header pulse-bars icon. Purely observational —
+	     no writes, so it's safe to open mid-conversation. -->
+	<div class="modal-backdrop" id="debug-modal">
+		<div class="modal-card wide" style="max-width: 960px">
+			<div class="modal-head">
+				<span class="modal-title">Debug · AI Agent telemetry</span>
+				<button class="modal-close" id="debug-close">×</button>
+			</div>
+			<div style="padding: 8px 22px 22px">
+				<div style="display:flex; gap:20px; align-items:center; margin-bottom:16px; font-size:12px; color:rgba(255,255,255,0.75)">
+					<div><span style="color:rgba(255,255,255,0.4)">Today: </span><span id="debug-today">—</span></div>
+					<div><span style="color:rgba(255,255,255,0.4)">Total: </span><span id="debug-total">—</span></div>
+					<button class="modal-btn-secondary" id="debug-refresh" style="margin-left:auto; padding: 4px 12px; font-size: 11px">Refresh</button>
+				</div>
+				<div style="font-size: 10px; color: rgba(255,255,255,0.4); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px">Recent turns (newest first)</div>
+				<div style="border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; overflow: hidden; max-height: 60vh; overflow-y: auto">
+					<table id="debug-turns" style="width: 100%; border-collapse: collapse; font-size: 11px">
+						<thead style="background: rgba(255,255,255,0.03); position: sticky; top: 0">
+							<tr style="color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px">
+								<th style="padding: 8px 10px; text-align: left; font-weight: 500">Time</th>
+								<th style="padding: 8px 10px; text-align: right; font-weight: 500" title="Fresh input tokens (not cached)">In</th>
+								<th style="padding: 8px 10px; text-align: right; font-weight: 500" title="Output tokens">Out</th>
+								<th style="padding: 8px 10px; text-align: right; font-weight: 500" title="Cache read (90% discount)">CR</th>
+								<th style="padding: 8px 10px; text-align: right; font-weight: 500" title="Cache write (25% premium)">CW</th>
+								<th style="padding: 8px 10px; text-align: right; font-weight: 500">$</th>
+								<th style="padding: 8px 10px; text-align: left; font-weight: 500">Tools</th>
+								<th style="padding: 8px 10px; text-align: left; font-weight: 500">Message</th>
+							</tr>
+						</thead>
+						<tbody id="debug-turns-body">
+							<tr><td colspan="8" style="padding: 20px; text-align: center; color: rgba(255,255,255,0.4)">Loading…</td></tr>
+						</tbody>
+					</table>
 				</div>
 			</div>
 		</div>
@@ -6542,6 +6585,77 @@
 		settingsBtn.addEventListener("click", openSettings);
 		settingsClose.addEventListener("click", closeSettings);
 		settingsModal.addEventListener("click", (e) => { if (e.target === settingsModal) closeSettings(); });
+
+		// ---------- debug modal ----------
+		// Observational view — shows aggregate token spend + a per-turn table
+		// so we can see whether prompt trims + lazy-loaded docs are actually
+		// biting. Fetches on open (fresh data every time); Refresh re-pulls.
+		const debugBtn = document.getElementById("th-debug");
+		const debugModal = document.getElementById("debug-modal");
+		const debugClose = document.getElementById("debug-close");
+		const debugRefresh = document.getElementById("debug-refresh");
+		const debugToday = document.getElementById("debug-today");
+		const debugTotal = document.getElementById("debug-total");
+		const debugTurnsBody = document.getElementById("debug-turns-body");
+		function _fmtTokens(u) {
+			if (!u) return "—";
+			const total = (u.input_tokens || 0) + (u.output_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+			const usd = typeof u.estimated_usd === "number" ? ` · $${u.estimated_usd.toFixed(4)}` : "";
+			return `${total.toLocaleString()} tok · ${u.turns || 0} turns${usd}`;
+		}
+		function _fmtTime(iso) {
+			try { const d = new Date(iso); return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
+			catch { return iso || "—"; }
+		}
+		async function loadDebug() {
+			debugTurnsBody.innerHTML = `<tr><td colspan="8" style="padding: 20px; text-align: center; color: rgba(255,255,255,0.4)">Loading…</td></tr>`;
+			try {
+				const [usageR, turnsR] = await Promise.all([
+					fetch("/api/llm/usage"),
+					fetch("/api/llm/turns?limit=200"),
+				]);
+				const usage = await usageR.json();
+				const turns = (await turnsR.json()).turns || [];
+				debugToday.textContent = _fmtTokens(usage.today);
+				debugTotal.textContent = _fmtTokens(usage.total);
+				if (!turns.length) {
+					debugTurnsBody.innerHTML = `<tr><td colspan="8" style="padding: 20px; text-align: center; color: rgba(255,255,255,0.4)">No turns logged yet. Chat with the agent and reopen this view.</td></tr>`;
+					return;
+				}
+				const rows = turns.map(t => {
+					const u = t.usage || {};
+					const tools = (t.tool_uses || []).map(x => {
+						const c = x.kind === "mcp" ? "rgba(120,180,255,0.85)" : "rgba(255,180,84,0.85)";
+						return `<span style="color:${c}">${x.name}</span>`;
+					}).join(", ") || "<span style=\"color:rgba(255,255,255,0.3)\">—</span>";
+					const preview = t.user_preview || t.reply_preview || "";
+					const cell = (v, align) => `<td style="padding:6px 10px; text-align:${align}; border-top:1px solid rgba(255,255,255,0.04); vertical-align:top">${v}</td>`;
+					return `<tr>
+						${cell(_fmtTime(t.ts), "left")}
+						${cell((u.input_tokens || 0).toLocaleString(), "right")}
+						${cell((u.output_tokens || 0).toLocaleString(), "right")}
+						${cell((u.cache_read_input_tokens || 0).toLocaleString(), "right")}
+						${cell((u.cache_creation_input_tokens || 0).toLocaleString(), "right")}
+						${cell(`$${(t.estimated_usd || 0).toFixed(4)}`, "right")}
+						${cell(tools, "left")}
+						${cell(`<span style="color:rgba(255,255,255,0.55); font-size:10.5px">${(preview || "").replace(/</g, "&lt;").slice(0, 140)}</span>`, "left")}
+					</tr>`;
+				}).join("");
+				debugTurnsBody.innerHTML = rows;
+			} catch (e) {
+				debugTurnsBody.innerHTML = `<tr><td colspan="8" style="padding: 20px; text-align: center; color: #ff8a8a">load failed: ${(e.message || e).toString().replace(/</g, "&lt;")}</td></tr>`;
+			}
+		}
+		debugBtn?.addEventListener("click", () => {
+			debugModal.classList.add("open");
+			loadDebug();
+		});
+		debugClose?.addEventListener("click", () => debugModal.classList.remove("open"));
+		debugModal.addEventListener("click", (e) => { if (e.target === debugModal) debugModal.classList.remove("open"); });
+		debugRefresh?.addEventListener("click", loadDebug);
+		document.addEventListener("keydown", (e) => {
+			if (e.key === "Escape" && debugModal.classList.contains("open")) debugModal.classList.remove("open");
+		});
 		// "Sign in with Comfy Cloud" — Comfy Cloud has no public OAuth flow for
 		// third-party apps (their docs: X-API-Key only), so this opens the API
 		// keys page in a new tab and focuses the paste field so the user's next
@@ -7110,6 +7224,27 @@ transform.addEventListener("dragging-changed", (e) => {
 		// with the live X/Y/Z readouts sits in view.
 		_scrollPropsToTransform?.();
 	} else {
+		// Softbox scale-bake: RectAreaLight's width/height are fixed at build
+		// time, so the wrapper's scale just visually stretches the child
+		// wireframe without changing the emitter shape. Translate the drag's
+		// scale into the softboxWidth / softboxHeight config on release, then
+		// reset wrapper scale to identity and rebuild the light so emission +
+		// wireframe both match the new dimensions. Only X and Y matter — Z is
+		// perpendicular to the emitter plane and has no meaning.
+		if (
+			transform.mode === "scale" &&
+			selected &&
+			selected.userData?.primKind === "light" &&
+			selected.userData.lightConfig?.type === "softbox" &&
+			(Math.abs(selected.scale.x - 1) > 1e-4 || Math.abs(selected.scale.y - 1) > 1e-4)
+		) {
+			const cfg = selected.userData.lightConfig;
+			cfg.softboxWidth = Math.max(0.1, Math.min(20, (cfg.softboxWidth ?? 2) * selected.scale.x));
+			cfg.softboxHeight = Math.max(0.1, Math.min(20, (cfg.softboxHeight ?? 2) * selected.scale.y));
+			selected.scale.set(1, 1, 1);
+			_lightApply(selected);
+			_lightSyncPaneFromSelection(selected);
+		}
 		renderCamDragDist = null;
 		scaleDragStart = null;
 		saveSceneDebounced();
@@ -9547,7 +9682,7 @@ function addTerrainFx(initialConfig) {
 const LIGHT_TYPES = ["directional", "point", "spot"];
 const LIGHT_DEFAULTS = {
 	type: "point",
-	intensity: 50,
+	intensity: 75,
 	color: 0xffffff,
 	castShadow: false,
 	// VSM blur radius (light.shadow.radius in pixels). 0 = sharp, higher = more
@@ -9560,7 +9695,7 @@ const LIGHT_DEFAULTS = {
 	spotAngle: 30,
 	spotPenumbra: 0.2,
 	// Point + spot distance (0 = unlimited range with no falloff clamp).
-	distance: 6,
+	distance: 7,
 	// Softbox (RectAreaLight) dimensions — width × height of the emitter
 	// rectangle in world meters. Only read when type === "softbox".
 	softboxWidth: 2,
@@ -9653,7 +9788,12 @@ class _SpotLightGlyph extends THREE.Group {
 	constructor(light, color) {
 		super();
 		this.light = light;
-		this._mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9, depthTest: false });
+		// Cone wireframe stays low-opacity so it reads as a subtle boundary
+		// hint instead of a hard shape competing with the actual illuminated
+		// subject. Aim target below sits at higher opacity so the null point
+		// remains obvious as a pick/reference marker.
+		this._mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.2, depthTest: false });
+		this._tipMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.7, depthTest: false });
 		const d = light.distance > 0 ? light.distance : 5;
 		const rBase = Math.tan(light.angle);
 		const segs = 32;
@@ -9670,6 +9810,20 @@ class _SpotLightGlyph extends THREE.Group {
 			axial.push(new THREE.Vector3(Math.cos(t) * rBase, Math.sin(t) * rBase, -d));
 		}
 		this.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(axial), this._mat));
+		// Aim marker — 3D "+" cross at the cone tip (0, 0, -d) reading as a
+		// visible null / target point so the user can eyeball where the beam
+		// converges without dragging the light itself. Size scales with the
+		// cone base radius so tight beams get a smaller marker + wide beams
+		// get a proportionally bigger one; floor + ceiling keep it readable
+		// at the extremes.
+		const tipSize = Math.max(0.25, Math.min(0.9, rBase * 0.6));
+		const tipZ = -d;
+		const tipPts = [
+			new THREE.Vector3(-tipSize, 0, tipZ), new THREE.Vector3(tipSize, 0, tipZ),
+			new THREE.Vector3(0, -tipSize, tipZ), new THREE.Vector3(0, tipSize, tipZ),
+			new THREE.Vector3(0, 0, tipZ - tipSize), new THREE.Vector3(0, 0, tipZ + tipSize),
+		];
+		this.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(tipPts), this._tipMat));
 		this.renderOrder = 999;
 		this.frustumCulled = false;
 		this.traverse(c => { c.frustumCulled = false; });
@@ -9683,6 +9837,7 @@ class _SpotLightGlyph extends THREE.Group {
 	dispose() {
 		this.traverse(c => { c.geometry?.dispose?.(); });
 		this._mat?.dispose?.();
+		this._tipMat?.dispose?.();
 	}
 }
 
@@ -9829,12 +9984,12 @@ function addLightFx(initialConfig) {
 	wrapper.name = `Light.${String(primCounters.light).padStart(3, "0")}`;
 	wrapper.userData.primKind = "light";
 	wrapper.userData.lightConfig = cfg;
-	// Drop the light at a natural key-light offset from the scene origin
-	// (upper-front-right) so a fresh spawn is visibly illuminating the
-	// origin subject rather than pointing at nothing. User can drag freely
-	// via the gizmo which appears exactly at the wrapper position = the
-	// light position.
-	wrapper.position.set(2, 4, 2);
+	// Drop the light pulled back and off to the side (opposite the default
+	// viewport camera's +X/+Z quadrant) so a fresh spawn reads as a
+	// three-point-style back/side key from the get-go rather than the flat
+	// front-on wash the old front-right anchor produced. User can drag
+	// freely via the gizmo which appears exactly at the wrapper position.
+	wrapper.position.set(-3, 3, -3);
 	// Directional + Spot get an aim: rotate the wrapper so its local -Z
 	// (where the target sits) points at world origin. Point lights emit
 	// omnidirectionally so rotation is meaningless — leave identity so the
@@ -19876,11 +20031,17 @@ function _lightSyncPaneFromSelection(wrapper) {
 	const hook = () => {
 		// Type pills — swap the internal light + helper without moving the
 		// wrapper transform (so the user's placement stays put across a swap).
+		// When switching to a type that HAS an aim direction (directional /
+		// spot / softbox), re-aim the wrapper at world origin so the beam
+		// lands on the seed subject instead of pointing wherever the previous
+		// type left the rotation. Matches the spawn-time lookAt in addLightFx.
 		document.querySelectorAll('#obj-light-section [data-light-type]').forEach(btn => {
 			btn.addEventListener("click", () => {
 				const r = _lightSelected();
 				if (!r) return;
-				r.userData.lightConfig.type = btn.dataset.lightType;
+				const nextType = btn.dataset.lightType;
+				r.userData.lightConfig.type = nextType;
+				if (nextType !== "point") r.lookAt(0, 0, 0);
 				_lightApply(r);
 				_lightSyncPaneFromSelection(r);
 				_applyGizmoSpaceForSelection();
@@ -21445,6 +21606,66 @@ const ASSISTANT_TOOLS = {
 		if (selected === obj) refreshObjectInspector?.();
 		saveScene?.();
 		return `rotated to (${x}°, ${y}°, ${z}°)`;
+	},
+
+	// Fetch an extended-topic doc (`server/docs/agent/<topic>.md`) from the
+	// backend so the agent can lazy-load deep guidance (workflow module
+	// creation, animoflow, etc.) instead of paying for it in every base
+	// prompt. Path validation happens server-side against the on-disk file
+	// set — this side just proxies the topic slug.
+	async read_docs({ topic } = {}) {
+		const slug = String(topic || "").trim().toLowerCase();
+		if (!slug) return "error: `topic` is required";
+		try {
+			const r = await fetch(`/api/agent/docs/${encodeURIComponent(slug)}`);
+			if (!r.ok) {
+				const body = await r.text().catch(() => "");
+				return `error: docs fetch failed — ${(body || `HTTP ${r.status}`).slice(0, 300)}`;
+			}
+			const j = await r.json();
+			return j.content || "(doc is empty)";
+		} catch (e) {
+			return `error: ${e.message || e}`;
+		}
+	},
+
+	// Aim `name` so its local -Z (three.js "forward") points at either a
+	// named object or an explicit world-space point. Uses Object3D.lookAt
+	// under the hood so the resulting Euler angles are always correct —
+	// preferred over set_object_rotation for aiming lights and cameras
+	// since eyeballing pitch/yaw/roll to hit a target is error-prone.
+	aim_object_at({ name, target, target_x, target_y, target_z } = {}) {
+		const obj = findObjByName(name);
+		if (!obj) return `error: no object named '${name}'`;
+		let point;
+		if (typeof target === "string" && target.length) {
+			const t = findObjByName(target);
+			if (!t) return `error: no target object named '${target}'`;
+			point = new THREE.Vector3();
+			// getWorldPosition walks the parent chain so a target that lives
+			// inside a group / rig still resolves to its actual scene-space
+			// position, not its local offset.
+			t.getWorldPosition(point);
+		} else if ([target_x, target_y, target_z].every(v => typeof v === "number")) {
+			point = new THREE.Vector3(target_x, target_y, target_z);
+		} else if (Array.isArray(target) && target.length === 3 && target.every(v => typeof v === "number")) {
+			point = new THREE.Vector3(target[0], target[1], target[2]);
+		} else {
+			return "error: provide either `target` (object name) or (`target_x`, `target_y`, `target_z`) world coordinates";
+		}
+		// lookAt operates in the parent's coordinate frame. Convert the world
+		// point into that frame so aiming works even when the object is
+		// nested inside a parent group with its own transform.
+		if (obj.parent) {
+			obj.parent.updateMatrixWorld();
+			const inv = new THREE.Matrix4().copy(obj.parent.matrixWorld).invert();
+			point = point.clone().applyMatrix4(inv);
+		}
+		obj.lookAt(point);
+		if (selected === obj) refreshObjectInspector?.();
+		saveScene?.();
+		const deg = (r) => (r * 180 / Math.PI).toFixed(1);
+		return `aimed ${obj.name} at (${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)}) → rotation (${deg(obj.rotation.x)}°, ${deg(obj.rotation.y)}°, ${deg(obj.rotation.z)}°)`;
 	},
 
 	set_object_scale({ name, x, y, z }) {
@@ -31207,10 +31428,12 @@ const EMPTY_SCENE = {
 		{ model: "nano-banana", prompt: "", expanded: false },
 		{ model: "seedance",    prompt: "", expanded: false },
 	],
-	// New scenes open through the render camera (not the free-orbit scene view) so
-	// the user starts framing the shot they'll actually export — the perspective
-	// view is more of an over-the-shoulder overview for arranging blockout objects.
-	activeView: "camera",
+	// New scenes open through the free-orbit viewport camera so the seed cube
+	// lands in the framed 3/4 view defined by `.camera` above. Opening through
+	// the render camera left the viewport wherever the previous session parked
+	// it — a fresh "New" felt broken because the angle carried over instead of
+	// snapping to the default composition.
+	activeView: "scene",
 };
 
 async function listProjects() {
