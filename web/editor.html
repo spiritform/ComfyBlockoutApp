@@ -2666,7 +2666,13 @@
 	#result-overlay #result-overlay-blockout-img {
 		position: absolute; inset: 0;
 		width: 100%; height: 100%;
-		object-fit: contain; background: #000;
+		/* cover (not contain) so aspect mismatches between the render (often
+		   /64-snapped latent) and the true-16:9 blockout snapshot can't expose
+		   a 1px underlay sliver at the top/bottom edge of the render. This
+		   image is a "before" wipe reference, not a pixel-perfect comparison
+		   surface — cropping a hair off the edges is fine and prevents the
+		   letterbox-mismatch hairline. */
+		object-fit: cover; background: #000;
 		display: none; z-index: 0; pointer-events: none;
 	}
 	#result-overlay.compare-mode #result-overlay-blockout-img { display: block; }
@@ -26868,10 +26874,17 @@ function updateResultOverlayPos() {
 	const asp = currentAspect();
 	const fit = asp ? fitDimensions() : { w: canvasWrap.clientWidth, h: canvasWrap.clientHeight };
 	const vs = viewportSize();
-	const left = (vs.w - fit.w) / 2 + "px";
-	const top = (vs.h - fit.h) / 2 + "px";
-	const width = fit.w + "px";
-	const height = fit.h + "px";
+	// Snap to whole pixels AND nudge 1px outward in each direction so the
+	// overlay always overshoots the WebGL scissor rect underneath. Otherwise
+	// an odd-pixel letterbox gap + CSS sub-pixel rounding can expose a 1px
+	// sliver at one edge where the live scene's clear color (e.g. a bright BG)
+	// pokes through around the render/blockout image. #canvas-wrap has
+	// overflow:hidden so the 1px overshoot is clipped and never visible past
+	// the canvas edges.
+	const left = (Math.floor((vs.w - fit.w) / 2) - 1) + "px";
+	const top = (Math.floor((vs.h - fit.h) / 2) - 1) + "px";
+	const width = (Math.ceil(fit.w) + 2) + "px";
+	const height = (Math.ceil(fit.h) + 2) + "px";
 	if (resultOverlay && !resultOverlay.hidden) {
 		resultOverlay.style.width = width;
 		resultOverlay.style.height = height;
