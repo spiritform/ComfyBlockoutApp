@@ -3948,9 +3948,6 @@
 				</svg>
 			</button>
 			<button class="th-btn-mini" id="th-help-close" hidden title="Close help">Close</button>
-			<button class="th-icon-btn" id="th-debug" title="Debug — AI Agent token usage + tool call log">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-8"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
-			</button>
 			<button class="th-icon-btn" id="th-settings" title="Settings">
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
 					<circle cx="12" cy="12" r="3"/>
@@ -4512,6 +4509,7 @@
 					     format) and asks the agent to inspect + register it as a
 					     ComfyBlockout workflow module. Icon-only button lives in the
 					     section header next to the MCP status. -->
+					<button type="button" id="assistant-debug-btn" class="assistant-icon-btn" title="Debug — AI Agent token usage + tool call log" aria-label="Debug telemetry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-8"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg></button>
 					<button type="button" id="assistant-import-btn" class="assistant-icon-btn" title="Import a Comfy workflow JSON and let the agent hook it up as a module" aria-label="Import workflow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></button>
 					<input type="file" id="assistant-import-file" accept=".json,application/json" hidden>
 					<span class="assistant-status" id="assistant-status">DISABLED</span>
@@ -6590,7 +6588,10 @@
 		// Observational view — shows aggregate token spend + a per-turn table
 		// so we can see whether prompt trims + lazy-loaded docs are actually
 		// biting. Fetches on open (fresh data every time); Refresh re-pulls.
-		const debugBtn = document.getElementById("th-debug");
+		// Button lives in the AI Agent header (hoisted alongside the import
+		// button) since debug is agent-specific — the top-header slot was too
+		// prominent for a dev-only view.
+		const debugBtn = document.getElementById("assistant-debug-btn");
 		const debugModal = document.getElementById("debug-modal");
 		const debugClose = document.getElementById("debug-close");
 		const debugRefresh = document.getElementById("debug-refresh");
@@ -10785,17 +10786,21 @@ document.getElementById("mcp-add-btn")?.addEventListener("click", async () => {
 		fixedBottom.appendChild(band);
 	}
 
-	// Hoist the MCP status pill + workflow-import button into the left-panel
-	// bottom-zone header slot so they sit on the same baseline as the AI AGENT
-	// kicker (the section's own head-row is hidden by CSS to avoid a duplicate).
+	// Hoist the MCP status pill + workflow-import + debug buttons into the
+	// left-panel bottom-zone header slot so they sit on the same baseline as
+	// the AI AGENT kicker (the section's own head-row is hidden by CSS to
+	// avoid a duplicate).
 	const headerEnd = document.getElementById("lp-zone-bottom-controls");
 	const status = document.getElementById("assistant-status");
 	const importBtn = document.getElementById("assistant-import-btn");
+	const debugBtnHoist = document.getElementById("assistant-debug-btn");
 	if (headerEnd) {
-		// Order: status pill first (left), then the import button (right) — reads
-		// as "[MCP · idle]  [↑]" so the import affordance sits at the far right
-		// where trailing actions usually land.
+		// Order: status pill first (left), then debug + import buttons at the
+		// far right — reads as "[MCP · idle]  [▁▂▃] [↑]". Debug sits inside
+		// of import because import is the more common action (users import
+		// workflows regularly; debug is dev/inspection).
 		if (status) headerEnd.appendChild(status);
+		if (debugBtnHoist) headerEnd.appendChild(debugBtnHoist);
 		if (importBtn) headerEnd.appendChild(importBtn);
 	}
 

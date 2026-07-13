@@ -3465,26 +3465,21 @@ ASSISTANT_SYSTEM = (
 EDITOR_TOOLS = [
     {
         "name": "add_primitive",
-        "description": "Add a SINGLE primitive object to the scene. For multiple at once, use batch_add_primitives instead — it's ~10x faster than calling this in a loop. Text/particles/clouds have their own defaults; for a mannequin figure use spawn_mannequin, for a skybox backdrop use spawn_skybox.",
+        "description": "Add ONE primitive. For multiple use batch_add_primitives (~10x faster). For mannequin/skybox use spawn_mannequin/spawn_skybox.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "kind": {
                     "type": "string",
                     "enum": ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "text", "particles", "clouds"],
-                    "description": "Primitive type to add. text spawns a 3D 'Text' mesh (rename via rename_object to change the string). particles/clouds spawn stylized FX systems.",
+                    "description": "text spawns a 3D 'Text' mesh (rename via rename_object to change the string). particles/clouds = stylized FX.",
                 },
-                "color": {"type": "string", "description": "Optional hex color like #ff5fbf"},
-                "position": {
-                    "type": "array",
-                    "items": {"type": "number"},
-                    "minItems": 3, "maxItems": 3,
-                    "description": "Optional [x,y,z] world position",
-                },
+                "color": {"type": "string", "description": "Optional hex (e.g. #ff5fbf)"},
+                "position": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
                 "preset": {
                     "type": "string",
                     "enum": ["snow", "rain", "sparks", "fireflies"],
-                    "description": "Only relevant when kind='particles'. Applies a canned particle configuration — 'snow' spawns a wide overhead volume of soft slow-drifting flakes, 'rain' fast falling streaks, 'sparks' short-lived warm additive bursts, 'fireflies' slow-drifting warm additive points. USE THIS when the user names a weather/effect ('add some snow', 'make it rain', 'sparks flying'); skip it for generic particle emitters.",
+                    "description": "kind='particles' only. Canned weather/effect configs. Use when user names one; skip for generic emitters.",
                 },
             },
             "required": ["kind"],
@@ -3492,7 +3487,7 @@ EDITOR_TOOLS = [
     },
     {
         "name": "batch_add_primitives",
-        "description": "Add MANY primitives in one call — use this for arrays, grids, patterns, or any multi-object placement. Massively faster than looping add_primitive.",
+        "description": "Add many primitives in one call. Use for arrays/grids/patterns instead of looping add_primitive.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -3538,107 +3533,97 @@ EDITOR_TOOLS = [
     },
     {
         "name": "get_selected_object",
-        "description": "Return the currently selected object's name, kind, transform, and color. Returns 'nothing selected' when the user has nothing highlighted. Use this to answer questions like 'what is this?' or before editing 'the selected thing' — much cheaper than list_objects when the user is pointing at something specific.",
+        "description": "Selected object's name/kind/transform/color, or 'nothing selected'. Cheaper than list_objects when the user is pointing at something.",
         "input_schema": {"type": "object", "properties": {}},
     },
     {
         "name": "get_camera_state",
-        "description": "Return the render camera's world position, aim target (if any), FOV, and aspect ratio. Use before answering camera framing questions or before proposing camera edits so you know where the shot currently is.",
+        "description": "Render camera world position, aim target, FOV, aspect. Call before camera edits or framing questions.",
         "input_schema": {"type": "object", "properties": {}},
     },
     {
         "name": "get_scene_summary",
-        "description": "High-level scene digest: object count grouped by kind, active workflow modules, total keyframe count, and scene duration in seconds. Cheaper than list_objects for a broad 'what's in this scene' answer.",
+        "description": "Object counts by kind + active workflows + keyframe count + scene duration. Cheaper than list_objects.",
         "input_schema": {"type": "object", "properties": {}},
     },
     {
         "name": "set_scene_duration",
-        "description": "Set the total scene / timeline duration in seconds. All keyframe times are relative to this duration (playhead is stored 0..1 internally, so existing keys stay at their relative position when duration changes).",
+        "description": "Set timeline duration in seconds. Keyframes are stored 0..1 relative, so they stay at their relative position.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "seconds": {"type": "number", "minimum": 0.5, "maximum": 300, "description": "Duration in seconds (0.5–300)."},
-            },
+            "properties": {"seconds": {"type": "number", "minimum": 0.5, "maximum": 300}},
             "required": ["seconds"],
         },
     },
     {
         "name": "set_playhead",
-        "description": "Move the timeline playhead to a specific time. Called before add_keyframe to place the next key at that moment. Use this + add_keyframe to compose animations one beat at a time.",
+        "description": "Move the timeline playhead. Call before add_keyframe to place a key at that beat.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "time_s": {"type": "number", "minimum": 0, "description": "Playhead time in seconds. Clamped to scene duration."},
-            },
+            "properties": {"time_s": {"type": "number", "minimum": 0}},
             "required": ["time_s"],
         },
     },
     {
         "name": "add_keyframe",
-        "description": "Add a keyframe on the CAMERA track or an OBJECT track at a given time. Captures whatever the current pose/transform is (so the caller should set position/rotation/scale FIRST via set_object_position etc., then call this). If time_s is omitted, uses the current playhead. `target` is 'camera' for the render camera track, or an object name for that object's track. `ease` defaults to easeInOut for boundary keys and 'through' (positional-only waypoint) for keys inserted between existing ones.",
+        "description": "Add a keyframe capturing CURRENT pose. Set transform first (set_object_position etc.), then call this. Omit time_s to use playhead. target='camera' or object name. ease defaults to easeInOut (or 'through' when inserted between existing keys).",
         "input_schema": {
             "type": "object",
             "properties": {
-                "target": {"type": "string", "description": "'camera' for the render camera track, or the exact name of a scene object."},
-                "time_s": {"type": "number", "minimum": 0, "description": "Optional time in seconds. Omit to use the current playhead."},
-                "ease": {"type": "string", "enum": ["linear", "easeIn", "easeOut", "easeInOut", "through"], "description": "Optional ease curve. Default easeInOut (or 'through' when inserted between existing keys)."},
+                "target": {"type": "string", "description": "'camera' or object name"},
+                "time_s": {"type": "number", "minimum": 0},
+                "ease": {"type": "string", "enum": ["linear", "easeIn", "easeOut", "easeInOut", "through"]},
             },
             "required": ["target"],
         },
     },
     {
         "name": "remove_keyframe",
-        "description": "Remove any keyframe on the target track at or near the given time (within 0.5% of duration).",
+        "description": "Remove a keyframe at/near time_s (within 0.5% of duration).",
         "input_schema": {
             "type": "object",
             "properties": {
-                "target": {"type": "string", "description": "'camera' or object name."},
-                "time_s": {"type": "number", "minimum": 0, "description": "Time of the key to remove, in seconds."},
+                "target": {"type": "string"},
+                "time_s": {"type": "number", "minimum": 0},
             },
             "required": ["target", "time_s"],
         },
     },
     {
         "name": "list_keyframes",
-        "description": "Return the keyframes on the given track: [{time_s, ease}]. Use to inspect an animation before editing.",
+        "description": "Return [{time_s, ease}] for the track. Inspect before editing.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "target": {"type": "string", "description": "'camera' or object name."},
-            },
+            "properties": {"target": {"type": "string"}},
             "required": ["target"],
         },
     },
     {
         "name": "play_preview",
-        "description": "Start or stop timeline playback preview. action='play' begins playback from the current playhead; action='stop' halts and holds position.",
+        "description": "Start/stop timeline playback from the current playhead.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "action": {"type": "string", "enum": ["play", "stop"], "description": "'play' or 'stop'."},
-            },
+            "properties": {"action": {"type": "string", "enum": ["play", "stop"]}},
             "required": ["action"],
         },
     },
     {
         "name": "set_skybox_image",
-        "description": "Apply an equirectangular panorama image to the scene's skybox. Pair with list_recent_outputs to pull the user's last render — e.g. 'apply my last generated image as a skybox' becomes list_recent_outputs(kind='image', limit=1) → set_skybox_image(url=<returned url>). If no skybox exists, spawn one first via spawn_skybox. Non-equirectangular images will stretch on the sphere — best used with generated 360° panos.",
+        "description": "Apply an equirectangular URL as the skybox texture. Pair with list_recent_outputs to reuse the last render. Spawn a sphere first if none exists. Non-equirectangular sources stretch.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "url": {"type": "string", "description": "Image URL (from list_recent_outputs) or a full http(s) URL"},
-            },
+            "properties": {"url": {"type": "string"}},
             "required": ["url"],
         },
     },
     {
         "name": "list_recent_outputs",
-        "description": "Return recently generated outputs (images, videos, 3D meshes) with their filenames, kinds, and paths. Use this to reference the user's recent renders — e.g. 'apply my last image as a skybox' or 'what did I generate today?'.",
+        "description": "List recently generated assets. Use to reference the user's last renders.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "limit": {"type": "integer", "minimum": 1, "maximum": 100, "description": "Max results to return (default 20)"},
-                "kind": {"type": "string", "enum": ["image", "video", "3d"], "description": "Optional filter — only return this asset kind"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100, "description": "Default 20"},
+                "kind": {"type": "string", "enum": ["image", "video", "3d"]},
             },
         },
     },
@@ -3691,7 +3676,7 @@ EDITOR_TOOLS = [
     },
     {
         "name": "set_object_rotation",
-        "description": "Set an object's rotation in degrees (Euler XYZ). NOTE: for aiming lights or cameras at a target, prefer `aim_object_at` — computing Euler angles from an arbitrary position is error-prone and typically produces rotations that miss the intended target.",
+        "description": "Set explicit Euler rotation (degrees, XYZ). For aiming at a target use `aim_object_at` instead — hand-computed Euler angles miss.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -3705,23 +3690,14 @@ EDITOR_TOOLS = [
     },
     {
         "name": "read_docs",
-        "description": (
-            "Load an extended-topic doc from disk when the user's request touches a "
-            "domain the base prompt only summarizes. Call this BEFORE acting on any "
-            "workflow-module task (create/import/repair) or AnimoFlow motion synthesis "
-            "— guessing at those without the doc produces broken output. Also fine to "
-            "call speculatively when a topic name matches the user's request. Returns "
-            "the markdown content of the doc as the tool result. No-op cost if the "
-            "topic doesn't match the current turn's real needs — better to load and "
-            "not use than to skip and hallucinate."
-        ),
+        "description": "Load extended-topic markdown before acting on it. Call this BEFORE any workflow-module task (create/import/repair) or AnimoFlow motion synthesis — the base prompt only summarizes them.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "topic": {
                     "type": "string",
                     "enum": ["workflows", "animoflow"],
-                    "description": "Topic slug. `workflows` covers create_workflow_module, template lookup, scene-image wiring, cloud shape:7 shift, 3D catalog gap, runtime error diagnosis. `animoflow` covers text-to-motion synthesis via the local MoMask container.",
+                    "description": "`workflows` = create_workflow_module recipe, scene-image wiring, cloud gotchas. `animoflow` = text-to-motion.",
                 },
             },
             "required": ["topic"],
@@ -3729,22 +3705,12 @@ EDITOR_TOOLS = [
     },
     {
         "name": "aim_object_at",
-        "description": (
-            "Aim an object so its forward direction points at a target — the ONLY correct way to "
-            "point a light, camera, or spot cone at something. Uses three.js lookAt internally, "
-            "so the rotation math is guaranteed. Use this whenever the user says 'point the light "
-            "at the cube', 'aim the camera at the character', 'make it face the subject', etc. "
-            "Never try to hand-compute Euler angles for aiming — you will almost certainly miss. "
-            "Pass EITHER `target` (another object's name — auto-resolves through parent groups) "
-            "OR (`target_x`, `target_y`, `target_z`) world coordinates. Directional / spot / "
-            "softbox lights all have a meaningful forward axis; point lights are omnidirectional "
-            "so aiming them does nothing visible."
-        ),
+        "description": "Point an object's forward at a target using three.js lookAt (guaranteed correct). Use for ALL aiming — lights, cameras, spot cones. Pass `target` (another object's name) OR (target_x, target_y, target_z). Point lights are omnidirectional so aiming them is a no-op.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "Object being aimed (light, camera, etc.)."},
-                "target": {"type": "string", "description": "Name of the object to aim at. Mutually exclusive with target_x/y/z."},
+                "name": {"type": "string"},
+                "target": {"type": "string", "description": "Object name to aim at. Mutually exclusive with target_x/y/z."},
                 "target_x": {"type": "number"},
                 "target_y": {"type": "number"},
                 "target_z": {"type": "number"},
@@ -3768,19 +3734,11 @@ EDITOR_TOOLS = [
     },
     {
         "name": "set_generator_prompt",
-        "description": (
-            "Set the prompt on a generator cell. Works on the built-in cells "
-            "(model: 'nano-banana' or 'seedance') AND on any agent-created WORKFLOW "
-            "module (pass its module id, e.g. 'flux2_klein_t2i_local'). For workflow "
-            "modules the tool writes to whichever input is named 'prompt' in the "
-            "manifest. For setting multiple named inputs on a workflow (positive + "
-            "negative prompt, strength, etc.) prefer `set_workflow_inputs` — this "
-            "single-field variant is kept for the common 'just update the prompt' case."
-        ),
+        "description": "Update the 'prompt' input on a generator cell (nano-banana / seedance / any WORKFLOW module id). Use `set_workflow_inputs` when multiple fields need to change.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "model": {"type": "string", "description": "'nano-banana', 'seedance', or a WORKFLOW module id"},
+                "model": {"type": "string", "description": "'nano-banana', 'seedance', or WORKFLOW module id"},
                 "prompt": {"type": "string"},
             },
             "required": ["model", "prompt"],
@@ -3788,22 +3746,14 @@ EDITOR_TOOLS = [
     },
     {
         "name": "set_workflow_inputs",
-        "description": (
-            "Batch-set multiple named inputs on a WORKFLOW module in one call — "
-            "e.g. positive prompt + negative prompt + strength together. Pass an "
-            "'inputs' object keyed by the input names declared in the module's manifest "
-            "(check activeWorkflowInputs in the scene context to see what's available). "
-            "Values are coerced to strings. Unknown input names are ignored and reported "
-            "back so you can correct spelling. Use this instead of calling "
-            "set_generator_prompt repeatedly when multiple fields need to change."
-        ),
+        "description": "Batch-set multiple named inputs on a WORKFLOW module. Input names match the module manifest (see activeWorkflowInputs in scene context). Unknown names are ignored + reported back.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "model": {"type": "string", "description": "WORKFLOW module id (matches activeWorkflowModuleId in scene context)"},
+                "model": {"type": "string", "description": "WORKFLOW module id"},
                 "inputs": {
                     "type": "object",
-                    "description": "Map of {input_name: value}. Input names must match those declared in the module's manifest.",
+                    "description": "Map {input_name: value}. Values coerced to strings.",
                     "additionalProperties": {"type": "string"},
                 },
             },
@@ -3812,163 +3762,73 @@ EDITOR_TOOLS = [
     },
     {
         "name": "trigger_generate",
-        "description": (
-            "Run the named generator cell through the editor's own pipeline (same as "
-            "the user clicking the viewport Generate button). The result lands in the "
-            "viewport overlay AND in the Assets pane (persisted to disk). Prefer this "
-            "over raw Comfy MCP tools when the user asks to generate something — the "
-            "raw MCP tools' output won't be saved to the Assets pane."
-        ),
+        "description": "Run a generator cell through the editor's pipeline. Result lands in the viewport overlay + Assets pane. Prefer over raw Comfy MCP (that output isn't saved to Assets).",
         "input_schema": {
             "type": "object",
             "properties": {
                 "model": {"type": "string", "enum": ["nano-banana", "seedance"]},
-                "prompt": {
-                    "type": "string",
-                    "description": "Optional. If provided, sets the cell prompt first, then runs. Omit to use the cell's existing prompt.",
-                },
+                "prompt": {"type": "string", "description": "Optional — sets the prompt first, then runs."},
             },
             "required": ["model"],
         },
     },
     {
         "name": "create_workflow_module",
-        "description": (
-            "Register a new generator based on a ComfyUI workflow you constructed or "
-            "fetched. The new module appears as a cell in the editor's WORKFLOW section "
-            "and runs through the same pipeline as the built-in generators (output "
-            "lands in Assets, cell is clickable/removable, etc.). Use when the user "
-            "asks for a generator that doesn't already exist. Also use to FIX or "
-            "REPLACE an existing workflow module — passing the same `id` overwrites "
-            "the workflow JSON and manifest atomically, then re-registers. Call "
-            "`get_workflow_module` first if you need to see what's currently saved "
-            "before rewriting. See the system prompt for the full construction "
-            "protocol."
-        ),
+        "description": "Register a ComfyUI workflow as an editor generator/util. Pass the same `id` to overwrite an existing module. Call `read_docs({topic:'workflows'})` first for the full recipe (input types, scene-image wiring, cloud gotchas).",
         "input_schema": {
             "type": "object",
             "properties": {
-                "id": {
-                    "type": "string",
-                    "description": "snake_case identifier, unique per workflow (e.g. 'flux2_klein_t2i_local')",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Human-readable title for the cell (e.g. 'Flux.2 Klein — Text to Image (Local)')",
-                },
-                "kind": {
-                    "type": "string",
-                    "enum": ["image", "video", "3d", "audio"],
-                    "description": "What the workflow produces. Determines the icon and how the result is imported.",
-                },
-                "output_ext": {
-                    "type": "string",
-                    "description": "Expected output extension without the dot (e.g. 'png', 'mp4', 'glb', 'wav')",
-                },
-                "runner": {
-                    "type": "string",
-                    "enum": ["cloud", "local"],
-                    "description": "Where the workflow will run. Defaults to 'cloud' if omitted.",
-                },
+                "id": {"type": "string", "description": "snake_case id (e.g. 'flux2_klein_t2i_local')"},
+                "label": {"type": "string", "description": "Cell title, ≤24 chars, `·` separator, T2I/I2I/etc. abbreviations."},
+                "kind": {"type": "string", "enum": ["image", "video", "3d", "audio"]},
+                "output_ext": {"type": "string", "description": "Extension without dot (png, mp4, glb, wav)"},
+                "runner": {"type": "string", "enum": ["cloud", "local"], "description": "Default 'cloud'"},
                 "workflow": {
                     "type": "object",
-                    "description": (
-                        "The full workflow JSON. For runner='cloud' use ComfyUI graph/save "
-                        "format (top-level nodes[] + links[]). For runner='local' use API/"
-                        "prompt format (flat dict keyed by node id string; each value has "
-                        "class_type + inputs + optional _meta.title). Convert format yourself "
-                        "if needed."
-                    ),
+                    "description": "Workflow JSON. API format (flat dict keyed by node id) preferred for both runners. Legacy graph format (nodes[]+links[]) also accepted.",
                 },
                 "intermediates": {
                     "type": "array",
-                    "description": (
-                        "Optional preprocessor previews (depth, canny, pose, normal, seg, "
-                        "lineart, etc.). Each entry causes the runner to splice a SaveImage "
-                        "onto the named node's output slot; the editor renders it as a preview "
-                        "tab (e.g. DEPTH) between BLOCKOUT and RENDER so the user can compare "
-                        "the preprocessor output to the final image. Skip when the workflow "
-                        "has no visual preprocessor stage (pure T2I, etc.)."
-                    ),
+                    "description": "Optional preprocessor preview taps. See workflows doc.",
                     "items": {
                         "type": "object",
                         "properties": {
-                            "name": {"type": "string", "description": "snake_case identifier (e.g. 'depth')"},
-                            "label": {"type": "string", "description": "Short tab label — 1-2 words (e.g. 'Depth')"},
-                            "source_node_id": {"type": "integer", "description": "Numeric id of the preprocessor node whose output should be saved"},
-                            "source_slot": {"type": "integer", "description": "Output socket index on that node — 0 for the primary image output"},
-                            "filename_prefix": {"type": "string", "description": "Optional. Defaults to intermediate_<name>."},
+                            "name": {"type": "string"},
+                            "label": {"type": "string", "description": "Short tab label (e.g. 'Depth')"},
+                            "source_node_id": {"type": "integer"},
+                            "source_slot": {"type": "integer", "description": "Default 0"},
+                            "filename_prefix": {"type": "string"},
                         },
                         "required": ["name", "label", "source_node_id"],
                     },
                 },
                 "inputs": {
                     "type": "array",
-                    "description": (
-                        "User-facing inputs the editor should render on the cell. Each entry "
-                        "specifies which node's widget the input patches at run time. "
-                        "Expose only inputs that change per run — everything else stays "
-                        "baked into the workflow."
-                    ),
+                    "description": "User-facing inputs. Expose ONLY per-run values (prompt, seed, source image). Everything else stays baked in.",
                     "items": {
                         "type": "object",
                         "properties": {
-                            "name": {
-                                "type": "string",
-                                "description": "snake_case kwarg name (e.g. 'prompt', 'seed', 'image')",
-                            },
+                            "name": {"type": "string", "description": "snake_case kwarg"},
                             "type": {
                                 "type": "string",
                                 "enum": ["textarea", "text", "scene-image", "scene-video", "number", "seed", "dropdown"],
-                                "description": (
-                                    "UI control type. 'textarea' = multi-line prompt, 'text' = "
-                                    "single-line, 'scene-image' = uses the editor's viewport "
-                                    "snapshot (or a picked source image) — the runner uploads it "
-                                    "and patches the LoadImage node with the returned filename, "
-                                    "'scene-video' = uses the video the user set as the Scene "
-                                    "Properties → Background → Video (falls back to a recorded "
-                                    "clip) — the runner uploads the file to ComfyUI's input dir "
-                                    "and patches the LoadVideo / VHS_LoadVideo node's `video` "
-                                    "widget with the resulting filename. No UI drop slot; the "
-                                    "user configures the video in Scene Properties. "
-                                    "'number' = numeric field (supports optional `default`, `min`, "
-                                    "`max`, `step`), 'seed' = numeric field with a 🎲/🔒 random-vs-"
-                                    "fixed toggle. Patch 'seed' onto KSampler.seed (or an int "
-                                    "primitive feeding it) so a fresh int is minted per run. "
-                                    "'dropdown' = <select> populated from `options` — use this for "
-                                    "any Comfy COMBO widget (preprocessor pickers, sampler names, "
-                                    "checkpoint names, etc.). The selected string is forwarded "
-                                    "verbatim to the widget."
-                                ),
+                                "description": "textarea/text = prompt fields. scene-image = LoadImage-patched viewport snapshot or upload. scene-video = LoadVideo-patched Scene→Background→Video. number = numeric (default/min/max/step). seed = numeric with 🎲/🔒 toggle (patch onto KSampler.seed). dropdown = <select> from `options` (any Comfy COMBO widget).",
                             },
                             "required": {"type": "boolean"},
-                            "placeholder": {
-                                "type": "string",
-                                "description": "Helper text shown in an empty input.",
-                            },
-                            "label": {
-                                "type": "string",
-                                "description": "Optional custom UI label (falls back to `name`).",
-                            },
-                            "default": {"description": "Optional default value for number/seed/dropdown fields (e.g. 0.8 for a ControlNet strength, 'DepthAnythingV2Preprocessor' for an AIO Aux preprocessor picker)."},
-                            "min": {"type": "number", "description": "Optional numeric lower bound (number type)."},
-                            "max": {"type": "number", "description": "Optional numeric upper bound (number type)."},
-                            "step": {"type": "number", "description": "Optional numeric step (e.g. 0.05 for strengths, 1 for counts)."},
+                            "placeholder": {"type": "string"},
+                            "label": {"type": "string"},
+                            "default": {"description": "Default for number/seed/dropdown."},
+                            "min": {"type": "number"},
+                            "max": {"type": "number"},
+                            "step": {"type": "number"},
                             "options": {
                                 "type": "array",
                                 "items": {"type": "string"},
-                                "description": "For type='dropdown' — full list of allowed values shown as a <select>. Ordered exactly as they should appear in the menu. Include every valid option from the Comfy COMBO widget so the user isn't guessing.",
+                                "description": "type='dropdown' only. Full ordered list of allowed values.",
                             },
                             "patch": {
                                 "type": "object",
-                                "description": (
-                                    "How to write this input into the workflow at run time. "
-                                    "Provide widget_index for the cloud runner (0-based position "
-                                    "in the node's widgets_values array) AND widget_name for the "
-                                    "local runner (the input key name in ComfyUI API format, e.g. "
-                                    "'text' for CLIPTextEncode, 'image' for LoadImage, 'seed' for "
-                                    "KSampler)."
-                                ),
+                                "description": "Where to write. Include BOTH widget_index (cloud, position) AND widget_name (local, input key like 'text' for CLIPTextEncode).",
                                 "properties": {
                                     "node_id": {"type": "integer"},
                                     "widget_index": {"type": "integer"},
@@ -3980,96 +3840,46 @@ EDITOR_TOOLS = [
                         "required": ["name", "type", "patch"],
                     },
                 },
-                "util": {
-                    "type": "boolean",
-                    "description": (
-                        "True → register as a UTILITY (button in the Tools grid, "
-                        "output feeds Assets for downstream workflows to consume) "
-                        "instead of a generator (cell in the WORKFLOWS section, "
-                        "output is a final render). Use for workflows whose "
-                        "purpose is media transformation (pose extraction from a "
-                        "video, background removal, edge/depth preview, etc). "
-                        "Filename prefix convention: `util_<name>.json`."
-                    ),
-                },
-                "icon": {
-                    "type": "string",
-                    "description": (
-                        "Optional inline SVG markup for the Tools button when "
-                        "util=True (e.g. `<svg viewBox='0 0 24 24' ...>...</svg>`). "
-                        "Small, 24x24, stroke-based to match the other tool "
-                        "icons. Falls back to a generic utility glyph."
-                    ),
-                },
+                "util": {"type": "boolean", "description": "True → Tools grid button (media transforms: pose extract, bg removal, etc). Filename: `util_<name>.json`."},
+                "icon": {"type": "string", "description": "Optional 24x24 inline SVG for util buttons."},
             },
             "required": ["id", "label", "kind", "output_ext", "workflow", "inputs"],
         },
     },
     {
         "name": "download_model_to_comfy",
-        "description": (
-            "Download a model file straight into the user's local ComfyUI models "
-            "directory. Use ONLY after check_local_models flags something as "
-            "missing AND the user confirmed they want you to fetch it. The "
-            "backend detects the ComfyUI install path and drops the file into "
-            "models/<folder>/. Progress streams into the chat automatically; "
-            "the tool_result reports the final on-disk path or an error. Prefer "
-            "direct HuggingFace URLs (https://huggingface.co/<repo>/resolve/main/<path>) "
-            "since those don't need auth for public models."
-        ),
+        "description": "Download a model into the local ComfyUI models/<folder>/. Use ONLY after check_local_models flags a miss AND the user confirmed. Prefer HuggingFace resolve/main URLs.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "Direct download URL to the raw file (e.g. huggingface.co/…/resolve/main/…)",
-                },
-                "folder": {
-                    "type": "string",
-                    "description": "ComfyUI models sub-folder (diffusion_models, vae, text_encoders, checkpoints, loras, controlnet, etc.)",
-                },
-                "filename": {
-                    "type": "string",
-                    "description": "Filename to save as — must match what the workflow references",
-                },
+                "url": {"type": "string", "description": "Direct file URL (e.g. huggingface.co/.../resolve/main/...)"},
+                "folder": {"type": "string", "description": "ComfyUI models sub-folder (diffusion_models, vae, text_encoders, checkpoints, loras, controlnet, ...)"},
+                "filename": {"type": "string", "description": "Must match what the workflow references."},
             },
             "required": ["url", "folder", "filename"],
         },
     },
     {
         "name": "get_workflow_module",
-        "description": (
-            "Read back the manifest AND workflow JSON currently saved for a "
-            "workflow module (source='workflow'). Use before proposing a fix so "
-            "you can see what's actually there instead of guessing. Returns "
-            "{id, manifest, workflow}. Refuses to return built-in Python modules."
-        ),
+        "description": "Read the manifest + workflow JSON saved for a workflow module. Call before proposing a fix. Refuses built-in Python modules.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "id": {"type": "string", "description": "The workflow module id (e.g. 'flux2_klein_t2i_local')"},
+                "id": {"type": "string"},
             },
             "required": ["id"],
         },
     },
     {
         "name": "check_custom_nodes",
-        "description": (
-            "Verify which ComfyUI custom-node class_types are installed locally. "
-            "Call this AFTER create_workflow_module with runner='local', BEFORE "
-            "downloading models — a workflow that references TripoSplat, Nunchaku, "
-            "or another third-party node type will crash at run time with a "
-            "cryptic KeyError if the nodes aren't installed. Returns "
-            "{reachable, missing: [class_type, ...], present: [class_type, ...]}. "
-            "Missing ones can be resolved via install_custom_node."
-        ),
+        "description": "Check which third-party node class_types are installed locally. Call after registering a runner='local' workflow BEFORE downloading models. Returns {missing, present}. Missing ones → install_custom_node.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "class_types": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Distinct node class_types the workflow uses (not the built-in ones like KSampler / CLIPTextEncode — only third-party ones).",
+                    "description": "Third-party class_types only. Skip built-ins (KSampler, CLIPTextEncode, etc.).",
                     "minItems": 1,
                 },
             },
@@ -4078,70 +3888,25 @@ EDITOR_TOOLS = [
     },
     {
         "name": "install_custom_node",
-        "description": (
-            "Clone a ComfyUI custom-node repo into the user's local install AND "
-            "auto-install its Python dependencies. Backend runs "
-            "`git clone --depth=1 <git_url> <ComfyUI>/custom_nodes/<name>` and, "
-            "if the repo ships a requirements.txt, ALSO runs "
-            "`<comfyui-python> -m pip install -r requirements.txt` against the "
-            "detected ComfyUI interpreter. Streams git AND pip output into the "
-            "chat. The tool_result reports `restart_required: true` (call "
-            "`restart_comfy` next), plus `pip_ran`, `pip_ok`, and `pip_error`. "
-            "If the target dir already exists, we skip the clone but still re-"
-            "run pip — that's the common recovery path when a node was cloned "
-            "on an earlier install but its deps never got installed. Pass "
-            "`force: true` to nuke an existing folder and re-clone from scratch "
-            "— use this when the previous install landed in the WRONG ComfyUI "
-            "(e.g. Easy Install vs Desktop) and you want a clean retry. The "
-            "only manual fallback is when `pip_ran: false` (couldn't find "
-            "ComfyUI's Python) — then tell the user to run pip themselves."
-        ),
+        "description": "git clone a ComfyUI custom-node repo into custom_nodes/ AND run pip on its requirements.txt against ComfyUI's Python. Returns {restart_required, pip_ran, pip_ok, pip_error}. If restart_required → call restart_comfy. `force:true` deletes an existing folder + re-clones (use when prior install landed in the wrong ComfyUI). If pip_ran=false, ask the user to run pip manually — otherwise handle it.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "git_url": {
-                    "type": "string",
-                    "description": "Public https git URL (github, gitlab, etc.). Trailing .git is optional.",
-                },
-                "name": {
-                    "type": "string",
-                    "description": "Directory name under custom_nodes/ (defaults to the repo's basename)",
-                },
-                "force": {
-                    "type": "boolean",
-                    "description": "Delete any existing folder at the target path and re-clone from scratch. Use this when a prior install went to the wrong ComfyUI or left the pack in a broken state.",
-                },
+                "git_url": {"type": "string", "description": "Public https URL; trailing .git optional."},
+                "name": {"type": "string", "description": "Directory name under custom_nodes/ (default: repo basename)"},
+                "force": {"type": "boolean", "description": "Delete existing folder + re-clone."},
             },
             "required": ["git_url"],
         },
     },
     {
         "name": "restart_comfy",
-        "description": (
-            "Restart the user's local ComfyUI so any newly-installed custom "
-            "nodes register on next boot. Requires ComfyUI-Manager (installed "
-            "by default on most easy-install builds). Call this IMMEDIATELY "
-            "after `install_custom_node` returns `restart_required: true` — "
-            "the user should not have to hit Ctrl+C themselves. Returns "
-            "{restarted: bool, error?: str}. If restarted=false with a 'not "
-            "installed' error, fall back to asking the user to restart "
-            "manually (Easy Install: close and reopen; CLI: Ctrl+C then re-run)."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {},
-        },
+        "description": "Restart local ComfyUI via ComfyUI-Manager so newly-installed custom nodes register. Call IMMEDIATELY after install_custom_node returns restart_required. If restarted=false ('not installed'), ask the user to restart manually.",
+        "input_schema": {"type": "object", "properties": {}},
     },
     {
         "name": "check_local_models",
-        "description": (
-            "Verify which model files are already installed in the user's local "
-            "ComfyUI. Call this right after registering a `runner: local` workflow "
-            "module so you can tell the user up-front what they're missing (and "
-            "for shared model dirs configured via extra_model_paths.yaml, whatever "
-            "ComfyUI can see counts as installed — no path config needed here). "
-            "Returns {reachable, missing: [{filename, folder}], present: [filename, ...]}."
-        ),
+        "description": "Check which model files exist in the local ComfyUI (respects extra_model_paths.yaml). Call after registering a runner='local' module. Returns {missing:[{filename, folder}], present}.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -4150,8 +3915,8 @@ EDITOR_TOOLS = [
                     "items": {
                         "type": "object",
                         "properties": {
-                            "filename": {"type": "string", "description": "The .safetensors / .ckpt / etc. filename ComfyUI would see in its dropdown"},
-                            "folder": {"type": "string", "description": "ComfyUI folder category — checkpoints, vae, loras, controlnet, text_encoders, diffusion_models, etc. Optional but helps the user route the download."},
+                            "filename": {"type": "string", "description": "The .safetensors/.ckpt/etc. filename ComfyUI sees in its dropdown."},
+                            "folder": {"type": "string", "description": "checkpoints / vae / loras / controlnet / text_encoders / diffusion_models / ..."},
                         },
                         "required": ["filename"],
                     },
@@ -4161,146 +3926,134 @@ EDITOR_TOOLS = [
             "required": ["models"],
         },
     },
-    # ── Compound-object spawns ───────────────────────────────────────
-    # Skybox + Mannequin build assemblies (multiple meshes + userData +
-    # skinning) so they live outside add_primitive's single-geometry model.
+    # Compound-object spawns — assemblies (multi-mesh + userData + skinning)
+    # that don't fit add_primitive's single-geometry model.
     {
         "name": "spawn_mannequin",
-        "description": "Spawn a ~1.72m Xbot-rigged mannequin figure — a Mixamo skinned GLB with pose-able joints. Result becomes the current selection so a follow-up rename_object / set_object_position works on it. Only one spawn per call.",
+        "description": "Spawn a ~1.72m Xbot-rigged mannequin (Mixamo skinned GLB, poseable joints). Becomes current selection.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "position": {
-                    "type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3,
-                    "description": "Optional [x,y,z] world position (default [0,0,0]).",
-                },
+                "position": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3, "description": "Default [0,0,0]"},
             },
         },
     },
     {
         "name": "spawn_skybox",
-        "description": "Spawn a giant inverted sphere as a scene backdrop. The user drops or generates a 360° equirectangular image onto it via the object inspector — this tool just adds the sphere. Idempotent-ish: re-clicking the Skybox tile in the UI reuses an existing skybox, but this tool always adds a new one; check list_objects first if you want to avoid duplicates.",
+        "description": "Spawn an empty 360° backdrop sphere. User drops/generates an equirectangular texture onto it. Prefer `generate_skybox` for a one-call environment.",
         "input_schema": {"type": "object", "properties": {}},
     },
     {
         "name": "spawn_terrain",
-        "description": "Spawn a procedural terrain — a 20x20m displaced plane with fBM noise. Preset picks the silhouette style: \"hills\" (rolling), \"mountains\" (jagged high amplitude), \"canyon\" (medium with plateaus). seed randomizes the specific terrain within the preset.",
+        "description": "Spawn a 20x20m fBM-noise terrain. presets: hills / mountains / canyon. For aesthetic-driven landscapes prefer `generate_terrain`.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "preset": {"type": "string", "enum": ["hills", "mountains", "canyon"], "description": "Silhouette style (default hills)"},
-                "seed": {"type": "integer", "description": "Random seed for the specific terrain (default 42)"},
+                "preset": {"type": "string", "enum": ["hills", "mountains", "canyon"], "description": "Default hills"},
+                "seed": {"type": "integer", "description": "Default 42"},
                 "position": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
             },
         },
     },
     {
         "name": "spawn_light",
-        "description": "Spawn a light in the scene. Four types with distinct roles: directional (parallel-ray sun, best shadow-caster for outdoor shots), spot (cone for focused pools), point (omnidirectional bulb — USE AS FILL, do NOT enable shadows), softbox (rectangular area light for soft fill — can't cast shadows by design). Adding any user light auto-kills the built-in scene fill so the user's lighting dominates.",
+        "description": "Spawn a light (see base prompt for type roles). Adding any user light auto-kills built-in scene fill.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "type": {"type": "string", "enum": ["directional", "point", "spot", "softbox"], "description": "Light type (default point). Directional + Spot are the shadow-casters. Point + Softbox are fill/ambient."},
-                "position": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3, "description": "Optional [x,y,z] world position — default (2, 4, 2)"},
-                "intensity": {"type": "number", "minimum": 0, "maximum": 500, "description": "Brightness (default 50). Softbox and point are area/omnidirectional and often need higher values than directional/spot."},
-                "color": {"type": "string", "description": "Hex color like #ffe4b0 for warm, #b0d4ff for cool. Default #ffffff."},
-                "cast_shadows": {"type": "boolean", "description": "Enable VSM shadow casting. Recommended TRUE for directional/spot, FALSE for point (produces artifacts) and softbox (unsupported)."},
-                "softbox_width": {"type": "number", "minimum": 0.1, "maximum": 20, "description": "Softbox emitter rectangle width in meters (softbox type only, default 2)."},
-                "softbox_height": {"type": "number", "minimum": 0.1, "maximum": 20, "description": "Softbox emitter rectangle height in meters (softbox type only, default 2)."},
+                "type": {"type": "string", "enum": ["directional", "point", "spot", "softbox"], "description": "Default point."},
+                "position": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3, "description": "Default (-3, 3, -3)"},
+                "intensity": {"type": "number", "minimum": 0, "maximum": 500, "description": "Default 75. Softbox/point often need more than directional/spot."},
+                "color": {"type": "string", "description": "Hex, default #ffffff. Warm #ffe4b0, cool #b0d4ff."},
+                "cast_shadows": {"type": "boolean", "description": "TRUE for directional/spot. FALSE for point (cube-map seams) + softbox (unsupported)."},
+                "softbox_width": {"type": "number", "minimum": 0.1, "maximum": 20, "description": "Meters, softbox only. Default 2."},
+                "softbox_height": {"type": "number", "minimum": 0.1, "maximum": 20, "description": "Meters, softbox only. Default 2."},
             },
         },
     },
     {
         "name": "generate_terrain",
-        "description": "Generate a grayscale heightmap via Comfy Cloud and apply it DIRECTLY as a terrain object's displacement. Reuses an existing terrain if there is one, spawns a fresh one if not — so a single call fully wires the ground. The heightmap guardrails (grayscale, top-down orthographic, white=high, no text) are appended to the prompt by the server. Prompt should describe the SHAPE of the landscape from above — e.g. \"mountain range with a wide river valley\", \"eroded desert canyons\", \"gentle rolling hills with a lake in the center\". PREFER THIS over a workflow-cell path for terrain shaping — those output flat images that land as a rendered plane, NOT applied to the terrain mesh.",
+        "description": "One-call: generate a grayscale heightmap on Comfy Cloud + apply it as terrain displacement. Reuses existing terrain if any. Prompt describes SHAPE from above (\"mountain range with river valley\") — server appends the grayscale/orthographic guardrails. Prefer over workflow cells for terrain (those produce planes).",
         "input_schema": {
             "type": "object",
             "properties": {
-                "prompt": {"type": "string", "description": "Landscape shape description (top-down)"},
+                "prompt": {"type": "string", "description": "Landscape SHAPE (top-down)"},
             },
             "required": ["prompt"],
         },
     },
     {
         "name": "generate_skybox",
-        "description": "Generate a 360° equirectangular panorama via Comfy Cloud and apply it DIRECTLY as the scene's skybox texture. Reuses an existing skybox if there is one, spawns a fresh sphere if not — so a single call fully wires the backdrop with no follow-up drag-and-drop. The panorama guardrails (equirectangular, 2:1 aspect, seamless wrap, no text, no figures) are appended to the prompt by the server, so you just describe the environment aesthetic — e.g. \"misty pine forest at dawn\", \"warehouse interior with skylights\", \"neon-lit tokyo street at night\". PREFER THIS over any workflow-cell path (Nano Banana / Seedance etc.) for skybox creation — those output flat images that land as a rendered plane, NOT applied to the sphere. If this tool errors, DO NOT fall back to a workflow-cell as a workaround (that produces a plane, wrong result); surface the backend error to the user so they can fix the CLI setup.",
+        "description": "One-call: generate a 360° equirectangular panorama on Comfy Cloud + apply it as the skybox texture. Reuses existing sphere if any. Prompt = aesthetic (\"misty pine forest at dawn\") — server appends the panorama guardrails. Prefer over workflow cells for backdrops (those produce planes, not sphere textures). On error, surface it — do NOT fall back to workflow cells.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "prompt": {"type": "string", "description": "Environment description — describe the SCENE / location / lighting, not the panorama format (the server adds those guardrails)."},
+                "prompt": {"type": "string", "description": "Environment/location/lighting."},
             },
             "required": ["prompt"],
         },
     },
-    # ── Camera control ──────────────────────────────────────────────
-    # Aim lock + hand-held shake + turntable. Applied to the render camera
-    # (the one whose shot the user is composing), NOT the perspective/scene
-    # view. Persist to state.renderCamera so save/load round-trips.
+    # Camera control — applied to the render camera (the shot), not the
+    # free-orbit scene view. Persists via state.renderCamera.
     {
         "name": "set_camera_target",
-        "description": "Lock the render camera's aim to a specific object every frame. Overrides orbit tumble AND any keyframed rotation — position keyframes still apply, but the camera keeps facing this object. Also used as the pivot for start_turntable's camera mode. Pass a scene object name (case-insensitive match against list_objects).",
+        "description": "Lock the render camera's aim to an object every frame. Overrides orbit + keyframed rotation (position keyframes still apply). Also the pivot for start_turntable(mode='camera').",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "name": {"type": "string", "description": "Name of the scene object to lock aim onto"},
-            },
+            "properties": {"name": {"type": "string"}},
             "required": ["name"],
         },
     },
     {
         "name": "clear_camera_target",
-        "description": "Release the camera's aim lock (from set_camera_target). Camera returns to its raw pose from keyframes / user orbit.",
+        "description": "Release the camera aim lock. Returns to raw pose from keyframes / orbit.",
         "input_schema": {"type": "object", "properties": {}},
     },
     {
         "name": "set_camera_handheld",
-        "description": "Add subtle multi-freq shake to the render camera — reads as handheld filming. Speed drives the shake frequency, Noise the amplitude (both 0..1). Set both to 0 to disable. Shake is applied only during camera-view playback / recording so a paused shot stays still.",
+        "description": "Multi-freq shake on the render camera. Both args 0..1 (0=off, 1=~5cm+1.5°). Only visible during camera-view playback/record.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "speed": {"type": "number", "minimum": 0, "maximum": 1, "description": "Shake frequency (0 = still, 1 = fast)"},
-                "noise": {"type": "number", "minimum": 0, "maximum": 1, "description": "Shake amplitude (0 = off, 1 = ~5cm position + ~1.5° rotation)"},
+                "speed": {"type": "number", "minimum": 0, "maximum": 1, "description": "Shake frequency"},
+                "noise": {"type": "number", "minimum": 0, "maximum": 1, "description": "Shake amplitude"},
             },
             "required": ["speed", "noise"],
         },
     },
     {
         "name": "start_turntable",
-        "description": "Bake a turntable / orbit motion. mode=\"subject\": rotates the named object 360° around its Y axis via 9 linear keyframes over duration seconds. mode=\"camera\": activates a procedural orbit ring — the render camera orbits object_name (or the current Target Object) at its current radius/height. Sets scene duration so one timeline loop = one revolution. object_name is required for subject mode; optional for camera mode (falls back to Target Object then current lookAt).",
+        "description": "Turntable motion. mode='subject' bakes 9 Y-rot keyframes on object_name. mode='camera' activates procedural orbit ring around it. Sets scene duration to one revolution. object_name required for subject mode.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "mode": {"type": "string", "enum": ["subject", "camera"], "description": "\"subject\" spins the object in place; \"camera\" orbits the render camera around it"},
-                "duration": {"type": "number", "minimum": 0.5, "maximum": 60, "description": "Seconds per revolution (typical 3-10)"},
-                "direction": {"type": "string", "enum": ["cw", "ccw"], "description": "Rotation direction (default cw)"},
-                "object_name": {"type": "string", "description": "Which object to spin/orbit around. Required for mode=subject."},
+                "mode": {"type": "string", "enum": ["subject", "camera"]},
+                "duration": {"type": "number", "minimum": 0.5, "maximum": 60, "description": "Seconds per rev (typical 3-10)"},
+                "direction": {"type": "string", "enum": ["cw", "ccw"], "description": "Default cw"},
+                "object_name": {"type": "string"},
             },
             "required": ["mode", "duration"],
         },
     },
     {
         "name": "stop_turntable",
-        "description": "Clear any active procedural camera orbit AND wipe all camera keyframes. Also wipes object keyframes on the named object if given (use to undo a subject-mode turntable). No-op if nothing's active.",
+        "description": "Clear procedural orbit + camera keyframes. Also wipes object keyframes if object_name given (undo subject-mode).",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "object_name": {"type": "string", "description": "Optional — clears keyframes on this object too (undoes subject-mode spin)."},
-            },
+            "properties": {"object_name": {"type": "string"}},
         },
     },
-    # ── AnimoFlow (text-to-motion) ──────────────────────────────────
-    # Prompts the local MoMask container to synthesize a HumanML3D motion
-    # clip and retargets it onto an AF_Mannequin in the scene. Requires
-    # Docker + AnimoFlow containers up (setup UI lives in Motion util pane).
+    # AnimoFlow — text-to-motion via local MoMask container onto AF_Mannequin.
+    # Requires Docker + AnimoFlow containers up (setup in Motion util pane).
     {
         "name": "run_animoflow",
-        "description": "Generate a text-to-motion animation and apply it to an AF_Mannequin in the scene. Requires Docker Desktop running + the AnimoFlow MoMask container up (setup lives in the Motion util pane). Spawns a mannequin if none exists. First run of the day takes 30-90s of CPU inference. Prompt style: short verb phrases like \"person walking forward\" or \"a character waving\".",
+        "description": "Text-to-motion animation retargeted onto an AF_Mannequin (spawns one if needed). Docker + AnimoFlow containers required. First run of the day: 30-90s. Prompt = short verb phrase (\"person walking forward\"). See read_docs({topic:'animoflow'}) for details.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "prompt": {"type": "string", "description": "Motion description — short verb phrase"},
-                "max_frames": {"type": "integer", "minimum": 30, "maximum": 240, "description": "Frame count (20fps, so 120 = 6s). Default 120."},
-                "seed": {"type": "integer", "description": "Optional seed for reproducibility. Default 42."},
+                "prompt": {"type": "string"},
+                "max_frames": {"type": "integer", "minimum": 30, "maximum": 240, "description": "20fps. Default 120 (6s)."},
+                "seed": {"type": "integer", "description": "Default 42"},
             },
             "required": ["prompt"],
         },
