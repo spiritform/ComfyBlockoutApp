@@ -2024,6 +2024,44 @@
 		font-size: 14px; line-height: 1;
 	}
 	.gen-slot-clear:hover { background: rgba(255,80,80,0.22); color: #ff8a8a; }
+	/* Wide variant — for panorama-style previews (skybox equirect, terrain
+	   heightmap). Stacks vertically: full-width 2:1 thumb on top, label
+	   below, clear × absolutely positioned in the top-right corner of the
+	   thumb. Shares the same dashed→solid, hover, drop-target behavior
+	   as the compact gen-slot. Wrap in a <label> to make the whole slot
+	   click-to-upload without a JS handler. */
+	.gen-slot.gen-slot-wide {
+		flex-direction: column;
+		align-items: stretch;
+		padding: 8px;
+		min-height: 0;
+		cursor: pointer;
+	}
+	.gen-slot.gen-slot-wide .gen-slot-thumb {
+		width: 100%;
+		height: auto;
+		aspect-ratio: 2 / 1;
+		flex: 0 0 auto;
+		border-radius: 4px;
+	}
+	.gen-slot.gen-slot-wide .gen-slot-label {
+		flex: 0 0 auto;
+		text-align: center;
+		padding-top: 4px;
+		font-size: 10px;
+		letter-spacing: 0.04em;
+	}
+	.gen-slot.gen-slot-wide .gen-slot-clear {
+		position: absolute;
+		top: 12px; right: 12px;
+		background: rgba(0,0,0,0.55);
+		width: 22px; height: 22px;
+		font-size: 15px;
+	}
+	.gen-slot.gen-slot-wide .gen-slot-clear:hover { background: rgba(255,80,80,0.35); }
+	.gen-slot.gen-slot-wide .gen-slot-thumb .gen-slot-upload {
+		width: 22px; height: 22px;
+	}
 	/* [hidden] attribute defaults to display:none via UA styles, but the .gen-slot-clear
 	   rule below sets display:inline-flex which overrides it — so an empty slot still
 	   showed the ×. Re-assert display:none via the [hidden] attribute selector. */
@@ -4281,7 +4319,10 @@
 		<div class="modal-card wide" style="max-width: 960px">
 			<div class="modal-head">
 				<span class="modal-title">Debug · AI Agent telemetry</span>
-				<button class="modal-close" id="debug-close">×</button>
+				<div style="margin-left:auto; display:flex; gap:8px; align-items:center">
+					<button class="modal-btn-secondary" id="debug-popout" style="padding:4px 12px; font-size:11px" title="Open in a separate window that auto-refreshes — useful while iterating on prompts">Pop out</button>
+					<button class="modal-close" id="debug-close" style="margin-left:0">×</button>
+				</div>
 			</div>
 			<div style="padding: 8px 22px 22px">
 				<div style="display:flex; gap:20px; align-items:center; margin-bottom:16px; font-size:12px; color:rgba(255,255,255,0.75)">
@@ -4890,17 +4931,18 @@
 				     preview reads correctly. -->
 				<div class="section" id="obj-skybox-section" style="display:none">
 					<div class="section-label">Panorama Image</div>
-					<div style="position:relative;margin-bottom:8px">
-						<div id="obj-skybox-thumb" style="width:100%;aspect-ratio:2/1;background:rgba(0,0,0,0.28) center/cover no-repeat;border:1px solid rgba(255,255,255,0.06);border-radius:4px;display:flex;align-items:center;justify-content:center;color:rgba(255,180,84,0.75);font-size:10px;letter-spacing:0.04em;text-align:center;padding:8px;box-sizing:border-box">NO IMAGE — UPLOAD OR GENERATE</div>
-						<!-- Clear X — top-right of the thumb, shown only while a
-						     texture is applied. Uses the shared .remove-x class so
-						     it matches gen-slot-clear / obj-image-clear visually. -->
-						<button type="button" class="remove-x" id="obj-skybox-clear" title="Remove panorama image" hidden style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.55)">×</button>
-					</div>
-					<input type="file" id="obj-skybox-upload-file" accept="image/*" hidden>
-					<div style="display:flex;gap:6px;margin-bottom:8px">
-						<button type="button" id="obj-skybox-upload-btn" class="mp-still-btn" style="flex:1;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85)">Upload</button>
-					</div>
+					<!-- Wide slot — same visual language as the compact gen-slots
+					     used by workflow cells. Wrapped in a <label> so clicking
+					     anywhere on the slot opens the file picker; drag-drop of
+					     an image file works via listeners below. -->
+					<label class="gen-slot gen-slot-wide" id="obj-skybox-slot" title="Click or drop an image to upload · or use the prompt + Generate below">
+						<div class="gen-slot-thumb" id="obj-skybox-thumb">
+							<svg class="gen-slot-upload" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2"/><path d="M8 9V2.5"/><path d="m5 5 3-3 3 3"/></svg>
+						</div>
+						<div class="gen-slot-label">Upload or drop an equirectangular image</div>
+						<button type="button" class="gen-slot-clear" id="obj-skybox-clear" title="Remove panorama image" hidden>×</button>
+						<input type="file" id="obj-skybox-upload-file" accept="image/*" hidden>
+					</label>
 					<div class="sub-label">Prompt</div>
 					<textarea id="obj-skybox-prompt" rows="2" placeholder="A misty pine forest at dawn…" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.08);border-radius:4px;color:rgba(255,255,255,0.85);padding:6px 8px;font-size:11px;font-family:inherit;resize:vertical;margin-bottom:6px"></textarea>
 					<button type="button" id="obj-skybox-generate-btn" class="mp-still-btn" style="width:100%">Generate</button>
@@ -4955,16 +4997,18 @@
 					<!-- Heightmap panel — upload or generate a grayscale image. -->
 					<div id="obj-terrain-heightmap" style="display:none">
 						<div class="sub-label" style="margin-top:10px">Heightmap</div>
-						<div style="position:relative;margin-top:4px">
-							<div id="obj-terrain-hm-thumb" style="width:100%;aspect-ratio:2/1;background:rgba(0,0,0,0.28) center/cover no-repeat;border:1px solid rgba(255,255,255,0.06);border-radius:4px;display:flex;align-items:center;justify-content:center;color:rgba(255,180,84,0.75);font-size:10px;letter-spacing:0.04em;text-align:center;padding:8px;box-sizing:border-box">NO IMAGE — UPLOAD OR GENERATE</div>
-							<button type="button" class="remove-x" id="obj-terrain-hm-clear" title="Remove heightmap" hidden style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.55)">×</button>
-						</div>
+						<!-- Wide slot — same pattern as the skybox pane. Click
+						     anywhere or drop an image to upload; × clears. -->
+						<label class="gen-slot gen-slot-wide" id="obj-terrain-hm-slot" style="margin-top:4px" title="Click or drop a grayscale heightmap · or use the prompt + Generate below">
+							<div class="gen-slot-thumb" id="obj-terrain-hm-thumb">
+								<svg class="gen-slot-upload" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2"/><path d="M8 9V2.5"/><path d="m5 5 3-3 3 3"/></svg>
+							</div>
+							<div class="gen-slot-label">Upload or drop a grayscale heightmap</div>
+							<button type="button" class="gen-slot-clear" id="obj-terrain-hm-clear" title="Remove heightmap" hidden>×</button>
+							<input type="file" id="obj-terrain-hm-file" accept="image/*" hidden>
+						</label>
 						<div class="drag-row" style="margin-top:6px">
 							<div class="drag-num" id="obj-terrain-hm-blur" style="flex:1"><span class="drag-label">Blur</span><span class="drag-val">0</span></div>
-						</div>
-						<input type="file" id="obj-terrain-hm-file" accept="image/*" hidden>
-						<div style="display:flex;gap:6px;margin-top:6px">
-							<button type="button" id="obj-terrain-hm-upload" class="mp-still-btn" style="flex:1;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85)">Upload</button>
 						</div>
 						<div class="sub-label" style="margin-top:10px">Prompt</div>
 						<textarea id="obj-terrain-hm-prompt" rows="2" placeholder="A misty pine forest at dawn…" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.08);border-radius:4px;color:rgba(255,255,255,0.85);padding:6px 8px;font-size:11px;font-family:inherit;resize:vertical;margin-bottom:6px"></textarea>
@@ -5014,6 +5058,15 @@
 					<div class="drag-row" id="obj-light-softbox-row" style="margin-top:6px;display:none">
 						<div class="drag-num" id="obj-light-softbox-width"><span class="drag-label">Width</span><span class="drag-val">2.0</span></div>
 						<div class="drag-num" id="obj-light-softbox-height"><span class="drag-label">Height</span><span class="drag-val">2.0</span></div>
+					</div>
+					<!-- Directional / Spot / Softbox — aim the light at another object
+					     in the scene. One-shot rotate; user drags freely from there.
+					     Point stays hidden since omnidirectional. -->
+					<div id="obj-light-target-row" style="margin-top:10px;display:none">
+						<div class="sub-label">Target</div>
+						<select id="obj-light-target" style="width:100%;margin-top:6px;padding:7px 10px;background:#0a0a0e;color:#e6e6ea;border:1px solid rgba(255,255,255,0.08);border-radius:5px;font:inherit;font-size:11px;cursor:pointer">
+							<option value="">— none —</option>
+						</select>
 					</div>
 					<div class="sub-label" id="obj-light-shadows-label" style="margin-top:10px">Shadows</div>
 					<div class="pill-toggle" id="obj-light-shadow-toggle" style="margin-top:6px">
@@ -6656,6 +6709,125 @@
 		debugRefresh?.addEventListener("click", loadDebug);
 		document.addEventListener("keydown", (e) => {
 			if (e.key === "Escape" && debugModal.classList.contains("open")) debugModal.classList.remove("open");
+		});
+		// Pop out into a bare window that auto-refreshes every 5s. Standalone
+		// HTML doc so styles don't fight with the editor's own CSS; hits the
+		// same /api/llm/* endpoints as the modal so both views agree. Dev-only
+		// affordance — kept lean, no persistent state beyond the window itself.
+		document.getElementById("debug-popout")?.addEventListener("click", () => {
+			const w = window.open("", "cb_debug", "width=1100,height=720,menubar=no,toolbar=no");
+			if (!w) { alert("Popup blocked. Allow popups for this site to use the detached debug view."); return; }
+			w.document.open();
+			w.document.write(`<!doctype html>
+<html><head>
+<meta charset="utf-8">
+<title>ComfyBlockout · Debug</title>
+<style>
+	:root { color-scheme: dark; }
+	html, body { margin: 0; padding: 0; background: #0a0a0e; color: #e6e6ea; font-family: "Inter", -apple-system, "Segoe UI", sans-serif; font-size: 12px; }
+	.wrap { padding: 20px 24px 28px; }
+	.head { display: flex; gap: 20px; align-items: center; margin-bottom: 14px; font-size: 12px; color: rgba(255,255,255,0.75); }
+	.head .k { color: rgba(255,255,255,0.4); }
+	.head .push { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+	.head button { background: transparent; color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.15); border-radius: 5px; padding: 4px 12px; font: inherit; font-size: 11px; cursor: pointer; }
+	.head button:hover { color: #fff; border-color: rgba(255,255,255,0.35); }
+	.head button.on { color: #ffd28a; border-color: rgba(255,180,84,0.4); }
+	.stamp { color: rgba(255,255,255,0.35); font-size: 10.5px; }
+	.kicker { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255,255,255,0.4); margin-bottom: 6px; }
+	.tbl-wrap { border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; overflow: hidden; }
+	table { width: 100%; border-collapse: collapse; font-size: 11px; }
+	thead { background: rgba(255,255,255,0.03); position: sticky; top: 0; }
+	th { color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; font-weight: 500; padding: 8px 10px; text-align: left; }
+	td { padding: 6px 10px; border-top: 1px solid rgba(255,255,255,0.04); vertical-align: top; }
+	.r { text-align: right; }
+	.dim { color: rgba(255,255,255,0.4); }
+</style>
+</head><body>
+<div class="wrap">
+	<div class="head">
+		<div><span class="k">Today: </span><span id="today">—</span></div>
+		<div><span class="k">Total: </span><span id="total">—</span></div>
+		<div class="push">
+			<span class="stamp" id="stamp"></span>
+			<button id="auto" class="on" title="Auto-refresh every 5s">Auto · 5s</button>
+			<button id="refresh">Refresh</button>
+		</div>
+	</div>
+	<div class="kicker">Recent turns (newest first)</div>
+	<div class="tbl-wrap" style="max-height: calc(100vh - 120px); overflow-y: auto">
+		<table>
+			<thead><tr>
+				<th>Time</th>
+				<th class="r" title="Fresh input tokens">In</th>
+				<th class="r">Out</th>
+				<th class="r" title="Cache read (90% discount)">CR</th>
+				<th class="r" title="Cache write (25% premium)">CW</th>
+				<th class="r">$</th>
+				<th>Tools</th>
+				<th>Message</th>
+			</tr></thead>
+			<tbody id="body"><tr><td colspan="8" class="dim" style="padding:20px; text-align:center">Loading…</td></tr></tbody>
+		</table>
+	</div>
+</div>
+<script>
+(function(){
+	const bodyEl = document.getElementById("body");
+	const todayEl = document.getElementById("today");
+	const totalEl = document.getElementById("total");
+	const stampEl = document.getElementById("stamp");
+	const autoBtn = document.getElementById("auto");
+	let auto = true;
+	let timer = null;
+	function fmtTokens(u){ if(!u) return "—"; const total = (u.input_tokens||0)+(u.output_tokens||0)+(u.cache_read_input_tokens||0)+(u.cache_creation_input_tokens||0); const usd = typeof u.estimated_usd==="number" ? " · $"+u.estimated_usd.toFixed(4) : ""; return total.toLocaleString()+" tok · "+(u.turns||0)+" turns"+usd; }
+	function fmtTime(iso){ try { return new Date(iso).toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit",second:"2-digit"}); } catch { return iso||"—"; } }
+	async function load(){
+		try {
+			const [uR, tR] = await Promise.all([fetch("/api/llm/usage"), fetch("/api/llm/turns?limit=200")]);
+			const u = await uR.json();
+			const turns = (await tR.json()).turns || [];
+			todayEl.textContent = fmtTokens(u.today);
+			totalEl.textContent = fmtTokens(u.total);
+			stampEl.textContent = "updated " + new Date().toLocaleTimeString();
+			if (!turns.length) { bodyEl.innerHTML = '<tr><td colspan="8" class="dim" style="padding:20px; text-align:center">No turns yet.</td></tr>'; return; }
+			const rows = turns.map(t => {
+				const u = t.usage || {};
+				const tools = (t.tool_uses || []).map(x => {
+					const c = x.kind === "mcp" ? "rgba(120,180,255,0.85)" : "rgba(255,180,84,0.85)";
+					return '<span style="color:'+c+'">'+x.name+'</span>';
+				}).join(", ") || '<span class="dim">—</span>';
+				const preview = (t.user_preview || t.reply_preview || "").replace(/</g,"&lt;").slice(0,140);
+				return '<tr>'
+					+'<td>'+fmtTime(t.ts)+'</td>'
+					+'<td class="r">'+(u.input_tokens||0).toLocaleString()+'</td>'
+					+'<td class="r">'+(u.output_tokens||0).toLocaleString()+'</td>'
+					+'<td class="r">'+(u.cache_read_input_tokens||0).toLocaleString()+'</td>'
+					+'<td class="r">'+(u.cache_creation_input_tokens||0).toLocaleString()+'</td>'
+					+'<td class="r">$'+((t.estimated_usd||0).toFixed(4))+'</td>'
+					+'<td>'+tools+'</td>'
+					+'<td><span style="color:rgba(255,255,255,0.55); font-size:10.5px">'+preview+'</span></td>'
+					+'</tr>';
+			}).join("");
+			bodyEl.innerHTML = rows;
+		} catch (e) {
+			bodyEl.innerHTML = '<tr><td colspan="8" style="padding:20px; text-align:center; color:#ff8a8a">load failed: '+String(e.message||e).replace(/</g,"&lt;")+'</td></tr>';
+		}
+	}
+	function loop(){ if (auto) { load(); timer = setTimeout(loop, 5000); } }
+	document.getElementById("refresh").addEventListener("click", load);
+	autoBtn.addEventListener("click", () => {
+		auto = !auto;
+		autoBtn.classList.toggle("on", auto);
+		autoBtn.textContent = auto ? "Auto · 5s" : "Auto · off";
+		if (auto) loop(); else if (timer) { clearTimeout(timer); timer = null; }
+	});
+	load();
+	timer = setTimeout(loop, 5000);
+})();
+<\/script>
+</body></html>`);
+			w.document.close();
+			w.focus();
 		});
 		// "Sign in with Comfy Cloud" — Comfy Cloud has no public OAuth flow for
 		// third-party apps (their docs: X-API-Key only), so this opens the API
@@ -9692,8 +9864,10 @@ const LIGHT_DEFAULTS = {
 	// need to expose it as a knob.
 	shadowSoftness: 8,
 	// Spot-specific — angle in degrees for UI ergonomics, converted to
-	// radians only when writing to three's spot light.
-	spotAngle: 30,
+	// radians only when writing to three's spot light. Widened from 30° to
+	// 45° so a fresh spot covers a proportionate area of the seed subject
+	// instead of a pin-hole beam that misses off-axis by default.
+	spotAngle: 45,
 	spotPenumbra: 0.2,
 	// Point + spot distance (0 = unlimited range with no falloff clamp).
 	distance: 7,
@@ -19550,11 +19724,14 @@ function _setSkyboxStatus(text, kind) {
 
 function _setSkyboxRunButton(phase) {
 	const gen = document.getElementById("obj-skybox-generate-btn");
-	const up = document.getElementById("obj-skybox-upload-btn");
 	if (!gen) return;
 	const busy = phase !== "idle";
 	gen.disabled = busy;
-	if (up) up.disabled = busy;
+	// Also lock the upload slot while a generate is in-flight so the two
+	// paths don't race — clicking the slot mid-generate opened the picker
+	// underneath the running job, which was confusing.
+	const slot = document.getElementById("obj-skybox-slot");
+	if (slot) slot.style.pointerEvents = busy ? "none" : "";
 	const label = phase === "running" ? "Running…" : "Generate";
 	gen.innerHTML = busy
 		? `<span style="display:inline-flex;align-items:center;gap:6px;justify-content:center">${_UTIL_SPINNER_SVG}<span>${label}</span></span>`
@@ -19564,15 +19741,21 @@ function _setSkyboxRunButton(phase) {
 function _refreshSkyboxThumb(skybox) {
 	const thumb = document.getElementById("obj-skybox-thumb");
 	if (!thumb) return;
+	const slot = document.getElementById("obj-skybox-slot");
+	const label = slot?.querySelector(".gen-slot-label");
 	const src = skybox?.userData?._skyboxImageUrl || skybox?.material?.map?.image?.src || null;
 	if (src) {
 		thumb.style.backgroundImage = `url("${src}")`;
-		thumb.textContent = "";
+		thumb.classList.add("has-image");
+		slot?.classList.add("filled");
+		if (label) label.textContent = "Panorama applied";
 	} else {
 		thumb.style.backgroundImage = "";
-		thumb.textContent = "NO IMAGE — UPLOAD OR GENERATE";
+		thumb.classList.remove("has-image");
+		slot?.classList.remove("filled");
+		if (label) label.textContent = "Upload or drop an equirectangular image";
 	}
-	// X pill is only meaningful when there's actually an image to remove.
+	// X pill only shows when there's actually an image to remove.
 	const clearBtn = document.getElementById("obj-skybox-clear");
 	if (clearBtn) clearBtn.hidden = !src;
 }
@@ -19667,7 +19850,11 @@ async function _skyboxGenerate() {
 		const j = await r.json();
 		_setSkyboxStatus(`done · ${j.filename || "saved to Assets"}`, "ok");
 		window.refreshAssets?.();
-		if (j.filename) _applySkyboxTexture(skybox, `/output/${j.filename}`);
+		// Prefer j.url (server-canonical, includes ext-partitioned subfolder
+		// like /output/images/…). Fallback stays for older clients hitting a
+		// newer server or vice-versa during rollout.
+		const url = j.url || (j.filename ? `/output/${j.filename}` : null);
+		if (url) _applySkyboxTexture(skybox, url);
 	} catch (err) {
 		console.error("[skybox] generate failed:", err);
 		_setSkyboxStatus(`failed · ${String(err.message || err).slice(0, 120)}`, "error");
@@ -19678,9 +19865,9 @@ async function _skyboxGenerate() {
 
 (function wireSkyboxObjectInspectorButtons() {
 	const hook = () => {
-		document.getElementById("obj-skybox-upload-btn")?.addEventListener("click", () => {
-			document.getElementById("obj-skybox-upload-file")?.click();
-		});
+		// The <label class="gen-slot"> wrapping the hidden file input opens
+		// the picker natively on click — no JS bridge needed. change fires
+		// after selection.
 		document.getElementById("obj-skybox-upload-file")?.addEventListener("change", async (e) => {
 			const f = e.target.files?.[0];
 			e.target.value = "";
@@ -19689,9 +19876,30 @@ async function _skyboxGenerate() {
 		document.getElementById("obj-skybox-generate-btn")?.addEventListener("click", async () => {
 			await _skyboxGenerate();
 		});
-		document.getElementById("obj-skybox-clear")?.addEventListener("click", () => {
+		// Clear × sits inside the label — stop the click bubbling to the
+		// label so the file picker doesn't open right after clearing.
+		document.getElementById("obj-skybox-clear")?.addEventListener("click", (e) => {
+			e.preventDefault();
+			e.stopPropagation();
 			_skyboxClearImage();
 		});
+		// Drag-drop an image file onto the slot.
+		const skyboxSlot = document.getElementById("obj-skybox-slot");
+		if (skyboxSlot) {
+			skyboxSlot.addEventListener("dragover", (e) => {
+				if (!e.dataTransfer?.types?.includes("Files")) return;
+				e.preventDefault();
+				skyboxSlot.classList.add("drop-target");
+			});
+			skyboxSlot.addEventListener("dragleave", () => skyboxSlot.classList.remove("drop-target"));
+			skyboxSlot.addEventListener("drop", async (e) => {
+				skyboxSlot.classList.remove("drop-target");
+				const f = e.dataTransfer?.files?.[0];
+				if (!f || !f.type.startsWith("image/")) return;
+				e.preventDefault();
+				await _skyboxHandleUpload(f);
+			});
+		}
 		// Opacity slider — drives the selected skybox's material alpha live.
 		// Stashes the value on userData so re-selection restores the same knob
 		// position, and repeat drags don't have to re-read the material.
@@ -19811,17 +20019,24 @@ function _terrainSyncPaneFromSelection(mesh) {
 	document.getElementById("obj-terrain-subdiv")?._refresh?.();
 	document.getElementById("obj-terrain-hm-amp")?._refresh?.();
 	document.getElementById("obj-terrain-hm-blur")?._refresh?.();
-	// Heightmap thumb + clear button
+	// Heightmap thumb + clear button — mirrors _refreshSkyboxThumb's pattern
+	// so the gen-slot-wide filled/empty states + label swap stay consistent.
 	const thumb = document.getElementById("obj-terrain-hm-thumb");
 	const clearBtn = document.getElementById("obj-terrain-hm-clear");
+	const slot = document.getElementById("obj-terrain-hm-slot");
+	const label = slot?.querySelector(".gen-slot-label");
 	if (thumb) {
 		if (cfg.heightmapUrl) {
 			thumb.style.backgroundImage = `url('${cfg.heightmapUrl}')`;
-			thumb.textContent = "";
+			thumb.classList.add("has-image");
+			slot?.classList.add("filled");
+			if (label) label.textContent = "Heightmap applied";
 			if (clearBtn) clearBtn.hidden = false;
 		} else {
 			thumb.style.backgroundImage = "";
-			thumb.textContent = "NO IMAGE — UPLOAD OR GENERATE";
+			thumb.classList.remove("has-image");
+			slot?.classList.remove("filled");
+			if (label) label.textContent = "Upload or drop a grayscale heightmap";
 			if (clearBtn) clearBtn.hidden = true;
 		}
 	}
@@ -19909,13 +20124,9 @@ function _terrainSetHmStatus(text, kind) {
 			await _terrainApplyConfig(t);
 			saveScene?.();
 		});
-		// Heightmap upload — save the file server-side + swap in the URL.
-		document.getElementById("obj-terrain-hm-upload")?.addEventListener("click", () => {
-			document.getElementById("obj-terrain-hm-file")?.click();
-		});
-		document.getElementById("obj-terrain-hm-file")?.addEventListener("change", async (e) => {
-			const f = e.target.files?.[0];
-			e.target.value = "";
+		// Heightmap upload — <label> wraps the hidden input, so clicking the
+		// slot opens the picker natively. Change handler applies the file.
+		const _terrainApplyHeightmapFile = async (f) => {
 			const t = _terrainSelected();
 			if (!f || !t) return;
 			_terrainSetHmStatus(`uploading ${f.name}…`, "busy");
@@ -19931,8 +20142,17 @@ function _terrainSetHmStatus(text, kind) {
 				console.error("[terrain] heightmap load failed:", err);
 				_terrainSetHmStatus(`load failed · ${String(err.message || err).slice(0, 120)}`, "error");
 			}
+		};
+		document.getElementById("obj-terrain-hm-file")?.addEventListener("change", async (e) => {
+			const f = e.target.files?.[0];
+			e.target.value = "";
+			await _terrainApplyHeightmapFile(f);
 		});
-		document.getElementById("obj-terrain-hm-clear")?.addEventListener("click", async () => {
+		document.getElementById("obj-terrain-hm-clear")?.addEventListener("click", async (e) => {
+			// Clear × sits inside the label — stop the click from bubbling to
+			// the label so the file picker doesn't open after clearing.
+			e.preventDefault();
+			e.stopPropagation();
 			const t = _terrainSelected();
 			if (!t) return;
 			t.userData.terrainConfig.heightmapUrl = null;
@@ -19944,6 +20164,23 @@ function _terrainSetHmStatus(text, kind) {
 			await _terrainApplyConfig(t);
 			saveScene?.();
 		});
+		// Drag-drop an image file onto the slot.
+		const hmSlot = document.getElementById("obj-terrain-hm-slot");
+		if (hmSlot) {
+			hmSlot.addEventListener("dragover", (e) => {
+				if (!e.dataTransfer?.types?.includes("Files")) return;
+				e.preventDefault();
+				hmSlot.classList.add("drop-target");
+			});
+			hmSlot.addEventListener("dragleave", () => hmSlot.classList.remove("drop-target"));
+			hmSlot.addEventListener("drop", async (e) => {
+				hmSlot.classList.remove("drop-target");
+				const f = e.dataTransfer?.files?.[0];
+				if (!f || !f.type.startsWith("image/")) return;
+				e.preventDefault();
+				await _terrainApplyHeightmapFile(f);
+			});
+		}
 		document.getElementById("obj-terrain-hm-generate")?.addEventListener("click", async () => {
 			const t = _terrainSelected();
 			if (!t) return;
@@ -19960,7 +20197,7 @@ function _terrainSetHmStatus(text, kind) {
 				if (!r.ok) throw new Error(await r.text() || `HTTP ${r.status}`);
 				const j = await r.json();
 				if (!j.filename) throw new Error("server returned no filename");
-				t.userData.terrainConfig.heightmapUrl = `/output/${j.filename}`;
+				t.userData.terrainConfig.heightmapUrl = j.url || `/output/${j.filename}`;
 				t.userData.terrainConfig.source = "heightmap";
 				await _terrainApplyConfig(t);
 				_terrainSyncPaneFromSelection(t);
@@ -20010,6 +20247,25 @@ function _lightSyncPaneFromSelection(wrapper) {
 	const hideShadows = cfg.type === "softbox";
 	if (shadowsLabel) shadowsLabel.style.display = hideShadows ? "none" : "";
 	if (shadowsToggle) shadowsToggle.style.display = hideShadows ? "none" : "";
+	// Target dropdown — only meaningful for aim-having types. Rebuild the
+	// option list from the current scene each open so a freshly-spawned
+	// object shows up without a full pane refresh.
+	const targetRow = document.getElementById("obj-light-target-row");
+	const targetSel = document.getElementById("obj-light-target");
+	const showTarget = cfg.type === "directional" || cfg.type === "spot";
+	if (targetRow) targetRow.style.display = showTarget ? "" : "none";
+	if (targetSel && showTarget) {
+		const opts = ['<option value="">— none —</option>'];
+		for (const o of objects) {
+			if (o === wrapper) continue; // don't allow self-target
+			if (o.userData?.primKind === "light") continue; // skip other lights
+			const nm = o.name || "?";
+			const kind = o.userData?.primKind || "object";
+			opts.push(`<option value="${nm.replace(/"/g, "&quot;")}">${nm} (${kind})</option>`);
+		}
+		targetSel.innerHTML = opts.join("");
+		targetSel.value = cfg.targetName || "";
+	}
 	// Refresh drag-nums
 	document.getElementById("obj-light-intensity")?._refresh?.();
 	document.getElementById("obj-light-distance")?._refresh?.();
@@ -20102,6 +20358,39 @@ function _lightSyncPaneFromSelection(wrapper) {
 				_lightSyncPaneFromSelection(r);
 				saveScene?.();
 			});
+		});
+		// Target dropdown — pick a scene object to aim the light at. Rotates
+		// the wrapper via the same lookAt path as the agent's aim_object_at
+		// (including the gimbal-lock guard for directly-above targets), then
+		// stores the target name on the light's config so save/load survives.
+		// One-shot aim: user can still drag freely with the gizmo afterward.
+		document.getElementById("obj-light-target")?.addEventListener("change", (e) => {
+			const r = _lightSelected();
+			if (!r) return;
+			const targetName = String(e.target.value || "");
+			r.userData.lightConfig.targetName = targetName || null;
+			if (!targetName) { saveScene?.(); return; }
+			const t = findObjByName(targetName);
+			if (!t) { saveScene?.(); return; }
+			try { snapshotForUndo(); } catch {}
+			const pt = new THREE.Vector3();
+			t.getWorldPosition(pt);
+			// Same parent-frame conversion + gimbal-lock guard as aim_object_at.
+			let local = pt.clone();
+			if (r.parent) {
+				r.parent.updateMatrixWorld();
+				local.applyMatrix4(new THREE.Matrix4().copy(r.parent.matrixWorld).invert());
+			}
+			const dir = new THREE.Vector3().subVectors(local, r.position);
+			const savedUp = r.up.clone();
+			if (dir.lengthSq() > 1e-8) {
+				dir.normalize();
+				if (Math.abs(dir.dot(r.up)) > 0.999) r.up.set(0, 0, 1);
+			}
+			r.lookAt(local);
+			r.up.copy(savedUp);
+			refreshObjectInspector?.();
+			saveScene?.();
 		});
 	};
 	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hook, { once: true });
@@ -21577,6 +21866,7 @@ const ASSISTANT_TOOLS = {
 	set_object_color({ name, color }) {
 		const obj = findObjByName(name);
 		if (!obj) return `error: no object named '${name}'`;
+		try { snapshotForUndo(); } catch {}
 		const ps = obj.userData.particleSystem;
 		if (ps) {
 			try {
@@ -21597,6 +21887,7 @@ const ASSISTANT_TOOLS = {
 	set_object_position({ name, x, y, z }) {
 		const obj = findObjByName(name);
 		if (!obj) return `error: no object named '${name}'`;
+		try { snapshotForUndo(); } catch {}
 		obj.position.set(+x || 0, +y || 0, +z || 0);
 		if (selected === obj) refreshObjectInspector?.();
 		saveScene?.();
@@ -21606,6 +21897,7 @@ const ASSISTANT_TOOLS = {
 	set_object_rotation({ name, x, y, z }) {
 		const obj = findObjByName(name);
 		if (!obj) return `error: no object named '${name}'`;
+		try { snapshotForUndo(); } catch {}
 		const RAD = Math.PI / 180;
 		obj.rotation.set((+x || 0) * RAD, (+y || 0) * RAD, (+z || 0) * RAD);
 		if (selected === obj) refreshObjectInspector?.();
@@ -21642,6 +21934,7 @@ const ASSISTANT_TOOLS = {
 	aim_object_at({ name, target, target_x, target_y, target_z } = {}) {
 		const obj = findObjByName(name);
 		if (!obj) return `error: no object named '${name}'`;
+		try { snapshotForUndo(); } catch {}
 		let point;
 		if (typeof target === "string" && target.length) {
 			const t = findObjByName(target);
@@ -21666,7 +21959,22 @@ const ASSISTANT_TOOLS = {
 			const inv = new THREE.Matrix4().copy(obj.parent.matrixWorld).invert();
 			point = point.clone().applyMatrix4(inv);
 		}
+		// lookAt gimbal-lock guard: when the aim direction is nearly parallel
+		// to the object's up vector (e.g. spotlight directly above the target
+		// pointing straight down), lookAt's "which way is up" reference
+		// degenerates and can flip the object 180°. Detect the near-vertical
+		// case and swap up to +Z temporarily so lookAt has a stable frame.
+		const dir = new THREE.Vector3().subVectors(point, obj.position);
+		const savedUp = obj.up.clone();
+		if (dir.lengthSq() > 1e-8) {
+			dir.normalize();
+			// dot with up axis — if nearly ±1, the aim is parallel to up.
+			if (Math.abs(dir.dot(obj.up)) > 0.999) {
+				obj.up.set(0, 0, 1);
+			}
+		}
 		obj.lookAt(point);
+		obj.up.copy(savedUp);
 		if (selected === obj) refreshObjectInspector?.();
 		saveScene?.();
 		const deg = (r) => (r * 180 / Math.PI).toFixed(1);
@@ -21676,6 +21984,7 @@ const ASSISTANT_TOOLS = {
 	set_object_scale({ name, x, y, z }) {
 		const obj = findObjByName(name);
 		if (!obj) return `error: no object named '${name}'`;
+		try { snapshotForUndo(); } catch {}
 		const sx = Math.max(0.001, +x || 1);
 		const sy = (y === undefined) ? sx : Math.max(0.001, +y);
 		const sz = (z === undefined) ? sx : Math.max(0.001, +z);
@@ -22133,7 +22442,7 @@ const ASSISTANT_TOOLS = {
 			}
 			const j = await r.json();
 			if (!j.filename) return "error: server returned no filename";
-			terrain.userData.terrainConfig.heightmapUrl = `/output/${j.filename}`;
+			terrain.userData.terrainConfig.heightmapUrl = j.url || `/output/${j.filename}`;
 			terrain.userData.terrainConfig.source = "heightmap";
 			await _terrainApplyConfig(terrain);
 			if (selected === terrain) _terrainSyncPaneFromSelection(terrain);
@@ -22172,7 +22481,8 @@ const ASSISTANT_TOOLS = {
 			}
 			const j = await r.json();
 			if (!j.filename) return "error: server returned no filename";
-			_applySkyboxTexture(skybox, `/output/${j.filename}`);
+			const url = j.url || `/output/${j.filename}`;
+			_applySkyboxTexture(skybox, url);
 			refreshOutliner();
 			window.refreshAssets?.();
 			saveScene?.();

@@ -1829,7 +1829,12 @@ async def skybox_generate(request: Request):
         # flux-2` from a terminal is the shortest way to check current args.
         detail = (stderr.strip() or stdout.strip() or f"comfy generate failed (rc={code})")
         raise HTTPException(500, detail[-800:])
-    return {"filename": out.name, "path": str(out), "ext": "png"}
+    # Return a canonical URL that respects new_output_path's ext-partitioned
+    # subfolders (images/ / videos/ / 3d/). Client used to construct
+    # `/output/${filename}` and 404 because the file actually lives at
+    # `/output/images/<filename>`.
+    url = "/output/" + out.relative_to(DATA_DIR).as_posix()
+    return {"filename": out.name, "path": str(out), "url": url, "ext": "png"}
 
 
 # ── Heightmap generation (T2I via Comfy Cloud) ────────────────────────
@@ -1872,7 +1877,11 @@ async def heightmap_generate(request: Request):
     if code != 0 or not out.exists():
         detail = (stderr.strip() or stdout.strip() or f"comfy generate failed (rc={code})")
         raise HTTPException(500, detail[-800:])
-    return {"filename": out.name, "path": str(out), "ext": "png"}
+    # Canonical URL respecting the ext-partitioned subfolder (heightmap lands
+    # under output/images/). Client fallback to /output/${filename} used to
+    # 404 for the same reason skybox generate did.
+    url = "/output/" + out.relative_to(DATA_DIR).as_posix()
+    return {"filename": out.name, "path": str(out), "url": url, "ext": "png"}
 
 
 @app.post("/api/motion/install")
@@ -3441,6 +3450,21 @@ ASSISTANT_SYSTEM = (
     "distinguishes them via `source: api` vs `source: local`. Legacy tool names "
     "still say \"generator\" (e.g. `set_generator_prompt`) — they work for both.\n\n"
 
+    "SCENE STATE — DON'T PRELOAD, QUERY ON DEMAND.\n"
+    "The <scene_pointer> block prepended to each turn contains ONLY minimal "
+    "pointers: currently selected object, selected asset, active workflow. NO "
+    "object list, no camera pose, no workflow catalog. Preloading the full "
+    "scene every turn was burning fresh tokens the user wasn't paying for.\n"
+    "- Small-talk / greetings (\"hi\", \"help\", \"what can you do?\") → reply "
+    "conversationally, DO NOT call any tools, DO NOT summarize the scene. Ask "
+    "the user what they want to build.\n"
+    "- Underspecified \"this / it / that\" command → the <scene_pointer> "
+    "selection line is usually enough. If not, call `get_selected_object`.\n"
+    "- Direct scene questions (\"what's in my scene?\", \"where is the camera?\") "
+    "→ call `list_objects` / `get_camera_state` / `get_scene_summary` first.\n"
+    "- Commands referencing an object name you don't have — call `list_objects` "
+    "before acting so you don't mis-target.\n\n"
+
     "EXTENDED TOPICS available via `read_docs({topic})` — call this BEFORE acting "
     "when the user's request touches one of these:\n"
     "- `workflows` — creating, importing, or repairing a workflow module "
@@ -4062,99 +4086,41 @@ EDITOR_TOOLS = [
 
 
 def _format_scene_context(ctx: dict) -> str:
-    """Render the scene state as a compact block we prepend to the conversation
-    on every turn. Objects[] is the SINGLE source of truth for what exists —
-    names mentioned in generator prompts may reference deleted objects."""
+    """Render a MINIMAL scene-state pointer prepended to every turn. Only the
+    'what is the user currently pointing at' bits — selection + active
+    workflow + selected asset. Everything else (full object list, camera
+    pose, workflow catalog, keyframes) the agent must query via tools
+    (list_objects, get_selected_object, get_camera_state, get_scene_summary)
+    on demand. Preloading the full scene analysis every turn was the fresh-
+    input token hog; this cuts ~90% of that cost.
+
+    The user's rule of thumb: don't analyze the scene unless asked to."""
     if not ctx:
         return ""
-    parts = ["<scene_context>"]
-    objs = ctx.get("objects") or []
-    if objs:
-        parts.append(f"Objects in scene ({len(objs)}):")
-        for o in objs:
-            name = o.get("name") or "?"
-            kind = o.get("kind") or "object"
-            ref = " [has refImage]" if o.get("hasRef") else ""
-            notes = f" — notes: {o['notes']}" if o.get("notes") else ""
-            parts.append(f"  - {name} ({kind}){ref}{notes}")
-    else:
-        parts.append("Objects in scene (0): NONE — the scene is empty.")
-    # Selection state — the user's current pointer of intent. When they say
-    # "make this red" or "apply this as a skybox" without naming a target,
-    # THIS is what they mean. Scene selection wins over asset selection since
-    # scene edits are the more common action; both are surfaced.
+    parts = []
+    # Scene selection — enables "make it red", "delete this", etc. without a
+    # round-trip. This is the single bit worth preloading; it's ~1 line.
     sel = ctx.get("selected")
     if sel and sel.get("name"):
-        parts.append(f"Currently selected in scene: [{sel['name']}] ({sel.get('kind') or 'object'})")
+        parts.append(f"selected: [{sel['name']}] ({sel.get('kind') or 'object'})")
+    # Assets selection — parallel affordance for "apply this as a skybox".
     sel_assets = ctx.get("selectedAssets") or []
     if sel_assets:
         first = sel_assets[0]
         extra = f" (+{len(sel_assets)-1} more)" if len(sel_assets) > 1 else ""
         parts.append(
-            f"Currently selected in Output panel: {first.get('filename') or '?'} "
+            f"selected asset: {first.get('filename') or '?'} "
             f"({first.get('kind') or 'asset'}, url={first.get('url') or '?'}){extra}"
         )
-    # Camera state — target lock, hand-held shake, procedural orbit. Emitted
-    # so the agent doesn't ask "is a turntable running?" or clobber an active
-    # target with clear_camera_target it didn't know was needed.
-    cam = ctx.get("camera") or {}
-    cam_lines = []
-    if cam.get("targetName"):
-        cam_lines.append(f"  aim locked on [{cam['targetName']}]")
-    hh = cam.get("handheld") or {}
-    if hh.get("noise") or hh.get("speed"):
-        cam_lines.append(f"  hand-held shake: speed={hh.get('speed', 0):.2f}, noise={hh.get('noise', 0):.2f}")
-    orb = cam.get("orbit") or {}
-    if orb.get("active"):
-        pivot = orb.get("pivotName") or "(frozen point)"
-        cam_lines.append(
-            f"  procedural orbit ACTIVE around [{pivot}] "
-            f"(radius={orb.get('radius', 0):.2f}, height={orb.get('height', 0):.2f}, "
-            f"direction={'ccw' if orb.get('direction') == -1 else 'cw'})"
-        )
-    if cam_lines:
-        parts.append("Render camera state:")
-        parts.extend(cam_lines)
-    # The UI presents partner-API generators (Nano Banana, Seedance, Tripo...)
-    # and manifest-driven local ComfyUI modules together under one "Workflows"
-    # panel. Both are workflows from the user's POV; here we still list them
-    # in two blocks so the agent knows which runtime path they take (partner
-    # API call vs local ComfyUI job).
-    cells = ctx.get("genCells") or []
-    if cells:
-        parts.append(f"API workflows ({len(cells)}):")
-        for c in cells:
-            model = c.get("model") or "?"
-            prompt = (c.get("prompt") or "").strip()
-            prompt_preview = (prompt[:120] + "…") if len(prompt) > 120 else prompt
-            parts.append(f"  - {model}: {prompt_preview or '(empty)'}")
-    wfs = ctx.get("workflowModules") or []
-    if wfs:
-        parts.append(f"Local workflows ({len(wfs)}):")
-        for w in wfs:
-            parts.append(f"  - {w.get('id')}: {w.get('label')} ({w.get('kind')})")
-    # active_target is the disambiguator for underspecified commands like "run
-    # one" — always prefer this over guessing from history. kind is always
-    # "workflow" now; source ("api" vs "local") tells the agent which path.
+    # Active workflow pointer — disambiguates "run it" without asking the user
+    # which workflow they meant. Just the id/label, not the full manifest.
     at = ctx.get("activeTarget")
     if at:
         source = at.get("source") or ("local" if ctx.get("activeWorkflowModuleId") else "api")
-        parts.append(
-            f"Active workflow: '{at.get('id')}' (label: {at.get('label')}, source: {source})."
-        )
-        awi = ctx.get("activeWorkflowInputs")
-        if source == "local" and awi:
-            names = ", ".join(str(i.get("name")) for i in awi if isinstance(i, dict))
-            parts.append(f"  Its inputs: {names}")
-    else:
-        parts.append("Active workflow: (none) — ask the user which workflow to use if a command is ambiguous.")
-    parts.append(
-        "NOTE: Objects above is authoritative. [Name] tokens inside generator "
-        "prompts are saved text and may reference objects that were deleted — "
-        "don't assume those exist unless the name also appears in Objects."
-    )
-    parts.append("</scene_context>")
-    return "\n".join(parts)
+        parts.append(f"active workflow: {at.get('id')} ({at.get('label')}, {source})")
+    if not parts:
+        return ""
+    return "<scene_pointer>\n" + "\n".join(parts) + "\n</scene_pointer>"
 
 
 _EDITOR_TOOL_NAMES = {t["name"] for t in EDITOR_TOOLS}
