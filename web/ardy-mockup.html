@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ARDY — evaluation harness</title>
+<style>
+	/* Evaluation harness: three.js viewer + prompt UI driven by the
+	   headless FastAPI wrapper at containers/ardy/app.py. */
+	:root {
+		color-scheme: dark;
+		--bg: #0a0a0e;
+		--panel: #14141a;
+		--panel2: #1a1a22;
+		--border: rgba(255,255,255,0.08);
+		--text: rgba(255,255,255,0.85);
+		--dim: rgba(255,255,255,0.45);
+		--amber: #ffb454;
+		--ok: #4ade80;
+		--err: #ff6b6b;
+	}
+	* { box-sizing: border-box; }
+	html, body {
+		margin: 0; padding: 0; height: 100%; overflow: hidden;
+		background: var(--bg); color: var(--text);
+		font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+	}
+	body { display: flex; flex-direction: column; }
+
+	header {
+		flex: 0 0 auto;
+		display: flex; align-items: center; gap: 14px;
+		padding: 10px 16px;
+		background: var(--panel);
+		border-bottom: 1px solid var(--border);
+	}
+	.title { font-size: 13px; font-weight: 600; letter-spacing: 0.4px; }
+	.title .sub { color: var(--dim); font-weight: 500; margin-left: 6px; }
+	.spacer { flex: 1; }
+	.link {
+		font-size: 11px; color: var(--dim); text-decoration: none;
+		padding: 5px 10px; border-radius: 5px;
+		border: 1px solid var(--border);
+	}
+	.link:hover { color: var(--text); border-color: rgba(255,255,255,0.18); }
+
+	.pill {
+		display: inline-flex; align-items: center; gap: 6px;
+		padding: 5px 10px; border-radius: 999px;
+		font-size: 11px; font-weight: 500;
+		background: rgba(255,180,84,0.12); color: var(--amber);
+	}
+	.pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+	.pill.checking .dot { animation: pulse 1.2s ease-in-out infinite; }
+	.pill.ok { background: rgba(74,222,128,0.12); color: var(--ok); }
+	.pill.err { background: rgba(255,107,107,0.12); color: var(--err); }
+	@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+	main { flex: 1; min-height: 0; display: flex; }
+
+	.sidebar {
+		flex: 0 0 300px; padding: 14px 16px;
+		background: var(--panel);
+		border-right: 1px solid var(--border);
+		overflow: auto;
+		display: flex; flex-direction: column; gap: 14px;
+	}
+	.sidebar h2 {
+		font-size: 10px; font-weight: 600; letter-spacing: 1px;
+		color: var(--dim); margin: 0 0 6px;
+		text-transform: uppercase;
+	}
+	.field { display: flex; flex-direction: column; gap: 6px; }
+	.field label {
+		font-size: 10px; letter-spacing: 0.5px; color: var(--dim);
+		text-transform: uppercase; font-weight: 600;
+	}
+	.field textarea, .field input[type=number] {
+		background: var(--panel2); color: var(--text);
+		border: 1px solid var(--border); border-radius: 5px;
+		padding: 8px 10px;
+		font: inherit; font-size: 12px;
+		resize: none;
+		/* Without min-width:0 + box-sizing:border-box, number inputs default
+		   to their intrinsic ~150px content width which overflows narrow
+		   flex columns and forces the second .col to wrap onto a new row. */
+		width: 100%;
+		min-width: 0;
+		box-sizing: border-box;
+	}
+	.field textarea { min-height: 68px; line-height: 1.4; }
+	.field textarea:focus, .field input:focus {
+		outline: none; border-color: rgba(255,180,84,0.5);
+	}
+	.field .row { display: flex; gap: 8px; }
+	.field .row .col { flex: 1; }
+
+	.btn {
+		display: flex; align-items: center; justify-content: center;
+		gap: 8px;
+		padding: 8px 14px; border-radius: 5px;
+		background: rgba(255,255,255,0.08); color: var(--text);
+		border: 1px solid var(--border);
+		font: inherit; font-size: 12px; font-weight: 500;
+		cursor: pointer;
+	}
+	.btn:hover { background: rgba(255,255,255,0.14); }
+	.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+	.btn.primary { background: var(--amber); color: #14141a; border-color: transparent; font-weight: 600; }
+	.btn.primary:hover { background: #ffbf6e; }
+	.btn.primary:disabled { background: rgba(255,180,84,0.3); color: rgba(20,20,26,0.5); }
+
+	.viz-toggles { display: flex; gap: 6px; }
+	.chip {
+		flex: 1;
+		padding: 6px 10px; border-radius: 5px;
+		background: transparent; color: var(--dim);
+		border: 1px solid var(--border);
+		font: inherit; font-size: 11px; font-weight: 500;
+		cursor: pointer;
+	}
+	.chip:hover:not(:disabled) { color: var(--text); border-color: rgba(255,255,255,0.18); }
+	.chip:disabled { opacity: 0.4; cursor: not-allowed; }
+	.chip.active {
+		color: var(--text);
+		background: rgba(255,255,255,0.06);
+		border-color: rgba(255,255,255,0.16);
+	}
+
+	.stats {
+		display: flex; flex-direction: column; gap: 4px;
+		font-size: 11px; color: var(--dim);
+	}
+	.stats .kv { display: flex; justify-content: space-between; }
+	.stats .kv .v { color: var(--text); font-variant-numeric: tabular-nums; }
+
+	.viewer {
+		flex: 1; position: relative; background: #0a0a0e;
+		display: flex; flex-direction: column;
+		min-width: 0; min-height: 0;
+	}
+	/* Wrap the canvas + empty message in a flex:1 relative box so both can
+	   fill the viewport minus the transport bar without the ResizeObserver
+	   feedback loop (observing the canvas itself + calling setSize is a
+	   classic doubling loop that blows the buffer up to 2^25). */
+	.canvas-wrap {
+		flex: 1; position: relative; min-height: 0;
+	}
+	#canvas {
+		position: absolute; inset: 0;
+		width: 100%; height: 100%;
+		display: block;
+	}
+	.transport {
+		flex: 0 0 auto;
+		display: flex; align-items: center; gap: 10px;
+		padding: 8px 14px;
+		background: var(--panel);
+		border-top: 1px solid var(--border);
+	}
+	.transport .play-btn {
+		width: 28px; height: 28px; border-radius: 50%;
+		background: rgba(255,255,255,0.08); border: 1px solid var(--border);
+		color: var(--text); font-size: 11px; padding: 0;
+		display: flex; align-items: center; justify-content: center;
+		cursor: pointer;
+	}
+	.transport .play-btn:hover { background: rgba(255,255,255,0.14); }
+	.transport .scrub {
+		flex: 1;
+		-webkit-appearance: none; appearance: none;
+		height: 4px; border-radius: 2px;
+		background: rgba(255,255,255,0.08);
+		cursor: pointer;
+	}
+	.transport .scrub::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		width: 12px; height: 12px; border-radius: 50%;
+		background: var(--amber);
+		cursor: grab;
+	}
+	.transport .frame-label {
+		font-size: 11px; color: var(--dim);
+		font-variant-numeric: tabular-nums;
+		min-width: 84px; text-align: right;
+	}
+
+</style>
+</head>
+<body>
+
+<header>
+	<div class="title">ARDY <span class="sub">port-prep · headless</span></div>
+	<span id="status-pill" class="pill checking">
+		<span class="dot"></span><span id="status-label">checking :8000</span>
+	</span>
+	<div class="spacer"></div>
+	<a class="link" href="https://github.com/nv-tlabs/ardy" target="_blank" rel="noopener">repo ↗</a>
+	<a class="link" href="../tools/ardy/README.md" target="_blank" rel="noopener">setup ↗</a>
+</header>
+
+<main>
+	<aside class="sidebar">
+		<div class="field">
+			<label for="prompt">Prompt</label>
+			<textarea id="prompt" placeholder="A person walks in a circle.">A person walks in a circle.</textarea>
+		</div>
+
+		<div class="field">
+			<div class="row">
+				<div class="col">
+					<label for="frames">Frames</label>
+					<input id="frames" type="number" value="200" min="20" max="1200" step="20">
+				</div>
+				<div class="col">
+					<label for="steps">Denoise steps</label>
+					<input id="steps" type="number" value="4" min="1" max="50">
+				</div>
+			</div>
+			<div class="row" style="margin-top:8px">
+				<div class="col">
+					<label for="cfg">CFG weight</label>
+					<input id="cfg" type="number" value="2.0" step="0.1" min="0" max="10">
+				</div>
+				<div class="col">
+					<label for="seed">Seed</label>
+					<input id="seed" type="number" placeholder="random" step="1">
+				</div>
+			</div>
+		</div>
+
+		<!-- Skeleton / Mesh visibility toggles. Both can be on for a
+		     debug-overlay view; both off just to see the grid. Default:
+		     skeleton on, mesh off (mesh is empty until first generation
+		     since the T-pose is skeleton-only). -->
+		<div class="viz-toggles">
+			<button id="tog-skel" class="chip active" title="Show skeleton">Skeleton</button>
+			<button id="tog-mesh" class="chip" title="Show mesh">Mesh</button>
+		</div>
+
+		<button id="gen-btn" class="btn primary" disabled>Generate</button>
+
+		<!-- Export row. Both buttons unlock the moment a generation lands.
+		     BVH pulls the string from the /generate response and Blobs it
+		     out. Record spins up a MediaRecorder on the WebGL canvas, hides
+		     the grid, plays the motion end-to-end, and downloads the .webm
+		     when it finishes. -->
+		<div class="viz-toggles" style="margin-top:8px">
+			<button id="dl-bvh" class="chip" title="Download animation as BVH" disabled>⬇ BVH</button>
+			<button id="rec-btn" class="chip" title="Record playback to .webm (grid hidden)" disabled>⬇ Record</button>
+		</div>
+
+		<div>
+			<h2>Last generation</h2>
+			<div class="stats" id="stats">
+				<div class="kv"><span>Prompt</span><span class="v" id="stat-prompt">—</span></div>
+				<div class="kv"><span>Frames</span><span class="v" id="stat-frames">—</span></div>
+				<div class="kv"><span>FPS</span><span class="v" id="stat-fps">—</span></div>
+				<div class="kv"><span>Inference</span><span class="v" id="stat-took">—</span></div>
+			</div>
+		</div>
+	</aside>
+
+	<div class="viewer">
+		<div class="canvas-wrap">
+			<canvas id="canvas"></canvas>
+		</div>
+		<div class="transport">
+			<button id="play-btn" class="play-btn" title="Play / pause">▶</button>
+			<input id="scrub" class="scrub" type="range" min="0" max="0" step="1" value="0">
+			<span id="frame-label" class="frame-label">0 / 0</span>
+		</div>
+	</div>
+</main>
+
+<!-- three.js — pinned to a specific ESM build so this file works stand-alone
+     via file:// without a bundler. -->
+<script type="importmap">
+{
+	"imports": {
+		"three": "https://unpkg.com/three@0.169.0/build/three.module.js",
+		"three/addons/": "https://unpkg.com/three@0.169.0/examples/jsm/"
+	}
+}
+</script>
+<script type="module">
+	import * as THREE from "three";
+	import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+	// ────────────────────────────────────────────────────────────────
+	// Config — override in DevTools if you remap ARDY_PORT in .env.
+	const ARDY_URL = "http://localhost:8000";
+
+	// ────────────────────────────────────────────────────────────────
+	// CoreSkeleton27 kinematic tree — the actual skeleton the ARDY-Core-RP
+	// checkpoint outputs (per ardy/skeleton/definitions.py:CoreSkeleton27).
+	// NOT the SMPL / HumanML3D 22-joint order — that's a different rig.
+	// If we later swap to a G1 or SOMA model the parents + N_JOINTS need to
+	// change; ideally the API would return the skeleton meta so the client
+	// adapts automatically. TODO once we start playing with other models.
+	const SKELETON_PARENTS = [
+		-1, // 0  Hips (root)
+		 0, // 1  Spine
+		 1, // 2  Spine1
+		 2, // 3  Spine2
+		 3, // 4  Spine3
+		 4, // 5  Neck
+		 5, // 6  Head
+		 4, // 7  RightShoulder
+		 7, // 8  RightArm
+		 8, // 9  RightForeArm
+		 9, // 10 RightHand
+		10, // 11 RightHandEnd
+		10, // 12 RightHandThumb1
+		 4, // 13 LeftShoulder
+		13, // 14 LeftArm
+		14, // 15 LeftForeArm
+		15, // 16 LeftHand
+		16, // 17 LeftHandEnd
+		16, // 18 LeftHandThumb1
+		 0, // 19 RightUpLeg
+		19, // 20 RightLeg
+		20, // 21 RightFoot
+		21, // 22 RightToeBase
+		 0, // 23 LeftUpLeg
+		23, // 24 LeftLeg
+		24, // 25 LeftFoot
+		25, // 26 LeftToeBase
+	];
+	const N_JOINTS = SKELETON_PARENTS.length;
+
+	// Rough T-pose in CoreSkeleton27 order (positions in meters, Y-up,
+	// +Z forward). Purely visual so the viewer isn't empty on boot —
+	// replaced by real motion the moment the user hits Generate. Approx
+	// 1.75 m tall.
+	const T_POSE = [[
+		[ 0.00, 0.95,  0.00],  // 0  Hips
+		[ 0.00, 1.03,  0.00],  // 1  Spine
+		[ 0.00, 1.11,  0.00],  // 2  Spine1
+		[ 0.00, 1.20,  0.00],  // 3  Spine2
+		[ 0.00, 1.30,  0.00],  // 4  Spine3
+		[ 0.00, 1.45,  0.00],  // 5  Neck
+		[ 0.00, 1.62,  0.00],  // 6  Head
+		[-0.15, 1.42,  0.00],  // 7  RightShoulder
+		[-0.30, 1.36,  0.00],  // 8  RightArm
+		[-0.55, 1.36,  0.00],  // 9  RightForeArm
+		[-0.78, 1.36,  0.00],  // 10 RightHand
+		[-0.86, 1.36,  0.00],  // 11 RightHandEnd
+		[-0.80, 1.34,  0.03],  // 12 RightHandThumb1
+		[ 0.15, 1.42,  0.00],  // 13 LeftShoulder
+		[ 0.30, 1.36,  0.00],  // 14 LeftArm
+		[ 0.55, 1.36,  0.00],  // 15 LeftForeArm
+		[ 0.78, 1.36,  0.00],  // 16 LeftHand
+		[ 0.86, 1.36,  0.00],  // 17 LeftHandEnd
+		[ 0.80, 1.34,  0.03],  // 18 LeftHandThumb1
+		[-0.10, 0.90,  0.00],  // 19 RightUpLeg
+		[-0.12, 0.47,  0.00],  // 20 RightLeg
+		[-0.13, 0.08,  0.00],  // 21 RightFoot
+		[-0.13, 0.03,  0.12],  // 22 RightToeBase
+		[ 0.10, 0.90,  0.00],  // 23 LeftUpLeg
+		[ 0.12, 0.47,  0.00],  // 24 LeftLeg
+		[ 0.13, 0.08,  0.00],  // 25 LeftFoot
+		[ 0.13, 0.03,  0.12],  // 26 LeftToeBase
+	]];
+
+	// ────────────────────────────────────────────────────────────────
+	// Three.js scene.
+	const canvas = document.getElementById("canvas");
+	const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+	renderer.setPixelRatio(window.devicePixelRatio);
+	renderer.setClearColor(0x0a0a0e, 1);
+
+	const scene = new THREE.Scene();
+
+	const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+	camera.position.set(2.6, 1.8, 3.4);
+
+	const controls = new OrbitControls(camera, canvas);
+	controls.target.set(0, 1.0, 0);
+	controls.enableDamping = true;
+
+	// Subtle ambient + a soft key light. No cast shadows — user asked to
+	// drop them, and for a skeleton viewer they add no signal.
+	scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+	const key = new THREE.DirectionalLight(0xffffff, 0.9);
+	key.position.set(3, 6, 4);
+	scene.add(key);
+
+	// Ground grid — thin, dim, matches editor.html's aesthetic.
+	const grid = new THREE.GridHelper(10, 20, 0x333333, 0x222222);
+	grid.material.transparent = true;
+	grid.material.opacity = 0.6;
+	scene.add(grid);
+
+	// Skeleton primitives: 22 spheres (joints) + 21 lines (bones = joint
+	// pairs where parent != -1). Positions are updated per frame from the
+	// ARDY joint array. Bones share one BufferGeometry drawn as a line
+	// segment for cheap redraws.
+	const jointGeom = new THREE.SphereGeometry(0.028, 12, 8);
+	const jointMat = new THREE.MeshBasicMaterial({ color: 0xffb454 });
+	const jointMeshes = [];
+	for (let i = 0; i < N_JOINTS; i++) {
+		const m = new THREE.Mesh(jointGeom, jointMat);
+		m.frustumCulled = false;
+		scene.add(m);
+		jointMeshes.push(m);
+	}
+
+	const boneCount = SKELETON_PARENTS.filter(p => p >= 0).length;
+	const bonePositions = new Float32Array(boneCount * 2 * 3);
+	const boneGeom = new THREE.BufferGeometry();
+	boneGeom.setAttribute("position", new THREE.BufferAttribute(bonePositions, 3));
+	const boneMat = new THREE.LineBasicMaterial({ color: 0xd0d0d8 });
+	const boneLines = new THREE.LineSegments(boneGeom, boneMat);
+	boneLines.frustumCulled = false;
+	scene.add(boneLines);
+
+	// SMPL humanoid mesh — server-side LBS produces posed vertices per frame,
+	// we push them into a shared BufferGeometry. Faces are static so they
+	// only get set once on the first generation. Empty until then.
+	const meshGeom = new THREE.BufferGeometry();
+	const meshMat = new THREE.MeshStandardMaterial({
+		color: 0x9aa4bd, roughness: 0.85, metalness: 0.0,
+		side: THREE.DoubleSide, flatShading: false,
+	});
+	const bodyMesh = new THREE.Mesh(meshGeom, meshMat);
+	bodyMesh.frustumCulled = false;
+	bodyMesh.visible = false;    // Off by default — skeleton is enough for first-boot T-pose
+	scene.add(bodyMesh);
+
+	function resize() {
+		// Read dimensions from the WRAPPER (has stable CSS-driven layout),
+		// not the canvas itself — observing the canvas + calling setSize on
+		// it feeds back into ResizeObserver and doubles the buffer until it
+		// blows past 2^25 px and the GPU silently refuses to draw anything.
+		const wrap = canvas.parentElement;
+		const w = wrap.clientWidth;
+		const h = wrap.clientHeight;
+		if (w === 0 || h === 0) return;
+		renderer.setSize(w, h, false);
+		camera.aspect = w / h;
+		camera.updateProjectionMatrix();
+	}
+	new ResizeObserver(resize).observe(canvas.parentElement);
+	resize();
+
+	// ────────────────────────────────────────────────────────────────
+	// Motion state.
+	let motion = null;       // { joints: [T][22][3], fps: 20, num_frames: T }
+	let currentFrame = 0;
+	let playing = false;
+	let lastFrameTs = 0;
+
+	const scrub = document.getElementById("scrub");
+	const frameLabel = document.getElementById("frame-label");
+	const playBtn = document.getElementById("play-btn");
+	const togSkel = document.getElementById("tog-skel");
+	const togMesh = document.getElementById("tog-mesh");
+
+	function updateVizVisibility() {
+		const showSkel = togSkel.classList.contains("active");
+		const showMesh = togMesh.classList.contains("active");
+		boneLines.visible = showSkel;
+		for (const m of jointMeshes) m.visible = showSkel;
+		// Mesh only ever visible after a real generation — the T-pose is
+		// skeleton-only, so leaving the toggle "on" pre-generation just
+		// means it'll flip on the moment the first motion arrives.
+		bodyMesh.visible = showMesh && !!(motion && motion.vertices);
+	}
+	togSkel.addEventListener("click", () => {
+		togSkel.classList.toggle("active");
+		updateVizVisibility();
+	});
+	togMesh.addEventListener("click", () => {
+		togMesh.classList.toggle("active");
+		updateVizVisibility();
+	});
+
+	function setFrame(i) {
+		if (!motion) return;
+		i = Math.max(0, Math.min(motion.num_frames - 1, i | 0));
+		currentFrame = i;
+		const frame = motion.joints[i];
+
+		// ARDY outputs in a Y-up coordinate system that already puts the
+		// character on Y=0 (feet on ground). Direct write to the three.js
+		// scene — no coordinate flip needed.
+		for (let j = 0; j < N_JOINTS; j++) {
+			const [x, y, z] = frame[j];
+			jointMeshes[j].position.set(x, y, z);
+		}
+		let bi = 0;
+		for (let j = 0; j < N_JOINTS; j++) {
+			const p = SKELETON_PARENTS[j];
+			if (p < 0) continue;
+			const [cx, cy, cz] = frame[j];
+			const [px, py, pz] = frame[p];
+			bonePositions[bi * 6 + 0] = px;
+			bonePositions[bi * 6 + 1] = py;
+			bonePositions[bi * 6 + 2] = pz;
+			bonePositions[bi * 6 + 3] = cx;
+			bonePositions[bi * 6 + 4] = cy;
+			bonePositions[bi * 6 + 5] = cz;
+			bi++;
+		}
+		boneGeom.attributes.position.needsUpdate = true;
+
+		// Push the current frame's mesh vertices into the mesh geometry.
+		// We reuse the same Float32Array slot each frame to avoid GC churn.
+		if (motion.vertices && motion.meshPos) {
+			const verts = motion.vertices[i];
+			const buf = motion.meshPos;
+			for (let v = 0; v < verts.length; v++) {
+				buf[v * 3 + 0] = verts[v][0];
+				buf[v * 3 + 1] = verts[v][1];
+				buf[v * 3 + 2] = verts[v][2];
+			}
+			meshGeom.attributes.position.needsUpdate = true;
+			// Recompute per-frame normals so shading tracks the pose.
+			// Cheap for ~7k verts.
+			meshGeom.computeVertexNormals();
+		}
+
+		scrub.value = i;
+		frameLabel.textContent = `${i} / ${motion.num_frames - 1}`;
+	}
+
+	scrub.addEventListener("input", () => {
+		playing = false; playBtn.textContent = "▶";
+		setFrame(+scrub.value);
+	});
+
+	playBtn.addEventListener("click", () => {
+		if (!motion) return;
+		playing = !playing;
+		playBtn.textContent = playing ? "❚❚" : "▶";
+		lastFrameTs = performance.now();
+	});
+
+	function tick(now) {
+		requestAnimationFrame(tick);
+		if (playing && motion) {
+			const dt = (now - lastFrameTs) / 1000;
+			const advance = Math.floor(dt * motion.fps);
+			if (advance > 0) {
+				let next = currentFrame + advance;
+				if (next >= motion.num_frames) next = 0; // loop
+				setFrame(next);
+				lastFrameTs = now;
+			}
+		}
+		controls.update();
+		renderer.render(scene, camera);
+	}
+	requestAnimationFrame(tick);
+
+	// Boot with a T-pose so the viewer isn't a lone pelvis dot — the moment
+	// the user hits Generate, real ARDY motion replaces it (see generate()
+	// below). We route through the same `motion` state used by playback so
+	// setFrame works identically for both cases.
+	motion = { joints: T_POSE, fps: 20, num_frames: 1 };
+	setFrame(0);
+
+	// ────────────────────────────────────────────────────────────────
+	// Server wiring.
+	const pill = document.getElementById("status-pill");
+	const pillLabel = document.getElementById("status-label");
+	const genBtn = document.getElementById("gen-btn");
+	const promptEl = document.getElementById("prompt");
+	const framesEl = document.getElementById("frames");
+	const stepsEl = document.getElementById("steps");
+	const cfgEl = document.getElementById("cfg");
+	const seedEl = document.getElementById("seed");
+
+	function setStatus(kind, text) {
+		pill.className = "pill " + kind;
+		pillLabel.textContent = text;
+	}
+
+	async function probeHealth() {
+		try {
+			const r = await fetch(`${ARDY_URL}/health`, { cache: "no-store" });
+			if (!r.ok) throw new Error(`http ${r.status}`);
+			const j = await r.json();
+			if (j.status === "ok") {
+				setStatus("ok", `ready · ${j.model} · ${j.fps} fps`);
+				genBtn.disabled = false;
+				return true;
+			}
+			setStatus("checking", "model loading…");
+			genBtn.disabled = true;
+			return false;
+		} catch (e) {
+			setStatus("err", "unreachable :8000");
+			genBtn.disabled = true;
+			return false;
+		}
+	}
+	probeHealth();
+	setInterval(() => { if (!pill.classList.contains("ok")) probeHealth(); }, 3000);
+
+	async function generate() {
+		const body = {
+			prompt: promptEl.value.trim() || "A person is standing.",
+			num_frames: +framesEl.value || 200,
+			num_denoising_steps: +stepsEl.value || 4,
+			cfg_weight: +cfgEl.value || 2.0,
+		};
+		if (seedEl.value !== "") body.seed = +seedEl.value;
+
+		genBtn.disabled = true;
+		genBtn.textContent = "Generating…";
+		try {
+			const r = await fetch(`${ARDY_URL}/generate`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(body),
+			});
+			if (!r.ok) {
+				const txt = await r.text();
+				throw new Error(`http ${r.status}: ${txt.slice(0, 200)}`);
+			}
+			const j = await r.json();
+			motion = {
+				joints: j.joints,
+				vertices: j.vertices,
+				bvh: j.bvh,
+				fps: j.fps,
+				num_frames: j.num_frames,
+			};
+			// Unlock export buttons now that we have real motion.
+			dlBvhBtn.disabled = !motion.bvh;
+			recBtn.disabled = false;
+			// Set up mesh geometry once — faces are static per model, and the
+			// position buffer gets reused every frame in setFrame().
+			if (j.vertices && j.faces) {
+				const V = j.vertices[0].length;
+				motion.meshPos = new Float32Array(V * 3);
+				meshGeom.setAttribute("position", new THREE.BufferAttribute(motion.meshPos, 3));
+				const F = j.faces.length;
+				const idx = new Uint32Array(F * 3);
+				for (let k = 0; k < F; k++) {
+					idx[k * 3 + 0] = j.faces[k][0];
+					idx[k * 3 + 1] = j.faces[k][1];
+					idx[k * 3 + 2] = j.faces[k][2];
+				}
+				meshGeom.setIndex(new THREE.BufferAttribute(idx, 1));
+			}
+			scrub.max = motion.num_frames - 1;
+			setFrame(0);
+			updateVizVisibility();
+
+			document.getElementById("stat-prompt").textContent = j.prompt.length > 32 ? j.prompt.slice(0, 32) + "…" : j.prompt;
+			document.getElementById("stat-frames").textContent = j.num_frames;
+			document.getElementById("stat-fps").textContent = j.fps;
+			document.getElementById("stat-took").textContent = `${j.took_ms} ms`;
+
+			// Auto-play the newly generated clip so the user sees the
+			// motion immediately without having to hit play.
+			playing = true;
+			playBtn.textContent = "❚❚";
+			lastFrameTs = performance.now();
+		} catch (e) {
+			console.error(e);
+			alert("Generation failed:\n" + e.message);
+		} finally {
+			genBtn.disabled = false;
+			genBtn.textContent = "Generate";
+		}
+	}
+
+	genBtn.addEventListener("click", generate);
+	promptEl.addEventListener("keydown", (e) => {
+		// Cmd/Ctrl+Enter as a quick "regenerate" shortcut without leaving
+		// the textarea.
+		if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+			e.preventDefault();
+			generate();
+		}
+	});
+
+	// ────────────────────────────────────────────────────────────────
+	// Exports: BVH file + WebM recording.
+	const dlBvhBtn = document.getElementById("dl-bvh");
+	const recBtn   = document.getElementById("rec-btn");
+
+	function _downloadBlob(blob, filename) {
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url;
+		a.download = filename;
+		document.body.appendChild(a);
+		a.click();
+		a.remove();
+		// Revoke after the click has been dispatched. Immediate revoke can
+		// race with the download in some browsers.
+		setTimeout(() => URL.revokeObjectURL(url), 5000);
+	}
+
+	function _slug(s, n = 32) {
+		return (s || "motion")
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/^-|-$/g, "")
+			.slice(0, n) || "motion";
+	}
+
+	dlBvhBtn.addEventListener("click", () => {
+		if (!motion || !motion.bvh) return;
+		const blob = new Blob([motion.bvh], { type: "text/plain;charset=utf-8" });
+		_downloadBlob(blob, `ardy-${_slug(motion.prompt || promptEl.value)}.bvh`);
+	});
+
+	// WebM recording. Uses canvas.captureStream so we grab exactly what
+	// three.js is drawing — no window/monitor picker prompt. Grid is
+	// hidden for the duration so the export is a clean subject-on-black
+	// clip. Chromium browsers may support "video/mp4" natively; we pick
+	// the best mime available and fall back to plain webm.
+	function _pickRecordMime() {
+		const candidates = [
+			"video/mp4;codecs=avc1",
+			"video/webm;codecs=vp9",
+			"video/webm;codecs=vp8",
+			"video/webm",
+		];
+		for (const m of candidates) {
+			if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+		}
+		return "";
+	}
+
+	async function record() {
+		if (!motion || !motion.num_frames) return;
+		if (!window.MediaRecorder) {
+			alert("MediaRecorder isn't available in this browser.");
+			return;
+		}
+		const mime = _pickRecordMime();
+		if (!mime) { alert("No supported video mime type — can't record."); return; }
+
+		recBtn.disabled = true;
+		recBtn.textContent = "● Recording…";
+
+		// Hide grid + joint spheres so the export is clean. Keep bones and
+		// mesh visibility as-is (user's current toggle preference).
+		const gridWasVisible = grid.visible;
+		grid.visible = false;
+
+		// canvas.captureStream(fps) — fps is a *hint*; the stream still
+		// grabs whatever the renderer draws. We pass motion.fps so timing
+		// hints line up if downstream tools sniff it.
+		const stream = canvas.captureStream(motion.fps);
+		const chunks = [];
+		const recorder = new MediaRecorder(stream, { mimeType: mime });
+		recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+
+		const donePromise = new Promise((resolve) => {
+			recorder.onstop = () => {
+				const ext = mime.includes("mp4") ? "mp4" : "webm";
+				const blob = new Blob(chunks, { type: mime });
+				_downloadBlob(blob, `ardy-${_slug(motion.prompt || promptEl.value)}.${ext}`);
+				resolve();
+			};
+		});
+
+		// Force playback from the start at the motion's own frame rate.
+		// The tick() loop advances currentFrame; we watch it and stop when
+		// we've captured the whole motion.
+		playing = true;
+		playBtn.textContent = "❚❚";
+		setFrame(0);
+		lastFrameTs = performance.now();
+		recorder.start();
+
+		const durationMs = (motion.num_frames / motion.fps) * 1000;
+		// Small tail to make sure the last frame ends up in the last chunk.
+		await new Promise((r) => setTimeout(r, durationMs + 200));
+
+		recorder.stop();
+		await donePromise;
+
+		grid.visible = gridWasVisible;
+		recBtn.disabled = false;
+		recBtn.textContent = "⬇ Record";
+	}
+
+	recBtn.addEventListener("click", record);
+</script>
+</body>
+</html>
