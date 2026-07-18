@@ -1884,6 +1884,219 @@ async def heightmap_generate(request: Request):
     return {"filename": out.name, "path": str(out), "url": url, "ext": "png"}
 
 
+# ── Splat editing / compression (@playcanvas/splat-transform) ─────────
+# Shells out to `npx @playcanvas/splat-transform` to run whitelisted actions
+# on a splat file (decimate, filter-nan, morton-order, filter-floaters,
+# filter-box, translate/rotate/scale) and/or convert to a compressed format
+# (sog / compressed.ply / spz). First run downloads the package via npx and
+# takes ~30s; subsequent runs are near-instant. Requires Node.js on PATH.
+_SPLAT_XFORM_TIMEOUT = 600
+
+# Whitelist — restricts what shell flags the endpoint will emit. Keeps
+# arbitrary CLI options out of user-controllable data.
+def _splat_action_to_args(action: dict) -> list[str]:
+    op = str(action.get("op", "")).strip()
+    if op == "filter_nan":
+        return ["--filter-nan"]
+    if op == "morton":
+        return ["--morton-order"]
+    if op == "filter_floaters":
+        return ["--filter-floaters"]
+    if op == "filter_harmonics":
+        band = int(action.get("band", 0))
+        if band < 0 or band > 3:
+            raise HTTPException(400, "filter_harmonics band must be 0..3")
+        return ["--filter-harmonics", str(band)]
+    if op == "decimate":
+        pct = float(action.get("percent", 100))
+        if pct <= 0 or pct >= 100:
+            raise HTTPException(400, "decimate percent must be in (0, 100)")
+        return ["--decimate", f"{pct:g}%"]
+    if op == "filter_box":
+        mn = action.get("min") or []
+        mx = action.get("max") or []
+        if len(mn) != 3 or len(mx) != 3:
+            raise HTTPException(400, "filter_box requires min[3] and max[3]")
+        coords = [float(v) for v in list(mn) + list(mx)]
+        return ["--filter-box", ",".join(f"{c:g}" for c in coords)]
+    if op == "translate":
+        v = [float(action.get(k, 0)) for k in ("x", "y", "z")]
+        return ["--translate", ",".join(f"{c:g}" for c in v)]
+    if op == "rotate":
+        v = [float(action.get(k, 0)) for k in ("x", "y", "z")]
+        return ["--rotate", ",".join(f"{c:g}" for c in v)]
+    if op == "scale":
+        factor = float(action.get("factor", 1))
+        return ["--scale", f"{factor:g}"]
+    raise HTTPException(400, f"unknown splat-transform op: {op}")
+
+
+def _resolve_splat_src(body: dict) -> Path:
+    """Accept src_path (absolute) or src_url (/output/...). Reject anything
+    that escapes DATA_DIR to prevent path traversal."""
+    src_path = body.get("src_path")
+    src_url = body.get("src_url")
+    if src_path:
+        p = Path(str(src_path)).resolve()
+    elif src_url:
+        rel = str(src_url).lstrip("/")
+        if rel.startswith("output/"):
+            rel = rel[len("output/"):]
+        p = (DATA_DIR / rel).resolve()
+    else:
+        raise HTTPException(400, "src_path or src_url required")
+    try:
+        p.relative_to(DATA_DIR.resolve())
+    except ValueError:
+        raise HTTPException(400, "src must live under output/")
+    if not p.exists():
+        raise HTTPException(404, f"splat not found: {p}")
+    return p
+
+
+def _resolve_npx() -> str:
+    """Windows exposes npx as npx.cmd; POSIX as plain npx. Fall through to
+    shutil.which so PATH lookup handles both."""
+    exe = shutil.which("npx") or shutil.which("npx.cmd")
+    if not exe:
+        raise HTTPException(
+            500,
+            "Node.js is required for splat editing/compression — install from "
+            "nodejs.org, then reopen the app. The `npx` command must be on PATH.",
+        )
+    return exe
+
+
+def _resolve_node() -> str | None:
+    return shutil.which("node") or shutil.which("node.exe")
+
+
+# Marker file written after the first successful `npx @playcanvas/splat-transform
+# --version` run. Its presence means the package is in npx's local cache and
+# subsequent calls skip the ~30s download. Cheaper than shelling out to inspect
+# npm's cache layout, which varies across Node installers.
+_SPLAT_PREFETCH_MARKER = DATA_DIR / ".splat_transform_prefetched"
+
+
+@app.get("/api/splat/requirements")
+async def splat_requirements():
+    """Report whether Node.js is on PATH and whether we've warmed the
+    splat-transform package cache. Frontend uses this to show an inline
+    "Install Node.js" card in the Splat Tools panel when node is missing,
+    and to decide whether to fire a background prefetch on panel open."""
+    node = _resolve_node()
+    node_ok = node is not None
+    node_version = ""
+    if node_ok:
+        try:
+            r = subprocess.run(
+                [node, "--version"], capture_output=True, text=True, timeout=5,
+            )
+            node_version = (r.stdout or "").strip()
+        except Exception:
+            node_ok = False
+    return {
+        "node": {
+            "ok": node_ok,
+            "version": node_version,
+            "install_url": "https://nodejs.org/en/download",
+        },
+        "splat_transform": {
+            # `cached` = we've run the prefetch at least once. Not a hard
+            # guarantee (user could clear their npx cache) but a strong hint
+            # that the next transform call won't stall on a first-use download.
+            "cached": _SPLAT_PREFETCH_MARKER.exists(),
+        },
+    }
+
+
+@app.post("/api/splat/save_ply")
+async def splat_save_ply(request: Request):
+    """Persist a client-generated PLY (post-lasso-delete filtered bytes) into
+    output/3d/ so the splat viewer can fetch it via a normal URL. Body is the
+    raw PLY bytes; no re-parsing on the server. Path traversal is impossible
+    because the filename is generated here, not taken from the client."""
+    body = await request.body()
+    if not body or len(body) < 128:
+        raise HTTPException(400, "empty or truncated PLY payload")
+    (DATA_DIR / "3d").mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    dst = DATA_DIR / "3d" / f"splat_lasso_{stamp}_{uuid.uuid4().hex[:6]}.ply"
+    dst.write_bytes(body)
+    return {
+        "filename": dst.name,
+        "path": str(dst),
+        "url": "/output/" + dst.relative_to(DATA_DIR).as_posix(),
+        "ext": "ply",
+    }
+
+
+@app.post("/api/splat/prefetch")
+async def splat_prefetch():
+    """Warm npx's cache by running `@playcanvas/splat-transform --version` once.
+    First run downloads ~30MB and takes 15-30s; subsequent transform calls skip
+    that stall. Frontend fires this in the background the first time the Splat
+    Tools panel is opened, so the user rarely sees the download latency."""
+    npx = _resolve_npx()
+    from server.modules._base import run_cli
+    code, stdout, stderr = await run_cli(
+        [npx, "-y", "@playcanvas/splat-transform", "--version"],
+        timeout=120,
+    )
+    if code != 0:
+        detail = (stderr.strip() or stdout.strip() or f"prefetch failed (rc={code})")
+        raise HTTPException(500, detail[-800:])
+    try:
+        _SPLAT_PREFETCH_MARKER.write_text(
+            f"{time.strftime('%Y-%m-%d %H:%M:%S')} · {(stdout or '').strip()[:200]}",
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+    return {"ok": True, "version": (stdout or "").strip()[:200]}
+
+
+@app.post("/api/splat/transform")
+async def splat_transform(request: Request):
+    body = await request.json()
+    src = _resolve_splat_src(body)
+    output_ext = str(body.get("output_ext", "ply")).lower().lstrip(".")
+    # Whitelist of output formats so a bad value can't turn into an arbitrary
+    # filename. Extensions map straight to what splat-transform recognises.
+    valid_out = {"ply", "compressed.ply", "sog", "spz", "webp", "glb", "csv"}
+    if output_ext not in valid_out:
+        raise HTTPException(400, f"output_ext must be one of {sorted(valid_out)}")
+    actions = body.get("actions") or []
+    if not isinstance(actions, list):
+        raise HTTPException(400, "actions must be a list")
+
+    from server.modules._base import run_cli
+    npx = _resolve_npx()
+
+    # Build output path directly — new_output_path's _EXT_KIND lookup doesn't
+    # cover .sog / .compressed.ply, and 3d assets all belong in output/3d/
+    # regardless of the specific format.
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    subdir = "images" if output_ext == "webp" else "3d"
+    (DATA_DIR / subdir).mkdir(parents=True, exist_ok=True)
+    dst = DATA_DIR / subdir / f"splat_edit_{stamp}_{uuid.uuid4().hex[:6]}.{output_ext}"
+
+    action_args: list[str] = []
+    for a in actions:
+        if not isinstance(a, dict):
+            raise HTTPException(400, "each action must be an object")
+        action_args.extend(_splat_action_to_args(a))
+
+    cmd = [npx, "-y", "@playcanvas/splat-transform", str(src), *action_args, str(dst), "--overwrite"]
+    code, stdout, stderr = await run_cli(cmd, timeout=_SPLAT_XFORM_TIMEOUT)
+    if code != 0 or not dst.exists():
+        detail = (stderr.strip() or stdout.strip() or f"splat-transform failed (rc={code})")
+        raise HTTPException(500, detail[-800:])
+
+    url = "/output/" + dst.relative_to(DATA_DIR).as_posix()
+    return {"filename": dst.name, "path": str(dst), "url": url, "ext": output_ext}
+
+
 @app.post("/api/motion/install")
 async def motion_install_animoflow():
     """Clone the AnimoFlow repo into APP_DIR/tools/animoflow. Runs synchronously

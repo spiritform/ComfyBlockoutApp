@@ -4439,16 +4439,13 @@
 				     open. Result replaces the source objects in place. -->
 				<button class="prim-btn" data-tool="bool" data-label="Boolean" title="Boolean — union / subtract / intersect two or more selected objects into a single mesh."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 22a2 2 0 0 1-2-2"/><path d="M16 22h-2"/><path d="M16 4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3a1 1 0 0 0 1-1v-5a2 2 0 0 1 2-2h5a1 1 0 0 0 1-1z"/><path d="M20 8a2 2 0 0 1 2 2"/><path d="M22 14v2"/><path d="M22 20a2 2 0 0 1-2 2"/></svg></button>
 				<button class="prim-btn" data-fx="scatter" data-label="Scatter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="18.5" cy="5.5" r=".5" fill="currentColor"/><circle cx="11.5" cy="11.5" r=".5" fill="currentColor"/><circle cx="7.5" cy="16.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="14.5" r=".5" fill="currentColor"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/></svg></button>
-				<!-- TripoSplat util — image → gaussian splat (.ply) via the
-				     standalone Docker container at tools/triposplat/. No
-				     Comfy Desktop / ComfyUI dependency; the container hosts
-				     the VAST-AI TripoSplat pipeline directly. Replaces the
-				     older Comfy Cloud Tripo 3D tile — Cloud partner-3D
-				     download is broken upstream right now. Local variant
-				     (triposplat-local) still ships in the Workflows list
-				     for users who prefer their existing ComfyUI. Hardcoded
+				<!-- TripoSplat util — image → gaussian splat (.ply) via the local
+				     ComfyUI at 127.0.0.1:8188. The Docker standalone runtime was
+				     dropped as a tile: too heavy for non-technical users (Docker
+				     Desktop + CUDA image + weights). Comfy Cloud has no splat
+				     partner yet, so local ComfyUI is the current path. Hardcoded
 				     so the astroid glyph paints at boot. -->
-				<button class="prim-btn" data-tool="util:triposplat-standalone" data-hardcoded="1" data-label="TripoSplat" title="TripoSplat — generate a 3D gaussian splat from a source image (runs locally in Docker, no Comfy Desktop required)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.983 21.186a1 1 0 0 1-1.966 0 10 10 0 0 0-8.203-8.203 1 1 0 0 1 0-1.966 10 10 0 0 0 8.203-8.203 1 1 0 0 1 1.966 0 10 10 0 0 0 8.203 8.203 1 1 0 0 1 0 1.966 10 10 0 0 0-8.203 8.203"/></svg></button>
+				<button class="prim-btn" data-tool="util:triposplat-local" data-hardcoded="1" data-label="TripoSplat" title="TripoSplat — generate a 3D gaussian splat from a source image (runs on your local ComfyUI at 127.0.0.1:8188)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.983 21.186a1 1 0 0 1-1.966 0 10 10 0 0 0-8.203-8.203 1 1 0 0 1 0-1.966 10 10 0 0 0 8.203-8.203 1 1 0 0 1 1.966 0 10 10 0 0 0 8.203 8.203 1 1 0 0 1 0 1.966 10 10 0 0 0-8.203 8.203"/></svg></button>
 				<!-- Mannequin — procedural block-figure at real-world 1.72m scale.
 				     Reference for blockouts (door frames, couches, camera height).
 				     AnimoFlow (text-to-motion) lives inside the Mannequin
@@ -5185,6 +5182,62 @@
 					</div>
 					<div class="hint" id="obj-tps-convert-status" style="margin-top:6px;font-size:10px;color:rgba(255,255,255,0.5)"></div>
 				</div>
+				<!-- Splat editing / compression via @playcanvas/splat-transform.
+				     Visible on any splat object with a cached _srcPlyUrl (TripoSplat
+				     results). Filter/decimate/SH actions apply in-place (source
+				     _srcPlyUrl updates, splat reloads); Export writes a new file
+				     in the chosen format and triggers a browser download. -->
+				<div class="section" id="obj-splat-tools-section" style="display:none">
+					<div class="section-label">Splat Tools</div>
+					<!-- Requirements card. Populated by _refreshSplatReqCard on selection.
+					     Empty when Node is present + cache warm; shows an install nudge
+					     when Node is missing; shows a subtle "warming cache..." row while
+					     the background prefetch runs on first panel open. -->
+					<div id="obj-splat-req-card"></div>
+					<!-- Paint delete: toggles a brush-based selection mode. Drag to
+					     paint gaussians into a selection set (with a yellow-tinted
+					     subset splat overlay as the live highlight); Del strips them
+					     from the source .ply and reloads the splat in place. -->
+					<div style="display:flex;gap:6px;margin-top:4px">
+						<button type="button" id="obj-splat-paint-toggle" class="mp-still-btn" style="flex:1">Paint Delete</button>
+						<button type="button" id="obj-splat-floaters" class="mp-still-btn" style="flex:1">Kill Floaters</button>
+					</div>
+					<!-- Live-updated hint that describes the paint-delete gesture
+					     (idle) or the current selection count (active). Sits
+					     under the button so the label itself stays a tight one
+					     or two words. -->
+					<div class="hint" id="obj-splat-paint-hint" style="margin-top:2px;font-size:9px;color:rgba(255,255,255,0.4);line-height:1.4">Ctrl+drag adds, Ctrl+Shift+drag erases, Del applies</div>
+					<div class="sub-label" style="margin-top:10px" title="Reduce the number of gaussians to make the splat lighter and faster to render">Simplify (fewer splats)</div>
+					<div class="slider-row">
+						<input type="range" id="obj-splat-decimate" min="10" max="95" step="5" value="50">
+						<span class="slider-val" id="obj-splat-decimate-val">50%</span>
+					</div>
+					<button type="button" id="obj-splat-decimate-apply" class="mp-still-btn" style="width:100%;margin-top:4px">Apply Simplify</button>
+					<div class="hint" style="margin-top:2px;font-size:9px;color:rgba(255,255,255,0.4);line-height:1.4">Keeps N% of the splats. Lower = smaller file, less detail.</div>
+					<div class="sub-label" style="margin-top:10px" title="Splats carry view-dependent color (shiny/reflective look) as spherical harmonic bands. Drop higher bands to shrink the file.">Color detail (view-dependent shine)</div>
+					<div class="select-row">
+						<select id="obj-splat-sh-band">
+							<option value="0">Flat color (smallest)</option>
+							<option value="1">Low</option>
+							<option value="2">Medium</option>
+							<option value="3" selected>Full detail (keep all)</option>
+						</select>
+					</div>
+					<button type="button" id="obj-splat-sh-apply" class="mp-still-btn" style="width:100%;margin-top:4px">Apply Color Detail</button>
+					<div class="hint" style="margin-top:2px;font-size:9px;color:rgba(255,255,255,0.4);line-height:1.4">Flat kills reflective/shiny shading, keeps base color. Best for cutting file size.</div>
+					<div class="sub-label" style="margin-top:10px">Export</div>
+					<div class="select-row">
+						<select id="obj-splat-export-fmt">
+							<option value="sog">SOG (compact web)</option>
+							<option value="compressed.ply">Compressed PLY</option>
+							<option value="spz">SPZ</option>
+							<option value="ply">PLY (uncompressed)</option>
+							<option value="glb">GLB (KHR splat)</option>
+						</select>
+					</div>
+					<button type="button" id="obj-splat-export-btn" class="mp-still-btn" style="width:100%;margin-top:4px">Download</button>
+					<div class="hint" id="obj-splat-tools-status" style="margin-top:6px;font-size:10px;color:rgba(255,255,255,0.5)"></div>
+				</div>
 				<!-- Text primitive editor — only visible when selection is a Text
 				     mesh. Editing the string / size / depth rebuilds the geometry. -->
 				<!-- Points-object controls (Point Cloud output). Visible only
@@ -5430,6 +5483,19 @@
 						<input type="checkbox" id="sc-rot-y" checked>
 						<span>Random Y rotation</span>
 					</label>
+				</div>
+
+				<div class="section" id="obj-scatter-animation" hidden>
+					<div class="section-label">Animation</div>
+					<div class="select-row">
+						<select id="sc-anim-clip"></select>
+					</div>
+					<div class="hint">Which clip every instance plays. Requires a skinned source (FBX/GLB with animations).</div>
+					<div class="drag-row" style="margin-top:8px">
+						<div class="drag-num" id="sc-anim-offset" style="flex:1"><span class="drag-label">Offset</span><span class="drag-val">1.00</span></div>
+						<div class="drag-num" id="sc-anim-speed" style="flex:1"><span class="drag-label">Speed</span><span class="drag-val">1.00</span></div>
+					</div>
+					<div class="hint">Offset randomizes each instance's start time within the clip (1.0 = full crowd desync). Speed scales base playback.</div>
 				</div>
 
 				<div class="section" id="obj-fbx-anim-section" hidden>
@@ -8923,16 +8989,24 @@ const nextPaint = () => new Promise(r => requestAnimationFrame(() => requestAnim
 
 async function loadSplat(arrayBuffer, filename, opts = {}) {
 	const sizeMB = (arrayBuffer.byteLength / 1024 / 1024).toFixed(1);
-	console.log(`[ComfyBlockout] loadSplat START — ${filename} (${sizeMB} MB)`);
-	updateStatus(`loading splat ${filename} (${sizeMB} MB)…`);
-	showLoading(`Loading splat · ${sizeMB} MB`, `Parsing ${filename}.`);
-	await nextPaint();
+	// `silent` skips the full-screen loading modal + status blip. Used by the
+	// paint-preview and post-edit reload paths where the UX should feel like
+	// an in-place swap, not a drag-and-drop import.
+	const silent = !!opts.silent;
+	if (!silent) console.log(`[ComfyBlockout] loadSplat START — ${filename} (${sizeMB} MB)`);
+	if (!silent) {
+		updateStatus(`loading splat ${filename} (${sizeMB} MB)…`);
+		showLoading(`Loading splat · ${sizeMB} MB`, `Parsing ${filename}.`);
+		await nextPaint();
+	}
 	let loaded = false;
 	const failTimer = setTimeout(() => {
 		if (loaded) return;
 		console.error(`[ComfyBlockout] splat ${filename} did not fire onLoad within 30s — likely unsupported format / bad magic bytes`);
-		updateStatus(`splat load timed out · ${filename}`);
-		hideLoading();
+		if (!silent) {
+			updateStatus(`splat load timed out · ${filename}`);
+			hideLoading();
+		}
 	}, 30000);
 	try {
 		const { SplatMesh } = await ensureSpark();
@@ -8944,8 +9018,10 @@ async function loadSplat(arrayBuffer, filename, opts = {}) {
 				loaded = true;
 				clearTimeout(failTimer);
 				splatMesh.userData.pickSphere = computeSplatPickSphere(splatMesh);
-				updateStatus(`splat loaded · ${filename}`);
-				hideLoading();
+				if (!silent) {
+					updateStatus(`splat loaded · ${filename}`);
+					hideLoading();
+				}
 				// Optional post-decode hook so callers (e.g. the Sharp Splat
 				// swap) can auto-center + rescale once the bounding box is
 				// actually populated — pre-decode bbox is (0,0,0) which
@@ -8961,14 +9037,18 @@ async function loadSplat(arrayBuffer, filename, opts = {}) {
 		scene.add(splatMesh);
 
 		if (opts.assetId) splatMesh.userData.assetId = opts.assetId;
-		registerImported(splatMesh, "splat", filename);
+		// Skip registerImported for preview meshes — they don't belong in
+		// `objects` / outliner. Caller can still bind assetId/filename manually.
+		if (!opts.skipRegister) registerImported(splatMesh, "splat", filename);
 		if (opts.savedName) splatMesh.name = opts.savedName;
 		return splatMesh;
 	} catch (e) {
 		clearTimeout(failTimer);
 		console.error("[ComfyBlockout] Splat load failed:", e);
-		updateStatus(`splat load failed: ${e.message}`);
-		hideLoading();
+		if (!silent) {
+			updateStatus(`splat load failed: ${e.message}`);
+			hideLoading();
+		}
 		return null;
 	}
 }
@@ -9576,6 +9656,13 @@ const DEFAULT_SCATTER_CONFIG = {
 	surface: false,      // container-box mode: clamp to bottom face — ignored when surfaceName is set
 	seed: 1,
 	scatter: 1,          // 1 = pure random, 0 = grid (evenly spaced, no clumping)
+	// Animated-source fields — only used when the picked source is a
+	// SkinnedMesh (FBX/GLB with bones + AnimationClips). Baked-bone-matrix
+	// path lets N instances share one draw call while playing on their own
+	// per-instance time offset (crowd sim).
+	animClipName: null,  // which clip to play; null = first available
+	animOffsetVar: 1.0,  // 0..1 randomizes each instance's start time within the clip
+	animSpeed: 1.0,      // base playback speed (per-instance further jittered ±10%)
 };
 const scatterSystems = [];
 
@@ -10220,6 +10307,230 @@ function extractSourceGeomMat(source) {
 	return { geom, mat: Array.isArray(mat) ? mat[0] : mat };
 }
 
+// ── Animated scatter (baked-bone-texture) ──────────────────────────
+// For SkinnedMesh sources, we bake each AnimationClip's bone matrices
+// per frame into a Float32 DataTexture, then run a plain InstancedMesh
+// whose vertex shader samples the texture per instance (via per-instance
+// clipStart / clipFrames / clipDuration / timeOffset / speed attributes).
+// One draw call for N walking mannequins — the crowd-sim payoff.
+const _ANIM_SCATTER_FPS = 30;
+const _animScatterSystems = []; // { uniformsList, live } — ticked in loop()
+
+function extractSourceSkinned(source) {
+	if (!source) return null;
+	let skinned = null;
+	source.traverse?.(c => { if (c.isSkinnedMesh && !skinned) skinned = c; });
+	if (!skinned || !skinned.skeleton || skinned.skeleton.bones.length === 0) return null;
+	// Animation clips live on the FBX/GLB root, not the SkinnedMesh itself.
+	const clips = source.animations || [];
+	if (clips.length === 0) return null;
+	return { skinned, clips };
+}
+
+function bakeSkeletonAnimations(source, skinned, clips, fps) {
+	const skeleton = skinned.skeleton;
+	const numBones = skeleton.bones.length;
+	// Total frames across all clips → texture row count.
+	const clipInfos = clips.map(clip => {
+		const frames = Math.max(2, Math.ceil(clip.duration * fps));
+		return { name: clip.name || `clip_${Math.random().toString(36).slice(2, 6)}`, clip, frames, duration: Math.max(0.001, clip.duration) };
+	});
+	let totalFrames = 0;
+	for (const info of clipInfos) { info.startFrame = totalFrames; totalFrames += info.frames; }
+	// Row = one frame across every bone (4 pixels per bone matrix, RGBA float
+	// per column-major matrix column). WebGL max texture size is well above
+	// what a reasonable crowd needs (32 bones × 4 pixels = 128 wide, hundreds
+	// of frames tall stays trivially small).
+	const texWidth = numBones * 4;
+	const texHeight = totalFrames;
+	const data = new Float32Array(texWidth * texHeight * 4);
+	const mixer = new THREE.AnimationMixer(source);
+	const bindMat = skinned.bindMatrix;
+	const bindInv = skinned.bindMatrixInverse;
+	const tmp = new THREE.Matrix4();
+	// Reset the source's transform temporarily so bindMatrix pre/post-mult
+	// isn't polluted by scatter-source placement. We restore after baking.
+	// Not actually needed — bindMatrix was captured at load, before the user
+	// moved anything. Leaving the source in place while baking is safe.
+	for (const info of clipInfos) {
+		const action = mixer.clipAction(info.clip);
+		action.reset();
+		action.play();
+		for (let f = 0; f < info.frames; f++) {
+			const t = (f / Math.max(1, info.frames - 1)) * info.clip.duration;
+			mixer.setTime(t);
+			source.updateMatrixWorld(true);
+			skeleton.update();
+			for (let b = 0; b < numBones; b++) {
+				tmp.fromArray(skeleton.boneMatrices, b * 16);
+				// Bake bindMatrixInverse * boneMatrix * bindMatrix so shader can
+				// apply directly to bind-pose vertex position without extra math.
+				tmp.multiplyMatrices(bindInv, tmp).multiply(bindMat);
+				const rowStart = ((info.startFrame + f) * texWidth + b * 4) * 4;
+				for (let c = 0; c < 16; c++) data[rowStart + c] = tmp.elements[c];
+			}
+		}
+		action.stop();
+	}
+	mixer.uncacheRoot(source);
+	const tex = new THREE.DataTexture(data, texWidth, texHeight, THREE.RGBAFormat, THREE.FloatType);
+	tex.magFilter = THREE.NearestFilter;
+	tex.minFilter = THREE.NearestFilter;
+	tex.generateMipmaps = false;
+	tex.needsUpdate = true;
+	return { texture: tex, texWidth, texHeight, numBones, clips: clipInfos };
+}
+
+function patchMaterialForAnimInst(sourceMat, baked, uniformsRef) {
+	const mat = sourceMat.clone();
+	// Local copy of uniforms — every animated scatter gets its own uTime so
+	// per-scatter speed/pause won't be possible in MVP but doesn't collide
+	// across scatters.
+	const u = {
+		uBoneTex: { value: baked.texture },
+		uBoneTexSize: { value: new THREE.Vector2(baked.texWidth, baked.texHeight) },
+		uAnimTime: { value: 0 },
+	};
+	uniformsRef.uniforms = u;
+	mat.onBeforeCompile = (shader) => {
+		shader.uniforms.uBoneTex = u.uBoneTex;
+		shader.uniforms.uBoneTexSize = u.uBoneTexSize;
+		shader.uniforms.uAnimTime = u.uAnimTime;
+		const inject = `
+attribute vec4 skinIndex;
+attribute vec4 skinWeight;
+attribute float aClipStart;
+attribute float aClipFrames;
+attribute float aClipDuration;
+attribute float aTimeOffset;
+attribute float aSpeed;
+uniform sampler2D uBoneTex;
+uniform vec2 uBoneTexSize;
+uniform float uAnimTime;
+mat4 _sampleAnimBone(float boneId, float row) {
+	float px = 1.0 / uBoneTexSize.x;
+	float x0 = (boneId * 4.0 + 0.5) * px;
+	float y = (row + 0.5) / uBoneTexSize.y;
+	vec4 c0 = texture2D(uBoneTex, vec2(x0, y));
+	vec4 c1 = texture2D(uBoneTex, vec2(x0 + px, y));
+	vec4 c2 = texture2D(uBoneTex, vec2(x0 + px * 2.0, y));
+	vec4 c3 = texture2D(uBoneTex, vec2(x0 + px * 3.0, y));
+	return mat4(c0, c1, c2, c3);
+}
+`;
+		shader.vertexShader = inject + shader.vertexShader;
+		// beginnormal_vertex runs before begin_vertex; compute bone matrices
+		// here so both the normal transform and the position transform reuse them.
+		shader.vertexShader = shader.vertexShader.replace(
+			'#include <beginnormal_vertex>',
+			`
+float _animT = uAnimTime * aSpeed + aTimeOffset;
+float _phase = fract(_animT / max(0.001, aClipDuration));
+float _row = aClipStart + _phase * max(0.0, aClipFrames - 1.0);
+mat4 _boneX = _sampleAnimBone(skinIndex.x, _row);
+mat4 _boneY = _sampleAnimBone(skinIndex.y, _row);
+mat4 _boneZ = _sampleAnimBone(skinIndex.z, _row);
+mat4 _boneW = _sampleAnimBone(skinIndex.w, _row);
+mat3 _boneN = mat3(_boneX) * skinWeight.x
+            + mat3(_boneY) * skinWeight.y
+            + mat3(_boneZ) * skinWeight.z
+            + mat3(_boneW) * skinWeight.w;
+vec3 objectNormal = normalize(_boneN * normal);
+#ifdef USE_TANGENT
+	vec3 objectTangent = normalize(_boneN * tangent.xyz);
+#endif
+`
+		);
+		shader.vertexShader = shader.vertexShader.replace(
+			'#include <begin_vertex>',
+			`
+vec4 _animPos = vec4(position, 1.0);
+vec3 transformed = (_boneX * _animPos).xyz * skinWeight.x
+                 + (_boneY * _animPos).xyz * skinWeight.y
+                 + (_boneZ * _animPos).xyz * skinWeight.z
+                 + (_boneW * _animPos).xyz * skinWeight.w;
+`
+		);
+	};
+	// Distinct cache key so this program never collides with the unmodified
+	// source material's cache entry.
+	mat.customProgramCacheKey = () => 'animInst_v1';
+	return mat;
+}
+
+function buildAnimatedInstancedMesh(source, count, cfg) {
+	const sk = extractSourceSkinned(source);
+	if (!sk) return null;
+	const srcGeom = sk.skinned.geometry;
+	if (!srcGeom.attributes.skinIndex || !srcGeom.attributes.skinWeight) return null;
+	// Shallow-clone geometry so our per-instance attrs don't leak onto the
+	// live SkinnedMesh (would also cause cross-talk between multiple scatters
+	// pointing at the same source — last-writer-wins on shared attrs).
+	// clone() shares the underlying attribute buffers, so cost is O(1).
+	const geom = srcGeom.clone();
+	const srcMat = Array.isArray(sk.skinned.material) ? sk.skinned.material[0] : sk.skinned.material;
+	if (!srcMat) return null;
+	const baked = bakeSkeletonAnimations(source, sk.skinned, sk.clips, _ANIM_SCATTER_FPS);
+	// Pick target clip — if cfg names one that exists, use it; else first.
+	let clipInfo = baked.clips[0];
+	if (cfg.animClipName) {
+		const found = baked.clips.find(ci => ci.name === cfg.animClipName);
+		if (found) clipInfo = found;
+	}
+	const uniformsRef = { uniforms: null };
+	const mat = patchMaterialForAnimInst(srcMat, baked, uniformsRef);
+	const im = new THREE.InstancedMesh(geom, mat, count);
+	// Per-instance animation attributes. clipStart/clipFrames/clipDuration are
+	// currently uniform across all instances (single-clip MVP), but shipping
+	// them as attributes leaves the door open for "random clip" mode later.
+	const startArr = new Float32Array(count);
+	const framesArr = new Float32Array(count);
+	const durArr = new Float32Array(count);
+	const offsetArr = new Float32Array(count);
+	const speedArr = new Float32Array(count);
+	const rng = makeSeededRng((cfg.seed | 0) + 7919); // separate stream from placement
+	const offsetVar = Math.max(0, Math.min(1, cfg.animOffsetVar ?? 1));
+	const baseSpeed = cfg.animSpeed ?? 1;
+	for (let i = 0; i < count; i++) {
+		startArr[i] = clipInfo.startFrame;
+		framesArr[i] = clipInfo.frames;
+		durArr[i] = clipInfo.duration;
+		offsetArr[i] = rng() * clipInfo.duration * offsetVar;
+		// ±10% speed jitter so instances slowly desync even with offsetVar=0.
+		speedArr[i] = baseSpeed * (0.9 + rng() * 0.2);
+	}
+	geom.setAttribute('aClipStart', new THREE.InstancedBufferAttribute(startArr, 1));
+	geom.setAttribute('aClipFrames', new THREE.InstancedBufferAttribute(framesArr, 1));
+	geom.setAttribute('aClipDuration', new THREE.InstancedBufferAttribute(durArr, 1));
+	geom.setAttribute('aTimeOffset', new THREE.InstancedBufferAttribute(offsetArr, 1));
+	geom.setAttribute('aSpeed', new THREE.InstancedBufferAttribute(speedArr, 1));
+	im.userData._animInst = {
+		uniformsRef,
+		texture: baked.texture,
+		clonedMaterial: mat,
+		clipName: clipInfo.name,
+		availableClips: baked.clips.map(c => c.name),
+		// Store the per-instance attrs so we can dispose them on rebuild.
+		attrs: ['aClipStart', 'aClipFrames', 'aClipDuration', 'aTimeOffset', 'aSpeed'],
+	};
+	return im;
+}
+
+function _disposeAnimInst(im) {
+	const info = im?.userData?._animInst;
+	if (!info) return;
+	info.texture?.dispose?.();
+	info.clonedMaterial?.dispose?.();
+	// Geometry here is our clone (see buildAnimatedInstancedMesh) — dispose
+	// clears the per-attribute GPU buffers we added. The shared attribute
+	// buffers underneath belong to the source SkinnedMesh's geometry and stay
+	// alive via that reference.
+	im.geometry?.dispose?.();
+	// Un-register from tick list.
+	const idx = _animScatterSystems.indexOf(info.uniformsRef);
+	if (idx >= 0) _animScatterSystems.splice(idx, 1);
+}
+
 function buildScatterFx(overrides) {
 	const cfg = { ...DEFAULT_SCATTER_CONFIG, ...(overrides || {}) };
 	const group = new THREE.Group();
@@ -10251,8 +10562,11 @@ function rebuildScatterInstances(group) {
 	const cfg = fx.config;
 	// Tear down the old InstancedMesh. Only its instance-attribute buffer
 	// belongs to us — geometry and material are shared with the source, so
-	// disposing them here would nuke the source's mesh too.
+	// disposing them here would nuke the source's mesh too. For animated
+	// instances we additionally dispose the baked bone texture + our patched
+	// material clone via _disposeAnimInst before the InstancedMesh itself goes.
 	if (fx.instMesh) {
+		_disposeAnimInst(fx.instMesh);
 		group.remove(fx.instMesh);
 		fx.instMesh.dispose?.();
 		fx.instMesh = null;
@@ -10273,14 +10587,33 @@ function rebuildScatterInstances(group) {
 		}
 	}
 	if (!source) return;
-	const { geom, mat } = extractSourceGeomMat(source);
-	if (!geom || !mat) return;
 	const count = Math.max(1, Math.floor(cfg.count));
-	// Share the source's material directly. Any color/roughness/texture edit
-	// on the source now shows up on every instance without a manual rebuild.
-	// Deleting the source triggers a rebuild-with-fallback before the source's
-	// material is disposed, so we never render with a stale reference.
-	const im = new THREE.InstancedMesh(geom, mat, count);
+	// Animated path: source is a SkinnedMesh with AnimationClips → bake bone
+	// matrices into a texture and use per-instance clip attributes. Falls
+	// through to the plain-instancing path if bake fails (missing skinIndex,
+	// no bones, etc.) so a broken skinned import still renders in bind pose
+	// rather than blanking the scatter entirely.
+	let im = null;
+	const isAnimated = !!extractSourceSkinned(source);
+	if (isAnimated) {
+		im = buildAnimatedInstancedMesh(source, count, cfg);
+		if (im) {
+			const info = im.userData._animInst;
+			_animScatterSystems.push(info.uniformsRef);
+			// Persist which clip we actually picked, so the UI dropdown stays in
+			// sync when a saved cfg.animClipName no longer exists.
+			cfg.animClipName = info.clipName;
+		}
+	}
+	if (!im) {
+		const { geom, mat } = extractSourceGeomMat(source);
+		if (!geom || !mat) return;
+		// Share the source's material directly. Any color/roughness/texture edit
+		// on the source now shows up on every instance without a manual rebuild.
+		// Deleting the source triggers a rebuild-with-fallback before the source's
+		// material is disposed, so we never render with a stale reference.
+		im = new THREE.InstancedMesh(geom, mat, count);
+	}
 	im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 	const rng = makeSeededRng(cfg.seed);
 	const m = new THREE.Matrix4();
@@ -11652,21 +11985,14 @@ function select(obj, opts = {}) {
 		// Mannequin inspector with Animation available inline.
 		forceRightPane("object", objectPaneLabel(selected));
 		refreshObjectInspector?.();
-		// Scroll the Object pane to the Transform section by default — for
-		// tall property panes (Particles / Scatter / etc.) the Transform
-		// controls otherwise start below the fold, so users can't just
-		// grab a value without hunting. Deferred a frame so the pane has
-		// laid out its content first. Annotations override to scroll to
-		// the TOP instead so the tool toolbar (Pen/Arrow/Box) + Color/
-		// Width/Opacity read first — you clicked the tool to configure it,
-		// not to nudge Transform.
+		// Reset the Object pane to the top on selection change so the new
+		// object's identity (name row, dominant tool cluster) reads first.
+		// The old behavior auto-scrolled to Transform — turned out to skip
+		// past object-specific tools (Splat Tools, Mode toggle, etc). The
+		// transform-gizmo drag still has its own safety-net scroll for the
+		// case where the user grabs a handle and needs the X/Y/Z readout.
 		requestAnimationFrame(() => {
-			if (selected?.userData?.primKind === "annotation") {
-				const body = document.getElementById("rp-body");
-				body?.scrollTo({ top: 0, behavior: "smooth" });
-			} else {
-				_scrollPropsToTransform?.();
-			}
+			document.getElementById("rp-body")?.scrollTo({ top: 0, behavior: "smooth" });
 		});
 	} else {
 		transform.detach();
@@ -15913,11 +16239,12 @@ function runUtilTool(moduleId) {
 		}
 	}
 	if (moduleId === "triposplat-local" || moduleId === "triposplat-standalone") {
-		// TripoSplat (either runtime) is a one-shot Image → Splat tool:
-		// spawn (or reselect) a tagged placeholder plane, let the OBJECT
-		// properties inspector render its source-image + generate controls,
-		// and on generate swap the plane for a spark.js SplatMesh at the
-		// placeholder's transform.
+		// TripoSplat is a one-shot Image → Splat tool: spawn (or reselect) a
+		// tagged placeholder plane, let the OBJECT properties inspector render
+		// its source-image + generate controls, and on generate swap the plane
+		// for a spark.js SplatMesh at the placeholder's transform. Both module
+		// ids route to the local ComfyUI runtime — the standalone Docker path
+		// was removed as a first-class tile.
 		let plane = objects.find(o => o.userData?.pcSource === true && !o.userData?.pcSourcePlane && o.visible !== false);
 		if (!plane) {
 			// Fresh placeholder — reset any prior upload / snapshot state
@@ -15932,11 +16259,7 @@ function runUtilTool(moduleId) {
 		} else {
 			select(plane);
 		}
-		// Tag which runtime the placeholder is for so the object inspector
-		// knows whether to render the Docker-container requirements pane
-		// (standalone only — the local variant assumes the user's ComfyUI
-		// is already running and doesn't need a setup panel).
-		plane.userData.tripoSplatRuntime = moduleId === "triposplat-standalone" ? "standalone" : "local";
+		plane.userData.tripoSplatRuntime = "local";
 		refreshObjectInspector?.();
 		return;
 	}
@@ -16246,6 +16569,10 @@ async function _tpsSwapToSplat(source) {
 	_tpsDisposeObject(source);
 	select(splat);
 	refreshOutliner();
+	// Points → Splat swap re-registers the splat as a scene asset so
+	// serializeScene picks it up. The buffer we cached above is the exact
+	// PLY bytes we want to persist.
+	_stampSplatAsAsset(splat, buf, filename);
 	if (typeof saveScene === "function") saveScene();
 	_tpsSetStatus("splat", "ok");
 	return splat;
@@ -16297,6 +16624,1086 @@ async function _tpsSetMode(source, mode, density) {
 	else hook();
 })();
 
+
+// -- Splat Tools (properties panel): filter / decimate / SH drop / export --
+// Wraps POST /api/splat/transform. Filter/decimate/SH actions apply to the
+// currently selected splat's cached _srcPlyUrl, reload the SplatMesh in place
+// (transform preserved), and update the cached URL so subsequent actions
+// compound on the latest state. Export writes a new file in the picked
+// format and triggers a browser download.
+function _splatToolsSetStatus(text, kind) {
+	const el = document.getElementById("obj-splat-tools-status");
+	if (!el) return;
+	el.textContent = text || "";
+	el.style.color = kind === "error" ? "#ff8a8a"
+		: kind === "busy" ? "rgba(255,180,84,0.9)"
+		: kind === "ok" ? "rgba(102,204,255,0.9)"
+		: "rgba(255,255,255,0.5)";
+}
+
+async function _splatTransform(srcUrl, actions, outputExt = "ply") {
+	const r = await fetch("/api/splat/transform", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ src_url: srcUrl, actions, output_ext: outputExt }),
+	});
+	if (!r.ok) {
+		const txt = await r.text().catch(() => "");
+		throw new Error(txt || `HTTP ${r.status}`);
+	}
+	return r.json();
+}
+
+// Rebuild the SplatMesh from a new PLY URL while keeping the same world
+// transform. Different from _replacePcPlaneWithSplat which auto-frames off
+// a placeholder plane -- here we already have a placed splat that just
+// needs its geometry replaced.
+// opts.buf: skip the fetch and use the provided ArrayBuffer directly (paint
+//   delete already has the filtered bytes in hand; the round trip through
+//   the server was masking the swap in a multi-second stall).
+// opts.filename: used when buf is passed and newPlyUrl is null.
+async function _reloadSplatInPlace(splatObj, newPlyUrl, opts = {}) {
+	if (!splatObj) return null;
+	let buf = opts.buf;
+	if (!buf) {
+		if (!newPlyUrl) return null;
+		const r = await fetch(newPlyUrl);
+		if (!r.ok) throw new Error(`fetch failed: HTTP ${r.status}`);
+		buf = await r.arrayBuffer();
+	}
+	if (!buf || buf.byteLength < 1024) throw new Error("payload empty");
+	const filename = opts.filename || (newPlyUrl ? (newPlyUrl.split("/").pop() || "splat.ply") : "splat.ply");
+	const pos = splatObj.position.clone();
+	const rot = splatObj.quaternion.clone();
+	const scl = splatObj.scale.clone();
+	const savedName = splatObj.name;
+	// Silent reload — no full-screen loading modal for what is visually an
+	// in-place edit. The user already sees a status blip in Splat Tools.
+	// Wait for the async onLoad (spark.js finishes parsing + GPU upload) BEFORE
+	// disposing the old splat -- otherwise the source is gone but the new one
+	// isn't visible yet, and the viewport flashes empty for ~50-200ms.
+	let resolveOnLoad;
+	const onLoadedPromise = new Promise(r => { resolveOnLoad = r; });
+	const newSplat = await loadSplat(buf, filename, {
+		savedName,
+		silent: true,
+		onLoaded: () => resolveOnLoad(),
+	});
+	if (!newSplat) throw new Error("loadSplat returned null");
+	newSplat.position.copy(pos);
+	newSplat.quaternion.copy(rot);
+	newSplat.scale.copy(scl);
+	newSplat.userData.pcResult = true;
+	// When we already have bytes in hand (paint delete), the persistence URL
+	// hasn't been assigned yet — caller patches _srcPlyUrl after the parallel
+	// upload lands. Splat Tools require a valid URL to run, so leaving it as
+	// null is intentional: it disables further transforms until persisted.
+	newSplat.userData._srcPlyUrl = newPlyUrl || null;
+	newSplat.userData._srcPlyFilename = filename;
+	if (splatObj.userData?._splatTintHex) newSplat.userData._splatTintHex = splatObj.userData._splatTintHex;
+	// Race a 3s timeout so a stuck onLoad doesn't leak the old splat forever.
+	// 3s is well above the typical ~100-200ms budget for a decimated PLY.
+	await Promise.race([
+		onLoadedPromise,
+		new Promise(r => setTimeout(r, 3000)),
+	]);
+	// spark.js sorts + uploads gaussians per-view during render. onLoad fires
+	// as soon as parsing finishes, but the FIRST render frame after that often
+	// still shows nothing — the per-view sort budgets a frame, and the driver
+	// may schedule the upload to complete on the next tick. Wait three frames
+	// so the new mesh is provably on-screen before we yank the old one.
+	await new Promise(r => requestAnimationFrame(() =>
+		requestAnimationFrame(() => requestAnimationFrame(r))));
+	_tpsDisposeObject(splatObj);
+	const idx = objects.indexOf(splatObj);
+	if (idx !== -1) objects.splice(idx, 1);
+	select(newSplat);
+	refreshOutliner?.();
+	// Await the asset upload so serializeScene sees the new assetId+filename
+	// before we return — otherwise a manual Save Scene / autosave / tab
+	// close firing before the fire-and-forget stamp resolves would persist
+	// a state that lacks this splat from `imports`, and deserializeScene
+	// would silently drop it on reopen. The stamp calls saveScene() itself
+	// once the assetId is written, so no separate saveScene() is needed here.
+	await _stampSplatAsAsset(newSplat, buf, filename);
+	return newSplat;
+}
+
+async function _splatApplyActions(actions, statusLabel) {
+	if (!selected || selected.userData?.primKind !== "splat" || !selected.userData?._srcPlyUrl) return;
+	try {
+		_splatToolsSetStatus(`${statusLabel}...`, "busy");
+		const j = await _splatTransform(selected.userData._srcPlyUrl, actions, "ply");
+		await _reloadSplatInPlace(selected, j.url);
+		_splatToolsSetStatus(`${statusLabel} - done`, "ok");
+	} catch (e) {
+		console.error("[splat-tools]", statusLabel, "failed:", e);
+		_splatToolsSetStatus(`${statusLabel} failed - ${String(e.message || e).slice(0, 140)}`, "error");
+	}
+}
+
+async function _splatExport(fmt) {
+	if (!selected || selected.userData?.primKind !== "splat" || !selected.userData?._srcPlyUrl) return;
+	try {
+		_splatToolsSetStatus(`exporting as ${fmt}...`, "busy");
+		const j = await _splatTransform(selected.userData._srcPlyUrl, [], fmt);
+		const a = document.createElement("a");
+		a.href = j.url;
+		a.download = j.filename || `splat.${fmt}`;
+		document.body.appendChild(a);
+		a.click();
+		a.remove();
+		window.refreshAssets?.();
+		_splatToolsSetStatus(`exported - ${j.filename}`, "ok");
+	} catch (e) {
+		console.error("[splat-tools] export failed:", e);
+		_splatToolsSetStatus(`export failed - ${String(e.message || e).slice(0, 140)}`, "error");
+	}
+}
+
+
+
+// -- Splat paint delete: brush selection + yellow highlight overlay --
+// Toggle enters paint mode: overlay div hosts a brush-circle cursor, orbit
+// is disabled, LMB drag paints gaussians into a selection Set. After each
+// stroke release, a subset PLY of the selected gaussians is loaded as a
+// yellow-tinted SplatMesh that sits at the source's transform -- the actual
+// visible highlight. Delete commits: filters selected indices out of the
+// source, uploads via /api/splat/save_ply, reloads in place. Escape or the
+// toggle button exits without applying.
+let _splatPaintActive = false;
+let _splatPaintTarget = null;
+let _splatPaintOverlay = null;         // <div> host for the cursor + capture area
+let _splatPaintCursorEl = null;        // <div> circle following pointer
+let _splatPaintPositions = null;       // Float32Array of xyz (splat-local)
+let _splatPaintVertexCount = 0;
+let _splatPaintPlyBuffer = null;       // full source ArrayBuffer
+let _splatPaintPlyMeta = null;         // {headerText, headerEnd, stride, ...}
+let _splatPaintSelected = new Set();   // gaussian indices flagged for delete
+let _splatPaintPainting = false;
+let _splatPaintBrushPx = 40;           // brush radius in CSS pixels
+let _splatPaintPreviewSplat = null;    // tinted SplatMesh overlay (or null)
+let _splatPaintPreviewInflight = false;
+let _splatPaintPreviewDirty = false;
+let _splatPaintDotsOverlay = null;      // THREE.Points overlay for live drag feedback
+let _splatPaintDotsDirty = false;
+let _splatPaintDotsRafHandle = null;
+let _splatPaintCtrlHeld = false;        // tracked from key events so the cursor circle shows the "arm" state
+let _splatPaintShiftHeld = false;       // true when the next/current stroke will subtract from the selection
+let _splatPaintKeyboardHooked = false;  // window keydown/keyup only wired once
+
+function _splatPaintSyncButton() {
+	const btn = document.getElementById("obj-splat-paint-toggle");
+	const hint = document.getElementById("obj-splat-paint-hint");
+	if (btn) {
+		btn.classList.toggle("active", _splatPaintActive);
+		btn.textContent = "Paint Delete";
+	}
+	if (hint) {
+		if (!_splatPaintActive) {
+			hint.textContent = "Ctrl+drag adds, Ctrl+Shift+drag erases, Del applies";
+		} else {
+			const n = _splatPaintSelected.size;
+			hint.textContent = n
+				? `${n.toLocaleString()} splats selected - Del to apply, Esc to cancel`
+				: "Ctrl+drag adds, Ctrl+Shift+drag erases, plain drag orbits";
+		}
+	}
+}
+
+function _splatPaintOverlayHost() {
+	return document.querySelector("#viewport") || document.body;
+}
+
+function _splatPaintBuildOverlay() {
+	const host = _splatPaintOverlayHost();
+	// Overlay is pointer-events:none so plain drag falls straight through to
+	// OrbitControls — Ctrl+drag paints, plain drag orbits (mirrors the
+	// annotations tool). The div exists only to host the brush cursor circle;
+	// pointer handlers live on the canvas itself in capture phase so we can
+	// intercept BEFORE orbit sees the event when Ctrl is held.
+	const div = document.createElement("div");
+	div.id = "splat-paint-overlay";
+	div.style.position = "absolute";
+	div.style.left = "0";
+	div.style.top = "0";
+	div.style.right = "0";
+	div.style.bottom = "0";
+	div.style.pointerEvents = "none";
+	div.style.zIndex = "50";
+	const cursor = document.createElement("div");
+	cursor.id = "splat-paint-cursor";
+	cursor.style.position = "absolute";
+	cursor.style.borderRadius = "50%";
+	cursor.style.border = "1.5px solid #ffb454";
+	cursor.style.background = "rgba(255,180,84,0.08)";
+	cursor.style.pointerEvents = "none";
+	cursor.style.transform = "translate(-50%, -50%)";
+	cursor.style.left = "-9999px";
+	cursor.style.top = "-9999px";
+	// Visible for the whole paint session so users can see the brush size /
+	// position at all times; color communicates the armed state (dim = plain,
+	// amber = Ctrl held, red = Ctrl+Shift held). See _splatPaintSyncCursorColor.
+	cursor.style.display = "block";
+	_splatPaintApplyCursorSize(cursor);
+	div.appendChild(cursor);
+	host.appendChild(div);
+	_splatPaintOverlay = div;
+	_splatPaintCursorEl = cursor;
+	canvas.addEventListener("pointerdown", _splatPaintOnDown, true);
+	canvas.addEventListener("pointermove", _splatPaintOnMove, true);
+	canvas.addEventListener("pointerup", _splatPaintOnUp, true);
+	canvas.addEventListener("pointercancel", _splatPaintOnUp, true);
+	canvas.addEventListener("wheel", _splatPaintOnWheel, { passive: false, capture: true });
+	canvas.addEventListener("pointerleave", _splatPaintOnPointerLeave);
+}
+
+function _splatPaintApplyCursorSize(cursor) {
+	const d = _splatPaintBrushPx * 2;
+	cursor.style.width = `${d}px`;
+	cursor.style.height = `${d}px`;
+}
+
+function _splatPaintOnPointerLeave() {
+	if (_splatPaintCursorEl) {
+		_splatPaintCursorEl.style.left = "-9999px";
+		_splatPaintCursorEl.style.top = "-9999px";
+	}
+}
+
+function _splatPaintTeardownOverlay() {
+	canvas.removeEventListener("pointerdown", _splatPaintOnDown, true);
+	canvas.removeEventListener("pointermove", _splatPaintOnMove, true);
+	canvas.removeEventListener("pointerup", _splatPaintOnUp, true);
+	canvas.removeEventListener("pointercancel", _splatPaintOnUp, true);
+	canvas.removeEventListener("wheel", _splatPaintOnWheel, { capture: true });
+	canvas.removeEventListener("pointerleave", _splatPaintOnPointerLeave);
+	if (!_splatPaintOverlay) return;
+	_splatPaintOverlay.parentNode?.removeChild(_splatPaintOverlay);
+	_splatPaintOverlay = null;
+	_splatPaintCursorEl = null;
+	_splatPaintCtrlHeld = false;
+	_splatPaintShiftHeld = false;
+	// Restore the OS cursor — sync-visibility flipped it to "none" while paint
+	// was armed. Doing it explicitly here since the cursor el no longer exists.
+	if (typeof canvas !== "undefined" && canvas?.style) canvas.style.cursor = "";
+}
+
+function _splatPaintBuildDotsOverlay(target) {
+	// THREE.Points overlay parented to the source splat so it inherits its
+	// world transform automatically -- positions live in splat-local (raw PLY)
+	// coords, which is exactly what the source's matrix rotates/translates.
+	const geom = new THREE.BufferGeometry();
+	geom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(0), 3));
+	const mat = new THREE.PointsMaterial({
+		color: 0xffff00,
+		size: 0.006,
+		sizeAttenuation: true,
+		transparent: true,
+		opacity: 0.95,
+		depthTest: false,
+		depthWrite: false,
+	});
+	const pts = new THREE.Points(geom, mat);
+	pts.userData._isPaintDots = true;
+	pts.renderOrder = 999; // paint on top of the splat cloud
+	pts.frustumCulled = false;
+	target.add(pts);
+	_splatPaintDotsOverlay = pts;
+}
+
+function _splatPaintDisposeDotsOverlay() {
+	if (_splatPaintDotsRafHandle) {
+		cancelAnimationFrame(_splatPaintDotsRafHandle);
+		_splatPaintDotsRafHandle = null;
+	}
+	if (!_splatPaintDotsOverlay) return;
+	const pts = _splatPaintDotsOverlay;
+	_splatPaintDotsOverlay = null;
+	try {
+		pts.parent?.remove?.(pts);
+		pts.geometry?.dispose?.();
+		pts.material?.dispose?.();
+	} catch (e) { console.warn("[splat-paint] dots dispose:", e); }
+}
+
+function _splatPaintSyncDots() {
+	if (!_splatPaintDotsOverlay || !_splatPaintPositions) return;
+	const sel = _splatPaintSelected;
+	const pos = _splatPaintPositions;
+	const arr = new Float32Array(sel.size * 3);
+	let w = 0;
+	for (const i of sel) {
+		arr[w++] = pos[i * 3    ];
+		arr[w++] = pos[i * 3 + 1];
+		arr[w++] = pos[i * 3 + 2];
+	}
+	const attr = new THREE.BufferAttribute(arr, 3);
+	_splatPaintDotsOverlay.geometry.setAttribute("position", attr);
+	_splatPaintDotsOverlay.geometry.computeBoundingSphere();
+	_splatPaintDotsOverlay.geometry.computeBoundingBox();
+}
+
+function _splatPaintScheduleDotsUpdate() {
+	_splatPaintDotsDirty = true;
+	if (_splatPaintDotsRafHandle) return;
+	_splatPaintDotsRafHandle = requestAnimationFrame(() => {
+		_splatPaintDotsRafHandle = null;
+		if (!_splatPaintDotsDirty) return;
+		_splatPaintDotsDirty = false;
+		_splatPaintSyncDots();
+	});
+}
+
+function _splatPaintDisposePreview() {
+	if (!_splatPaintPreviewSplat) return;
+	const p = _splatPaintPreviewSplat;
+	_splatPaintPreviewSplat = null;
+	try {
+		scene.remove(p);
+		p.parent?.remove?.(p);
+		p.userData.splatMesh?.dispose?.();
+	} catch (e) { console.warn("[splat-paint] preview dispose:", e); }
+	// Preview was already stripped from `objects` on creation; belt-and-braces
+	// remove in case something re-inserted it.
+	const idx = objects.indexOf(p);
+	if (idx !== -1) objects.splice(idx, 1);
+}
+
+async function _splatPaintStart(splatObj) {
+	const target = splatObj || (selected?.userData?.primKind === "splat" ? selected : null);
+	if (!target || !target.userData?._srcPlyUrl) return;
+	if (_splatPaintActive) return;
+	_splatPaintActive = true;
+	_splatPaintTarget = target;
+	_splatPaintSelected = new Set();
+	_splatPaintBuildOverlay();
+	_splatPaintBuildDotsOverlay(target);
+	_splatPaintHookKeyboard();
+	// Cursor + hint reflect the tool's armed state as soon as it turns on.
+	_splatPaintSyncCursorVisibility();
+	_splatPaintSyncCursorColor();
+	// Orbit stays enabled — plain drag orbits, Ctrl+drag paints. Transform
+	// gizmo also stays enabled so users can still nudge the splat mid-paint
+	// if they need to reposition it.
+	_splatToolsSetStatus?.("", null);
+	_splatPaintSyncButton();
+	try {
+		const r = await fetch(target.userData._srcPlyUrl);
+		if (!r.ok) throw new Error(`HTTP ${r.status}`);
+		const buf = await r.arrayBuffer();
+		const meta = _splatParsePlyHeader(buf);
+		const dv = new DataView(buf, meta.headerEnd);
+		const positions = new Float32Array(meta.vertexCount * 3);
+		for (let i = 0; i < meta.vertexCount; i++) {
+			const base = i * meta.stride;
+			positions[i * 3    ] = dv.getFloat32(base, true);
+			positions[i * 3 + 1] = dv.getFloat32(base + 4, true);
+			positions[i * 3 + 2] = dv.getFloat32(base + 8, true);
+		}
+		if (_splatPaintActive) {
+			_splatPaintPositions = positions;
+			_splatPaintVertexCount = meta.vertexCount;
+			_splatPaintPlyBuffer = buf;
+			_splatPaintPlyMeta = meta;
+		}
+	} catch (e) {
+		console.warn("[splat-paint] position prefetch failed:", e);
+		_splatToolsSetStatus?.(`paint prefetch failed - ${String(e.message || e).slice(0, 140)}`, "error");
+	}
+}
+
+function _splatPaintStop() {
+	if (!_splatPaintActive) return;
+	_splatPaintActive = false;
+	_splatPaintTarget = null;
+	_splatPaintPositions = null;
+	_splatPaintVertexCount = 0;
+	_splatPaintPlyBuffer = null;
+	_splatPaintPlyMeta = null;
+	_splatPaintSelected = new Set();
+	_splatPaintPainting = false;
+	_splatPaintDisposePreview();
+	_splatPaintDisposeDotsOverlay();
+	_splatPaintTeardownOverlay();
+	// Orbit/transform were never disabled in the Ctrl-gated flow — this
+	// left as a no-op guard in case an earlier code path flipped them off.
+	if (typeof orbit !== "undefined" && !orbit.enabled) orbit.enabled = true;
+	if (typeof transform !== "undefined" && !transform.enabled) transform.enabled = true;
+	_splatToolsSetStatus?.("", null);
+	_splatPaintSyncButton();
+}
+
+function _splatPaintLocalPt(e) {
+	// Coord system is the CANVAS rect, not the overlay rect. The overlay
+	// covers #viewport (may include margins / other UI), whereas the camera
+	// projection is calibrated to the canvas dimensions. Using canvas rect
+	// keeps the brush circle position + gaussian projection in sync — bug
+	// otherwise is a visible offset between where you paint and what lights up.
+	const rect = canvas.getBoundingClientRect();
+	// Offset from the overlay's origin so the cursor DIV position (which is
+	// relative to overlay) still lands under the pointer.
+	const overlayRect = _splatPaintOverlay.getBoundingClientRect();
+	return [
+		e.clientX - overlayRect.left, // cursor x in overlay coords
+		e.clientY - overlayRect.top,  // cursor y in overlay coords
+		e.clientX - rect.left,        // paint x in canvas coords
+		e.clientY - rect.top,         // paint y in canvas coords
+		rect.width,                    // projection widthPx
+		rect.height,                   // projection heightPx
+	];
+}
+
+function _splatPaintMoveCursor(x, y) {
+	if (!_splatPaintCursorEl) return;
+	_splatPaintCursorEl.style.left = `${x}px`;
+	_splatPaintCursorEl.style.top = `${y}px`;
+}
+
+// Ctrl-gated pointer flow: plain drag falls through to OrbitControls (orbit
+// stays enabled while paint mode is active), Ctrl/Meta+drag paints. Mirrors
+// the annotations tool so users can reframe the camera without exiting the
+// tool. Alt-drag also passes through so Alt-cam keeps working.
+// Selection is always additive across strokes — the user builds up a
+// selection then hits Del once. Ctrl+Shift+drag erases from the selection
+// (Shift as the "subtract" modifier; brush color flips red as a cue).
+function _splatPaintOnDown(e) {
+	if (!_splatPaintActive) return;
+	if (e.button !== 0) return;
+	if (!(e.ctrlKey || e.metaKey) || e.altKey) return; // plain drag → orbit
+	e.preventDefault();
+	e.stopImmediatePropagation();
+	try { canvas.setPointerCapture?.(e.pointerId); } catch {}
+	_splatPaintPainting = true;
+	const [cx, cy, px, py, w, h] = _splatPaintLocalPt(e);
+	_splatPaintMoveCursor(cx, cy);
+	_splatPaintPaintAt(px, py, w, h, !!e.shiftKey);
+}
+
+function _splatPaintOnMove(e) {
+	if (!_splatPaintActive) return;
+	// Track Ctrl + Shift state from every move — keydown can be missed if the
+	// window wasn't focused when the key was pressed, and we still want the
+	// brush color to flip when the user starts moving with a modifier held.
+	const held = !!(e.ctrlKey || e.metaKey) && !e.altKey;
+	const subtract = held && !!e.shiftKey;
+	let colorChanged = false;
+	if (held !== _splatPaintCtrlHeld) { _splatPaintCtrlHeld = held; colorChanged = true; }
+	if (subtract !== _splatPaintShiftHeld) { _splatPaintShiftHeld = subtract; colorChanged = true; }
+	if (colorChanged) _splatPaintSyncCursorColor();
+	const [cx, cy, px, py, w, h] = _splatPaintLocalPt(e);
+	_splatPaintMoveCursor(cx, cy);
+	if (!_splatPaintPainting) return;
+	// If the user let go of Ctrl mid-drag, stop painting cleanly — the next
+	// pointerdown handles restart.
+	if (!held) {
+		_splatPaintPainting = false;
+		try { canvas.releasePointerCapture?.(e.pointerId); } catch {}
+		_splatPaintSyncButton();
+		return;
+	}
+	e.stopImmediatePropagation();
+	_splatPaintPaintAt(px, py, w, h, subtract);
+}
+
+function _splatPaintOnUp(e) {
+	if (!_splatPaintPainting) return;
+	_splatPaintPainting = false;
+	try { canvas.releasePointerCapture?.(e.pointerId); } catch {}
+	_splatPaintSyncButton();
+}
+
+function _splatPaintOnWheel(e) {
+	// Only intercept wheel-to-resize when Ctrl is held (i.e. the user is
+	// actively in "paint" state). Plain wheel falls through so OrbitControls
+	// dolly-zoom keeps working while paint mode is on.
+	if (!(e.ctrlKey || e.metaKey)) return;
+	e.preventDefault();
+	e.stopImmediatePropagation();
+	const step = e.deltaY < 0 ? 4 : -4;
+	_splatPaintBrushPx = Math.max(8, Math.min(200, _splatPaintBrushPx + step));
+	if (_splatPaintCursorEl) _splatPaintApplyCursorSize(_splatPaintCursorEl);
+}
+
+// Brush circle stays visible for the whole paint session so the user sees
+// the tool is armed the moment they toggle it on. Color reflects armed state:
+//   dim white  = paint mode active, no modifier (plain drag will orbit)
+//   amber      = Ctrl held (drag will ADD to selection)
+//   red        = Ctrl+Shift held (drag will ERASE from selection)
+// OS cursor is hidden across the whole paint session — the ring IS the cursor.
+function _splatPaintSyncCursorVisibility() {
+	if (!_splatPaintCursorEl) return;
+	_splatPaintCursorEl.style.display = _splatPaintActive ? "block" : "none";
+	if (typeof canvas !== "undefined" && canvas?.style) {
+		canvas.style.cursor = _splatPaintActive ? "none" : "";
+	}
+}
+
+function _splatPaintSyncCursorColor() {
+	if (!_splatPaintCursorEl) return;
+	if (_splatPaintShiftHeld && _splatPaintCtrlHeld) {
+		_splatPaintCursorEl.style.border = "1.5px solid #ff5c5c";
+		_splatPaintCursorEl.style.background = "rgba(255,92,92,0.10)";
+	} else if (_splatPaintCtrlHeld) {
+		_splatPaintCursorEl.style.border = "1.5px solid #ffb454";
+		_splatPaintCursorEl.style.background = "rgba(255,180,84,0.08)";
+	} else {
+		// Idle: bright white ring so users clearly see the brush size + position
+		// against any splat backdrop, but no fill so it reads as "not armed".
+		_splatPaintCursorEl.style.border = "1.5px solid rgba(255,255,255,0.85)";
+		_splatPaintCursorEl.style.background = "transparent";
+	}
+}
+
+function _splatPaintOnKeyDown(e) {
+	if (!_splatPaintActive) return;
+	if ((e.key === "Control" || e.key === "Meta") && !_splatPaintCtrlHeld) {
+		_splatPaintCtrlHeld = true;
+		_splatPaintSyncCursorColor();
+	}
+	// Shift-while-armed flips the brush red so users see they're erasing
+	// before they start dragging.
+	if (e.key === "Shift" && _splatPaintCtrlHeld && !_splatPaintShiftHeld) {
+		_splatPaintShiftHeld = true;
+		_splatPaintSyncCursorColor();
+	}
+}
+function _splatPaintOnKeyUp(e) {
+	if ((e.key === "Control" || e.key === "Meta") && _splatPaintCtrlHeld) {
+		_splatPaintCtrlHeld = false;
+		_splatPaintSyncCursorColor();
+		// A Ctrl-release mid-drag also ends the stroke — pointermove already
+		// covers this but keyup catches the case where the pointer is idle.
+		if (_splatPaintPainting) {
+			_splatPaintPainting = false;
+			_splatPaintSyncButton();
+		}
+	}
+	if (e.key === "Shift" && _splatPaintShiftHeld) {
+		_splatPaintShiftHeld = false;
+		_splatPaintSyncCursorColor();
+	}
+}
+function _splatPaintHookKeyboard() {
+	if (_splatPaintKeyboardHooked) return;
+	_splatPaintKeyboardHooked = true;
+	window.addEventListener("keydown", _splatPaintOnKeyDown);
+	window.addEventListener("keyup", _splatPaintOnKeyUp);
+	// Alt-tab strips Ctrl keyup; reset the cached state so the cursor doesn't
+	// stay stuck on when the user swaps back.
+	window.addEventListener("blur", () => {
+		if (_splatPaintCtrlHeld || _splatPaintShiftHeld) {
+			_splatPaintCtrlHeld = false;
+			_splatPaintShiftHeld = false;
+			_splatPaintSyncCursorColor();
+		}
+	});
+}
+
+// Project every cached position, add any gaussians within `radius` px of the
+// current mouse to the selection Set (or remove them if `deselect` is true).
+// Inlined matrix math mirrors _splatBuildFilteredPly / _splatLassoCountSelected.
+function _splatPaintPaintAt(sxMouse, syMouse, widthPx, heightPx, deselect) {
+	if (!_splatPaintPositions || !_splatPaintTarget) return;
+	const splatObj = _splatPaintTarget;
+	splatObj.updateMatrixWorld(true);
+	camera.updateMatrixWorld(true);
+	const M = splatObj.matrixWorld.elements;
+	const V = camera.matrixWorldInverse.elements;
+	const P = camera.projectionMatrix.elements;
+	const _mulMat = (out, a, b) => {
+		for (let r = 0; r < 4; r++) {
+			for (let c = 0; c < 4; c++) {
+				out[r * 4 + c] =
+					a[0 * 4 + c] * b[r * 4 + 0] +
+					a[1 * 4 + c] * b[r * 4 + 1] +
+					a[2 * 4 + c] * b[r * 4 + 2] +
+					a[3 * 4 + c] * b[r * 4 + 3];
+			}
+		}
+	};
+	const VM = new Float32Array(16);
+	const PVM = new Float32Array(16);
+	_mulMat(VM, V, M);
+	_mulMat(PVM, P, VM);
+	const near = camera.near;
+	const rSq = _splatPaintBrushPx * _splatPaintBrushPx;
+	const pos = _splatPaintPositions;
+	const N = _splatPaintVertexCount;
+	const sel = _splatPaintSelected;
+	let changed = false;
+	for (let i = 0; i < N; i++) {
+		const x = pos[i * 3    ];
+		const y = pos[i * 3 + 1];
+		const z = pos[i * 3 + 2];
+		const viewZ = VM[2] * x + VM[6] * y + VM[10] * z + VM[14];
+		if (viewZ >= -near) continue;
+		const cx = PVM[0] * x + PVM[4] * y + PVM[8]  * z + PVM[12];
+		const cy = PVM[1] * x + PVM[5] * y + PVM[9]  * z + PVM[13];
+		const cw = PVM[3] * x + PVM[7] * y + PVM[11] * z + PVM[15];
+		if (cw === 0) continue;
+		const sx = (cx / cw + 1) * 0.5 * widthPx;
+		const sy = (1 - cy / cw) * 0.5 * heightPx;
+		const dx = sx - sxMouse, dy = sy - syMouse;
+		if (dx * dx + dy * dy > rSq) continue;
+		if (deselect) {
+			if (sel.has(i)) { sel.delete(i); changed = true; }
+		} else {
+			if (!sel.has(i)) { sel.add(i); changed = true; }
+		}
+	}
+	if (changed) {
+		_splatPaintSyncButton();
+		_splatPaintScheduleDotsUpdate();
+	}
+}
+
+// Build a subset PLY containing ONLY the selected gaussian indices, load it
+// as a SplatMesh, tint yellow, and position-lock to the target splat. Called
+// after each stroke; debounced against overlapping requests so a fast series
+// of small strokes doesn't queue N loadSplat calls.
+async function _splatPaintRebuildPreview() {
+	if (!_splatPaintActive) return;
+	if (_splatPaintPreviewInflight) { _splatPaintPreviewDirty = true; return; }
+	_splatPaintPreviewInflight = true;
+	try {
+		const target = _splatPaintTarget;
+		const sel = _splatPaintSelected;
+		const meta = _splatPaintPlyMeta;
+		const buf = _splatPaintPlyBuffer;
+		if (!target || !meta || !buf) return;
+		if (sel.size === 0) {
+			_splatPaintDisposePreview();
+			return;
+		}
+		const stride = meta.stride;
+		const newHeader = meta.headerText.replace(
+			/element\s+vertex\s+\d+/,
+			`element vertex ${sel.size}`,
+		);
+		const headerBytes = new TextEncoder().encode(newHeader);
+		const outSize = headerBytes.length + sel.size * stride;
+		const out = new Uint8Array(outSize);
+		out.set(headerBytes, 0);
+		const srcBytes = new Uint8Array(buf, meta.headerEnd);
+		let writeOff = headerBytes.length;
+		// Iterate selection in a deterministic order (Set preserves insertion,
+		// good enough for spark.js which sorts internally per-view anyway).
+		for (const i of sel) {
+			out.set(srcBytes.subarray(i * stride, (i + 1) * stride), writeOff);
+			writeOff += stride;
+		}
+		const subsetBytes = out.buffer;
+		// Dispose the previous preview BEFORE loading the new one so the count
+		// of scene splats stays at 1 (source + new preview) during the swap.
+		_splatPaintDisposePreview();
+		const preview = await loadSplat(subsetBytes, `paint-preview.ply`, {
+			savedName: "PaintPreview",
+			// `restoring: true` skips the OpenCV->OpenGL 180deg X flip so the
+			// preview lands in the source's coord frame without an extra flip.
+			restoring: true,
+			// Silent + skipRegister: no loading modal for the between-stroke
+			// rebuild, and the preview stays out of objects[] / outliner.
+			silent: true,
+			skipRegister: true,
+		});
+		if (!preview) return;
+		// Yank from the outliner-visible objects list; it's a helper visual,
+		// not a scene object the user can select or transform.
+		const idx = objects.indexOf(preview);
+		if (idx !== -1) objects.splice(idx, 1);
+		preview.userData._isPaintPreview = true;
+		// Position-lock to source. Source has its own quaternion (loadSplat
+		// applied the same 180-X flip when it first loaded), so we copy the
+		// full transform not just position.
+		preview.position.copy(target.position);
+		preview.quaternion.copy(target.quaternion);
+		preview.scale.copy(target.scale);
+		// Yellow highlight via SET_RGB (replaces color entirely; MULTIPLY would
+		// just tint the existing color and look like a wash).
+		preview.userData._splatTintHex = "#ffff00";
+		preview.userData._textureVisible = false;
+		try { await applySplatColorState(preview); } catch (e) { console.warn("[splat-paint] tint failed:", e); }
+		refreshOutliner?.();
+		_splatPaintPreviewSplat = preview;
+	} catch (e) {
+		console.error("[splat-paint] preview build failed:", e);
+	} finally {
+		_splatPaintPreviewInflight = false;
+		if (_splatPaintPreviewDirty) {
+			_splatPaintPreviewDirty = false;
+			_splatPaintRebuildPreview();
+		}
+	}
+}
+
+function _splatPaintSchedulePreview() {
+	_splatPaintPreviewDirty = true;
+	if (_splatPaintPreviewInflight) return;
+	_splatPaintRebuildPreview();
+}
+
+// Commit: filter selected indices out of the source PLY, upload, reload.
+async function _splatPaintApply() {
+	if (!_splatPaintActive || _splatPaintSelected.size === 0) return;
+	const target = _splatPaintTarget;
+	const meta = _splatPaintPlyMeta;
+	const buf = _splatPaintPlyBuffer;
+	if (!target || !meta || !buf) { _splatPaintStop(); return; }
+	const sel = _splatPaintSelected;
+	if (sel.size >= meta.vertexCount) {
+		_splatToolsSetStatus?.("no gaussians would remain - skipped", "error");
+		return;
+	}
+	// Dispose the yellow overlays immediately so the transition reads cleanly.
+	_splatPaintDisposePreview();
+	_splatPaintDisposeDotsOverlay();
+	try {
+		_splatToolsSetStatus?.("filtering gaussians...", "busy");
+		const stride = meta.stride;
+		const keptCount = meta.vertexCount - sel.size;
+		const newHeader = meta.headerText.replace(
+			/element\s+vertex\s+\d+/,
+			`element vertex ${keptCount}`,
+		);
+		const headerBytes = new TextEncoder().encode(newHeader);
+		const outSize = headerBytes.length + keptCount * stride;
+		const out = new Uint8Array(outSize);
+		out.set(headerBytes, 0);
+		const srcBytes = new Uint8Array(buf, meta.headerEnd);
+		let writeOff = headerBytes.length;
+		for (let i = 0; i < meta.vertexCount; i++) {
+			if (sel.has(i)) continue;
+			out.set(srcBytes.subarray(i * stride, (i + 1) * stride), writeOff);
+			writeOff += stride;
+		}
+		_splatToolsSetStatus?.("reloading...", "busy");
+		// Fast path — reload from the in-memory subset bytes instead of doing
+		// a full server round-trip (upload → wait → fetch back → parse). The
+		// server-side POST for persistence runs in parallel; we only await it
+		// so the new splat gets a real _srcPlyUrl before Splat Tools try to
+		// operate on it.
+		const localFilename = `splat_paint_${Date.now()}.ply`;
+		const persistPromise = (async () => {
+			const r = await fetch("/api/splat/save_ply", {
+				method: "POST",
+				headers: { "Content-Type": "application/octet-stream" },
+				body: out.buffer,
+			});
+			if (!r.ok) throw new Error(await r.text().catch(() => `HTTP ${r.status}`));
+			return r.json();
+		})();
+		const newSplat = await _reloadSplatInPlace(target, null, {
+			buf: out.buffer,
+			filename: localFilename,
+		});
+		try {
+			const j = await persistPromise;
+			if (newSplat && j?.url) {
+				newSplat.userData._srcPlyUrl = j.url;
+				newSplat.userData._srcPlyFilename = j.filename;
+			}
+		} catch (e) {
+			console.warn("[splat-paint] persistence upload failed — splat may not survive save/reload:", e);
+		}
+		_splatToolsSetStatus?.("paint deleted - draw again or click Paint Delete to exit", "ok");
+	} catch (err) {
+		console.error("[splat-paint] apply failed:", err);
+		_splatToolsSetStatus?.(`paint failed - ${String(err.message || err).slice(0, 140)}`, "error");
+	} finally {
+		_splatPaintActive = false;
+		_splatPaintTarget = null;
+		_splatPaintPositions = null;
+		_splatPaintPlyBuffer = null;
+		_splatPaintPlyMeta = null;
+		_splatPaintSelected = new Set();
+		_splatPaintTeardownOverlay();
+		// Orbit stays enabled during paint mode now — belt-and-braces guard
+		// in case an earlier code path flipped it off.
+		if (typeof orbit !== "undefined" && !orbit.enabled) orbit.enabled = true;
+		if (typeof transform !== "undefined" && !transform.enabled) transform.enabled = true;
+		_splatPaintSyncButton();
+	}
+}
+
+// Global keyboard: Del commits, Esc cancels, [ / ] resize brush. Guarded
+// against text-input focus so typing in a text field never triggers.
+window.addEventListener("keydown", (e) => {
+	if (!_splatPaintActive) return;
+	const tag = (document.activeElement?.tagName || "").toLowerCase();
+	if (tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable) return;
+	if (e.key === "Escape") { e.preventDefault(); _splatPaintStop(); }
+	else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); _splatPaintApply(); }
+	else if (e.key === "[") { e.preventDefault(); _splatPaintBrushPx = Math.max(8, _splatPaintBrushPx - 4); if (_splatPaintCursorEl) _splatPaintApplyCursorSize(_splatPaintCursorEl); }
+	else if (e.key === "]") { e.preventDefault(); _splatPaintBrushPx = Math.min(200, _splatPaintBrushPx + 4); if (_splatPaintCursorEl) _splatPaintApplyCursorSize(_splatPaintCursorEl); }
+});
+
+
+// Parse PLY header (ASCII up to end_header\n) + read xyz floats per vertex.
+// Standard 3DGS PLYs are format binary_little_endian 1.0 with a fixed float
+// stride per vertex (x,y,z,... normals, SH, opacity, scale, rot). We only
+// need xyz for the point-in-polygon test — everything else is opaque bytes
+// we copy through.
+function _splatParsePlyHeader(buf) {
+	const bytes = new Uint8Array(buf);
+	// Header end marker: 'end_header\n' (10 bytes)
+	const marker = new TextEncoder().encode("end_header\n");
+	let headerEnd = -1;
+	outer:
+	for (let i = 0; i + marker.length <= bytes.length; i++) {
+		for (let j = 0; j < marker.length; j++) {
+			if (bytes[i + j] !== marker[j]) continue outer;
+		}
+		headerEnd = i + marker.length;
+		break;
+	}
+	if (headerEnd < 0) throw new Error("PLY end_header not found");
+	const headerText = new TextDecoder("utf-8").decode(bytes.subarray(0, headerEnd));
+	if (!/format\s+binary_little_endian/i.test(headerText)) {
+		throw new Error("Only binary_little_endian PLYs are supported");
+	}
+	const vertMatch = headerText.match(/element\s+vertex\s+(\d+)/);
+	if (!vertMatch) throw new Error("element vertex count missing");
+	const vertexCount = parseInt(vertMatch[1], 10);
+	// Total float32 properties per vertex — support the standard 3DGS layout
+	// where every column is a float32. Not general PLY, but matches every
+	// splat we ship. Bail loudly if we see a non-float column.
+	const propLines = headerText.split(/\r?\n/).filter(l => /^property\b/.test(l));
+	for (const l of propLines) {
+		if (!/^property\s+float(\s|$)/.test(l)) {
+			throw new Error(`Only float32 PLY columns supported (saw: ${l.trim()})`);
+		}
+	}
+	const floatsPerVertex = propLines.length;
+	const stride = floatsPerVertex * 4;
+	return { headerText, headerEnd, vertexCount, floatsPerVertex, stride };
+}
+
+function _splatPointInPoly(x, y, poly) {
+	let inside = false;
+	for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+		const xi = poly[i][0], yi = poly[i][1];
+		const xj = poly[j][0], yj = poly[j][1];
+		const hit = ((yi > y) !== (yj > y)) &&
+			(x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+		if (hit) inside = !inside;
+	}
+	return inside;
+}
+
+async function _splatBuildFilteredPly(splatObj, polysScreenPts, overlayRect) {
+	const url = splatObj.userData._srcPlyUrl;
+	const r = await fetch(url);
+	if (!r.ok) throw new Error(`PLY fetch failed: HTTP ${r.status}`);
+	const buf = await r.arrayBuffer();
+	const meta = _splatParsePlyHeader(buf);
+	const dv = new DataView(buf, meta.headerEnd);
+	// Precompute the world -> NDC -> screen pipeline outside the hot loop.
+	// We inline the matrix math to avoid Vector3/Matrix4 allocations per vertex.
+	splatObj.updateMatrixWorld(true);
+	camera.updateMatrixWorld(true);
+	const M = splatObj.matrixWorld.elements;              // 16
+	const V = camera.matrixWorldInverse.elements;         // 16
+	const P = camera.projectionMatrix.elements;           // 16
+	const near = camera.near;
+	const widthPx = overlayRect.width;
+	const heightPx = overlayRect.height;
+	// Compose world -> clip once so the inner loop is one matrix * vec4.
+	// clip = P * V * M. We'll do the multiplies manually since Three's
+	// Matrix4.multiplyMatrices allocates.
+	const _mulMat = (out, a, b) => {
+		for (let r = 0; r < 4; r++) {
+			for (let c = 0; c < 4; c++) {
+				out[r * 4 + c] =
+					a[0 * 4 + c] * b[r * 4 + 0] +
+					a[1 * 4 + c] * b[r * 4 + 1] +
+					a[2 * 4 + c] * b[r * 4 + 2] +
+					a[3 * 4 + c] * b[r * 4 + 3];
+			}
+		}
+	};
+	const VM = new Float32Array(16);
+	const PVM = new Float32Array(16);
+	_mulMat(VM, V, M);
+	_mulMat(PVM, P, VM);
+	// Also keep VM alone so we can test view-space z for the behind-camera cull.
+	const stride = meta.stride;
+	const keep = new Uint8Array(meta.vertexCount);
+	let keptCount = 0;
+	for (let i = 0; i < meta.vertexCount; i++) {
+		const base = i * stride;
+		const x = dv.getFloat32(base, true);
+		const y = dv.getFloat32(base + 4, true);
+		const z = dv.getFloat32(base + 8, true);
+		// View-space z (Three convention: -Z is forward). Reject anything with
+		// z_view >= -near since projection wraps for those.
+		const viewZ = VM[2] * x + VM[6] * y + VM[10] * z + VM[14];
+		if (viewZ >= -near) {
+			keep[i] = 1; keptCount++;
+			continue;
+		}
+		// Perspective divide via clip-space w.
+		const cx = PVM[0] * x + PVM[4] * y + PVM[8]  * z + PVM[12];
+		const cy = PVM[1] * x + PVM[5] * y + PVM[9]  * z + PVM[13];
+		const cw = PVM[3] * x + PVM[7] * y + PVM[11] * z + PVM[15];
+		if (cw === 0) { keep[i] = 1; keptCount++; continue; }
+		const ndcX = cx / cw;
+		const ndcY = cy / cw;
+		// NDC (-1..+1) -> screen pixel coords in overlayRect's local frame.
+		const sx = (ndcX + 1) * 0.5 * widthPx;
+		const sy = (1 - ndcY) * 0.5 * heightPx;
+		let inAny = false;
+		for (const p of polysScreenPts) {
+			if (_splatPointInPoly(sx, sy, p)) { inAny = true; break; }
+		}
+		if (inAny) {
+			keep[i] = 0; // delete
+		} else {
+			keep[i] = 1;
+			keptCount++;
+		}
+	}
+	if (keptCount === meta.vertexCount) return null; // nothing to delete
+	if (keptCount === 0) return null;                // don't create empty PLY
+	// Rewrite header with new vertex count.
+	const newHeader = meta.headerText.replace(
+		/element\s+vertex\s+\d+/,
+		`element vertex ${keptCount}`,
+	);
+	const headerBytes = new TextEncoder().encode(newHeader);
+	const outSize = headerBytes.length + keptCount * stride;
+	const out = new Uint8Array(outSize);
+	out.set(headerBytes, 0);
+	const srcBytes = new Uint8Array(buf, meta.headerEnd);
+	let writeOff = headerBytes.length;
+	for (let i = 0; i < meta.vertexCount; i++) {
+		if (!keep[i]) continue;
+		out.set(srcBytes.subarray(i * stride, (i + 1) * stride), writeOff);
+		writeOff += stride;
+	}
+	return out.buffer;
+}
+
+(function wireSplatToolsControls() {
+	const hook = () => {
+		const dSlider = document.getElementById("obj-splat-decimate");
+		const dVal = document.getElementById("obj-splat-decimate-val");
+		dSlider?.addEventListener("input", () => {
+			if (dVal) dVal.textContent = `${dSlider.value}%`;
+		});
+		document.getElementById("obj-splat-floaters")?.addEventListener("click", () => {
+			_splatApplyActions([{ op: "filter_floaters" }], "killing floaters");
+		});
+		document.getElementById("obj-splat-paint-toggle")?.addEventListener("click", () => {
+			if (_splatPaintActive) _splatPaintStop();
+			else _splatPaintStart(selected);
+		});
+		document.getElementById("obj-splat-decimate-apply")?.addEventListener("click", () => {
+			const pct = parseFloat(dSlider?.value || "50");
+			_splatApplyActions([{ op: "decimate", percent: pct }], `decimating to ${pct}%`);
+		});
+		document.getElementById("obj-splat-sh-apply")?.addEventListener("click", () => {
+			const band = parseInt(document.getElementById("obj-splat-sh-band")?.value || "3", 10);
+			_splatApplyActions([{ op: "filter_harmonics", band }], `dropping SH > ${band}`);
+		});
+		document.getElementById("obj-splat-export-btn")?.addEventListener("click", () => {
+			const fmt = document.getElementById("obj-splat-export-fmt")?.value || "sog";
+			_splatExport(fmt);
+		});
+	};
+	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hook, { once: true });
+	else hook();
+})();
+
+// -- Splat Tools requirements card + background prefetch --
+// Renders inline into #obj-splat-req-card. Node missing -> red install nudge
+// with a link to nodejs.org. Node present + cache cold -> silent background
+// prefetch (POST /api/splat/prefetch) that warms the ~30MB npx download so
+// the user's first real transform call is instant. Cached module-level so we
+// only hit the network once per session.
+let _splatReqsCache = null;
+let _splatReqsInflight = null;
+let _splatPrefetchInflight = null;
+
+async function _fetchSplatReqs(force = false) {
+	if (_splatReqsCache && !force) return _splatReqsCache;
+	if (_splatReqsInflight) return _splatReqsInflight;
+	_splatReqsInflight = (async () => {
+		try {
+			const r = await fetch("/api/splat/requirements");
+			if (!r.ok) throw new Error(`HTTP ${r.status}`);
+			_splatReqsCache = await r.json();
+			return _splatReqsCache;
+		} finally {
+			_splatReqsInflight = null;
+		}
+	})();
+	return _splatReqsInflight;
+}
+
+function _renderSplatReqCard(reqs, prefetching) {
+	const el = document.getElementById("obj-splat-req-card");
+	if (!el) return;
+	if (!reqs) { el.innerHTML = ""; return; }
+	if (!reqs.node?.ok) {
+		// Red install nudge -- Node absent means every splat-transform call
+		// will fail. Buttons below remain enabled so clicking them surfaces
+		// the same error inline via _splatToolsSetStatus.
+		el.innerHTML = `
+			<div style="margin:8px 0 4px 0;padding:10px 12px;background:rgba(255,80,80,0.08);border:1px solid rgba(255,80,80,0.28);border-radius:5px;display:flex;gap:10px;align-items:flex-start">
+				<span style="width:8px;height:8px;border-radius:50%;background:#ff5c5c;box-shadow:0 0 6px rgba(255,92,92,0.5);flex:0 0 auto;margin-top:5px"></span>
+				<div style="flex:1;min-width:0">
+					<div style="font-size:11px;color:rgba(255,255,255,0.9);font-weight:500">Node.js required</div>
+					<div style="font-size:10px;color:rgba(255,255,255,0.55);margin-top:3px;line-height:1.5">Splat editing and compression run through <code style="font-size:9px;background:rgba(255,255,255,0.06);padding:1px 4px;border-radius:2px">npx @playcanvas/splat-transform</code>. Install Node.js, then reopen ComfyBlockout.</div>
+					<a href="${reqs.node.install_url}" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;font-size:10px;color:#ffb454;background:rgba(255,180,84,0.1);border:1px solid rgba(255,180,84,0.28);border-radius:3px;padding:4px 10px;text-decoration:none;letter-spacing:0.04em">Install Node.js ↗</a>
+				</div>
+			</div>
+		`;
+		return;
+	}
+	if (prefetching) {
+		// Subtle amber pulse while the background warm-cache runs. Non-blocking
+		// -- the tools stay usable, they'll just stall on their first call.
+		el.innerHTML = `
+			<div style="margin:6px 0 4px 0;padding:6px 10px;background:rgba(255,180,84,0.06);border:1px solid rgba(255,180,84,0.2);border-radius:4px;display:flex;gap:8px;align-items:center;font-size:10px;color:rgba(255,180,84,0.85);letter-spacing:0.03em">
+				<span style="display:inline-block;width:8px;height:8px;border-radius:50%;border:1.5px solid rgba(255,180,84,0.25);border-top-color:#ffb454;animation:spin 0.9s linear infinite;flex:0 0 auto"></span>
+				Warming splat-transform cache… (~30s, first run only)
+			</div>
+		`;
+		return;
+	}
+	// Node present + cache warm -> no card at all. Keeps the panel clean once
+	// setup is done, matching the TripoSplat pane's collapse-to-nothing when
+	// green.
+	el.innerHTML = "";
+}
+
+async function _refreshSplatReqCard() {
+	const reqs = await _fetchSplatReqs();
+	if (!reqs) return;
+	// Kick off background prefetch the first time we see a warm-Node but cold
+	// cache. Silent success; failures leave the flag off so it retries next open.
+	if (reqs.node?.ok && !reqs.splat_transform?.cached && !_splatPrefetchInflight) {
+		_renderSplatReqCard(reqs, true);
+		_splatPrefetchInflight = (async () => {
+			try {
+				const r = await fetch("/api/splat/prefetch", { method: "POST" });
+				if (r.ok) {
+					_splatReqsCache = { ...reqs, splat_transform: { ...reqs.splat_transform, cached: true } };
+				}
+			} catch (e) {
+				console.warn("[splat-tools] prefetch failed:", e);
+			} finally {
+				_splatPrefetchInflight = null;
+				_renderSplatReqCard(_splatReqsCache);
+			}
+		})();
+		return;
+	}
+	_renderSplatReqCard(reqs, !!_splatPrefetchInflight);
+}
+
+
 // Point Cloud tool — Splat render mode. Feeds TripoSplat's PLY through the
 // existing spark.js loadSplat helper (which handles all standard 3DGS PLYs
 // including TripoSplat's format — same code path as drag-and-drop splat
@@ -16305,6 +17712,24 @@ async function _tpsSetMode(source, mode, density) {
 // 2-unit footprint, then translate to plane.position. Existing splat
 // Appearance controls (Color tint + Texture toggle) engage automatically
 // via primKind = "splat" from registerImported.
+// Upload a splat's PLY bytes to the per-scene asset store and stamp the
+// resulting assetId + filename on userData. This is what makes a splat
+// survive scene save/reload — serializeScene's imports branch filters by
+// userData.assetId, and deserializeScene rebuilds via
+// /comfyblockout/asset/<node_id>/<assetId>.<ext>. Best-effort: upload
+// failure logs a warning but doesn't block the splat from displaying.
+async function _stampSplatAsAsset(splatObj, buf, filename) {
+	if (!splatObj || !buf) return;
+	try {
+		const { assetId } = await uploadAsset(filename, buf);
+		splatObj.userData.assetId = assetId;
+		splatObj.userData.filename = filename;
+		if (typeof saveScene === "function") saveScene();
+	} catch (e) {
+		console.warn("[splat] asset upload failed (splat will not persist across reloads):", e);
+	}
+}
+
 async function _replacePcPlaneWithSplat(plyUrl) {
 	const plane = objects.find(o => o.userData?.pcSource === true && !o.userData?.pcSourcePlane && o.visible !== false);
 	if (!plane) return;
@@ -16364,6 +17789,9 @@ async function _replacePcPlaneWithSplat(plyUrl) {
 		splat.userData._srcPlyFilename = filename;
 		select(splat);
 		refreshOutliner();
+		// Upload the freshly-generated PLY as a per-scene asset so serializeScene
+		// captures it under `imports` and the splat survives save/reload.
+		_stampSplatAsAsset(splat, buf, filename);
 		if (typeof saveScene === "function") saveScene();
 	} catch (e) {
 		console.error("[pointcloud/splat] PLY → SplatMesh swap failed:", e);
@@ -16391,6 +17819,28 @@ function renderUtilToolPane() {
 		return;
 	}
 	const sections = [];
+	// Mode toggle -- for utils that meaningfully accept either an image or
+	// a video source (e.g. Preprocessors: depth/pose extractors that run on
+	// either input type). Persisted per-module in localStorage. Renders as a
+	// .pill-toggle at the very top so it acts as the pane's dominant knob.
+	const supportsImageVideo = m.id === "util_preprocessors" || m.image_video_toggle === true;
+	let utilMode = "video";
+	if (supportsImageVideo) {
+		try {
+			const raw = localStorage.getItem(`cb.util.${m.id}.mode`);
+			if (raw === "image" || raw === "video") utilMode = raw;
+		} catch {}
+		sections.push(`
+			<div class="section">
+				<div class="section-label">Mode</div>
+				<div class="pill-toggle" style="margin-top:6px">
+					<button type="button" class="util-mode-btn ${utilMode === "image" ? "active" : ""}" data-util-mode="image">Image</button>
+					<button type="button" class="util-mode-btn ${utilMode === "video" ? "active" : ""}" data-util-mode="video">Video</button>
+				</div>
+			</div>
+		`);
+	}
+	pane._utilMode = utilMode;
 	// Preset picker — a manifest can declare a `presets` array so one util
 	// tile fronts several workflows (Preprocessors: Lotus Depth+OpenPose,
 	// DepthCrafter, Depth Pro). Coming-soon entries render dimmed and
@@ -16426,7 +17876,17 @@ function renderUtilToolPane() {
 		`);
 	}
 	const numberInputs = (m.inputs || []).filter(s => s.type === "number");
-	for (const spec of (m.inputs || [])) {
+	for (let spec of (m.inputs || [])) {
+		// Rewrite the input slot to match the Mode toggle when this util
+		// supports both. Video-mode keeps the manifest label; image-mode
+		// swaps to a generic "Source Image".
+		if (supportsImageVideo && (spec.type === "scene-video" || spec.type === "scene-image")) {
+			spec = {
+				...spec,
+				type: utilMode === "image" ? "scene-image" : "scene-video",
+				label: utilMode === "image" ? "Source Image" : (spec.label || "Source Video"),
+			};
+		}
 		if (spec.type === "scene-video") {
 			// Extra params — number inputs get rendered as dropdowns inside
 			// the same card (aligns with "downscale width" for VHS_LoadVideo).
@@ -16551,6 +18011,20 @@ function renderUtilToolPane() {
 	const activeInput = (m.inputs || []).find(s => s.type === "scene-video" || s.type === "scene-image");
 	pane._utilInputKind = activeInput?.type === "scene-image" ? "image" : "video";
 	pane.innerHTML = sections.join("");
+	// Wire the Mode pill-toggle -- storing the pick before re-rendering so the
+	// new pane opens on the freshly-selected mode. Re-render is the cheap way
+	// to swap the input slot (image vs video) without duplicating the render
+	// logic.
+	if (supportsImageVideo) {
+		pane.querySelectorAll(".util-mode-btn").forEach(btn => {
+			btn.addEventListener("click", () => {
+				const mode = btn.dataset.utilMode;
+				if (mode !== "image" && mode !== "video") return;
+				try { localStorage.setItem(`cb.util.${m.id}.mode`, mode); } catch {}
+				renderUtilToolPane();
+			});
+		});
+	}
 
 	// Wire the custom dropdowns for any number inputs the pane rendered.
 	// Click the button → toggle menu. Click an option → set value + close.
@@ -17968,15 +19442,28 @@ async function _pcHandleUpload(file) {
 // without the user having visited the util pane first).
 async function _pcGenerate() {
 	if (_utilRunPhase && _utilRunPhase !== "idle") return; // guard double-clicks
-	// Prefer the standalone Docker path — it's the current recommended
-	// TripoSplat runtime (no Comfy Desktop required). local_triposplat
-	// still ships in the Workflows list for users who prefer to run it
-	// through a ComfyUI they already have open.
-	_activeUtilId = "triposplat-standalone";
+	// Route through the local ComfyUI at 127.0.0.1:8188 (via local_triposplat).
+	// The Docker standalone runtime was removed as a first-class Tools path —
+	// it required a heavy install (Docker Desktop + CUDA image + weights). Users
+	// on Comfy Desktop already have the runtime they need running.
+	_activeUtilId = "triposplat-local";
 	try {
 		_setPcRunButton?.("running");
 		_setPcStatus?.("running TripoSplat…", "busy");
-		const r = await fetch(`/api/run/triposplat-standalone`, {
+		// The server-side _image_store is a single slot per node — every
+		// viewport autoSnapshot overwrites it. If the user uploaded a specific
+		// image and then the Blockout view fired an autoSnapshot in between,
+		// the run would silently splat the viewport instead. Re-upload the
+		// cached blob so the last write into _image_store is the user's pick.
+		if (_utilSourceIsUpload && _utilUploadedImageUrl) {
+			try {
+				const blob = await (await fetch(_utilUploadedImageUrl)).blob();
+				await uploadImage(blob);
+			} catch (reupErr) {
+				console.warn("[triposplat] re-upload before generate failed:", reupErr);
+			}
+		}
+		const r = await fetch(`/api/run/triposplat-local`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ node_id: NODE_ID, inputs: {} }),
@@ -17995,7 +19482,20 @@ async function _pcGenerate() {
 		// PLY sits at the /output root — server-side new_output_path routes
 		// 3d assets under a subfolder, so /output/<filename> would 404 and
 		// hand loadSplat an empty buffer.
-		const swapUrl = j.url || (j.filename ? `/output/3d/${j.filename}` : null);
+		let swapUrl = j.url || (j.filename ? `/output/3d/${j.filename}` : null);
+		// Auto-clean pass — filter-nan drops any NaN/Inf gaussians that would
+		// render as artifacts; morton-order reorders splats along a Z-order
+		// curve for better rendering locality. Best-effort: if npx/Node isn't
+		// installed the raw url falls through unchanged so the splat still loads.
+		if (swapUrl) {
+			try {
+				_setPcStatus?.("cleaning splat…", "busy");
+				const cj = await _splatTransform(swapUrl, [{ op: "filter_nan" }, { op: "morton" }], "ply");
+				if (cj?.url) swapUrl = cj.url;
+			} catch (cleanErr) {
+				console.warn("[triposplat] auto-clean skipped:", cleanErr);
+			}
+		}
 		if (swapUrl) await _replacePcPlaneWithSplat(swapUrl);
 	} catch (err) {
 		console.error("[triposplat] generate failed:", err);
@@ -24500,36 +26000,19 @@ function refreshObjectInspector() {
 	// not tweaking a plane. Post-Generate, this swaps to a Points object and
 	// the branch below handles that state.
 	const isPcPlaceholder = selected.userData?.primKind === "pcPlaceholder";
-	// TripoSplat standalone requirements pane — only shown when the
-	// selected placeholder was spawned for the Docker runtime (the local
-	// variant hits a running ComfyUI directly and has no setup panel).
-	// Polling starts on show, stops on hide so an idle scene doesn't fire
-	// /api/requirements every 5s forever.
+	// Docker TripoSplat requirements pane removed — the local runtime is the
+	// only path now, and it just needs the user's ComfyUI running. Hide the
+	// pane wholesale and stop any lingering poll so an old placeholder from a
+	// previous session doesn't ping /api/requirements every 5s forever.
 	const tsReqSection = document.getElementById("obj-triposplat-req-section");
-	const isTsStandalone = isPcPlaceholder && selected.userData?.tripoSplatRuntime === "standalone";
 	if (tsReqSection) {
-		tsReqSection.style.display = isTsStandalone ? "" : "none";
-		if (isTsStandalone) {
-			_refreshTripoSplatReqPane();
-			_startTripoSplatReqPolling();
-		} else {
-			_stopTripoSplatReqPolling();
-		}
+		tsReqSection.style.display = "none";
+		_stopTripoSplatReqPolling?.();
 	}
 	const pcSection = document.getElementById("obj-pc-source-section");
 	if (pcSection) {
-		// For the standalone runtime, keep the Source Image / Upload /
-		// Generate block hidden until the environment is green — otherwise
-		// users are staring at controls that would fail immediately. The
-		// requirements pane above surfaces the missing pieces. Local
-		// variant has no reqs, so it shows immediately.
-		const tsReqs = tsReqSection?._tsReqs;
-		const tsReady = !isTsStandalone || (
-			tsReqs && tsReqs.docker?.ok && tsReqs.container?.ok && tsReqs.weights?.ok
-		);
-		const show = isPcPlaceholder && tsReady;
-		pcSection.style.display = show ? "" : "none";
-		if (show) _refreshPcPlaceholderThumb(selected);
+		pcSection.style.display = isPcPlaceholder ? "" : "none";
+		if (isPcPlaceholder) _refreshPcPlaceholderThumb(selected);
 	}
 	// Tripo 3D placeholder (pre-Generate) — same pattern as PC above but
 	// with a mode toggle (Text/Image) inside the section, because the
@@ -24652,6 +26135,25 @@ function refreshObjectInspector() {
 			if (dSlider && typeof stored === "number") dSlider.value = String(stored);
 			if (dSlider && dVal) dVal.textContent = parseFloat(dSlider.value).toFixed(2);
 		}
+	}
+	// Splat Tools — visible on any splat object with a cached _srcPlyUrl.
+	// Restricted to splat mode (not Points) because filter/decimate operate on
+	// the gaussian data and the reload path assumes a SplatMesh. Status line
+	// resets on selection change so a stale error doesn't linger.
+	const splatToolsSection = document.getElementById("obj-splat-tools-section");
+	if (splatToolsSection) {
+		const isSplatWithSrc = selected.userData?.primKind === "splat" && !!selected.userData?._srcPlyUrl;
+		splatToolsSection.style.display = isSplatWithSrc ? "" : "none";
+		if (isSplatWithSrc && typeof _splatToolsSetStatus === "function") _splatToolsSetStatus("", null);
+		// Node/prefetch requirements: cached per session, kicks off a silent
+		// background prefetch when Node is present but the npx cache is cold.
+		if (isSplatWithSrc && typeof _refreshSplatReqCard === "function") _refreshSplatReqCard();
+		// Paint mode syncs its button state when the pane refreshes so re-entering
+		// with an already-active paint session keeps the toggle lit. If the user
+		// navigated away from a paint-active splat, stop the mode to free the
+		// overlay + preview.
+		if (isSplatWithSrc && typeof _splatPaintSyncButton === "function") _splatPaintSyncButton();
+		else if (typeof _splatPaintStop === "function") _splatPaintStop();
 	}
 	// Points object (Point Cloud output) — show the Size + color-mode
 	// section, hide otherwise. Object color picker (Appearance) doubles
@@ -25321,11 +26823,14 @@ const scSections = [
 	"obj-scatter-source",
 	"obj-scatter-distribution",
 	"obj-scatter-variation",
+	"obj-scatter-animation",
 ].map(id => document.getElementById(id));
 const scSourceSel = document.getElementById("sc-source");
 const scSurfaceSel = document.getElementById("sc-surface-obj");
 const scSurface = document.getElementById("sc-surface");
 const scRotY = document.getElementById("sc-rot-y");
+const scAnimClipSel = document.getElementById("sc-anim-clip");
+const scAnimSection = document.getElementById("obj-scatter-animation");
 
 function currentScatterCfg() {
 	return selected?.userData?.primKind === "scatter"
@@ -25361,12 +26866,27 @@ setupSCField("sc-scale-min", c => c.scaleMin, (c, v) => { c.scaleMin = Math.max(
 	{ sens: 0.01, min: 0.01, format: v => v.toFixed(2) });
 setupSCField("sc-scale-max", c => c.scaleMax, (c, v) => { c.scaleMax = Math.max(0.01, v); },
 	{ sens: 0.01, min: 0.01, format: v => v.toFixed(2) });
+setupSCField("sc-anim-offset", c => c.animOffsetVar ?? 1, (c, v) => { c.animOffsetVar = Math.max(0, Math.min(1, v)); },
+	{ sens: 0.01, min: 0, max: 1, format: v => v.toFixed(2) });
+setupSCField("sc-anim-speed", c => c.animSpeed ?? 1, (c, v) => { c.animSpeed = Math.max(0, v); },
+	{ sens: 0.01, min: 0, format: v => v.toFixed(2) });
+
+scAnimClipSel.addEventListener("change", () => {
+	const c = currentScatterCfg();
+	if (!c) return;
+	c.animClipName = scAnimClipSel.value || null;
+	rebuildScatterInstances(selected);
+	saveScene?.();
+});
 
 scSourceSel.addEventListener("change", () => {
 	const c = currentScatterCfg();
 	if (!c) return;
 	c.sourceName = scSourceSel.value || null;
 	rebuildScatterInstances(selected);
+	// Source change may toggle the Animation section (skinned vs plain) — refresh
+	// the inspector so the section + clip list appears/disappears immediately.
+	refreshScatterInspector();
 	saveScene?.();
 });
 scSurfaceSel.addEventListener("change", () => {
@@ -25459,6 +26979,23 @@ function refreshScatterInspector() {
 	refreshScatterSourceList();
 	scSurface.checked = !!cfg.surface;
 	scRotY.checked = !!cfg.rotateY;
+	// Animation section only appears when the current source has clips. Pull
+	// clip names off the live InstancedMesh (bake already resolved them), so
+	// what the user sees matches what's actually rendered.
+	const animInfo = selected.userData?.scatterFx?.instMesh?.userData?._animInst;
+	if (animInfo?.availableClips?.length) {
+		scAnimSection.hidden = false;
+		scAnimClipSel.innerHTML = "";
+		for (const name of animInfo.availableClips) {
+			const opt = document.createElement("option");
+			opt.value = name;
+			opt.textContent = name;
+			scAnimClipSel.appendChild(opt);
+		}
+		scAnimClipSel.value = animInfo.clipName || animInfo.availableClips[0];
+	} else {
+		scAnimSection.hidden = true;
+	}
 	for (const el of dragFields) el._refresh?.();
 }
 
@@ -28128,6 +29665,15 @@ function loop() {
 				for (const g of scatterSystems) {
 					const fx = g.userData?.scatterFx;
 					if (fx?.boxHelper) fx.boxHelper.visible = !recording;
+				}
+			}
+			// Animated scatters: bump uAnimTime every frame so the baked-bone-
+			// texture skinning advances. Ambient — advances even when transport
+			// is paused, matching the "crowd is always moving" intent. Cheap:
+			// one uniform write per animated scatter, no matrix rebuild.
+			if (_animScatterSystems.length) {
+				for (const ref of _animScatterSystems) {
+					if (ref.uniforms?.uAnimTime) ref.uniforms.uAnimTime.value += dt;
 				}
 			}
 		}

@@ -115,7 +115,10 @@ MODULE = ModuleDef(
                   "from the source image.")},
     ],
     output_ext="ply",
-    util=True,
+    # Hidden from the Tools grid — the local ComfyUI variant (triposplat-local)
+    # is the only user-facing TripoSplat tile. Backend module stays available
+    # for old scenes that still reference the -standalone id.
+    util=False,
     # Reuse the astroid glyph that the old local_triposplat carried — same
     # tool identity, different runtime.
     icon=(

@@ -1,6 +1,6 @@
 {
   "id": "util_preprocessors",
-  "label": "Video Preprocessors",
+  "label": "Preprocessors",
   "kind": "video",
   "output_ext": "mp4",
   "runner": "local",
