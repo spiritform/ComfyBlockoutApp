@@ -10,7 +10,14 @@
     {
       "id": "lotus_openpose",
       "label": "Lotus Depth + OpenPose",
-      "workflow": "util_preprocessors"
+      "workflow": "util_preprocessors",
+      "image_workflow": "util_preprocessors_image",
+      "image_patches": {
+        "video": {
+          "node_id": 87,
+          "widget_name": "image"
+        }
+      }
     },
     {
       "id": "depth_anything_v2",
@@ -26,6 +33,7 @@
       "id": "depthcrafter",
       "label": "DepthCrafter",
       "workflow": "util_preprocessors_depthcrafter",
+      "image_workflow": "util_preprocessors_depthcrafter_image",
       "patches": {
         "video": {
           "node_id": 4,
@@ -40,6 +48,16 @@
           "node_id": 4,
           "widget_name": "frame_load_cap"
         }
+      },
+      "image_patches": {
+        "video": {
+          "node_id": 198,
+          "widget_name": "image"
+        },
+        "resolution": [
+          { "node_id": 8, "widget_name": "width" },
+          { "node_id": 8, "widget_name": "height" }
+        ]
       }
     },
     {

@@ -4613,6 +4613,7 @@
 			<div id="result-toggle">
 				<button data-result="viewport" class="active">Viewport</button>
 				<button data-result="blockout">Blockout</button>
+				<button data-result="preproc" hidden>Preproc</button>
 				<button data-result="render" hidden>Render</button>
 				<button id="result-close" type="button" title="Close render — clear the overlay and go back to the live scene" hidden>×</button>
 			</div>
@@ -18013,7 +18014,9 @@ function renderUtilToolPane() {
 			// last Blockout snapshot (or a user upload). Generate runs the
 			// workflow directly (no auto-record step; still image is already
 			// available via autoSnapshot's on-Blockout-open trigger).
-			const paramRows = numberInputs.map(n => {
+			// Skip video-only knobs (max_frames maps to frame_load_cap on
+			// the video loader node — meaningless when we're feeding a still).
+			const paramRows = numberInputs.filter(n => n.name !== "max_frames").map(n => {
 				const def = n.default ?? 0;
 				const label = n.label || n.name;
 				const OPTIONS = Array.isArray(n.options) && n.options.length ? n.options : [
@@ -18064,9 +18067,16 @@ function renderUtilToolPane() {
 		}
 	}
 	// Which mode the pane is currently in (video vs image). Drives the
-	// preview probe order, the upload handler, and the run flow.
+	// preview probe order, the upload handler, and the run flow. For utils
+	// that support the Image/Video toggle, the manifest's declared input
+	// type is always scene-video — the toggle overrides it at render time.
+	// So we key off utilMode here, not the raw manifest, or the image mode
+	// would silently keep the video probe order + generate flow.
+	let inferredKind = "video";
 	const activeInput = (m.inputs || []).find(s => s.type === "scene-video" || s.type === "scene-image");
-	pane._utilInputKind = activeInput?.type === "scene-image" ? "image" : "video";
+	if (supportsImageVideo) inferredKind = utilMode === "image" ? "image" : "video";
+	else if (activeInput?.type === "scene-image") inferredKind = "image";
+	pane._utilInputKind = inferredKind;
 	pane.innerHTML = sections.join("");
 	// Wire the Mode pill-toggle -- storing the pick before re-rendering so the
 	// new pane opens on the freshly-selected mode. Re-render is the cheap way
@@ -18197,21 +18207,44 @@ function renderUtilToolPane() {
 		if (!_activeUtilId) return;
 		if (_utilRunPhase !== "idle") return; // guard double-clicks
 		try {
-			// Only auto-record when there's no source video already staged —
-			// either an explicit upload OR a prior recording still visible in
-			// the preview slot. Re-clicking Generate should run the workflow
-			// on the existing source, not re-record from scratch. To force a
-			// fresh recording, hit the X on the preview to clear the source.
-			const hasExistingSource = !!pane.querySelector("#util-rec-preview-video");
-			if (!_utilSourceIsUpload && !hasExistingSource && !recording) {
-				_setUtilRunButton("recording");
-				_setUtilStatus("recording viewport…", "busy");
-				const rec = new Promise((resolve, reject) => {
-					window.__utilAwaitingRecording = { resolve, reject };
-					setTimeout(() => reject(new Error("recording timed out")), 60_000);
-				});
-				document.getElementById("tl-rec")?.click();
-				await rec;
+			const isImageMode = pane._utilInputKind === "image";
+			if (isImageMode) {
+				// Image-mode Generate: capture a fresh viewport still and use
+				// it as the source. No video record, no max-frames — the
+				// preprocessor gets a single-frame image straight from the
+				// blockout view. If the user uploaded, re-upload the cached
+				// blob so the last write into _image_store is their pick and
+				// not a stale autoSnapshot from an earlier Blockout visit.
+				if (_utilSourceIsUpload && _utilUploadedImageUrl) {
+					try {
+						const blob = await (await fetch(_utilUploadedImageUrl)).blob();
+						await uploadImage(blob);
+					} catch (reupErr) {
+						console.warn("[util:image] re-upload before generate failed:", reupErr);
+					}
+				} else {
+					_setUtilStatus("capturing viewport…", "busy");
+					try { await autoSnapshot(); } catch (snapErr) {
+						console.warn("[util:image] autoSnapshot failed:", snapErr);
+					}
+				}
+			} else {
+				// Only auto-record when there's no source video already staged —
+				// either an explicit upload OR a prior recording still visible in
+				// the preview slot. Re-clicking Generate should run the workflow
+				// on the existing source, not re-record from scratch. To force a
+				// fresh recording, hit the X on the preview to clear the source.
+				const hasExistingSource = !!pane.querySelector("#util-rec-preview-video");
+				if (!_utilSourceIsUpload && !hasExistingSource && !recording) {
+					_setUtilRunButton("recording");
+					_setUtilStatus("recording viewport…", "busy");
+					const rec = new Promise((resolve, reject) => {
+						window.__utilAwaitingRecording = { resolve, reject };
+						setTimeout(() => reject(new Error("recording timed out")), 60_000);
+					});
+					document.getElementById("tl-rec")?.click();
+					await rec;
+				}
 			}
 			_setUtilRunButton("running");
 			_setUtilStatus(`running ${_activeUtilId}…`, "busy");
@@ -18231,6 +18264,12 @@ function renderUtilToolPane() {
 			// per-preset workflow file when the manifest declares presets.
 			const presetBtn = pane.querySelector(".util-preset-btn");
 			if (presetBtn?.dataset.value) runInputs.preset = presetBtn.dataset.value;
+			// Mode — Image or Video, for utils that support the toggle. The
+			// server uses it to (a) resolve scene-video → _image_store when
+			// image mode is on, and (b) pick the preset's image_workflow if
+			// declared. Video-mode is the historical default so the field is
+			// only sent when supportsImageVideo is true.
+			if (pane._utilInputKind) runInputs.mode = pane._utilInputKind;
 			const r = await fetch(`/api/run/${encodeURIComponent(_activeUtilId)}`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -18249,6 +18288,33 @@ function renderUtilToolPane() {
 			// path returned inline.
 			if (_activeUtilId === "util_pointcloud" && j.filename) {
 				await _replacePcPlaneWithPoints(`/output/${j.filename}`);
+			}
+			// Land 2D image/video utility outputs in the viewport overlay so
+			// the user sees the result on the aspect frame without opening
+			// the Output pane. Preprocessor outputs (depth/pose/canny —
+			// ControlNet condition maps) get their own "Preproc" tab so they
+			// don't stomp on Blockout or Render. Other 2D util outputs use
+			// the shared Render tab. Point-cloud/3d results have their own
+			// tactile flow above.
+			const ext = String(j.ext || "").toLowerCase();
+			const isPreviewable = j.url && ext && !["ply", "glb", "obj", "fbx"].includes(ext);
+			if (isPreviewable && _activeUtilId !== "util_pointcloud") {
+				const ts = Date.now();
+				const bust = j.url.includes("?") ? `${j.url}&t=${ts}` : `${j.url}?t=${ts}`;
+				if (_activeUtilId === "util_preprocessors" && window.showPreprocInViewport) {
+					window.showPreprocInViewport(bust, j.filename);
+				} else if (window.showResultInViewport) {
+					const kind = ["mp4", "webm", "mov"].includes(ext) ? "video" : "image";
+					const inters = Array.isArray(j.intermediates)
+						? j.intermediates.filter(x => x && x.url).map(x => ({
+							name: x.name,
+							label: x.label || x.name,
+							url: x.url.includes("?") ? `${x.url}&t=${ts}` : `${x.url}?t=${ts}`,
+							filename: x.filename,
+						}))
+						: [];
+					window.showResultInViewport(kind, bust, j.filename, inters);
+				}
 			}
 		} catch (err) {
 			console.error(`[util:${_activeUtilId}] run failed:`, err);
@@ -19151,7 +19217,12 @@ function _updateUtilPreviewSlot() {
 		slot.style.minHeight = "80px";
 		slot.style.background = "rgba(0,0,0,0.15)";
 		slot.style.display = "flex";
-		slot.innerHTML = `<div style="font-size:10px;color:rgba(255,180,84,0.85);padding:8px 12px;text-align:center">No source yet — hit <strong>Generate</strong> to record the viewport, or <strong>Upload video</strong>.</div>`;
+		const paneEl = document.getElementById("rp-pane-util");
+		const isImage = paneEl?._utilInputKind === "image";
+		const msg = isImage
+			? `No source yet — hit <strong>Generate</strong> to use the current viewport, or <strong>Upload image</strong>.`
+			: `No source yet — hit <strong>Generate</strong> to record the viewport, or <strong>Upload video</strong>.`;
+		slot.innerHTML = `<div style="font-size:10px;color:rgba(255,180,84,0.85);padding:8px 12px;text-align:center">${msg}</div>`;
 	};
 	// Probe existence via the JSON endpoint — FastAPI's @app.get routes
 	// return 405 for HEAD by default, which the old probe misread as
@@ -19164,16 +19235,25 @@ function _updateUtilPreviewSlot() {
 	// slot). scene-video probes video first (the Preprocessors flow).
 	const pane = document.getElementById("rp-pane-util");
 	const inputKind = pane?._utilInputKind || "video";
+	// Image mode is strict — no fallback to video. A leftover recording in
+	// _video_store from an earlier session would otherwise hijack the Image
+	// Input slot with a playable clip (see screenshot regression). Video
+	// mode keeps the two-tier probe so an image-only prior run still shows.
 	const first = inputKind === "image"
 		? { url: `/comfyblockout/image_url?node_id=${nid}`, show: showImage }
 		: { url: `/comfyblockout/video_url?node_id=${nid}`, show: showVideo };
 	const second = inputKind === "image"
-		? { url: `/comfyblockout/video_url?node_id=${nid}`, show: showVideo }
+		? null
 		: { url: `/comfyblockout/image_url?node_id=${nid}`, show: showImage };
 	const probe = (attempt = 0) => {
 		fetch(`${first.url}&t=${t + attempt}`).then(r => r.ok ? r.json() : { url: null })
 			.then(j => {
 				if (j?.url) return first.show();
+				if (!second) {
+					if (attempt < 4) setTimeout(() => probe(attempt + 1), 250);
+					else showNone();
+					return;
+				}
 				return fetch(`${second.url}&t=${t + attempt}`).then(r2 => r2.ok ? r2.json() : { url: null })
 					.then(j2 => {
 						if (j2?.url) return second.show();
@@ -23259,6 +23339,28 @@ function refreshChatContextChip() {
 		if (clearBtn) clearBtn.hidden = false;
 		return;
 	}
+	// Active workflow or gen cell — the user explicitly picked a generator
+	// row in the sidebar, so that intent trumps a leftover outliner selection.
+	// If both are set we show workflow + object, so the agent sees the whole
+	// picture. Row label is read off the rendered .gen-name span so we don't
+	// have to duplicate module metadata here.
+	const activeCellId = activeWorkflowCellId || activeGenCellId;
+	let workflowLabel = null;
+	if (activeCellId) {
+		const row = document.querySelector(`#workflow-cells .gen-cell[data-cell-id="${activeCellId}"]`);
+		workflowLabel = row?.querySelector(".gen-name")?.textContent?.trim() || null;
+	}
+	if (workflowLabel && selObj) {
+		const objName = selObj.name || selObj.userData?.primKind || "Object";
+		target.textContent = `${workflowLabel} · workflow · ${objName} · object`;
+		if (clearBtn) clearBtn.hidden = false;
+		return;
+	}
+	if (workflowLabel) {
+		target.textContent = `${workflowLabel} · workflow`;
+		if (clearBtn) clearBtn.hidden = false;
+		return;
+	}
 	if (selObj) {
 		const name = selObj.name || selObj.userData?.primKind || "Object";
 		target.textContent = selCount > 1
@@ -24429,14 +24531,15 @@ async function sendAssistant(message, opts = {}) {
 		assistantInput.value = "";
 		_inspectErrorContext = null;
 		_workflowImportContext = null;
-		try {
-			await fetch("/api/llm/reset", {
-				method: "POST", headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ node_id: NODE_ID }),
-			});
-		} catch {}
+		// Wipe the local UI FIRST so the user sees an empty log instantly.
+		// Server-side history reset is fire-and-forget — a slow /api/llm/reset
+		// used to make /clear feel unresponsive.
 		assistantLog.innerHTML = `<div class="assistant-msg system" id="assistant-intro">Ask the agent to refine a prompt, structure a generation JSON, or call a Comfy MCP tool.</div>`;
 		refreshChatContextChip?.();
+		fetch("/api/llm/reset", {
+			method: "POST", headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ node_id: NODE_ID }),
+		}).catch(() => {});
 		return;
 	}
 	if (opts.silent) {
@@ -26193,23 +26296,25 @@ function refreshObjectInspector() {
 			if (dSlider && dVal) dVal.textContent = parseFloat(dSlider.value).toFixed(2);
 		}
 	}
-	// Splat Tools — visible on any splat object with a cached _srcPlyUrl.
-	// Restricted to splat mode (not Points) because filter/decimate operate on
-	// the gaussian data and the reload path assumes a SplatMesh. Status line
-	// resets on selection change so a stale error doesn't linger.
+	// Splat Tools — always shown on any splat object. Individual tools that
+	// need the cached _srcPlyUrl (Simplify / Paint Delete / Export / etc.)
+	// gate on it themselves and surface a status-line error if it's missing.
+	// Showing the section regardless keeps the pane predictable — users don't
+	// wonder why the tools "disappear" on a fresh scene-loaded splat before
+	// the source URL has been rehydrated.
 	const splatToolsSection = document.getElementById("obj-splat-tools-section");
 	if (splatToolsSection) {
-		const isSplatWithSrc = selected.userData?.primKind === "splat" && !!selected.userData?._srcPlyUrl;
-		splatToolsSection.style.display = isSplatWithSrc ? "" : "none";
-		if (isSplatWithSrc && typeof _splatToolsSetStatus === "function") _splatToolsSetStatus("", null);
+		const isSplat = selected.userData?.primKind === "splat";
+		splatToolsSection.style.display = isSplat ? "" : "none";
+		if (isSplat && typeof _splatToolsSetStatus === "function") _splatToolsSetStatus("", null);
 		// Node/prefetch requirements: cached per session, kicks off a silent
 		// background prefetch when Node is present but the npx cache is cold.
-		if (isSplatWithSrc && typeof _refreshSplatReqCard === "function") _refreshSplatReqCard();
+		if (isSplat && typeof _refreshSplatReqCard === "function") _refreshSplatReqCard();
 		// Paint mode syncs its button state when the pane refreshes so re-entering
 		// with an already-active paint session keeps the toggle lit. If the user
 		// navigated away from a paint-active splat, stop the mode to free the
 		// overlay + preview.
-		if (isSplatWithSrc && typeof _splatPaintSyncButton === "function") _splatPaintSyncButton();
+		if (isSplat && typeof _splatPaintSyncButton === "function") _splatPaintSyncButton();
 		else if (typeof _splatPaintStop === "function") _splatPaintStop();
 	}
 	// Points object (Point Cloud output) — show the Size + color-mode
@@ -28440,6 +28545,7 @@ const resultToggle = document.getElementById("result-toggle");
 const renderToggleBtn = resultToggle?.querySelector('[data-result="render"]');
 const blockoutToggleBtn = resultToggle?.querySelector('[data-result="blockout"]');
 const viewportToggleBtn = resultToggle?.querySelector('[data-result="viewport"]');
+const preprocToggleBtn = resultToggle?.querySelector('[data-result="preproc"]');
 const resultCloseBtn = document.getElementById("result-close");
 
 // Result-toggle container is [hidden] until at least one pill has content. Call
@@ -28461,8 +28567,13 @@ window.revealBlockoutToggle = function () {
 	// so existing callers don't need to change.
 	syncResultToggleContainer();
 };
-let resultMode = "viewport"; // "viewport" | "blockout" | "render" | "intermediate:<name>"
+let resultMode = "viewport"; // "viewport" | "blockout" | "preproc" | "render" | "intermediate:<name>"
 let lastResult = null;       // { kind, url, filename, intermediates: [{name,label,url,filename}] }
+// Last Preprocessor util output (depth, pose, canny, etc). Lives in its own
+// slot separate from lastResult so a ControlNet workflow's Render can coexist
+// with the ControlNet condition map that seeded it. Cleared by × on the pill
+// or by /clear on the chat.
+let lastPreprocResult = null; // { url, filename }
 
 function updateResultOverlayPos() {
 	const asp = currentAspect();
@@ -28802,6 +28913,33 @@ window.addEventListener("cb:boot-ready", () => {
 	window._fakeRender(undefined, { switchTo: false }).catch(() => {});
 }, { once: true });
 
+// Show the latest Preprocessor util output (depth/pose/canny/etc.). Own slot
+// separate from Render so a ControlNet workflow can use this as the condition
+// map input while its own Render preview holds the final generation.
+function showPreprocResult() {
+	if (!lastPreprocResult) { resultMode = "viewport"; applyResultMode(); return; }
+	resultOverlay.hidden = false;
+	resultOverlayVid.removeAttribute("src");
+	resultOverlayVid.style.display = "none";
+	resultOverlayImg.style.display = "";
+	resultOverlayImg.src = lastPreprocResult.url;
+	resultOverlayImg.style.objectFit = "contain";
+	resultOverlayImg.style.background = "#000";
+	resultOverlay.classList.remove("loading");
+	updateResultOverlayPos();
+}
+
+window.showPreprocInViewport = function (url, filename) {
+	if (!url) return;
+	lastPreprocResult = { url, filename };
+	if (preprocToggleBtn) preprocToggleBtn.hidden = false;
+	if (viewportToggleBtn) viewportToggleBtn.hidden = false;
+	syncResultToggleContainer();
+	resultMode = "preproc";
+	applyResultMode();
+	window.refreshAssets?.();
+};
+
 // Show a preprocessor preview (depth map, canny edges, etc.) declared by the
 // workflow manifest. Same overlay treatment as the blockout — contain so the
 // image renders at its native AR without cropping.
@@ -28822,6 +28960,8 @@ function applyResultMode() {
 	refreshToggleActive();
 	if (resultMode === "blockout") {
 		showBlockoutSnapshot();
+	} else if (resultMode === "preproc") {
+		showPreprocResult();
 	} else if (resultMode === "render") {
 		showRenderResult();
 	} else if (typeof resultMode === "string" && resultMode.startsWith("intermediate:")) {
@@ -28840,7 +28980,9 @@ function applyResultMode() {
 	// viewport (nothing to save) + intermediates (ephemeral debug frames).
 	const saveOv = document.getElementById("result-save-overlay");
 	if (saveOv) {
-		const canSave = (resultMode === "render" && !!lastResult) || resultMode === "blockout";
+		const canSave = (resultMode === "render" && !!lastResult)
+			|| resultMode === "blockout"
+			|| (resultMode === "preproc" && !!lastPreprocResult);
 		saveOv.classList.toggle("visible", canSave);
 	}
 	// Clear button suppressed for now — its "clear stale _video_store entry"
@@ -28888,11 +29030,27 @@ window.showResultInViewport = function (kind, url, filename, intermediates) {
 	// Blockout was already revealed when Generate fired.
 	if (renderToggleBtn) renderToggleBtn.hidden = false;
 	if (viewportToggleBtn) viewportToggleBtn.hidden = false;
+	// If the workflow emitted a "preprocessor_preview" intermediate (ControlNet
+	// workflows do), route it into the dedicated Preproc tab so a fresh run
+	// always overwrites the stale one — and skip adding a duplicate pill for
+	// it below. Any other intermediates (canny, depth explicit sidecar, etc.)
+	// still get their own dynamic pill via addIntermediateButton.
+	const preprocInter = inters.find(x =>
+		x && x.url && (x.name === "preprocessor_preview" || x.name === "preproc" || x.name === "preprocessor")
+	);
+	if (preprocInter) {
+		lastPreprocResult = { url: preprocInter.url, filename: preprocInter.filename };
+		if (preprocToggleBtn) preprocToggleBtn.hidden = false;
+	}
 	// Rebuild the preview pills fresh — a re-run of the same workflow just
 	// swaps the images under existing tabs, but a switch to a workflow with
 	// different intermediates should drop the old ones.
 	clearIntermediateButtons();
-	for (const inter of inters) addIntermediateButton(inter);
+	const preprocName = preprocInter?.name || null;
+	for (const inter of inters) {
+		if (preprocName && inter?.name === preprocName) continue; // Preproc tab covers this one.
+		addIntermediateButton(inter);
+	}
 	syncResultToggleContainer();
 	resultMode = "render";
 	applyResultMode();
@@ -28917,6 +29075,9 @@ document.getElementById("result-save-overlay")?.addEventListener("click", () => 
 	if (resultMode === "blockout") {
 		href = `/comfyblockout/image/${encodeURIComponent(NODE_ID)}?t=${Date.now()}`;
 		filename = `blockout_${NODE_ID}.png`;
+	} else if (resultMode === "preproc" && lastPreprocResult) {
+		href = lastPreprocResult.url;
+		filename = lastPreprocResult.filename || "preproc.png";
 	} else if (lastResult) {
 		href = lastResult.url;
 		filename = lastResult.filename || "render.png";

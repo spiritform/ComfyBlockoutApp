@@ -244,6 +244,14 @@ def _apply_single_patch(workflow: dict, spec: dict, patch: dict, kwargs: dict) -
     node_id = str(patch.get("node_id"))
     widget_name = patch.get("widget_name")  # local-format hint, optional
     input_type = spec.get("type", "text")
+    # Skip patch if the manifest input has no value AND isn't required. This
+    # lets an image-mode run silently ignore video-only knobs (like max_frames)
+    # whose patch targets a node that only exists in the video workflow.
+    # Required inputs still error out below if the target node is missing.
+    if not spec.get("required") and input_type not in ("scene-image", "scene-video"):
+        value = kwargs.get(spec["name"])
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return
     node = workflow.get(node_id)
     if not isinstance(node, dict):
         raise RuntimeError(f"manifest patch: node {node_id} not present in workflow")

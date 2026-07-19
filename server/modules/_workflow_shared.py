@@ -390,6 +390,13 @@ def _make_run(workflow_path: Path, manifest: dict):
         # own workflow if the preset doesn't override. Coming-soon presets fail
         # fast with a clear message so the frontend can surface it.
         preset_id = kwargs.pop("preset", None)
+        # Image/Video mode — utils like Preprocessors accept either kind of
+        # source. When mode="image", the preset's optional `image_workflow`
+        # stem overrides the default `workflow`, and `image_patches` overrides
+        # `patches` (LoadImage lives at a different node id than VHS_LoadVideo).
+        # scene-video input specs also flip to scene-image so run_local_workflow
+        # uploads from _image_store, not _video_store.
+        ui_mode = (kwargs.pop("mode", None) or "").strip().lower() or None
         base_path = workflow_path
         active_preset = None
         presets = manifest.get("presets") or []
@@ -399,7 +406,12 @@ def _make_run(workflow_path: Path, manifest: dict):
                 raise ValueError(f"unknown preset '{preset_id}' for {manifest['id']}")
             if active_preset.get("coming_soon"):
                 raise ValueError(f"preset '{active_preset.get('label') or preset_id}' isn't wired up yet")
-            preset_stem = active_preset.get("workflow")
+            # Prefer image_workflow when in image mode, fall back to the regular workflow.
+            preset_stem = (
+                active_preset.get("image_workflow")
+                if ui_mode == "image" and active_preset.get("image_workflow")
+                else active_preset.get("workflow")
+            )
             if preset_stem and preset_stem != workflow_path.stem:
                 candidate = workflow_path.parent / f"{preset_stem}.json"
                 if not candidate.exists():
@@ -412,16 +424,39 @@ def _make_run(workflow_path: Path, manifest: dict):
         # name → patch (or list of patches). We build an effective manifest
         # here so the downstream runner sees the correct targets without
         # having to know about presets at all.
+        # In image mode, `image_patches` wins over `patches` — the image
+        # workflow's LoadImage node has different ids from the video loader.
         effective_manifest = manifest
-        if active_preset and isinstance(active_preset.get("patches"), dict):
-            overrides = active_preset["patches"]
+        overrides = None
+        if active_preset:
+            if ui_mode == "image" and isinstance(active_preset.get("image_patches"), dict):
+                overrides = active_preset["image_patches"]
+            elif isinstance(active_preset.get("patches"), dict):
+                overrides = active_preset["patches"]
+        # Even without preset-level overrides, image mode must flip scene-video
+        # slots to scene-image so run_local_workflow uploads from _image_store.
+        if overrides or ui_mode == "image":
             new_inputs = []
             for spec in manifest.get("inputs", []):
-                if spec.get("name") in overrides:
-                    new_inputs.append({**spec, "patch": overrides[spec["name"]]})
-                else:
-                    new_inputs.append(spec)
+                new_spec = dict(spec)
+                if ui_mode == "image" and new_spec.get("type") == "scene-video":
+                    new_spec["type"] = "scene-image"
+                if overrides and new_spec.get("name") in overrides:
+                    new_spec["patch"] = overrides[new_spec["name"]]
+                new_inputs.append(new_spec)
             effective_manifest = {**manifest, "inputs": new_inputs}
+        # Video pipelines commonly hardcode output_ext=mp4, but image mode's
+        # SaveImage node writes PNG. Without this override the runner would
+        # pick up the PNG then rename it to .mp4 — file is opened as video
+        # in Assets, plays as garbled bytes. Manifest can declare
+        # `image_output_ext` to pin a specific format; defaults to png.
+        if ui_mode == "image":
+            image_ext = manifest.get("image_output_ext", "png")
+            effective_manifest = {
+                **effective_manifest,
+                "output_ext": image_ext,
+                "kind": "image",
+            }
         # Prefer an API-format sidecar over the raw imported JSON. Two naming
         # conventions:
         #   - `<stem>.local.json`  — written by the "prepare for local" agent flow

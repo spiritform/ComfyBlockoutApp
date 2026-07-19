@@ -3178,6 +3178,13 @@ async def run_module(module_id: str, request: Request):
     # image 1's dimensions. Without this, Nano defaults to 1:1 square.
     skip_source_image = bool(inputs.pop("skip_source_image", False))
 
+    # Image/Video mode — utils like Preprocessors offer both. When the client
+    # sends mode="image" on an input the manifest declared as scene-video, we
+    # treat it as scene-image for path resolution (grab _image_store, populate
+    # image_path). The downstream module also gets mode= so it can pick the
+    # preset's image_workflow (see _workflow_shared.run_local).
+    ui_mode = (inputs.get("mode") or "").strip().lower() or None
+
     # Blockout Strength (0.0..1.0) — how strictly the model should adhere to the
     # blockout's composition. Injected into the prompt as a tier-appropriate
     # instruction. Default 1.0 (strict) preserves prior behavior when the client
@@ -3190,7 +3197,13 @@ async def run_module(module_id: str, request: Request):
 
     # Resolve scene-image / scene-video into concrete file paths from the editor's saved state.
     for spec in m.inputs:
-        if spec.get("type") == "scene-image":
+        # In image mode, treat scene-video slots as scene-image — the frontend
+        # already staged the source via /image_url (autoSnapshot or upload),
+        # and the preset-picked workflow uses LoadImage instead of VHS_LoadVideo.
+        effective_type = spec.get("type")
+        if ui_mode == "image" and effective_type == "scene-video":
+            effective_type = "scene-image"
+        if effective_type == "scene-image":
             if skip_source_image:
                 # Synthesize a plain black canvas at the scene aspect so the
                 # model has an aspect anchor even in text-to-image mode. Nano
@@ -3220,7 +3233,7 @@ async def run_module(module_id: str, request: Request):
             if not info or not Path(info["path"]).exists():
                 raise HTTPException(400, "no scene image saved — snapshot in the editor first")
             inputs["image_path"] = Path(info["path"])
-        elif spec.get("type") == "scene-video":
+        elif effective_type == "scene-video":
             # Preference order: transport-recorded clip FIRST (its duration
             # matches the scene trim range exactly, so feeding it to a video
             # workflow processes exactly what the user animated). Falls back

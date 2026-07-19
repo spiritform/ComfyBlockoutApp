@@ -12,6 +12,10 @@
       "image": [
         "198",
         0
+      ],
+      "mask": [
+        "198",
+        1
       ]
     },
     "class_type": "ImageResizeKJv2",
