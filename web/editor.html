@@ -16302,7 +16302,7 @@ function runUtilTool(moduleId) {
 // find it later.
 function spawnEmptyPcPlane() {
 	snapshotForUndo();
-	primCounters.plane = (primCounters.plane || 0) + 1;
+	primCounters.splat = (primCounters.splat || 0) + 1;
 	// PlaneGeometry defaults to XY plane, normal +Z — that's already
 	// upright, no rotation needed. Position +1y so the bottom edge sits
 	// on the grid rather than half-buried.
@@ -16312,7 +16312,7 @@ function spawnEmptyPcPlane() {
 		transparent: true, opacity: 0.18,
 	});
 	const mesh = new THREE.Mesh(geom, mat);
-	mesh.name = `PC.${String(primCounters.plane).padStart(3, "0")}`;
+	mesh.name = `Splat.${String(primCounters.splat).padStart(3, "0")}`;
 	mesh.position.set(0, 1, 0);
 	// pcPlaceholder — visually a plane (holds the source image texture) but
 	// SEMANTICALLY a point-cloud object waiting to be generated. Distinct
@@ -16732,6 +16732,11 @@ async function _reloadSplatInPlace(splatObj, newPlyUrl, opts = {}) {
 async function _splatApplyActions(actions, statusLabel) {
 	if (!selected || selected.userData?.primKind !== "splat" || !selected.userData?._srcPlyUrl) return;
 	try {
+		// Snapshot BEFORE the swap so Ctrl+Z restores the pre-transform splat.
+		// Undo works by re-deserializing the saved scene JSON; the pre-swap
+		// assetId still points to intact bytes on the server, so a refetch
+		// rebuilds the original splat in place.
+		snapshotForUndo();
 		_splatToolsSetStatus(`${statusLabel}...`, "busy");
 		const j = await _splatTransform(selected.userData._srcPlyUrl, actions, "ply");
 		await _reloadSplatInPlace(selected, j.url);
@@ -17358,6 +17363,14 @@ async function _splatPaintApply() {
 	// Dispose the yellow overlays immediately so the transition reads cleanly.
 	_splatPaintDisposePreview();
 	_splatPaintDisposeDotsOverlay();
+	// Snapshot BEFORE the destructive commit so Ctrl+Z restores the pre-paint
+	// splat. deserializeScene refetches the original assetId (server still
+	// has the intact bytes) and rebuilds the splat at the same transform.
+	snapshotForUndo();
+	// Set to the reloaded splat on success — the finally block re-arms paint
+	// mode on it instead of tearing down, so the user can immediately paint
+	// more without re-toggling the button.
+	let rearmTarget = null;
 	try {
 		_splatToolsSetStatus?.("filtering gaussians...", "busy");
 		const stride = meta.stride;
@@ -17406,23 +17419,67 @@ async function _splatPaintApply() {
 		} catch (e) {
 			console.warn("[splat-paint] persistence upload failed — splat may not survive save/reload:", e);
 		}
+		rearmTarget = newSplat;
 		_splatToolsSetStatus?.("paint deleted - draw again or click Paint Delete to exit", "ok");
 	} catch (err) {
 		console.error("[splat-paint] apply failed:", err);
 		_splatToolsSetStatus?.(`paint failed - ${String(err.message || err).slice(0, 140)}`, "error");
 	} finally {
-		_splatPaintActive = false;
-		_splatPaintTarget = null;
-		_splatPaintPositions = null;
-		_splatPaintPlyBuffer = null;
-		_splatPaintPlyMeta = null;
-		_splatPaintSelected = new Set();
-		_splatPaintTeardownOverlay();
-		// Orbit stays enabled during paint mode now — belt-and-braces guard
-		// in case an earlier code path flipped it off.
-		if (typeof orbit !== "undefined" && !orbit.enabled) orbit.enabled = true;
-		if (typeof transform !== "undefined" && !transform.enabled) transform.enabled = true;
-		_splatPaintSyncButton();
+		if (rearmTarget && rearmTarget.userData?._srcPlyUrl) {
+			// Keep paint mode toggled on so the user can immediately paint another
+			// selection on the freshly-reloaded splat. Overlay, brush cursor, and
+			// keyboard hooks stay alive from the original _splatPaintStart call.
+			_splatPaintTarget = rearmTarget;
+			_splatPaintSelected = new Set();
+			_splatPaintPainting = false;
+			_splatPaintPositions = null;
+			_splatPaintVertexCount = 0;
+			_splatPaintPlyBuffer = null;
+			_splatPaintPlyMeta = null;
+			_splatPaintBuildDotsOverlay(rearmTarget);
+			_splatPaintSyncButton();
+			// Re-prefetch positions from the new source PLY. Brush strokes safely
+			// early-out while positions are still loading (see _splatPaintPaintAt),
+			// so a quick draw immediately after Del is just a no-op until fetch lands.
+			(async () => {
+				try {
+					const r = await fetch(rearmTarget.userData._srcPlyUrl);
+					if (!r.ok) throw new Error(`HTTP ${r.status}`);
+					const buf = await r.arrayBuffer();
+					const meta = _splatParsePlyHeader(buf);
+					const dv = new DataView(buf, meta.headerEnd);
+					const positions = new Float32Array(meta.vertexCount * 3);
+					for (let i = 0; i < meta.vertexCount; i++) {
+						const base = i * meta.stride;
+						positions[i * 3    ] = dv.getFloat32(base, true);
+						positions[i * 3 + 1] = dv.getFloat32(base + 4, true);
+						positions[i * 3 + 2] = dv.getFloat32(base + 8, true);
+					}
+					if (_splatPaintActive && _splatPaintTarget === rearmTarget) {
+						_splatPaintPositions = positions;
+						_splatPaintVertexCount = meta.vertexCount;
+						_splatPaintPlyBuffer = buf;
+						_splatPaintPlyMeta = meta;
+					}
+				} catch (e) {
+					console.warn("[splat-paint] rearm prefetch failed:", e);
+					_splatToolsSetStatus?.(`paint prefetch failed - ${String(e.message || e).slice(0, 140)}`, "error");
+				}
+			})();
+		} else {
+			_splatPaintActive = false;
+			_splatPaintTarget = null;
+			_splatPaintPositions = null;
+			_splatPaintPlyBuffer = null;
+			_splatPaintPlyMeta = null;
+			_splatPaintSelected = new Set();
+			_splatPaintTeardownOverlay();
+			// Orbit stays enabled during paint mode now — belt-and-braces guard
+			// in case an earlier code path flipped it off.
+			if (typeof orbit !== "undefined" && !orbit.enabled) orbit.enabled = true;
+			if (typeof transform !== "undefined" && !transform.enabled) transform.enabled = true;
+			_splatPaintSyncButton();
+		}
 	}
 }
 

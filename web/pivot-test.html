@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pivot Controls — feel test</title>
+<style>
+	:root {
+		color-scheme: dark;
+		--bg: #0a0a0e;
+		--panel: #14141a;
+		--border: rgba(255,255,255,0.08);
+		--text: rgba(255,255,255,0.85);
+		--dim: rgba(255,255,255,0.45);
+		--amber: #ffb454;
+		--accent: #6ab7ff;
+	}
+	* { box-sizing: border-box; }
+	html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+	body { display: flex; flex-direction: column; }
+
+	header { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--border); }
+	header .title { font-weight: 600; letter-spacing: 0.3px; }
+	header .dim { color: var(--dim); }
+
+	.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+	.seg button { background: transparent; color: var(--text); border: 0; padding: 5px 10px; cursor: pointer; font: inherit; border-right: 1px solid var(--border); }
+	.seg button:last-child { border-right: 0; }
+	.seg button.active { background: var(--accent); color: #0a0a0e; font-weight: 600; }
+
+	.chk { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; user-select: none; }
+	.chk input { accent-color: var(--accent); }
+	.chk.disabled { opacity: 0.4; pointer-events: none; }
+
+	.spacer { flex: 1; }
+
+	#stage { flex: 1; position: relative; }
+	#stage canvas { display: block; width: 100%; height: 100%; }
+
+	#hint { position: absolute; left: 12px; bottom: 10px; padding: 8px 10px; background: rgba(0,0,0,0.55); border: 1px solid var(--border); border-radius: 6px; color: var(--dim); font-size: 12px; }
+	#hint b { color: var(--text); font-weight: 600; }
+
+	#readout { position: absolute; right: 12px; top: 12px; padding: 8px 10px; background: rgba(0,0,0,0.55); border: 1px solid var(--border); border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; color: var(--dim); min-width: 220px; }
+	#readout .row { display: flex; gap: 8px; justify-content: space-between; }
+	#readout .k { color: var(--dim); }
+	#readout .v { color: var(--text); }
+
+	#gizmo-axis-label {
+		position: absolute; z-index: 20;
+		pointer-events: none; user-select: none;
+		font: 700 12px ui-monospace, monospace;
+		text-shadow: 0 1px 3px rgba(0,0,0,0.85);
+		color: rgba(255,255,255,0.75);
+		display: none;
+	}
+	#gizmo-axis-label.visible { display: block; }
+	#gizmo-axis-label.axis-x { color: #ff5252; }
+	#gizmo-axis-label.axis-y { color: #4ade80; }
+	#gizmo-axis-label.axis-z { color: #4a8aff; }
+</style>
+</head>
+<body>
+
+<header>
+	<div class="seg" id="gizmoSeg">
+		<button data-gizmo="tc" class="active">TC</button>
+		<button data-gizmo="pc">PivotControls</button>
+	</div>
+	<div class="seg" id="tcModeSeg">
+		<button data-mode="translate" class="active">Move</button>
+		<button data-mode="rotate">Rotate</button>
+		<button data-mode="scale">Scale</button>
+	</div>
+	<div class="pc-group">
+		<label class="chk" id="chkTranslate"><input type="checkbox" checked> translate</label>
+		<label class="chk" id="chkRotate"><input type="checkbox" checked> rotate</label>
+		<label class="chk" id="chkScale"><input type="checkbox" checked> scale</label>
+		<label class="chk" id="chkAnn"><input type="checkbox"> annotations</label>
+		<label class="chk" id="chkSpace"><input type="checkbox"> world</label>
+		<label class="chk" id="chkFixed"><input type="checkbox" checked> fixed</label>
+		<label class="chk" id="chkSize" style="gap:6px;">
+			size <input type="range" id="sizeRange" min="20" max="200" value="55" style="width:90px;">
+			<span id="sizeVal" style="min-width:30px; text-align:right; color: var(--dim);">0.55</span>
+		</label>
+		<label class="chk" id="chkThick" style="gap:6px;">
+			thick <input type="range" id="thickRange" min="10" max="200" value="40" style="width:90px;">
+			<span id="thickVal" style="min-width:30px; text-align:right; color: var(--dim);">0.40</span>
+		</label>
+	</div>
+</header>
+
+<div id="stage">
+	<div id="readout">
+		<div class="row"><span class="k">selected</span><span class="v" id="rSel">—</span></div>
+		<div class="row"><span class="k">pos</span><span class="v" id="rPos">—</span></div>
+		<div class="row"><span class="k">rot</span><span class="v" id="rRot">—</span></div>
+		<div class="row"><span class="k">scl</span><span class="v" id="rScl">—</span></div>
+		<div class="row"><span class="k">gizmo</span><span class="v" id="rGiz">TransformControls</span></div>
+	</div>
+	<div id="hint">
+		<b>Feel test</b> — try dragging axes, rotate rings, and the tip-dots (PC only) with each gizmo.
+		Switch modes above. Nothing here is saved.
+	</div>
+	<div id="gizmo-axis-label"></div>
+</div>
+
+<script type="importmap">
+{
+	"imports": {
+		"three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+		"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+		"three-pivot-controls": "https://cdn.jsdelivr.net/npm/three-pivot-controls@0.1.0/dist/three-pivot-controls.js"
+	}
+}
+</script>
+
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { TransformControls } from "three/addons/controls/TransformControls.js";
+import { PivotControls } from "three-pivot-controls";
+
+const stage = document.getElementById("stage");
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(stage.clientWidth, stage.clientHeight);
+renderer.setClearColor(0x0a0a0e, 1);
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, stage.clientWidth / stage.clientHeight, 0.1, 100);
+camera.position.set(4, 3.5, 5);
+camera.lookAt(0, 0.5, 0);
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 0.9));
+const key = new THREE.DirectionalLight(0xffffff, 1.2);
+key.position.set(5, 8, 6);
+scene.add(key);
+
+const grid = new THREE.GridHelper(20, 20, 0x333340, 0x22222a);
+scene.add(grid);
+
+const orbit = new OrbitControls(camera, renderer.domElement);
+orbit.enableDamping = true;
+orbit.dampingFactor = 0.08;
+orbit.target.set(0, 0.5, 0);
+orbit.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
+
+const mat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.55, metalness: 0.05 });
+const objects = [];
+function addPrim(geom, color, pos, name) {
+	const m = new THREE.Mesh(geom, mat(color));
+	m.position.copy(pos);
+	m.name = name;
+	scene.add(m);
+	objects.push(m);
+	return m;
+}
+addPrim(new THREE.BoxGeometry(1, 1, 1), 0xff7a5c, new THREE.Vector3(-2, 0.5, 0), "cube");
+addPrim(new THREE.SphereGeometry(0.6, 32, 24), 0x6ab7ff, new THREE.Vector3(0, 0.6, 0), "sphere");
+addPrim(new THREE.ConeGeometry(0.6, 1.2, 24), 0xffd166, new THREE.Vector3(2, 0.6, 0), "cone");
+
+let selected = objects[0];
+
+// --- TransformControls ---
+const tc = new TransformControls(camera, renderer.domElement);
+tc.addEventListener("dragging-changed", (e) => { orbit.enabled = !e.value; });
+tc.addEventListener("objectChange", updateReadout);
+scene.add(tc.getHelper());
+
+// --- TC axis-letter overlay (ported from editor.html) ---
+(function wireAxisLabel() {
+	const label = document.getElementById("gizmo-axis-label");
+	if (!label) return;
+	const _axisDir = {
+		X: new THREE.Vector3(1, 0, 0),
+		Y: new THREE.Vector3(0, 1, 0),
+		Z: new THREE.Vector3(0, 0, 1),
+	};
+	function classFor(ax) {
+		if (ax === "X") return "axis-x";
+		if (ax === "Y") return "axis-y";
+		if (ax === "Z") return "axis-z";
+		return "";
+	}
+	function update() {
+		// Only track TC — pivot library owns its own labels via annotations mode.
+		if (mode !== "tc") {
+			if (label.classList.contains("visible")) label.classList.remove("visible");
+			return;
+		}
+		const ax = tc.axis;
+		const singleAxis = ax === "X" || ax === "Y" || ax === "Z";
+		if (!singleAxis || !tc.object) {
+			if (label.classList.contains("visible")) label.classList.remove("visible");
+			return;
+		}
+		const origin = new THREE.Vector3();
+		tc.object.getWorldPosition(origin);
+		const dir = _axisDir[ax].clone();
+		if (tc.space === "local") {
+			const q = new THREE.Quaternion();
+			tc.object.getWorldQuaternion(q);
+			dir.applyQuaternion(q);
+		}
+		const camPos = new THREE.Vector3();
+		camera.getWorldPosition(camPos);
+		const factor = origin.distanceTo(camPos) * Math.min(1.9 * Math.tan(Math.PI * camera.fov / 360) / camera.zoom, 7);
+		const tipOffset = 0.65 * (factor * tc.size / 4);
+		const anchor = origin.clone().add(dir.multiplyScalar(tipOffset));
+		anchor.project(camera);
+		const cv = renderer.domElement.getBoundingClientRect();
+		const wr = stage.getBoundingClientRect();
+		const sx = (anchor.x * 0.5 + 0.5) * cv.width;
+		const sy = (1 - (anchor.y * 0.5 + 0.5)) * cv.height;
+		label.style.left = (cv.left - wr.left + sx) + "px";
+		label.style.top  = (cv.top  - wr.top  + sy) + "px";
+		label.style.transform = "translate(-50%, -50%)";
+		label.textContent = ax;
+		label.className = "visible " + classFor(ax);
+	}
+	window.addEventListener("pointermove", update);
+	tc.addEventListener("axis-changed", update);
+	tc.addEventListener("dragging-changed", (ev) => { if (!ev.value) update(); });
+	// Expose so gizmo-mode switch can force a clear.
+	window.__refreshAxisLabel = update;
+})();
+
+// --- PivotControls ---
+const pc = new PivotControls(camera, renderer.domElement, {
+	translate: true, rotate: true, scale: true,
+	space: "local", fixed: true, annotations: false,
+	size: 0.55, thickness: 0.4,
+});
+pc.addEventListener?.("dragstart", () => { orbit.enabled = false; });
+pc.addEventListener?.("dragend",   () => { orbit.enabled = true;  });
+pc.addEventListener?.("drag",      updateReadout);
+scene.add(pc.getHelper());
+
+let mode = "tc"; // "tc" | "pc"
+
+function attachSelection() {
+	tc.detach();
+	pc.detach?.();
+	if (!selected) return;
+	if (mode === "tc") tc.attach(selected);
+	else pc.attach(selected);
+	updateReadout();
+}
+attachSelection();
+
+// --- picking ---
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+renderer.domElement.addEventListener("pointerdown", (e) => {
+	if (e.button !== 0) return;
+	// Let the active gizmo eat the event if it's over a handle
+	const rect = renderer.domElement.getBoundingClientRect();
+	ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+	ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+	raycaster.setFromCamera(ndc, camera);
+	const hits = raycaster.intersectObjects(objects, false);
+	if (hits.length) {
+		selected = hits[0].object;
+		attachSelection();
+	}
+});
+
+// --- UI wiring ---
+document.getElementById("gizmoSeg").addEventListener("click", (e) => {
+	const b = e.target.closest("button"); if (!b) return;
+	document.querySelectorAll("#gizmoSeg button").forEach(x => x.classList.toggle("active", x === b));
+	mode = b.dataset.gizmo;
+	document.getElementById("rGiz").textContent = mode === "tc" ? "TransformControls" : "PivotControls";
+	window.__refreshAxisLabel?.();
+	document.getElementById("tcModeSeg").style.opacity = mode === "tc" ? 1 : 0.4;
+	document.getElementById("tcModeSeg").style.pointerEvents = mode === "tc" ? "auto" : "none";
+	for (const id of ["chkTranslate","chkRotate","chkScale","chkAnn","chkSpace","chkFixed","chkSize","chkThick"]) {
+		document.getElementById(id).classList.toggle("disabled", mode !== "pc");
+	}
+	attachSelection();
+});
+document.getElementById("tcModeSeg").addEventListener("click", (e) => {
+	const b = e.target.closest("button"); if (!b) return;
+	document.querySelectorAll("#tcModeSeg button").forEach(x => x.classList.toggle("active", x === b));
+	tc.setMode(b.dataset.mode);
+});
+
+function bindPCChk(id, apply) {
+	const el = document.getElementById(id);
+	const input = el.querySelector("input");
+	input.addEventListener("change", () => { apply(input.checked); });
+}
+bindPCChk("chkTranslate", (v) => { pc.translate = v; });
+bindPCChk("chkRotate",    (v) => { pc.rotate    = v; });
+bindPCChk("chkScale",     (v) => { pc.scale     = v; });
+bindPCChk("chkAnn",       (v) => { pc.annotations = v; });
+bindPCChk("chkSpace",     (v) => { pc.space = v ? "world" : "local"; });
+bindPCChk("chkFixed",     (v) => { pc.fixed = v; });
+
+const sizeRange = document.getElementById("sizeRange");
+const sizeVal = document.getElementById("sizeVal");
+sizeRange.addEventListener("input", () => {
+	const v = sizeRange.value / 100;
+	sizeVal.textContent = v.toFixed(2);
+	pc.size = v;
+});
+const thickRange = document.getElementById("thickRange");
+const thickVal = document.getElementById("thickVal");
+thickRange.addEventListener("input", () => {
+	const v = thickRange.value / 100;
+	thickVal.textContent = v.toFixed(2);
+	pc.thickness = v;
+});
+
+// Start with PC checkboxes greyed since TC is the initial mode.
+for (const id of ["chkTranslate","chkRotate","chkScale","chkAnn","chkSpace","chkFixed","chkSize","chkThick"]) {
+	document.getElementById(id).classList.add("disabled");
+}
+
+function updateReadout() {
+	const el = (id) => document.getElementById(id);
+	if (!selected) { el("rSel").textContent = "—"; return; }
+	el("rSel").textContent = selected.name;
+	const p = selected.position, r = selected.rotation, s = selected.scale;
+	const f = (n) => n.toFixed(2);
+	const d = (n) => (n * 180 / Math.PI).toFixed(1) + "\u00B0";
+	el("rPos").textContent = `${f(p.x)}, ${f(p.y)}, ${f(p.z)}`;
+	el("rRot").textContent = `${d(r.x)}, ${d(r.y)}, ${d(r.z)}`;
+	el("rScl").textContent = `${f(s.x)}, ${f(s.y)}, ${f(s.z)}`;
+}
+updateReadout();
+
+// --- loop ---
+function tick() {
+	orbit.update();
+	pc.update?.();
+	renderer.render(scene, camera);
+	requestAnimationFrame(tick);
+}
+tick();
+
+window.addEventListener("resize", () => {
+	renderer.setSize(stage.clientWidth, stage.clientHeight);
+	camera.aspect = stage.clientWidth / stage.clientHeight;
+	camera.updateProjectionMatrix();
+});
+</script>
+</body>
+</html>

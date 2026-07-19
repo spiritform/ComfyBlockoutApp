@@ -357,6 +357,11 @@ async def root() -> FileResponse:
     return FileResponse(WEB_DIR / "editor.html")
 
 
+@app.get("/pivot-test")
+async def pivot_test() -> FileResponse:
+    return FileResponse(WEB_DIR / "pivot-test.html")
+
+
 # Editor still references /extensions/ComfyBlockout/icons/... — keep that path live.
 @app.get("/extensions/ComfyBlockout/icons/{name}")
 async def legacy_icon(name: str) -> FileResponse:
