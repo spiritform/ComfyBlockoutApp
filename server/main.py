@@ -3389,13 +3389,13 @@ async def run_module(module_id: str, request: Request):
     # (per-object screen-space metadata + reference-image map) + any user-saved
     # tweaks + the actual user request.
     #
-    # Only image/video generators want that framing — 3D text-to-model partners
-    # (Rodin, Tripo, Hunyuan) take a plain prompt describing the object, and
-    # Rodin in particular caps the prompt at 2500 chars so the injected block
-    # blows past the limit and the run fails validation. Skip augmentation for
-    # 3D and audio kinds so their prompts go through raw.
+    # Nano Banana ONLY — the BASE_PROMPT talks in terms of "image 1 is the
+    # blockout" and "images 2, 3 are per-object swatches", which is behavior
+    # unique to Nano's multi-image prompting. Custom ControlNet workflows,
+    # partner 3D/video/audio APIs, and other image modules do their own
+    # conditioning and should receive the user's prompt verbatim.
     user_prompt = (inputs.get("prompt") or "").strip()
-    if user_prompt and m.kind not in {"3d", "audio"}:
+    if user_prompt and module_id == "nano-banana":
         # _prompt_store now holds the user's EDITED base prompt (full replace
         # of BASE_PROMPT), not appended tweaks. Empty / unset → server default.
         base_override = (_prompt_store.get(node_id) or "").strip()

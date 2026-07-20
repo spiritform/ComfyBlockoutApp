@@ -4709,7 +4709,7 @@
 				     download button was redundant. Element left in the DOM
 				     hidden so the existing click wiring (line ~25563) survives
 				     without JS branches; flip display back if we want it back. -->
-				<button id="result-save-overlay" type="button" title="Download this render" style="display:none">
+				<button id="result-save-overlay" type="button" title="Download this image">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
 				</button>
 				<!-- Clear button — only visible when Blockout is showing a recorded
@@ -6569,6 +6569,11 @@
 				const isEditable = tag === "INPUT" || tag === "TEXTAREA" || t?.isContentEditable;
 				if (isEditable) return;
 				e.preventDefault();
+				// Stop propagation so the window-level scene keydown handler
+				// doesn't ALSO fire and delete a scene object / keyframe alongside
+				// the asset tiles. Without this, Delete in the Output pane
+				// silently nukes whatever was previously selected in the scene.
+				e.stopPropagation();
 				const names = [...assetSelection];
 				assetSelection.clear();
 				assetSelectAnchor = null;
@@ -7457,6 +7462,17 @@ transform.setSpace(gizmoSpace);
 function _applyGizmoSpaceForSelection() {
 	const isPointLight = selected?.userData?.primKind === "light" && selected.userData.lightConfig?.type === "point";
 	transform.setSpace(isPointLight ? "world" : gizmoSpace);
+	// Repair pre-existing negative scale (from an earlier session before the
+	// scale-drag clamp was in place). A negative component flips the object's
+	// local axis, which makes translate drags run backward on that axis.
+	// Blockout primitives are symmetric, so abs() is visually a no-op.
+	if (selected) {
+		let flipped = false;
+		if (selected.scale.x < 0) { selected.scale.x = Math.abs(selected.scale.x); flipped = true; }
+		if (selected.scale.y < 0) { selected.scale.y = Math.abs(selected.scale.y); flipped = true; }
+		if (selected.scale.z < 0) { selected.scale.z = Math.abs(selected.scale.z); flipped = true; }
+		if (flipped) selected.updateMatrixWorld();
+	}
 }
 transform.addEventListener("dragging-changed", (e) => {
 	// Orbit only locks while the user actively holds an axis handle mid-drag
@@ -12588,19 +12604,29 @@ function refreshOutliner() {
 			saveScene?.();
 		});
 
-		// Single click anywhere on the group head (except the ×, eye, or an
-		// active name-rename input) toggles expand/collapse. Clicks on the
-		// name label ARE allowed to toggle — but the toggle is deferred 220ms
-		// so a double-click can cancel it and go into rename cleanly instead.
-		// Shift/Ctrl-click selects every member additively (grab-the-group
-		// escape hatch).
+		// Click on the folder icon toggles expand/collapse — a dedicated affordance
+		// so the rest of the head is free to act as "select the whole group".
+		card.querySelector(".out-group-icon").addEventListener("click", e => {
+			e.stopPropagation();
+			group.expanded = !group.expanded;
+			refreshOutliner();
+			saveScene?.();
+		});
+		// Plain click on the head (except ×, eye, lock, folder icon, or an active
+		// rename input) selects every member — the multi-select transform path
+		// (groupDragSnapshot) then treats the group as one unit for translate/
+		// rotate/scale gizmos. Shift/Ctrl-click toggles members additively.
+		// Clicks on the name are deferred 220ms so a double-click can cancel
+		// the select and enter rename mode instead.
 		card.querySelector(".out-group-head").addEventListener("click", e => {
-			if (e.target.closest(".out-vis, .out-lock, .out-group-ungroup, .out-name-edit")) return;
+			if (e.target.closest(".out-vis, .out-lock, .out-group-ungroup, .out-group-icon, .out-name-edit")) return;
 			const additive = e.shiftKey || e.ctrlKey || e.metaKey;
-			if (additive) {
+			const doSelect = () => {
+				pendingExpandToggle = null;
+				if (!additive) selectionSet.clear();
 				let last = null;
 				for (const m of members) {
-					if (selectionSet.has(m)) {
+					if (additive && selectionSet.has(m)) {
 						selectionSet.delete(m);
 						continue;
 					}
@@ -12624,25 +12650,13 @@ function refreshOutliner() {
 				}
 				orbit.enabled = true;
 				refreshOutliner();
-				return;
-			}
-			// Plain click: toggle expand/collapse. Deferred 220ms so a double-
-			// click on the name label can cancel this (see nameSpan dblclick
-			// above) and land in rename mode instead. Non-name clicks feel
-			// like the delay isn't there since there's no dblclick to wait
-			// for on those areas.
-			const onName = !!e.target.closest(".out-name");
-			const doToggle = () => {
-				pendingExpandToggle = null;
-				group.expanded = !group.expanded;
-				refreshOutliner();
-				saveScene?.();
 			};
-			if (onName) {
+			const onName = !!e.target.closest(".out-name");
+			if (onName && !additive) {
 				if (pendingExpandToggle) return;
-				pendingExpandToggle = setTimeout(doToggle, 220);
+				pendingExpandToggle = setTimeout(doSelect, 220);
 			} else {
-				doToggle();
+				doSelect();
 			}
 		});
 
@@ -14996,6 +15010,27 @@ function setViewportGenerateBusy() {
 	}
 	_vpGenerateBusyRefs++;
 }
+// Freshly-mounted properties-pane Generate button — if the underlying cell is
+// already mid-run (sidebar ▶ has .busy), replay the busy visual on the new
+// button so re-opening the properties pane doesn't reset it to "Generate".
+function restoreRpGenerateBusyIfRunning(rpBtn, cellId) {
+	if (!rpBtn) return;
+	const running = document.querySelector(`#workflow-cells .gen-cell[data-cell-id="${cellId}"] .gen-run-btn.busy`);
+	if (!running) return;
+	const spanEl = rpBtn.querySelector("span");
+	const iconEl = rpBtn.querySelector("svg");
+	if (spanEl) {
+		rpBtn.dataset.savedLabel = spanEl.textContent || "Generate";
+		spanEl.textContent = "Generating…";
+	}
+	if (iconEl) {
+		rpBtn.dataset.savedIcon = iconEl.outerHTML;
+		iconEl.outerHTML = VP_SPINNER_SVG;
+	}
+	rpBtn.classList.add("busy");
+	rpBtn.disabled = true;
+}
+
 function clearViewportGenerateBusy() {
 	const btn = document.getElementById("vp-generate");
 	if (!btn) return;
@@ -15506,9 +15541,11 @@ function renderGenCellProperties(cell) {
 
 	// Delegate to the sidebar row's ▶ — same wiring, same busy-state hooks,
 	// so the properties Generate button is just a bigger, closer entry point.
-	pane.querySelector(".rp-generate-btn")?.addEventListener("click", () => {
+	const rpGenBtn = pane.querySelector(".rp-generate-btn");
+	rpGenBtn?.addEventListener("click", () => {
 		document.querySelector(`#workflow-cells .gen-cell[data-cell-id="${cell.id}"] .gen-run-btn`)?.click();
 	});
+	restoreRpGenerateBusyIfRunning(rpGenBtn, cell.id);
 
 	// Blockout Strength drag-num — same widget style as Density/Scale/Mask.
 	// Drag horizontally to scrub 0..100%; click to type. Debounced save keeps
@@ -22555,9 +22592,11 @@ function renderWorkflowCellProperties(cell) {
 
 	// Delegate to the sidebar row's ▶ — same wiring, same busy-state hooks,
 	// so the properties Generate button is just a bigger, closer entry point.
-	pane.querySelector(".rp-generate-btn")?.addEventListener("click", () => {
+	const rpGenBtn = pane.querySelector(".rp-generate-btn");
+	rpGenBtn?.addEventListener("click", () => {
 		document.querySelector(`#workflow-cells .gen-cell[data-cell-id="${cell.id}"] .gen-run-btn`)?.click();
 	});
+	restoreRpGenerateBusyIfRunning(rpGenBtn, cell.id);
 
 	function autosize(ta) {
 		if (ta.tagName !== "TEXTAREA") return;
@@ -25511,12 +25550,12 @@ transform.addEventListener("mouseDown", () => {
 	// (perpendicular translates grow |pos - target| each tick), so cache once.
 	renderCamDragDist = selected === renderCam ? (renderCam.position.distanceTo(renderCamTarget) || 3) : null;
 	scaleDragStart = (transform.mode === "scale" && selected) ? selected.scale.clone() : null;
-	// Group-drag prep: when the multi-selection has >1 member and we're in
-	// translate mode, snapshot the primary's world position + each other
-	// member's world position. objectChange consumes these to apply the same
-	// delta to every set member. Rotate/scale intentionally stay per-primary
-	// in this first pass — group rotate/scale needs pivot math and can wait.
-	if (transform.mode === "translate" && selected && selectionSet.size > 1) {
+	// Group-drag prep: when the multi-selection has >1 member, snapshot enough
+	// state to apply the primary's transform delta to every other member. The
+	// primary's world position is the pivot for rotate/scale so the whole
+	// selection swings/grows around a stable point (matches how a real Group
+	// object would behave).
+	if (selected && selectionSet.size > 1 && (transform.mode === "translate" || transform.mode === "rotate" || transform.mode === "scale")) {
 		const primaryPos = new THREE.Vector3();
 		selected.getWorldPosition(primaryPos);
 		const others = new Map();
@@ -25524,9 +25563,18 @@ transform.addEventListener("mouseDown", () => {
 			if (o === selected) continue;
 			const p = new THREE.Vector3();
 			o.getWorldPosition(p);
-			others.set(o, p);
+			const q = new THREE.Quaternion();
+			o.getWorldQuaternion(q);
+			others.set(o, { pos: p, worldQuat: q, scale: o.scale.clone() });
 		}
-		groupDragSnapshot = { primaryPos, others };
+		groupDragSnapshot = {
+			mode: transform.mode,
+			primaryPos,
+			primaryStartQuat: selected.quaternion.clone(),
+			primaryStartWorldQuat: (() => { const q = new THREE.Quaternion(); selected.getWorldQuaternion(q); return q; })(),
+			primaryStartScale: selected.scale.clone(),
+			others,
+		};
 	} else {
 		groupDragSnapshot = null;
 	}
@@ -25582,30 +25630,91 @@ transform.addEventListener("objectChange", () => {
 		// Compress the delta between drag-start and what TransformControls just set,
 		// so a pixel of pointer motion produces a smaller scale change. Skipped when
 		// snap is on so the 0.25 quantization steps still land visibly.
+		// Clamp to a small positive floor — dragging a scale handle past zero
+		// flips the sign, which inverts the object's local axes and makes the
+		// translate gizmo drag in reverse ("Y up drags down"). Keeping scale
+		// strictly positive blocks that whole class of bug at the source.
+		const SCALE_MIN = 0.01;
 		selected.scale.set(
-			scaleDragStart.x + (selected.scale.x - scaleDragStart.x) * SCALE_FINE,
-			scaleDragStart.y + (selected.scale.y - scaleDragStart.y) * SCALE_FINE,
-			scaleDragStart.z + (selected.scale.z - scaleDragStart.z) * SCALE_FINE,
+			Math.max(SCALE_MIN, scaleDragStart.x + (selected.scale.x - scaleDragStart.x) * SCALE_FINE),
+			Math.max(SCALE_MIN, scaleDragStart.y + (selected.scale.y - scaleDragStart.y) * SCALE_FINE),
+			Math.max(SCALE_MIN, scaleDragStart.z + (selected.scale.z - scaleDragStart.z) * SCALE_FINE),
 		);
 	}
 	// Group-drag delta pass — runs last so it picks up the primary's FINAL
-	// world position after any snap / anchor adjustments applied above. Every
-	// other set member gets the same world-space translation. Converts through
-	// the member's parent to keep the change consistent for parented hierarchies.
-	if (groupDragSnapshot && selected && transform.mode === "translate") {
+	// world state after any snap / anchor adjustments applied above. Every
+	// other set member gets the same world-space delta relative to the pivot
+	// (the primary's pre-drag world position). Converts through the member's
+	// parent to keep the change consistent for parented hierarchies.
+	if (groupDragSnapshot && selected) {
 		selected.updateMatrixWorld();
-		const currentPos = new THREE.Vector3();
-		selected.getWorldPosition(currentPos);
-		const delta = new THREE.Vector3().subVectors(currentPos, groupDragSnapshot.primaryPos);
-		const worldTarget = new THREE.Vector3();
-		for (const [o, snapshotPos] of groupDragSnapshot.others) {
-			worldTarget.copy(snapshotPos).add(delta);
-			if (o.parent && o.parent !== scene) {
-				const inv = new THREE.Matrix4().copy(o.parent.matrixWorld).invert();
-				worldTarget.applyMatrix4(inv);
+		const pivot = groupDragSnapshot.primaryPos;
+		if (groupDragSnapshot.mode === "translate" && transform.mode === "translate") {
+			const currentPos = new THREE.Vector3();
+			selected.getWorldPosition(currentPos);
+			const delta = new THREE.Vector3().subVectors(currentPos, pivot);
+			const worldTarget = new THREE.Vector3();
+			for (const [o, snap] of groupDragSnapshot.others) {
+				worldTarget.copy(snap.pos).add(delta);
+				if (o.parent && o.parent !== scene) {
+					const inv = new THREE.Matrix4().copy(o.parent.matrixWorld).invert();
+					worldTarget.applyMatrix4(inv);
+				}
+				o.position.copy(worldTarget);
+				o.updateMatrixWorld();
 			}
-			o.position.copy(worldTarget);
-			o.updateMatrixWorld();
+		} else if (groupDragSnapshot.mode === "rotate" && transform.mode === "rotate") {
+			// Delta rotation in WORLD space: currentWorldQ * startWorldQ⁻¹.
+			// Each member swings around the pivot AND spins by the same delta.
+			const currentWorldQ = new THREE.Quaternion();
+			selected.getWorldQuaternion(currentWorldQ);
+			const deltaQ = currentWorldQ.clone().multiply(groupDragSnapshot.primaryStartWorldQuat.clone().invert());
+			const worldTarget = new THREE.Vector3();
+			const parentQ = new THREE.Quaternion();
+			const parentInv = new THREE.Matrix4();
+			for (const [o, snap] of groupDragSnapshot.others) {
+				worldTarget.copy(snap.pos).sub(pivot).applyQuaternion(deltaQ).add(pivot);
+				const newWorldQ = deltaQ.clone().multiply(snap.worldQuat);
+				if (o.parent && o.parent !== scene) {
+					parentInv.copy(o.parent.matrixWorld).invert();
+					worldTarget.applyMatrix4(parentInv);
+					o.parent.getWorldQuaternion(parentQ);
+					o.quaternion.copy(parentQ.invert().multiply(newWorldQ));
+				} else {
+					o.quaternion.copy(newWorldQ);
+				}
+				o.position.copy(worldTarget);
+				o.updateMatrixWorld();
+			}
+		} else if (groupDragSnapshot.mode === "scale" && transform.mode === "scale") {
+			// Per-axis scale ratio derived from the primary's current vs start
+			// scale. Reuses whatever the single-object compression/clamp above
+			// wrote into selected.scale so group members follow the same curve.
+			const start = groupDragSnapshot.primaryStartScale;
+			const cur = selected.scale;
+			const ratio = new THREE.Vector3(
+				cur.x / (Math.abs(start.x) < 1e-6 ? 1 : start.x),
+				cur.y / (Math.abs(start.y) < 1e-6 ? 1 : start.y),
+				cur.z / (Math.abs(start.z) < 1e-6 ? 1 : start.z),
+			);
+			const worldTarget = new THREE.Vector3();
+			const offset = new THREE.Vector3();
+			for (const [o, snap] of groupDragSnapshot.others) {
+				offset.copy(snap.pos).sub(pivot);
+				offset.set(offset.x * ratio.x, offset.y * ratio.y, offset.z * ratio.z);
+				worldTarget.copy(pivot).add(offset);
+				o.scale.set(
+					Math.max(0.01, snap.scale.x * ratio.x),
+					Math.max(0.01, snap.scale.y * ratio.y),
+					Math.max(0.01, snap.scale.z * ratio.z),
+				);
+				if (o.parent && o.parent !== scene) {
+					const inv = new THREE.Matrix4().copy(o.parent.matrixWorld).invert();
+					worldTarget.applyMatrix4(inv);
+				}
+				o.position.copy(worldTarget);
+				o.updateMatrixWorld();
+			}
 		}
 	}
 });
@@ -28980,9 +29089,11 @@ function applyResultMode() {
 	// viewport (nothing to save) + intermediates (ephemeral debug frames).
 	const saveOv = document.getElementById("result-save-overlay");
 	if (saveOv) {
+		const isIntermediate = typeof resultMode === "string" && resultMode.startsWith("intermediate:");
 		const canSave = (resultMode === "render" && !!lastResult)
 			|| resultMode === "blockout"
-			|| (resultMode === "preproc" && !!lastPreprocResult);
+			|| (resultMode === "preproc" && !!lastPreprocResult)
+			|| isIntermediate;
 		saveOv.classList.toggle("visible", canSave);
 	}
 	// Clear button suppressed for now — its "clear stale _video_store entry"
@@ -29078,6 +29189,13 @@ document.getElementById("result-save-overlay")?.addEventListener("click", () => 
 	} else if (resultMode === "preproc" && lastPreprocResult) {
 		href = lastPreprocResult.url;
 		filename = lastPreprocResult.filename || "preproc.png";
+	} else if (typeof resultMode === "string" && resultMode.startsWith("intermediate:")) {
+		const name = resultMode.slice("intermediate:".length);
+		const inter = (lastResult?.intermediates || []).find(x => x.name === name);
+		if (inter) {
+			href = inter.url;
+			filename = inter.filename || `${name}.png`;
+		}
 	} else if (lastResult) {
 		href = lastResult.url;
 		filename = lastResult.filename || "render.png";
