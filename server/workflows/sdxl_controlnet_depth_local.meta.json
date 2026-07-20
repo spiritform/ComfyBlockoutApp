@@ -16,26 +16,18 @@
       }
     },
     {
-      "name": "prompt",
-      "type": "textarea",
-      "label": "Positive Prompt",
-      "placeholder": "a cozy living room, warm lighting, photorealistic, highly detailed",
-      "required": true,
+      "name": "checkpoint",
+      "type": "dropdown",
+      "label": "Checkpoint",
+      "options_source": {
+        "class_type": "CheckpointLoaderSimple",
+        "widget": "ckpt_name",
+        "include": "xl"
+      },
+      "default": "SDXL\\Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors",
       "patch": {
-        "node_id": 6,
-        "widget_index": 0,
-        "widget_name": "text"
-      }
-    },
-    {
-      "name": "negative_prompt",
-      "type": "textarea",
-      "label": "Negative Prompt",
-      "placeholder": "blurry, lowres, jpeg artifacts, watermark, ugly",
-      "patch": {
-        "node_id": 7,
-        "widget_index": 0,
-        "widget_name": "text"
+        "node_id": 1,
+        "widget_name": "ckpt_name"
       }
     },
     {
@@ -97,6 +89,55 @@
       }
     },
     {
+      "name": "preproc_blur",
+      "type": "number",
+      "label": "Preproc Blur",
+      "default": 17,
+      "min": 0,
+      "max": 31,
+      "step": 1,
+      "patch": {
+        "node_id": 22,
+        "widget_name": "blur_radius"
+      }
+    },
+    {
+      "name": "preproc_sigma",
+      "type": "number",
+      "label": "Preproc Sigma",
+      "default": 3.8,
+      "min": 0.1,
+      "max": 10,
+      "step": 0.1,
+      "patch": {
+        "node_id": 22,
+        "widget_name": "sigma"
+      }
+    },
+    {
+      "name": "prompt",
+      "type": "textarea",
+      "label": "Positive Prompt",
+      "placeholder": "a cozy living room, warm lighting, photorealistic, highly detailed",
+      "required": true,
+      "patch": {
+        "node_id": 6,
+        "widget_index": 0,
+        "widget_name": "text"
+      }
+    },
+    {
+      "name": "negative_prompt",
+      "type": "textarea",
+      "label": "Negative Prompt",
+      "placeholder": "blurry, lowres, jpeg artifacts, watermark, ugly",
+      "patch": {
+        "node_id": 7,
+        "widget_index": 0,
+        "widget_name": "text"
+      }
+    },
+    {
       "name": "seed",
       "type": "seed",
       "label": "Seed",
@@ -107,9 +148,63 @@
       }
     },
     {
+      "name": "sampler",
+      "type": "dropdown",
+      "label": "Sampler",
+      "options_source": {
+        "class_type": "KSampler",
+        "widget": "sampler_name"
+      },
+      "default": "dpmpp_2m",
+      "patch": {
+        "node_id": 3,
+        "widget_name": "sampler_name"
+      }
+    },
+    {
+      "name": "scheduler",
+      "type": "dropdown",
+      "label": "Scheduler",
+      "options_source": {
+        "class_type": "KSampler",
+        "widget": "scheduler"
+      },
+      "default": "karras",
+      "patch": {
+        "node_id": 3,
+        "widget_name": "scheduler"
+      }
+    },
+    {
+      "name": "steps",
+      "type": "number",
+      "label": "Steps",
+      "default": 30,
+      "min": 1,
+      "max": 150,
+      "step": 1,
+      "patch": {
+        "node_id": 3,
+        "widget_name": "steps"
+      }
+    },
+    {
+      "name": "cfg",
+      "type": "number",
+      "label": "CFG",
+      "default": 7,
+      "min": 0,
+      "max": 30,
+      "step": 0.5,
+      "patch": {
+        "node_id": 3,
+        "widget_name": "cfg"
+      }
+    },
+    {
       "name": "controlnet_strength",
       "type": "number",
-      "label": "Strength",
+      "label": "ControlNet",
       "default": 0.8,
       "min": 0,
       "max": 1,
@@ -123,11 +218,11 @@
   ],
   "intermediates": [
     {
-      "name": "depth",
-      "label": "Depth",
-      "source_node_id": 9,
+      "name": "preproc",
+      "label": "Preproc",
+      "source_node_id": 22,
       "source_slot": 0,
-      "filename_prefix": "sdxl_depth_cn_depth"
+      "filename_prefix": "sdxl_cn_preproc"
     }
   ]
 }

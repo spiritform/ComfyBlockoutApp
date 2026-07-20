@@ -1,23 +1,19 @@
 {
   "1": {
+    "inputs": {
+      "ckpt_name": "SDXL\\Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors"
+    },
     "class_type": "CheckpointLoaderSimple",
     "_meta": {
       "title": "Load Juggernaut XL Checkpoint"
-    },
-    "inputs": {
-      "ckpt_name": "juggernautXL_version9Rundiffusion.safetensors"
     }
   },
   "3": {
-    "class_type": "KSampler",
-    "_meta": {
-      "title": "KSampler"
-    },
     "inputs": {
       "seed": 43623624,
       "steps": 30,
-      "cfg": 7,
-      "sampler_name": "dpmpp_2m",
+      "cfg": 3,
+      "sampler_name": "euler",
       "scheduler": "karras",
       "denoise": 1,
       "model": [
@@ -36,13 +32,13 @@
         "5",
         0
       ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
     }
   },
   "4": {
-    "class_type": "VAEDecode",
-    "_meta": {
-      "title": "VAE Decode"
-    },
     "inputs": {
       "samples": [
         "3",
@@ -52,84 +48,73 @@
         "1",
         2
       ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
     }
   },
   "5": {
-    "class_type": "EmptyLatentImage",
-    "_meta": {
-      "title": "Empty Latent 1344x768"
-    },
     "inputs": {
       "width": 1344,
       "height": 768,
       "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent 1344x768"
     }
   },
   "6": {
-    "class_type": "CLIPTextEncode",
-    "_meta": {
-      "title": "Positive Prompt"
-    },
     "inputs": {
       "text": "a wide open grass field with scattered rocks and boulders, blue sky with soft clouds, golden hour lighting, photorealistic, highly detailed, 8k",
       "clip": [
         "1",
         1
       ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Prompt"
     }
   },
   "7": {
-    "class_type": "CLIPTextEncode",
-    "_meta": {
-      "title": "Negative Prompt"
-    },
     "inputs": {
       "text": "blurry, lowres, jpeg artifacts, watermark, ugly",
       "clip": [
         "1",
         1
       ]
-    }
-  },
-  "8": {
-    "class_type": "ControlNetLoader",
-    "_meta": {
-      "title": "Load ControlNet (Depth)"
     },
-    "inputs": {
-      "control_net_name": "control-lora-depth-rank256.safetensors"
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Prompt"
     }
   },
   "9": {
-    "class_type": "AIO_Preprocessor",
-    "_meta": {
-      "title": "AIO Aux Preprocessor"
-    },
     "inputs": {
+      "preprocessor": "DepthAnythingV2Preprocessor",
+      "resolution": 1024,
       "image": [
         "10",
         0
-      ],
-      "preprocessor": "DepthAnythingV2Preprocessor",
-      "resolution": 1024
+      ]
+    },
+    "class_type": "AIO_Preprocessor",
+    "_meta": {
+      "title": "AIO Aux Preprocessor"
     }
   },
   "10": {
+    "inputs": {
+      "image": "viewport.png"
+    },
     "class_type": "LoadImage",
     "_meta": {
       "title": "Source Image (Viewport)"
-    },
-    "inputs": {
-      "image": "viewport.png",
-      "upload": "image",
-      "type": "input"
     }
   },
   "16": {
-    "class_type": "ControlNetApplyAdvanced",
-    "_meta": {
-      "title": "Apply ControlNet Depth"
-    },
     "inputs": {
       "strength": 0.8,
       "start_percent": 0,
@@ -143,30 +128,94 @@
         0
       ],
       "control_net": [
-        "8",
+        "18",
         0
       ],
       "image": [
-        "9",
+        "22",
         0
       ],
       "vae": [
         "1",
         2
       ]
+    },
+    "class_type": "ControlNetApplyAdvanced",
+    "_meta": {
+      "title": "Apply ControlNet Depth"
     }
   },
   "17": {
-    "class_type": "SaveImage",
-    "_meta": {
-      "title": "Save Output"
-    },
     "inputs": {
       "filename_prefix": "sdxl_depth_cn",
       "images": [
         "4",
         0
       ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Output"
+    }
+  },
+  "18": {
+    "inputs": {
+      "type": "auto",
+      "control_net": [
+        "19",
+        0
+      ]
+    },
+    "class_type": "SetUnionControlNetType",
+    "_meta": {
+      "title": "SetUnionControlNetType"
+    }
+  },
+  "19": {
+    "inputs": {
+      "control_net_name": "PROMAX_controlnet-union-sdxl-1.0.safetensors"
+    },
+    "class_type": "ControlNetLoader",
+    "_meta": {
+      "title": "Load ControlNet Model"
+    }
+  },
+  "20": {
+    "inputs": {
+      "images": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "21": {
+    "inputs": {
+      "images": [
+        "9",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "22": {
+    "inputs": {
+      "blur_radius": 17,
+      "sigma": 1,
+      "image": [
+        "9",
+        0
+      ]
+    },
+    "class_type": "ImageBlur",
+    "_meta": {
+      "title": "Blur Image"
     }
   }
 }

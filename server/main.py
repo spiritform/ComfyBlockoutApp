@@ -2829,6 +2829,41 @@ async def local_check_models(request: Request):
     return {"reachable": True, "missing": missing, "present": present}
 
 
+@app.get("/api/local/widget-options")
+async def local_widget_options(class_type: str, widget: str):
+    """Return the current combo choice list for a specific node widget from
+    local ComfyUI's /object_info. Manifest inputs with
+    `options_source: {class_type, widget}` use this to render dropdowns that
+    always reflect what's actually installed instead of a stale hardcoded list."""
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(f"{_LOCAL_COMFY_URL}/object_info/{class_type}")
+            r.raise_for_status()
+            oi = r.json()
+    except Exception as e:
+        raise HTTPException(503, f"Local ComfyUI unreachable: {e}")
+    info = (oi or {}).get(class_type)
+    if not isinstance(info, dict):
+        raise HTTPException(404, f"unknown class_type: {class_type}")
+    input_spec = info.get("input") or {}
+    for section in ("required", "optional"):
+        specs = input_spec.get(section) or {}
+        entry = specs.get(widget)
+        if not isinstance(entry, list) or not entry:
+            continue
+        # Old format: `[[opt1, opt2, ...], {tooltip: ...}]` — choices at [0].
+        if isinstance(entry[0], list):
+            return {"options": entry[0]}
+        # New format: `["COMBO", {options: [...], multiselect: false}]` — used
+        # by newer ComfyUI core / custom nodes (SetUnionControlNetType, etc.).
+        if entry[0] == "COMBO" and len(entry) > 1 and isinstance(entry[1], dict):
+            opts = entry[1].get("options")
+            if isinstance(opts, list):
+                return {"options": opts}
+    raise HTTPException(404, f"widget {widget} on {class_type} is not a combo")
+
+
 @app.post("/api/workflows/register")
 async def workflows_register(request: Request):
     """Save a workflow + its manifest atomically, then hot-register the module
@@ -4891,6 +4926,24 @@ async def assets_thumb(path: str, size: int = 256):
             # to asset.url via its onerror handler.
             raise HTTPException(500, f"thumb failed: {e}")
     return FileResponse(dst, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.post("/api/assets/upload")
+async def assets_upload(file: UploadFile = File(...), prefix: str = "upload"):
+    """Drop a client-side image directly into the Assets library (Output pane).
+    Used by MediaPipe still capture and any other in-app image producer that
+    wants its output to appear alongside generated renders instead of in the
+    per-object refs store."""
+    from server.modules._base import new_output_path
+    ext = (Path(file.filename or "").suffix.lstrip(".").lower()) or "png"
+    if ext not in {"png", "jpg", "jpeg", "webp"}:
+        raise HTTPException(400, f"unsupported image ext: {ext}")
+    safe_prefix = "".join(c if c.isalnum() or c in "-_" else "_" for c in prefix)[:32] or "upload"
+    dst = new_output_path(DATA_DIR, safe_prefix, ext)
+    data = await file.read()
+    dst.write_bytes(data)
+    rel = dst.relative_to(DATA_DIR).as_posix()
+    return {"url": f"/output/{rel}", "filename": dst.name, "kind": "image"}
 
 
 @app.delete("/api/assets/{filename}")

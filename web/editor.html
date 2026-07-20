@@ -2513,23 +2513,12 @@
 		font-size: 10px; color: rgba(255,255,255,0.55);
 		flex: 0 0 auto;
 	}
-	.drag-num.wf-drag {
-		flex: 0 0 auto;
-		/* Fixed width — auto would let the native <input>'s default 20-char size
-		   blow the chip out to hundreds of pixels the moment it enters edit mode. */
-		width: 60px; min-width: 60px;
-		padding: 4px 10px;
-		justify-content: center;
-		box-sizing: border-box;
-	}
-	.drag-num.wf-drag .drag-val { flex: 0 0 auto; text-align: center; color: rgba(255,255,255,0.95); }
-	/* Edit-mode input inherits the chip's fixed width instead of expanding to
-	   its own default 20-char intrinsic size. Text scrolls inside if longer. */
-	.drag-num.wf-drag input { width: 100%; min-width: 0; box-sizing: border-box; text-align: center; }
-	/* Seed chip is wider than a strength/scale chip so a full 10-digit seed
-	   fits without clipping (2^31 is 10 digits). Overrides the base fixed
-	   60px width so both drag and edit-mode use the larger box. */
-	.drag-num.wf-drag.wf-seed-drag { width: 96px; min-width: 96px; }
+	/* Workflow drag chips inherit the base .drag-num layout — full-width row,
+	   label on the left, value on the right — so they match Hand-held's Speed
+	   / Noise cells. Only override what actually needs to change: value color
+	   pops brighter than the label, and edit-mode input keeps sane sizing. */
+	.drag-num.wf-drag .drag-val { color: rgba(255,255,255,0.95); }
+	.drag-num.wf-drag input { width: 100%; min-width: 0; box-sizing: border-box; text-align: right; }
 	/* Seed chip in random mode — no drag affordance since the value is
 	   regenerated at run time. Dimmed so it reads as "not yours to edit". */
 	.drag-num.wf-drag.disabled { cursor: default; opacity: 0.55; }
@@ -2609,7 +2598,13 @@
 	.select-row select option { background: #1a1a20; }
 
 	#result-overlay {
-		position: absolute; pointer-events: none; z-index: 8;
+		/* When the overlay is visible (Blockout/Preproc/Render/intermediate
+		   tabs), it captures every pointer event so orbit/select/drag on the
+		   3D canvas underneath is fully suppressed — the user shouldn't be
+		   able to accidentally spin the scene while comparing a render.
+		   Viewport mode hides the overlay entirely (see applyResultMode),
+		   so the canvas gets its clicks back automatically. */
+		position: absolute; pointer-events: auto; z-index: 8;
 		overflow: hidden; background: #000;
 		box-shadow: 0 4px 20px rgba(0,0,0,0.5);
 	}
@@ -14770,6 +14765,17 @@ document.getElementById("mp-still")?.addEventListener("click", async () => {
 		_mp.running = true;
 		_mpLoop();
 		btn.textContent = "Take still";
+		// Disable drag-from-viewport again — no fresh still to drag.
+		const mpOverlay = document.getElementById("mediapipe-overlay");
+		if (mpOverlay) {
+			mpOverlay.draggable = false;
+			mpOverlay.style.cursor = "";
+			for (const child of mpOverlay.querySelectorAll("video, canvas")) {
+				child.draggable = false;
+				child.style.cursor = "";
+			}
+		}
+		_mp.lastStill = null;
 		return;
 	}
 	btn.disabled = true;
@@ -14802,11 +14808,52 @@ document.getElementById("mp-still")?.addEventListener("click", async () => {
 		}
 		ctx.drawImage(overlay, 0, 0, w, h);
 		ctx.restore();
-		const blob = await new Promise(res => cvs.toBlob(res, "image/png"));
+		// Crop to the current app aspect ratio (falls back to 16:9 when the
+		// user has "free" selected) so the saved still matches what the
+		// on-screen overlay showed inside the aspect frame — no more captured
+		// webcam letterbox bleeding past the visible rectangle, and the
+		// Blockout tab (which reuses this file) stays aspect-consistent with
+		// the render output.
+		const cropRatio = currentAspect()?.ratio ?? (16 / 9);
+		const sw = cvs.width, sh = cvs.height;
+		let cw, ch;
+		if (sw / sh > cropRatio) { ch = sh; cw = Math.round(sh * cropRatio); }
+		else { cw = sw; ch = Math.round(sw / cropRatio); }
+		const sx = Math.round((sw - cw) / 2);
+		const sy = Math.round((sh - ch) / 2);
+		const cropped = document.createElement("canvas");
+		cropped.width = cw; cropped.height = ch;
+		cropped.getContext("2d").drawImage(cvs, sx, sy, cw, ch, 0, 0, cw, ch);
+		// WebP q=0.9 encodes ~5-10x faster than PNG for the same visual quality
+		// on webcam-scale frames, and the upload payload is proportionally
+		// smaller. Assets endpoint accepts webp alongside png/jpg.
+		const blob = await new Promise(res => cropped.toBlob(res, "image/webp", 0.9));
 		if (!blob) throw new Error("canvas produced no blob");
-		const file = new File([blob], `mediapipe_${Date.now()}.png`, { type: "image/png" });
-		await uploadObjectRefImage(file);
+		const file = new File([blob], `mediapipe_${Date.now()}.webp`, { type: "image/webp" });
+		// Upload into the Assets library (Output pane) — matches the hint text
+		// and lets the user drag the still from Assets into any workflow slot.
+		const fd = new FormData();
+		fd.append("file", file);
+		fd.append("prefix", "mediapipe");
+		const r = await fetch("/api/assets/upload", { method: "POST", body: fd });
+		if (!r.ok) throw new Error(`upload failed (${r.status})`);
+		const j = await r.json();
+		_mp.lastStill = { url: j.url, filename: j.filename, kind: "image" };
 		window.refreshAssets?.();
+		// Enable drag-from-viewport on the frozen frame — user can grab the
+		// still straight from the MediaPipe overlay into any workflow slot,
+		// skipping the trip through the Output pane. `draggable` doesn't
+		// inherit, so set it on every child the pointer can land on (video
+		// is topmost, canvas is above it in some cases).
+		const mpOverlay = document.getElementById("mediapipe-overlay");
+		if (mpOverlay) {
+			mpOverlay.draggable = true;
+			mpOverlay.style.cursor = "grab";
+			for (const child of mpOverlay.querySelectorAll("video, canvas")) {
+				child.draggable = true;
+				child.style.cursor = "grab";
+			}
+		}
 		// Freeze in the viewport — pause the video (last decoded frame
 		// stays on screen) AND stop the detection loop so the drawn
 		// skeleton stays frozen on that exact frame. Button flips so the
@@ -14816,11 +14863,42 @@ document.getElementById("mp-still")?.addEventListener("click", async () => {
 		_mp.frozen = true;
 		btn.textContent = "Resume live";
 		btn.disabled = false;
+		// Defensive: pin the viewport tab so the MediaPipe overlay stays the
+		// active surface after capture. Something (?) has been observed to
+		// flip to Render mid-flow; explicit set keeps it predictable.
+		if (typeof resultMode !== "undefined" && resultMode !== "viewport") {
+			resultMode = "viewport";
+			applyResultMode?.();
+		}
 	} catch (e) {
 		console.error("[mediapipe] still capture failed:", e);
 		btn.textContent = "failed";
 		setTimeout(() => { btn.textContent = "Take still"; btn.disabled = false; }, 1400);
 	}
+});
+// Drag the frozen MediaPipe still straight into any workflow scene-image
+// slot — same application/x-cb-asset payload the Output tiles and result
+// overlay emit, so every existing drop target already accepts it. Bound at
+// the overlay level and fires for the child <video>/<canvas> too since
+// they inherit the bubbling dragstart event once they're draggable.
+document.getElementById("mediapipe-overlay")?.addEventListener("dragstart", e => {
+	if (!_mp.lastStill) { e.preventDefault(); return; }
+	try {
+		try { e.dataTransfer.clearData(); } catch {}
+		e.dataTransfer.setData("application/x-cb-asset", JSON.stringify(_mp.lastStill));
+		e.dataTransfer.effectAllowed = "copy";
+		document.body.classList.add("dragging-asset");
+		const ghost = document.createElement("div");
+		ghost.className = "asset-drag-ghost";
+		ghost.innerHTML = `<img src="${_mp.lastStill.url}" alt="">`;
+		document.body.appendChild(ghost);
+		e.dataTransfer.setDragImage(ghost, 28, 28);
+		_mp._dragGhost = ghost;
+	} catch {}
+});
+document.getElementById("mediapipe-overlay")?.addEventListener("dragend", () => {
+	document.body.classList.remove("dragging-asset");
+	if (_mp._dragGhost) { _mp._dragGhost.remove(); _mp._dragGhost = null; }
 });
 function addFx(kind) {
 	if (kind === "clouds") return addCloudsFx();
@@ -22485,8 +22563,8 @@ function renderWorkflowCellProperties(cell) {
 			const displayVal = isRandom ? "random" : (val || "0");
 			inputsHtml += `
 				<div class="wf-drag-row">
-					<span class="wf-drag-outer-label">${label}</span>
 					<div class="drag-num wf-drag wf-seed-drag${isRandom ? " disabled" : ""}" data-input="${spec.name}" data-input-type="seed" title="${label}">
+						<span class="drag-label">${label}</span>
 						<span class="drag-val">${displayVal}</span>
 					</div>
 					<button class="wf-seed-mode" data-input="${spec.name}" type="button" title="${isRandom ? "Random — new seed each run. Click to lock." : "Fixed — same seed each run. Click to randomize."}"
@@ -22494,13 +22572,12 @@ function renderWorkflowCellProperties(cell) {
 				</div>
 			`;
 		} else if (spec.type === "number") {
-			// Label lives OUTSIDE the drag-box so the layout reads as
-			// "Strength : [0.51]" — the drag surface itself is a small chip
-			// hugging just the value, not a full-width row with the label baked in.
+			// Label + value baked INSIDE the drag chip — matches Hand-held's
+			// Speed/Noise cells (label left, value right, full-width row).
 			inputsHtml += `
 				<div class="wf-drag-row">
-					<span class="wf-drag-outer-label">${label}</span>
 					<div class="drag-num wf-drag" data-input="${spec.name}" title="${label}">
+						<span class="drag-label">${label}</span>
 						<span class="drag-val">0</span>
 					</div>
 				</div>
@@ -22508,19 +22585,26 @@ function renderWorkflowCellProperties(cell) {
 		} else if (spec.type === "dropdown") {
 			// COMBO widget picker — fully custom dropdown so styling matches
 			// the app (native <select> option lists can't be branded on all
-			// browsers). Label sits above the trigger; the trigger opens an
-			// absolutely-positioned menu with the options. Options baked into
-			// the manifest.
+			// browsers). Options can be baked into the manifest (`options`) OR
+			// fetched dynamically from ComfyUI's /object_info at render time
+			// via `options_source: {class_type, widget, include?}` — the
+			// wiring loop below kicks off the fetch and swaps the menu HTML in.
 			const opts = Array.isArray(spec.options) ? spec.options : [];
+			const dynamic = spec.options_source && typeof spec.options_source === "object";
 			const cur = cell.values[spec.name] ?? spec.default ?? (opts[0] || "");
 			const curEsc = String(cur).replace(/</g, "&lt;").replace(/"/g, "&quot;");
-			const optsHtml = opts.map(o => {
-				const esc = String(o).replace(/</g, "&lt;").replace(/"/g, "&quot;");
-				const cls = "wf-dropdown-opt" + (String(o) === String(cur) ? " selected" : "");
-				return `<button type="button" class="${cls}" data-value="${esc}" role="option">${esc}</button>`;
-			}).join("");
+			const optsHtml = dynamic
+				? `<div class="wf-dropdown-loading" style="padding:8px 10px;font-size:10px;color:rgba(255,255,255,0.45)">Loading…</div>`
+				: opts.map(o => {
+					const esc = String(o).replace(/</g, "&lt;").replace(/"/g, "&quot;");
+					const cls = "wf-dropdown-opt" + (String(o) === String(cur) ? " selected" : "");
+					return `<button type="button" class="${cls}" data-value="${esc}" role="option">${esc}</button>`;
+				}).join("");
+			const srcAttr = dynamic
+				? ` data-options-source="${String(JSON.stringify(spec.options_source)).replace(/</g, "&lt;").replace(/"/g, "&quot;")}"`
+				: "";
 			inputsHtml += `
-				<div class="wf-dropdown" data-input="${spec.name}" style="margin-top:6px">
+				<div class="wf-dropdown" data-input="${spec.name}"${srcAttr} style="margin-top:6px">
 					<div class="wf-dropdown-label">${label}</div>
 					<button type="button" class="wf-dropdown-btn" aria-haspopup="listbox" aria-expanded="false">
 						<span class="wf-dropdown-value">${curEsc}</span>
@@ -22620,6 +22704,41 @@ function renderWorkflowCellProperties(cell) {
 		const valueEl = wrap.querySelector(".wf-dropdown-value");
 		if (!btn || !menu || !valueEl) continue;
 		const specName = wrap.dataset.input;
+		// Dynamic-options dropdowns — fetch the current combo list from
+		// /object_info and rebuild the menu. Cached per class_type/widget for
+		// the session so multi-cell pages don't re-fetch. Falls back silently
+		// on error (menu keeps its "Loading…" placeholder so the user sees
+		// something went wrong without a hard crash).
+		if (wrap.dataset.optionsSource) {
+			(async () => {
+				let src;
+				try { src = JSON.parse(wrap.dataset.optionsSource); }
+				catch { return; }
+				const key = `${src.class_type}::${src.widget}`;
+				window.__widgetOptionsCache = window.__widgetOptionsCache || {};
+				let list = window.__widgetOptionsCache[key];
+				if (!list) {
+					try {
+						const r = await fetch(`/api/local/widget-options?class_type=${encodeURIComponent(src.class_type)}&widget=${encodeURIComponent(src.widget)}`);
+						if (!r.ok) throw new Error(await r.text());
+						const j = await r.json();
+						list = Array.isArray(j.options) ? j.options : [];
+						window.__widgetOptionsCache[key] = list;
+					} catch (e) {
+						menu.innerHTML = `<div style="padding:8px 10px;font-size:10px;color:rgba(255,180,84,0.7)">Local ComfyUI not reachable — start it to pick a model.</div>`;
+						return;
+					}
+				}
+				const inc = (src.include || "").toLowerCase();
+				const filtered = inc ? list.filter(o => String(o).toLowerCase().includes(inc)) : list;
+				const cur = cell.values[specName] ?? valueEl.textContent ?? "";
+				menu.innerHTML = filtered.map(o => {
+					const esc = String(o).replace(/</g, "&lt;").replace(/"/g, "&quot;");
+					const cls = "wf-dropdown-opt" + (String(o) === String(cur) ? " selected" : "");
+					return `<button type="button" class="${cls}" data-value="${esc}" role="option">${esc}</button>`;
+				}).join("") || `<div style="padding:8px 10px;font-size:10px;color:rgba(255,255,255,0.4)">No matches</div>`;
+			})();
+		}
 		const closeMenu = () => {
 			menu.hidden = true;
 			btn.setAttribute("aria-expanded", "false");
@@ -28781,6 +28900,20 @@ async function showBlockoutSnapshot() {
 	resultOverlayImg.removeAttribute("src");
 	resultOverlay.classList.add("loading");
 	updateResultOverlayPos();
+	// If a MediaPipe still has been captured, THAT is the image the model sees
+	// as image 1 (either directly dropped into a workflow slot, or via the
+	// implicit "current source" convention). Blockout tab shows it so the
+	// user sees the real input, not the 3D scene sitting beneath the overlay.
+	if (_mp.lastStill?.url) {
+		await new Promise((resolve) => {
+			const pre = new Image();
+			pre.onload = pre.onerror = resolve;
+			pre.src = _mp.lastStill.url;
+		});
+		resultOverlayImg.src = _mp.lastStill.url;
+		resultOverlay.classList.remove("loading");
+		return;
+	}
 	// Render → upload → preload → swap. Awaiting each step guarantees the
 	// spinner stays up until the fresh image is actually decoded and ready
 	// to paint. Bigger scenes → longer autoSnapshot, so the spinner scales
@@ -28892,17 +29025,28 @@ function _setCompareTarget(pct) {
 }
 function syncCompareMode() {
 	if (!resultOverlay || !_blockoutUnderlay) return;
-	const active = (resultMode === "render") && !!lastResult;
+	// Compare "before" underlay picked by the pipeline stage the user is
+	// viewing — one step back from the current tab:
+	//   Render  → preproc if a preproc pass ran, else the blockout snapshot
+	//   Preproc → blockout snapshot
+	//   anything else → no compare (viewport is live, blockout has no "before")
+	// "Blockout" for compare purposes = whatever the model actually saw as
+	// image 1. Prefer the MediaPipe still if one was captured; fall back to
+	// the auto-composited 3D scene snapshot.
+	const blockoutSrc = _mp.lastStill?.url
+		|| `/comfyblockout/image/${encodeURIComponent(NODE_ID)}?t=${Date.now()}`;
+	let underlaySrc = null;
+	if (resultMode === "render" && lastResult) {
+		underlaySrc = lastPreprocResult ? lastPreprocResult.url : blockoutSrc;
+	} else if (resultMode === "preproc" && lastPreprocResult) {
+		underlaySrc = blockoutSrc;
+	}
+	const active = !!underlaySrc;
 	resultOverlay.classList.toggle("compare-mode", active);
 	if (active) {
-		// Same URL that showBlockoutSnapshot loads into resultOverlayImg —
-		// pointing the underlay at it means the "before" side is always the
-		// current auto-composited scene. Cache-busting timestamp so a rebuild
-		// after a scene edit doesn't stick with a stale blockout.
-		const url = `/comfyblockout/image/${encodeURIComponent(NODE_ID)}?t=${Date.now()}`;
-		if (_blockoutUnderlay.dataset.src !== url) {
-			_blockoutUnderlay.dataset.src = url;
-			_blockoutUnderlay.src = url;
+		if (_blockoutUnderlay.dataset.src !== underlaySrc) {
+			_blockoutUnderlay.dataset.src = underlaySrc;
+			_blockoutUnderlay.src = underlaySrc;
 		}
 		resultOverlay.style.setProperty("--compare-x", `${_comparePct}%`);
 	} else {
@@ -29179,13 +29323,21 @@ document.getElementById("result-clear-overlay")?.addEventListener("click", async
 	await showBlockoutSnapshot();
 	applyResultMode?.();
 });
-document.getElementById("result-save-overlay")?.addEventListener("click", () => {
-	// Blockout mode → download the composited PNG snapshot (what the model
-	// received as image 1). Render mode → download the generated result.
+document.getElementById("result-save-overlay")?.addEventListener("click", async () => {
+	// Save whatever's currently displayed — reading straight off the visible
+	// <img>/<video> means blockout tab downloads the MediaPipe still (webp)
+	// when one exists, or the composited scene otherwise, with no re-fetch
+	// or on-the-fly regeneration on the server.
 	let href = null, filename = null;
 	if (resultMode === "blockout") {
-		href = `/comfyblockout/image/${encodeURIComponent(NODE_ID)}?t=${Date.now()}`;
-		filename = `blockout_${NODE_ID}.png`;
+		if (resultOverlayVid?.style.display !== "none" && resultOverlayVid?.src) {
+			href = resultOverlayVid.src;
+			filename = `blockout_${NODE_ID}.mp4`;
+		} else {
+			href = resultOverlayImg?.src || `/comfyblockout/image/${encodeURIComponent(NODE_ID)}`;
+			const ext = href.includes(".webp") ? "webp" : "png";
+			filename = `blockout_${NODE_ID}.${ext}`;
+		}
 	} else if (resultMode === "preproc" && lastPreprocResult) {
 		href = lastPreprocResult.url;
 		filename = lastPreprocResult.filename || "preproc.png";
@@ -29201,10 +29353,28 @@ document.getElementById("result-save-overlay")?.addEventListener("click", () => 
 		filename = lastResult.filename || "render.png";
 	}
 	if (!href) return;
-	const a = document.createElement("a");
-	a.href = href;
-	a.download = filename;
-	document.body.appendChild(a); a.click(); a.remove();
+	// Fetch → blob → object URL is way more reliable than a bare <a href
+	// download> when the backend is busy (e.g. mid-workflow-run). Force-cache
+	// tells the browser "use the image you already have in memory, don't
+	// re-fetch" — matches right-click Save Image As which is instant because
+	// it never hits the network for an already-loaded image.
+	try {
+		const r = await fetch(href, { cache: "force-cache" });
+		if (!r.ok) throw new Error(`HTTP ${r.status}`);
+		const blob = await r.blob();
+		const objUrl = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = objUrl;
+		a.download = filename;
+		document.body.appendChild(a); a.click(); a.remove();
+		setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
+	} catch (e) {
+		// Fallback: let the browser fetch it the normal way.
+		const a = document.createElement("a");
+		a.href = href;
+		a.download = filename;
+		document.body.appendChild(a); a.click(); a.remove();
+	}
 });
 
 // Result overlay drag source — lets the user drag the currently-visible

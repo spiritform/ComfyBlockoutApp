@@ -93,8 +93,24 @@ def apply_source_aspect_to_latents(workflow: dict, src_w: int, src_h: int) -> No
 def inject_intermediate_saves(workflow: dict, intermediates: list[dict]) -> dict[str, str]:
     """For each declared intermediate, splice in a synthetic SaveImage that fans
     off the source node's chosen slot. Returns {intermediate_name -> synthetic
-    node id} so the caller can find the resulting files in /history."""
+    node id} so the caller can find the resulting files in /history.
+
+    Uses numeric string IDs starting above the workflow's max — some ComfyUI
+    versions reject non-numeric node IDs silently (the node runs but doesn't
+    appear in /history outputs), which broke intermediate extraction and let
+    the synth SaveImage's file leak into the primary render pick."""
     mapping: dict[str, str] = {}
+    # Base next-id at max(existing numeric ids) + 1, ignoring anything that
+    # isn't a plain integer string (user-authored non-standard ids).
+    max_id = 0
+    for k in workflow.keys():
+        try:
+            n = int(k)
+            if n > max_id: max_id = n
+        except (TypeError, ValueError):
+            continue
+    next_id = max_id + 100  # gap so re-splices don't collide across runs
+
     for spec in intermediates or []:
         name = spec.get("name")
         src_id = spec.get("source_node_id", spec.get("node_id"))
@@ -102,9 +118,10 @@ def inject_intermediate_saves(workflow: dict, intermediates: list[dict]) -> dict
             continue
         src_slot = int(spec.get("source_slot", 0))
         prefix = spec.get("filename_prefix") or f"intermediate_{name}"
-        synth_id = f"_int_{name}"
+        synth_id = str(next_id)
         while synth_id in workflow:
-            synth_id += "_"
+            next_id += 1
+            synth_id = str(next_id)
         workflow[synth_id] = {
             "class_type": "SaveImage",
             "_meta": {"title": f"Intermediate · {name}"},
@@ -114,6 +131,7 @@ def inject_intermediate_saves(workflow: dict, intermediates: list[dict]) -> dict
             },
         }
         mapping[name] = synth_id
+        next_id += 1
     return mapping
 
 
@@ -305,6 +323,12 @@ def _apply_single_patch(workflow: dict, spec: dict, patch: dict, kwargs: dict) -
                     value = float(s)
                 except ValueError:
                     pass
+        # ComfyUI schema-validates some widgets as int (KSampler.steps, etc.).
+        # A whole-number float ("30" → 30.0) fails validation, so demote it to
+        # int when the fractional part is zero. Preserves float semantics for
+        # true decimals (0.8, 7.5).
+        if input_type == "number" and isinstance(value, float) and value.is_integer():
+            value = int(value)
         inputs[widget_name] = value
         print(f"[workflow-patch] node {node_id}.{widget_name} <- {value!r} ({input_type})")
 
@@ -412,33 +436,37 @@ async def download_output(client: httpx.AsyncClient, item: dict, dst: Path) -> N
 
 def pick_output(outputs: dict, allowed_exts: list[str]) -> dict | None:
     """Walk every completed node's outputs and return the first file matching
-    the allowed extensions. Preference given to nodes titled BLOCKOUT_OUTPUT
-    (mirrors the convention used by local_triposplat.py)."""
-    prioritized: list[str] = []
-    others: list[str] = []
-    for nid, node_outs in (outputs or {}).items():
-        if not isinstance(node_outs, dict):
-            continue
-        # Rather than parse titles per output, we just visit prioritized nodes
-        # first if present. In the current MVP that requires the manifest to
-        # denote them; keeping the code path here so it's easy to extend.
-        prioritized.append(nid) if False else others.append(nid)
-
-    for nid in prioritized + others:
-        node_outs = outputs[nid]
-        for key, val in node_outs.items():
-            if not isinstance(val, list):
+    the allowed extensions. TWO-PASS: prefer items with `type == "output"`
+    (the SaveImage/SaveVideo family) over `type == "temp"` (PreviewImage /
+    Preview nodes the user drops in ComfyUI to eyeball intermediates). Without
+    this, a preprocessor PreviewImage can win the race and get returned as
+    "the render", which is why depth maps started showing up in the Render tab."""
+    def _walk(prefer_output: bool) -> dict | None:
+        for _nid, node_outs in (outputs or {}).items():
+            if not isinstance(node_outs, dict):
                 continue
-            for item in val:
-                if not isinstance(item, dict):
+            for _key, val in node_outs.items():
+                if not isinstance(val, list):
                     continue
-                fn = item.get("filename")
-                if not isinstance(fn, str):
-                    continue
-                ext = Path(fn).suffix.lstrip(".").lower()
-                if ext in allowed_exts:
+                for item in val:
+                    if not isinstance(item, dict):
+                        continue
+                    fn = item.get("filename")
+                    if not isinstance(fn, str):
+                        continue
+                    ext = Path(fn).suffix.lstrip(".").lower()
+                    if ext not in allowed_exts:
+                        continue
+                    itype = (item.get("type") or "output").lower()
+                    is_output = itype == "output"
+                    if prefer_output and not is_output:
+                        continue
+                    if not prefer_output and is_output:
+                        continue
                     return item
-    return None
+        return None
+
+    return _walk(prefer_output=True) or _walk(prefer_output=False)
 
 
 async def run_local_workflow(workflow_path: Path, manifest: dict, kwargs: dict, data_dir: Path) -> dict:
@@ -515,14 +543,18 @@ async def run_local_workflow(workflow_path: Path, manifest: dict, kwargs: dict, 
         _pid, outputs = await submit_and_wait(client, workflow)
 
         # Peel the intermediate outputs first so pick_output can safely ignore
-        # them when it scans for the primary result.
+        # them when it scans for the primary result. Pop the synth node from
+        # outputs UNCONDITIONALLY — even if extraction failed for some reason,
+        # we must never let our synthetic SaveImage win pick_output and get
+        # returned as "the render" (which is how the depth pass started showing
+        # up in the Render tab).
         intermediates_out: list[dict] = []
         for spec in intermediates_spec:
             name = spec.get("name")
             synth_id = intermediates_map.get(name)
             if not synth_id:
                 continue
-            node_outs = (outputs or {}).get(synth_id) or {}
+            node_outs = (outputs or {}).pop(synth_id, {}) or {}
             picked = None
             for val in node_outs.values():
                 if not isinstance(val, list):
@@ -536,6 +568,7 @@ async def run_local_workflow(workflow_path: Path, manifest: dict, kwargs: dict, 
                 if picked:
                     break
             if not picked:
+                print(f"[workflow] intermediate '{name}' (synth {synth_id}) produced no matching output — skipping tab")
                 continue
             e = Path(picked["filename"]).suffix.lstrip(".").lower() or allowed_exts[0]
             i_dst = new_output_path(data_dir, f"{module_id}_{name}", e)
@@ -547,7 +580,6 @@ async def run_local_workflow(workflow_path: Path, manifest: dict, kwargs: dict, 
                 "filename": i_dst.name,
                 "ext": e,
             })
-            outputs.pop(synth_id, None)
 
         item = pick_output(outputs, allowed_exts)
         if not item:
