@@ -34,66 +34,37 @@
       "name": "preprocessor",
       "type": "dropdown",
       "label": "Preprocessor",
+      "options_source": {
+        "class_type": "AIO_Preprocessor",
+        "widget": "preprocessor"
+      },
       "default": "DepthAnythingV2Preprocessor",
-      "options": [
-        "none",
-        "AnimeFace_SemSegPreprocessor",
-        "AnyLineArtPreprocessor_aux",
-        "BinaryPreprocessor",
-        "CannyEdgePreprocessor",
-        "ColorPreprocessor",
-        "DensePosePreprocessor",
-        "DepthAnythingPreprocessor",
-        "Zoe_DepthAnythingPreprocessor",
-        "DepthAnythingV2Preprocessor",
-        "DSINE-NormalMapPreprocessor",
-        "DWPreprocessor",
-        "AnimalPosePreprocessor",
-        "HEDPreprocessor",
-        "FakeScribblePreprocessor",
-        "LeReS-DepthMapPreprocessor",
-        "LineArtPreprocessor",
-        "AnimeLineArtPreprocessor",
-        "LineartStandardPreprocessor",
-        "Manga2Anime_LineArt_Preprocessor",
-        "MediaPipe-FaceMeshPreprocessor",
-        "MeshGraphormer-DepthMapPreprocessor",
-        "Metric3D-DepthMapPreprocessor",
-        "Metric3D-NormalMapPreprocessor",
-        "MiDaS-NormalMapPreprocessor",
-        "MiDaS-DepthMapPreprocessor",
-        "M-LSDPreprocessor",
-        "BAE-NormalMapPreprocessor",
-        "OneFormer-COCO-SemSegPreprocessor",
-        "OneFormer-ADE20K-SemSegPreprocessor",
-        "OpenposePreprocessor",
-        "PiDiNetPreprocessor",
-        "PyraCannyPreprocessor",
-        "ImageLuminanceDetector",
-        "ScribblePreprocessor",
-        "Scribble_PiDiNet_Preprocessor",
-        "TEEDPreprocessor",
-        "TilePreprocessor",
-        "Zoe-DepthMapPreprocessor",
-        "SAMPreprocessor",
-        "ShufflePreprocessor",
-        "ImageIntensityDetector",
-        "Scribble_XDoG_Preprocessor",
-        "TTPlanet_TileGF_Preprocessor",
-        "TTPlanet_TileSimple_Preprocessor"
-      ],
       "patch": {
         "node_id": 9,
-        "widget_index": 0,
         "widget_name": "preprocessor"
+      }
+    },
+    {
+      "name": "controlnet_strength",
+      "type": "number",
+      "label": "ControlNet",
+      "default": 0.8,
+      "min": 0,
+      "max": 1,
+      "step": 0.05,
+      "patch": {
+        "node_id": 16,
+        "widget_index": 0,
+        "widget_name": "strength"
       }
     },
     {
       "name": "preproc_blur",
       "type": "number",
       "label": "Preproc Blur",
+      "row": "preproc",
       "default": 17,
-      "min": 0,
+      "min": 1,
       "max": 31,
       "step": 1,
       "patch": {
@@ -105,6 +76,7 @@
       "name": "preproc_sigma",
       "type": "number",
       "label": "Preproc Sigma",
+      "row": "preproc",
       "default": 3.8,
       "min": 0.1,
       "max": 10,
@@ -112,6 +84,33 @@
       "patch": {
         "node_id": 22,
         "widget_name": "sigma"
+      }
+    },
+    {
+      "name": "megapixels",
+      "type": "number",
+      "label": "Megapixels",
+      "default": 1.0,
+      "min": 0.25,
+      "max": 4,
+      "step": 0.25,
+      "patch": {
+        "node_id": 25,
+        "widget_name": "megapixels"
+      }
+    },
+    {
+      "name": "upscale_method",
+      "type": "dropdown",
+      "label": "Scale Method",
+      "options_source": {
+        "class_type": "ImageScaleToTotalPixels",
+        "widget": "upscale_method"
+      },
+      "default": "lanczos",
+      "patch": {
+        "node_id": 25,
+        "widget_name": "upscale_method"
       }
     },
     {
@@ -179,6 +178,7 @@
       "name": "steps",
       "type": "number",
       "label": "Steps",
+      "row": "sc",
       "default": 30,
       "min": 1,
       "max": 150,
@@ -192,6 +192,7 @@
       "name": "cfg",
       "type": "number",
       "label": "CFG",
+      "row": "sc",
       "default": 7,
       "min": 0,
       "max": 30,
@@ -202,17 +203,16 @@
       }
     },
     {
-      "name": "controlnet_strength",
+      "name": "denoise",
       "type": "number",
-      "label": "ControlNet",
-      "default": 0.8,
+      "label": "Denoise",
+      "default": 1,
       "min": 0,
       "max": 1,
       "step": 0.05,
       "patch": {
-        "node_id": 16,
-        "widget_index": 0,
-        "widget_name": "strength"
+        "node_id": 3,
+        "widget_name": "denoise"
       }
     }
   ],
@@ -222,7 +222,11 @@
       "label": "Preproc",
       "source_node_id": 22,
       "source_slot": 0,
-      "filename_prefix": "sdxl_cn_preproc"
+      "filename_prefix": "sdxl_cn_preproc",
+      "skip_when": [
+        {"input": "preprocessor", "equals": "none"},
+        {"input": "controlnet_strength", "equals": 0}
+      ]
     }
   ]
 }

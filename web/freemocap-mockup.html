@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FreeMoCap — tracking preview</title>
+<style>
+	/* Standalone tracking-preview mockup. FreeMoCap's real value is multi-cam
+	   3D triangulation via skellytracker (which wraps MediaPipe Holistic).
+	   This page runs MediaPipe directly in-browser so we can eyeball what
+	   the per-view tracker gives us + a 3D world-landmarks panel that
+	   approximates what a single-view triangulation would look like. */
+	:root {
+		color-scheme: dark;
+		--bg: #0a0a0e;
+		--panel: #14141a;
+		--panel2: #1a1a22;
+		--border: rgba(255,255,255,0.08);
+		--text: rgba(255,255,255,0.85);
+		--dim: rgba(255,255,255,0.45);
+		--amber: #ffb454;
+		--ok: #4ade80;
+		--err: #ff6b6b;
+	}
+	* { box-sizing: border-box; }
+	html, body {
+		margin: 0; padding: 0; height: 100%; overflow: hidden;
+		background: var(--bg); color: var(--text);
+		font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+	}
+	body { display: flex; flex-direction: column; }
+
+	header {
+		flex: 0 0 auto;
+		display: flex; align-items: center; gap: 14px;
+		padding: 10px 16px;
+		background: var(--panel);
+		border-bottom: 1px solid var(--border);
+	}
+	.title { font-size: 13px; font-weight: 600; letter-spacing: 0.4px; }
+	.title .sub { color: var(--dim); font-weight: 500; margin-left: 6px; }
+	.spacer { flex: 1; }
+	.link {
+		font-size: 11px; color: var(--dim); text-decoration: none;
+		padding: 5px 10px; border-radius: 5px;
+		border: 1px solid var(--border);
+	}
+	.link:hover { color: var(--text); border-color: rgba(255,255,255,0.18); }
+
+	.pill {
+		display: inline-flex; align-items: center; gap: 6px;
+		padding: 5px 10px; border-radius: 999px;
+		font-size: 11px; font-weight: 500;
+		background: rgba(255,180,84,0.12); color: var(--amber);
+	}
+	.pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+	.pill.checking .dot { animation: pulse 1.2s ease-in-out infinite; }
+	.pill.ok { background: rgba(74,222,128,0.12); color: var(--ok); }
+	.pill.err { background: rgba(255,107,107,0.12); color: var(--err); }
+	@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+	main { flex: 1; min-height: 0; display: flex; }
+
+	.sidebar {
+		flex: 0 0 260px; padding: 14px 16px;
+		background: var(--panel);
+		border-right: 1px solid var(--border);
+		overflow: auto;
+		display: flex; flex-direction: column; gap: 14px;
+	}
+	.sidebar h2 {
+		font-size: 10px; font-weight: 600; letter-spacing: 1px;
+		color: var(--dim); margin: 0 0 6px;
+		text-transform: uppercase;
+	}
+	.field { display: flex; flex-direction: column; gap: 6px; }
+	.field label {
+		font-size: 10px; letter-spacing: 0.5px; color: var(--dim);
+		text-transform: uppercase; font-weight: 600;
+	}
+
+	.seg {
+		display: flex; gap: 4px;
+		background: var(--panel2);
+		border: 1px solid var(--border);
+		border-radius: 5px; padding: 3px;
+	}
+	.seg button {
+		flex: 1;
+		background: transparent; color: var(--dim);
+		border: 0; border-radius: 3px;
+		font: inherit; font-size: 11px; font-weight: 500;
+		padding: 5px 6px; cursor: pointer;
+	}
+	.seg button:hover { color: var(--text); }
+	.seg button.active {
+		background: rgba(255,255,255,0.08); color: var(--text);
+	}
+
+	.btn {
+		display: flex; align-items: center; justify-content: center; gap: 8px;
+		padding: 8px 14px; border-radius: 5px;
+		background: rgba(255,255,255,0.08); color: var(--text);
+		border: 1px solid var(--border);
+		font: inherit; font-size: 12px; font-weight: 500;
+		cursor: pointer;
+	}
+	.btn:hover { background: rgba(255,255,255,0.14); }
+	.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+	.btn.primary { background: var(--amber); color: #14141a; border-color: transparent; font-weight: 600; }
+	.btn.primary:hover { background: #ffbf6e; }
+
+	.stats {
+		display: flex; flex-direction: column; gap: 4px;
+		font-size: 11px; color: var(--dim);
+	}
+	.stats .kv { display: flex; justify-content: space-between; }
+	.stats .kv .v { color: var(--text); font-variant-numeric: tabular-nums; }
+
+	.viewer {
+		flex: 1; min-width: 0; min-height: 0;
+		display: flex;
+	}
+	.pane {
+		flex: 1; min-width: 0; min-height: 0;
+		position: relative;
+		background: #06060a;
+		display: flex; align-items: center; justify-content: center;
+	}
+	.pane + .pane { border-left: 1px solid var(--border); }
+	.pane .label {
+		position: absolute; top: 10px; left: 12px; z-index: 3;
+		font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+		color: var(--dim); font-weight: 600;
+		background: rgba(6,6,10,0.55);
+		padding: 4px 8px; border-radius: 4px;
+		backdrop-filter: blur(4px);
+	}
+
+	/* Video stage — the raw feed sits behind a landmark canvas sized to the
+	   video's intrinsic resolution. object-fit contains the feed so its aspect
+	   is preserved inside the pane, and the overlay canvas mirrors that with
+	   CSS transform so 0..1 landmark coords land on the same pixels. */
+	.stage {
+		position: relative;
+		width: 100%; height: 100%;
+		display: flex; align-items: center; justify-content: center;
+		overflow: hidden;
+	}
+	#video, #overlay {
+		max-width: 100%; max-height: 100%;
+		display: block;
+	}
+	#video { transform: scaleX(-1); }
+	#overlay {
+		position: absolute; pointer-events: none;
+		transform: scaleX(-1);
+	}
+	#world-canvas {
+		position: absolute; inset: 0;
+		width: 100%; height: 100%;
+		display: block;
+	}
+	.empty {
+		color: var(--dim); font-size: 12px;
+		text-align: center; padding: 24px;
+	}
+
+	.footer {
+		flex: 0 0 auto;
+		display: flex; align-items: center; gap: 10px;
+		padding: 8px 14px;
+		background: var(--panel);
+		border-top: 1px solid var(--border);
+		font-size: 11px; color: var(--dim);
+	}
+	.footer .kv { display: inline-flex; gap: 5px; }
+	.footer .kv .v { color: var(--text); font-variant-numeric: tabular-nums; }
+	.footer .spacer { flex: 1; }
+</style>
+</head>
+<body>
+
+<header>
+	<div class="title">FreeMoCap <span class="sub">tracking preview · single-cam</span></div>
+	<span id="status-pill" class="pill checking">
+		<span class="dot"></span><span id="status-label">idle</span>
+	</span>
+	<div class="spacer"></div>
+	<a class="link" href="https://github.com/freemocap/freemocap" target="_blank" rel="noopener">repo ↗</a>
+	<a class="link" href="https://github.com/freemocap/skellytracker" target="_blank" rel="noopener">skellytracker ↗</a>
+</header>
+
+<main>
+	<aside class="sidebar">
+		<div class="field">
+			<label>Source</label>
+			<div class="seg" id="src-seg">
+				<button data-src="webcam" class="active">Webcam</button>
+				<button data-src="video">Video file</button>
+			</div>
+			<input id="file-input" type="file" accept="video/*" hidden>
+		</div>
+
+		<div class="field">
+			<label>Tracker</label>
+			<div class="seg" id="mode-seg">
+				<button data-mode="pose" class="active">Pose</button>
+				<button data-mode="hands">+ Hands</button>
+				<button data-mode="holistic">Holistic</button>
+			</div>
+		</div>
+
+		<div class="field">
+			<label>Model quality</label>
+			<div class="seg" id="quality-seg">
+				<button data-q="lite" class="active">Lite</button>
+				<button data-q="full">Full</button>
+				<button data-q="heavy">Heavy</button>
+			</div>
+		</div>
+
+		<div class="field">
+			<label>Show</label>
+			<div class="seg" id="show-seg">
+				<button data-show="2d" class="active">2D</button>
+				<button data-show="3d" class="active">3D</button>
+			</div>
+		</div>
+
+		<button id="start-btn" class="btn primary">Start camera</button>
+		<button id="stop-btn" class="btn" disabled>Stop</button>
+
+		<div>
+			<h2>Live stats</h2>
+			<div class="stats" id="stats">
+				<div class="kv"><span>Detect FPS</span><span class="v" id="stat-fps">—</span></div>
+				<div class="kv"><span>Inference</span><span class="v" id="stat-ms">—</span></div>
+				<div class="kv"><span>Pose landmarks</span><span class="v" id="stat-pose">0 / 33</span></div>
+				<div class="kv"><span>Hand landmarks</span><span class="v" id="stat-hands">0 / 42</span></div>
+				<div class="kv"><span>Face landmarks</span><span class="v" id="stat-face">0 / 478</span></div>
+			</div>
+		</div>
+
+		<div>
+			<h2>About</h2>
+			<div style="font-size:11px;color:var(--dim);line-height:1.5">
+				This runs MediaPipe in the browser — the same tracker
+				<code style="color:var(--text)">skellytracker</code> uses per view.
+				FreeMoCap's extra value is <em>multi-cam</em> triangulation
+				into ground-truth 3D. The right pane shows MediaPipe's
+				world-landmarks as a rough proxy.
+			</div>
+		</div>
+	</aside>
+
+	<div class="viewer">
+		<div class="pane">
+			<span class="label">2D landmarks</span>
+			<div class="stage" id="video-stage">
+				<div class="empty" id="video-empty">
+					Click <strong>Start camera</strong> to begin.
+				</div>
+				<video id="video" playsinline muted hidden></video>
+				<canvas id="overlay" hidden></canvas>
+			</div>
+		</div>
+		<div class="pane">
+			<span class="label">3D world</span>
+			<canvas id="world-canvas"></canvas>
+		</div>
+	</div>
+</main>
+
+<div class="footer">
+	<span class="kv">source <span class="v" id="ft-src">—</span></span>
+	<span class="kv">mode <span class="v" id="ft-mode">pose · lite</span></span>
+	<span class="spacer"></span>
+	<span class="kv" id="ft-hint" style="color:var(--dim)">Grant camera access after Start.</span>
+</div>
+
+<script type="importmap">
+{
+	"imports": {
+		"three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+		"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+	}
+}
+</script>
+
+<script type="module">
+	import * as THREE from "three";
+	import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+	// ─── MediaPipe loader ──────────────────────────────────────────────
+	// Same CDN version the editor already uses so we don't drift on WASM.
+	const MP_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.17";
+	const MODEL_URLS = {
+		pose: {
+			lite:  "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
+			full:  "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task",
+			heavy: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task",
+		},
+		hand:  "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
+		face:  "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
+	};
+
+	const state = {
+		tasks: null, vision: null,
+		poseLm: null, handLm: null, faceLm: null,
+		drawingUtils: null,
+		stream: null, source: "webcam", mode: "pose", quality: "lite",
+		show2d: true, show3d: true,
+		running: false, lastTs: 0, lastInfer: 0,
+		fpsBuf: [], msBuf: [],
+		lastResult: { pose: null, hands: null, face: null, worldPose: null },
+	};
+
+	// ─── Elements ──────────────────────────────────────────────────────
+	const $ = (id) => document.getElementById(id);
+	const video = $("video"), overlay = $("overlay");
+	const videoEmpty = $("video-empty");
+	const startBtn = $("start-btn"), stopBtn = $("stop-btn");
+	const statusPill = $("status-pill"), statusLabel = $("status-label");
+	const ftMode = $("ft-mode"), ftSrc = $("ft-src"), ftHint = $("ft-hint");
+
+	function setStatus(text, cls) {
+		statusLabel.textContent = text;
+		statusPill.className = "pill " + (cls || "checking");
+	}
+	function updateFooter() {
+		ftMode.textContent = `${state.mode} · ${state.quality}`;
+		ftSrc.textContent = state.source;
+	}
+	updateFooter();
+
+	// ─── Segmented button wiring ──────────────────────────────────────
+	function wireSeg(id, apply) {
+		const seg = $(id);
+		seg.addEventListener("click", (e) => {
+			const btn = e.target.closest("button");
+			if (!btn) return;
+			apply(btn, seg);
+		});
+	}
+
+	wireSeg("src-seg", (btn, seg) => {
+		[...seg.querySelectorAll("button")].forEach(b => b.classList.toggle("active", b === btn));
+		state.source = btn.dataset.src;
+		updateFooter();
+		if (state.source === "video") {
+			$("file-input").click();
+		}
+	});
+
+	wireSeg("mode-seg", (btn, seg) => {
+		[...seg.querySelectorAll("button")].forEach(b => b.classList.toggle("active", b === btn));
+		state.mode = btn.dataset.mode;
+		updateFooter();
+		ensureLandmarkersForMode();
+	});
+
+	wireSeg("quality-seg", (btn, seg) => {
+		[...seg.querySelectorAll("button")].forEach(b => b.classList.toggle("active", b === btn));
+		state.quality = btn.dataset.q;
+		updateFooter();
+		// Force reload of the pose landmarker at the new quality.
+		if (state.poseLm) { state.poseLm.close(); state.poseLm = null; }
+		if (state.running) ensureLandmarkersForMode();
+	});
+
+	// The Show segment is a multi-toggle — click flips each independently.
+	wireSeg("show-seg", (btn) => {
+		btn.classList.toggle("active");
+		state.show2d = $("show-seg").querySelector('[data-show="2d"]').classList.contains("active");
+		state.show3d = $("show-seg").querySelector('[data-show="3d"]').classList.contains("active");
+	});
+
+	// Video-file source. Reuses the same loop; getUserMedia is skipped.
+	$("file-input").addEventListener("change", async (e) => {
+		const f = e.target.files?.[0];
+		if (!f) return;
+		if (state.stream) { state.stream.getTracks().forEach(t => t.stop()); state.stream = null; }
+		video.srcObject = null;
+		video.src = URL.createObjectURL(f);
+		video.loop = true;
+		videoEmpty.hidden = true;
+		video.hidden = false;
+		await video.play();
+		overlay.width = video.videoWidth; overlay.height = video.videoHeight;
+		overlay.hidden = false;
+		if (!state.tasks) await loadMediaPipe();
+		await ensureLandmarkersForMode();
+		state.running = true;
+		setStatus(`playing · ${f.name}`, "ok");
+		startBtn.disabled = true; stopBtn.disabled = false;
+		requestAnimationFrame(loop);
+	});
+
+	// ─── MediaPipe lifecycle ──────────────────────────────────────────
+	async function loadMediaPipe() {
+		setStatus("loading MediaPipe…", "checking");
+		const tasks = await import(`${MP_CDN}/vision_bundle.mjs`);
+		const vision = await tasks.FilesetResolver.forVisionTasks(`${MP_CDN}/wasm`);
+		state.tasks = tasks;
+		state.vision = vision;
+	}
+
+	async function ensureLandmarkersForMode() {
+		if (!state.tasks) return;
+		const { tasks, vision } = state;
+		if (!state.poseLm) {
+			setStatus(`loading pose · ${state.quality}…`, "checking");
+			state.poseLm = await tasks.PoseLandmarker.createFromOptions(vision, {
+				baseOptions: { modelAssetPath: MODEL_URLS.pose[state.quality], delegate: "GPU" },
+				runningMode: "VIDEO",
+				numPoses: 1,
+				// World landmarks give us metric-space 3D per detection —
+				// what we plot in the right pane as a stand-in for the
+				// multi-cam triangulated pose FreeMoCap would produce.
+				outputSegmentationMasks: false,
+			});
+		}
+		if ((state.mode === "hands" || state.mode === "holistic") && !state.handLm) {
+			setStatus("loading hands…", "checking");
+			state.handLm = await tasks.HandLandmarker.createFromOptions(vision, {
+				baseOptions: { modelAssetPath: MODEL_URLS.hand, delegate: "GPU" },
+				runningMode: "VIDEO",
+				numHands: 2,
+			});
+		}
+		if (state.mode === "holistic" && !state.faceLm) {
+			setStatus("loading face…", "checking");
+			state.faceLm = await tasks.FaceLandmarker.createFromOptions(vision, {
+				baseOptions: { modelAssetPath: MODEL_URLS.face, delegate: "GPU" },
+				runningMode: "VIDEO",
+				numFaces: 1,
+			});
+		}
+		state.drawingUtils = new tasks.DrawingUtils(overlay.getContext("2d"));
+		setStatus(state.source === "video" ? "playing" : "tracking", "ok");
+	}
+
+	// ─── Start / stop ─────────────────────────────────────────────────
+	startBtn.addEventListener("click", async () => {
+		try {
+			startBtn.disabled = true;
+			setStatus("requesting camera…", "checking");
+			state.stream = await navigator.mediaDevices.getUserMedia({
+				video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false,
+			});
+			video.srcObject = state.stream;
+			await new Promise(r => video.addEventListener("loadedmetadata", r, { once: true }));
+			await video.play();
+			videoEmpty.hidden = true;
+			video.hidden = false;
+			overlay.width = video.videoWidth;
+			overlay.height = video.videoHeight;
+			overlay.style.width = video.clientWidth + "px";
+			overlay.style.height = video.clientHeight + "px";
+			overlay.hidden = false;
+			if (!state.tasks) await loadMediaPipe();
+			await ensureLandmarkersForMode();
+			ftHint.textContent = "";
+			state.running = true;
+			stopBtn.disabled = false;
+			requestAnimationFrame(loop);
+		} catch (e) {
+			console.error(e);
+			setStatus(`camera denied — ${e.message || e}`, "err");
+			startBtn.disabled = false;
+		}
+	});
+
+	stopBtn.addEventListener("click", () => {
+		state.running = false;
+		if (state.stream) { state.stream.getTracks().forEach(t => t.stop()); state.stream = null; }
+		video.pause();
+		video.hidden = true;
+		overlay.hidden = true;
+		videoEmpty.hidden = false;
+		videoEmpty.innerHTML = "Stopped. Click <strong>Start camera</strong> to resume.";
+		startBtn.disabled = false;
+		stopBtn.disabled = true;
+		setStatus("stopped", "checking");
+	});
+
+	// Keep the overlay CSS box locked to the video element as it scales
+	// to fit the pane — object-fit doesn't apply to canvases, so we set
+	// its size directly.
+	function syncOverlaySize() {
+		if (video.hidden) return;
+		const r = video.getBoundingClientRect();
+		overlay.style.width  = r.width + "px";
+		overlay.style.height = r.height + "px";
+	}
+	new ResizeObserver(syncOverlaySize).observe($("video-stage"));
+
+	// ─── Detection loop ───────────────────────────────────────────────
+	function loop() {
+		if (!state.running) return;
+		requestAnimationFrame(loop);
+		if (video.readyState < 2) return;
+		const ts = performance.now();
+		if (ts - state.lastTs < 20) return; // ~50 FPS cap; MP itself will be slower
+
+		const t0 = performance.now();
+		try {
+			if (state.poseLm) {
+				const r = state.poseLm.detectForVideo(video, ts);
+				state.lastResult.pose = r.landmarks?.[0] || null;
+				state.lastResult.worldPose = r.worldLandmarks?.[0] || null;
+			}
+			if (state.handLm && (state.mode === "hands" || state.mode === "holistic")) {
+				const r = state.handLm.detectForVideo(video, ts);
+				state.lastResult.hands = r.landmarks || [];
+			} else state.lastResult.hands = [];
+			if (state.faceLm && state.mode === "holistic") {
+				const r = state.faceLm.detectForVideo(video, ts);
+				state.lastResult.face = r.faceLandmarks?.[0] || null;
+			} else state.lastResult.face = null;
+		} catch (e) {
+			// video warm-up frames occasionally throw; ignore.
+		}
+		const t1 = performance.now();
+		state.lastInfer = t1 - t0;
+		state.msBuf.push(state.lastInfer); if (state.msBuf.length > 30) state.msBuf.shift();
+		if (state.lastTs) {
+			const dt = ts - state.lastTs;
+			state.fpsBuf.push(1000 / dt); if (state.fpsBuf.length > 30) state.fpsBuf.shift();
+		}
+		state.lastTs = ts;
+
+		drawOverlay();
+		draw3D();
+		updateStats();
+	}
+
+	// ─── 2D overlay ───────────────────────────────────────────────────
+	function drawOverlay() {
+		const ctx = overlay.getContext("2d");
+		ctx.clearRect(0, 0, overlay.width, overlay.height);
+		if (!state.show2d) return;
+		const du = state.drawingUtils;
+		const T = state.tasks;
+		if (state.lastResult.pose && du) {
+			du.drawConnectors(state.lastResult.pose, T.PoseLandmarker.POSE_CONNECTIONS,
+				{ color: "#ffb454", lineWidth: 3 });
+			du.drawLandmarks(state.lastResult.pose, { color: "#ffd28a", lineWidth: 1, radius: 3 });
+		}
+		for (const hand of (state.lastResult.hands || [])) {
+			du.drawConnectors(hand, T.HandLandmarker.HAND_CONNECTIONS,
+				{ color: "#4ade80", lineWidth: 2 });
+			du.drawLandmarks(hand, { color: "#a7f3c8", lineWidth: 1, radius: 2 });
+		}
+		if (state.lastResult.face && du) {
+			du.drawConnectors(state.lastResult.face, T.FaceLandmarker.FACE_LANDMARKS_TESSELATION,
+				{ color: "rgba(255,180,84,0.28)", lineWidth: 1 });
+			du.drawConnectors(state.lastResult.face, T.FaceLandmarker.FACE_LANDMARKS_FACE_OVAL,
+				{ color: "#ffd28a", lineWidth: 1 });
+			du.drawConnectors(state.lastResult.face, T.FaceLandmarker.FACE_LANDMARKS_LIPS,
+				{ color: "#ffd28a", lineWidth: 1 });
+		}
+	}
+
+	function updateStats() {
+		const avg = (a) => a.length ? (a.reduce((s,v)=>s+v,0)/a.length) : 0;
+		$("stat-fps").textContent = state.fpsBuf.length ? avg(state.fpsBuf).toFixed(1) : "—";
+		$("stat-ms").textContent  = state.msBuf.length ? avg(state.msBuf).toFixed(1) + " ms" : "—";
+		$("stat-pose").textContent  = `${state.lastResult.pose?.length || 0} / 33`;
+		$("stat-hands").textContent = `${(state.lastResult.hands||[]).reduce((s,h)=>s+h.length,0)} / 42`;
+		$("stat-face").textContent  = `${state.lastResult.face?.length || 0} / 478`;
+	}
+
+	// ─── 3D world-landmarks preview ───────────────────────────────────
+	// MediaPipe's worldLandmarks are in meters, hip-centered, Y-down,
+	// Z-forward-from-camera. We flip Y and Z to make it viewer-friendly
+	// and drop points into a Line/Points primitive on every frame.
+	const world = { canvas: $("world-canvas"), renderer: null, scene: null, camera: null,
+					controls: null, poseLine: null, poseDots: null };
+
+	function initWorld() {
+		const canvas = world.canvas;
+		world.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+		world.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+		world.scene = new THREE.Scene();
+		world.scene.background = new THREE.Color(0x06060a);
+		world.camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
+		world.camera.position.set(0, 0.2, 2.4);
+		world.controls = new OrbitControls(world.camera, canvas);
+		world.controls.enableDamping = true;
+		world.controls.target.set(0, 0.1, 0);
+
+		const grid = new THREE.GridHelper(3, 12, 0x333340, 0x1e1e28);
+		grid.position.y = -1.0;
+		world.scene.add(grid);
+
+		const axes = new THREE.AxesHelper(0.3);
+		axes.position.y = -1.0;
+		world.scene.add(axes);
+
+		// Skeleton primitives — geometry buffers get overwritten each frame.
+		const poseGeom = new THREE.BufferGeometry();
+		poseGeom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(33 * 2 * 3 * 40), 3));
+		const poseMat = new THREE.LineBasicMaterial({ color: 0xffb454, transparent: true, opacity: 0.9 });
+		world.poseLine = new THREE.LineSegments(poseGeom, poseMat);
+		world.scene.add(world.poseLine);
+
+		const dotGeom = new THREE.BufferGeometry();
+		dotGeom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(33 * 3), 3));
+		const dotMat = new THREE.PointsMaterial({ color: 0xffd28a, size: 0.03, sizeAttenuation: true });
+		world.poseDots = new THREE.Points(dotGeom, dotMat);
+		world.scene.add(world.poseDots);
+
+		function resize() {
+			const r = canvas.getBoundingClientRect();
+			world.renderer.setSize(r.width, r.height, false);
+			world.camera.aspect = r.width / r.height;
+			world.camera.updateProjectionMatrix();
+		}
+		new ResizeObserver(resize).observe(canvas);
+		resize();
+
+		(function tick() {
+			requestAnimationFrame(tick);
+			world.controls.update();
+			world.renderer.render(world.scene, world.camera);
+		})();
+	}
+	initWorld();
+
+	// Same 33-joint MediaPipe pose connections list the JS DrawingUtils uses.
+	const POSE_EDGES = [
+		[11,12],[11,13],[13,15],[15,17],[15,19],[15,21],[17,19],
+		[12,14],[14,16],[16,18],[16,20],[16,22],[18,20],
+		[11,23],[12,24],[23,24],
+		[23,25],[25,27],[27,29],[29,31],[27,31],
+		[24,26],[26,28],[28,30],[30,32],[28,32],
+		[9,10],[0,1],[1,2],[2,3],[3,7],[0,4],[4,5],[5,6],[6,8],
+	];
+
+	function draw3D() {
+		if (!state.show3d) { world.poseLine.visible = false; world.poseDots.visible = false; return; }
+		const pts = state.lastResult.worldPose;
+		if (!pts || !pts.length) { world.poseLine.visible = false; world.poseDots.visible = false; return; }
+		world.poseLine.visible = true;
+		world.poseDots.visible = true;
+
+		const dotPos = world.poseDots.geometry.attributes.position;
+		const linePos = world.poseLine.geometry.attributes.position;
+		for (let i = 0; i < 33; i++) {
+			const p = pts[i];
+			if (!p) continue;
+			// Mirror X to match the mirrored video, flip Y so up is +Y.
+			dotPos.array[i*3+0] = -p.x;
+			dotPos.array[i*3+1] = -p.y;
+			dotPos.array[i*3+2] = -p.z;
+		}
+		dotPos.needsUpdate = true;
+		let idx = 0;
+		for (const [a, b] of POSE_EDGES) {
+			const pa = pts[a], pb = pts[b];
+			if (!pa || !pb) continue;
+			linePos.array[idx++] = -pa.x; linePos.array[idx++] = -pa.y; linePos.array[idx++] = -pa.z;
+			linePos.array[idx++] = -pb.x; linePos.array[idx++] = -pb.y; linePos.array[idx++] = -pb.z;
+		}
+		// Zero the tail so stale edges don't ghost.
+		for (; idx < linePos.array.length; idx++) linePos.array[idx] = 0;
+		linePos.needsUpdate = true;
+		world.poseLine.geometry.setDrawRange(0, POSE_EDGES.length * 2);
+	}
+</script>
+
+</body>
+</html>

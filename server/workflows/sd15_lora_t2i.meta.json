@@ -1,0 +1,187 @@
+{
+  "id": "sd15_lora_t2i",
+  "label": "SD1.5 LoRA \u00b7 T2I",
+  "kind": "image",
+  "output_ext": "png",
+  "runner": "local",
+  "inputs": [
+    {
+      "name": "prompt",
+      "type": "textarea",
+      "label": "Positive Prompt",
+      "placeholder": "A grotesque monster in a swamp...",
+      "required": true,
+      "patch": {
+        "node_id": 6,
+        "widget_name": "text"
+      }
+    },
+    {
+      "name": "negative_prompt",
+      "type": "textarea",
+      "label": "Negative Prompt",
+      "placeholder": "blurry, lowres, jpeg artifacts, watermark, ugly",
+      "patch": {
+        "node_id": 7,
+        "widget_name": "text"
+      }
+    },
+    {
+      "name": "checkpoint",
+      "type": "dropdown",
+      "label": "Checkpoint",
+      "options_source": {
+        "class_type": "CheckpointLoaderSimple",
+        "widget": "ckpt_name"
+      },
+      "patch": {
+        "node_id": 29,
+        "widget_name": "ckpt_name"
+      }
+    },
+    {
+      "name": "lora",
+      "type": "dropdown",
+      "label": "LoRA",
+      "options_source": {
+        "class_type": "LoraLoaderModelOnly",
+        "widget": "lora_name"
+      },
+      "patch": {
+        "node_id": 27,
+        "widget_name": "lora_name"
+      }
+    },
+    {
+      "name": "width",
+      "type": "number",
+      "label": "Width",
+      "row": "size",
+      "default": 512,
+      "min": 64,
+      "max": 2048,
+      "step": 64,
+      "patch": {
+        "node_id": 28,
+        "widget_name": "width"
+      }
+    },
+    {
+      "name": "height",
+      "type": "number",
+      "label": "Height",
+      "row": "size",
+      "default": 512,
+      "min": 64,
+      "max": 2048,
+      "step": 64,
+      "patch": {
+        "node_id": 28,
+        "widget_name": "height"
+      }
+    },
+    {
+      "name": "sampler_name",
+      "type": "dropdown",
+      "label": "Sampler",
+      "options": [
+        "euler",
+        "euler_cfg_pp",
+        "euler_ancestral",
+        "euler_ancestral_cfg_pp",
+        "heun",
+        "heunpp2",
+        "dpm_2",
+        "dpm_2_ancestral",
+        "lms",
+        "dpm_fast",
+        "dpm_adaptive",
+        "dpmpp_2s_ancestral",
+        "dpmpp_sde",
+        "dpmpp_2m",
+        "dpmpp_2m_sde",
+        "dpmpp_3m_sde",
+        "ddpm",
+        "lcm",
+        "ddim",
+        "uni_pc",
+        "uni_pc_bh2"
+      ],
+      "patch": {
+        "node_id": 3,
+        "widget_name": "sampler_name"
+      }
+    },
+    {
+      "name": "scheduler",
+      "type": "dropdown",
+      "label": "Scheduler",
+      "options": [
+        "simple",
+        "sgm_uniform",
+        "karras",
+        "exponential",
+        "ddim_uniform",
+        "beta",
+        "normal",
+        "linear_quadratic",
+        "kl_optimal"
+      ],
+      "patch": {
+        "node_id": 3,
+        "widget_name": "scheduler"
+      }
+    },
+    {
+      "name": "steps",
+      "type": "number",
+      "label": "Steps",
+      "row": "sc",
+      "default": 30,
+      "min": 1,
+      "max": 150,
+      "step": 1,
+      "patch": {
+        "node_id": 3,
+        "widget_name": "steps"
+      }
+    },
+    {
+      "name": "cfg",
+      "type": "number",
+      "label": "CFG",
+      "row": "sc",
+      "default": 7,
+      "min": 1,
+      "max": 30,
+      "step": 0.5,
+      "patch": {
+        "node_id": 3,
+        "widget_name": "cfg"
+      }
+    },
+    {
+      "name": "seed",
+      "type": "seed",
+      "label": "Seed",
+      "default": 42,
+      "patch": {
+        "node_id": 3,
+        "widget_name": "seed"
+      }
+    },
+    {
+      "name": "denoise",
+      "type": "number",
+      "label": "Denoise",
+      "default": 1,
+      "min": 0,
+      "max": 1,
+      "step": 0.05,
+      "patch": {
+        "node_id": 3,
+        "widget_name": "denoise"
+      }
+    }
+  ]
+}

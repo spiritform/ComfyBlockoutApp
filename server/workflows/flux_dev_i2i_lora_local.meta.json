@@ -1,0 +1,155 @@
+{
+  "id": "flux_dev_i2i_lora_local",
+  "label": "Flux Dev \u00b7 I2I + LoRA",
+  "kind": "image",
+  "output_ext": "png",
+  "runner": "local",
+  "inputs": [
+    {
+      "name": "image",
+      "type": "scene-image",
+      "label": "Viewport / Source Image",
+      "patch": {
+        "node_id": 10,
+        "widget_index": 0,
+        "widget_name": "image"
+      }
+    },
+    {
+      "name": "unet",
+      "type": "dropdown",
+      "label": "Base Model",
+      "options": [
+        "flux1-dev.safetensors",
+        "flux1-dev-fp8.safetensors",
+        "flux2-dev.safetensors"
+      ],
+      "default": "flux1-dev.safetensors",
+      "patch": {
+        "node_id": 1,
+        "widget_index": 0,
+        "widget_name": "unet_name"
+      }
+    },
+    {
+      "name": "lora_name",
+      "type": "dropdown",
+      "label": "LoRA",
+      "options_source": {
+        "class_type": "LoraLoader",
+        "widget": "lora_name"
+      },
+      "patch": {
+        "node_id": 20,
+        "widget_index": 0,
+        "widget_name": "lora_name"
+      }
+    },
+    {
+      "name": "lora_strength",
+      "type": "number",
+      "label": "LoRA Strength",
+      "default": 0.85,
+      "min": 0,
+      "max": 2,
+      "step": 0.05,
+      "patch": {
+        "node_id": 20,
+        "widget_index": 1,
+        "widget_name": "strength_model"
+      }
+    },
+    {
+      "name": "guidance",
+      "type": "number",
+      "label": "Guidance",
+      "default": 3.5,
+      "min": 1,
+      "max": 10,
+      "step": 0.5,
+      "patch": {
+        "node_id": 25,
+        "widget_index": 0,
+        "widget_name": "guidance"
+      }
+    },
+    {
+      "name": "sampler",
+      "type": "dropdown",
+      "label": "Sampler",
+      "options_source": {
+        "class_type": "KSampler",
+        "widget": "sampler_name"
+      },
+      "default": "euler",
+      "patch": {
+        "node_id": 8,
+        "widget_name": "sampler_name"
+      }
+    },
+    {
+      "name": "scheduler",
+      "type": "dropdown",
+      "label": "Scheduler",
+      "options_source": {
+        "class_type": "KSampler",
+        "widget": "scheduler"
+      },
+      "default": "simple",
+      "patch": {
+        "node_id": 8,
+        "widget_name": "scheduler"
+      }
+    },
+    {
+      "name": "steps",
+      "type": "number",
+      "label": "Steps",
+      "default": 20,
+      "min": 1,
+      "max": 50,
+      "step": 1,
+      "patch": {
+        "node_id": 8,
+        "widget_index": 1,
+        "widget_name": "steps"
+      }
+    },
+    {
+      "name": "denoise",
+      "type": "number",
+      "label": "Denoise",
+      "default": 0.75,
+      "min": 0,
+      "max": 1,
+      "step": 0.05,
+      "patch": {
+        "node_id": 8,
+        "widget_index": 0,
+        "widget_name": "denoise"
+      }
+    },
+    {
+      "name": "seed",
+      "type": "seed",
+      "label": "Seed",
+      "patch": {
+        "node_id": 8,
+        "widget_index": 2,
+        "widget_name": "seed"
+      }
+    },
+    {
+      "name": "prompt",
+      "type": "textarea",
+      "label": "Prompt",
+      "placeholder": "A cinematic establishing shot at dusk, warm amber lantern light, photorealistic, highly detailed",
+      "required": true,
+      "patch": {
+        "node_id": 6,
+        "widget_index": 0,
+        "widget_name": "text"
+      }
+    }
+  ]
+}

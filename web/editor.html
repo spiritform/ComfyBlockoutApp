@@ -790,7 +790,6 @@
 	body.preview-mode #timeline,
 	body.preview-mode #status,
 	body.preview-mode #info-block,
-	body.preview-mode #drop-overlay,
 	body.preview-mode #aspect-frame .label { display: none !important; }
 	body.preview-mode #aspect-frame { border-color: rgba(255,255,255,0.05); }
 	body.preview-mode #viewport-area { padding: 0; }
@@ -2815,11 +2814,15 @@
 		width: 24px; height: 24px; padding: 0;
 		border: none; border-radius: 4px; cursor: pointer;
 		background: transparent;
-		color: rgba(255,255,255,0.45);
+		color: #fff;
+		/* mix-blend-mode: difference makes the icon invert against whatever
+		   is behind it — stays legible on bright skies, dark backgrounds,
+		   and mid-tones alike. Same trick the #aspect-frame guides use. */
+		mix-blend-mode: difference;
 		display: none; align-items: center; justify-content: center;
 		pointer-events: auto;
 	}
-	#result-save-overlay:hover { color: rgba(255,255,255,0.85); }
+	#result-save-overlay:hover { color: #fff; opacity: 1; }
 	#result-save-overlay svg { width: 14px; height: 14px; display: block; }
 	/* Only revealed on hover of the overlay — keeps the render/blockout image
 	   uncluttered until the user actually reaches for the download. */
@@ -2928,26 +2931,6 @@
 	/* Suppress the click-focus ring entirely — no amber flash on click/tab. */
 	.vpm-btn:focus, .vpm-btn:focus-visible { outline: none; }
 
-	#drop-overlay {
-		position: fixed; inset: 0; z-index: 200;
-		background: rgba(255,180,84,0.08); backdrop-filter: blur(2px);
-		border: 2px dashed rgba(255,180,84,0.5);
-		display: none; align-items: center; justify-content: center;
-		pointer-events: none;
-	}
-	#drop-overlay.active { display: flex; }
-	.drop-card {
-		background: rgba(10,10,14,0.92);
-		border: 1px solid rgba(255,180,84,0.4);
-		border-radius: 12px; padding: 24px 36px;
-		text-align: center;
-	}
-	.drop-card-icon { font-size: 28px; color: #ffb454; margin-bottom: 8px; }
-	.drop-card-text {
-		font-size: 12px; color: #fff;
-		letter-spacing: 0.08em; text-transform: uppercase; font-weight: 500;
-	}
-
 	#loading-overlay {
 		position: fixed; inset: 0; z-index: 300;
 		background: rgba(7, 8, 11, 0.78); backdrop-filter: blur(4px);
@@ -3042,7 +3025,7 @@
 	.rp-generate-btn {
 		display: flex; align-items: center; justify-content: center;
 		gap: 8px; flex-direction: row-reverse;
-		width: 100%; height: 34px; margin-top: 12px;
+		width: 100%; height: 34px; margin-top: 4px;
 		background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.75);
 		border: none; border-radius: 5px; cursor: pointer;
 		font: inherit; font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
@@ -3768,6 +3751,19 @@
 		color: #ffd28a;
 	}
 	.wf-dropdown-opt.selected:hover { background: rgba(255,180,84,0.28); }
+	/* Subfolder group header — surfaces the folder name above its items
+	   when ComfyUI returns paths with subfolder prefixes (loras/flux/…,
+	   checkpoints/SDXL/…). Non-interactive, styled to read as a section
+	   divider rather than a clickable row. */
+	.wf-dropdown-folder {
+		padding: 8px 8px 3px;
+		font-size: 9px; font-weight: 600;
+		color: rgba(255,255,255,0.35);
+		letter-spacing: 0.06em; text-transform: uppercase;
+		pointer-events: none;
+		flex-shrink: 0;
+	}
+	.wf-dropdown-opt.nested { padding-left: 16px; }
 
 	/* Drag highlight on chat drop targets — the input row and the log
 	   scroll surface both accept asset drops; amber outline signals
@@ -5107,7 +5103,7 @@
 						<input type="range" id="obj-annotation-opacity" min="0" max="1" step="0.01" value="1">
 						<span class="slider-val" id="obj-annotation-opacity-val">1.00</span>
 					</div>
-					<div class="hint" id="obj-annotation-count" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5);line-height:1.5">Empty — hold <strong>Ctrl</strong> (or Cmd) and drag to draw. Camera controls stay unblocked when Ctrl isn't held.</div>
+					<div class="hint" id="obj-annotation-count" style="margin-top:8px;font-size:10px;color:rgba(255,255,255,0.5);line-height:1.5">Empty — drag on the viewport to paint. RMB pans, MMB dollies. Deselect to orbit.</div>
 				</div>
 				<!-- TripoSplat representation toggle — appears on TripoSplat
 				     results (splat OR resampled points with the pcResult flag
@@ -5270,6 +5266,65 @@
 						</div>
 					</div>
 				</div>
+				<!-- Plane display mode + source. Mode is a simple pill toggle
+				     (2D fills the viewport, 3D is a positioned plane). Source
+				     is a single expandable cell styled like the Background
+				     Image/Video cells — thumb + filename in the head, opacity
+				     slider + Change source button in the body. Only shown for
+				     media-plane primitives (image/video imports). -->
+				<div class="section" id="obj-plane-mode-section" style="display:none">
+					<div class="section-label">Mode</div>
+					<div class="pill-toggle" id="obj-plane-mode" style="margin-top:6px">
+						<button type="button" class="active" data-plane-mode="2d">2D</button>
+						<button type="button" data-plane-mode="3d">3D</button>
+					</div>
+					<div class="section-label" style="margin-top:14px">Source</div>
+					<div class="bg-cells" style="margin-top:6px">
+						<div class="bg-cell active" id="obj-plane-source-cell">
+							<div class="bg-cell-head">
+								<span class="bg-cell-thumb" id="obj-plane-source-thumb"></span>
+								<span class="bg-cell-label" id="obj-plane-source-label">Source</span>
+							</div>
+							<div class="bg-cell-body">
+								<!-- Matches the Scene Properties Image/Video cell body:
+								     Transform (X/Y/Scale) + Display (Blur/Opacity) in
+								     compact pill grids. The underlying <input type=range>
+								     values get migrated to drag-num pills by the
+								     enhanceRangeAsDrag list further down. X/Y shift a
+								     2D backdrop plane in screen space; in 3D mode
+								     they move the plane's position.x/y instead. -->
+								<div class="sub-label" style="margin-top:6px">Transform</div>
+								<div class="param-grid cols-3">
+									<div class="slider-row">
+										<input type="range" id="obj-plane-x" min="-500" max="500" step="1" value="0">
+										<span class="slider-val" id="obj-plane-x-val">0</span>
+									</div>
+									<div class="slider-row">
+										<input type="range" id="obj-plane-y" min="-500" max="500" step="1" value="0">
+										<span class="slider-val" id="obj-plane-y-val">0</span>
+									</div>
+									<div class="slider-row">
+										<input type="range" id="obj-plane-scale" min="10" max="500" step="1" value="100">
+										<span class="slider-val" id="obj-plane-scale-val">100</span>
+									</div>
+								</div>
+								<div class="sub-label" style="margin-top:8px">Display</div>
+								<div class="param-grid cols-2">
+									<div class="slider-row">
+										<input type="range" id="obj-plane-blur" min="0" max="40" step="1" value="0">
+										<span class="slider-val" id="obj-plane-blur-val">0</span>
+									</div>
+									<div class="slider-row">
+										<input type="range" id="obj-plane-opacity" min="0" max="100" step="1" value="100">
+										<span class="slider-val" id="obj-plane-opacity-val">100</span>
+									</div>
+								</div>
+								<button type="button" id="obj-plane-source-btn" class="bg-cell-picker" style="margin-top:8px">Change source…</button>
+								<input type="file" id="obj-plane-source-file" accept="image/*,video/*" hidden>
+							</div>
+						</div>
+					</div>
+				</div>
 				<div class="section" id="obj-appearance-section">
 					<div class="section-label">Appearance</div>
 					<div class="rp-bg-pair">
@@ -5304,6 +5359,15 @@
 						<input type="range" id="obj-points-size" min="0.001" max="0.2" step="0.001" value="0.001">
 						<span class="slider-val" id="obj-points-size-val">0.001</span>
 					</div>
+					<div class="sub-label" style="margin-top:8px">Density</div>
+					<div class="slider-row">
+						<input type="range" id="obj-points-density" min="1" max="100" step="1" value="100">
+						<span class="slider-val" id="obj-points-density-val">100%</span>
+					</div>
+					<div class="hint" id="obj-points-density-hint">Every Nth point kept — 100% shows all, lower is sparser.</div>
+					<div class="sub-label" style="margin-top:10px">Export</div>
+					<button type="button" id="obj-points-export-btn" class="mp-still-btn" style="width:100%">Download PLY</button>
+					<div class="hint">Saves the current visible density (subsample bakes into the download).</div>
 				</div>
 
 				<div class="section" id="obj-particles-emitter" hidden>
@@ -5898,7 +5962,7 @@
 					<div class="hint">Linear fog fades everything past Near toward the color at Far.</div>
 				</div>
 
-				<div class="section" id="contact-shadow-section">
+				<div class="section" id="contact-shadow-section" style="display:none">
 					<div class="section-label">Contact Shadow</div>
 					<div class="pill-toggle" id="cs-toggle" style="margin-top:6px">
 						<button type="button" class="active" data-cs="off">Off</button>
@@ -6558,11 +6622,27 @@
 			// Bulk-delete selected assets on Delete / Backspace, but only when the
 			// Assets pane is open AND focus is not in a text-edit field (typing in
 			// the prompt textarea shouldn't blow away Assets).
-			if ((e.key === "Delete" || e.key === "Backspace") && isAssetsOpen() && assetSelection.size > 0) {
-				const t = e.target;
-				const tag = t?.tagName;
-				const isEditable = tag === "INPUT" || tag === "TEXTAREA" || t?.isContentEditable;
-				if (isEditable) return;
+			if (!isAssetsOpen()) return;
+			const t = e.target;
+			const tag = t?.tagName;
+			const isEditable = tag === "INPUT" || tag === "TEXTAREA" || t?.isContentEditable;
+			if (isEditable) return;
+			// Ctrl/Cmd+A → select every tile currently in the filtered view.
+			// Massive time-saver for pruning a full Output pane down to just
+			// the keepers.
+			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+				e.preventDefault();
+				e.stopPropagation();
+				assetSelection.clear();
+				for (const a of assetsFiltered) assetSelection.add(a.filename);
+				assetSelectAnchor = assetsFiltered[0]?.filename || null;
+				for (const tile of assetsGrid.querySelectorAll(".assets-tile")) {
+					tile.classList.toggle("selected", assetSelection.has(tile.dataset.filename));
+				}
+				refreshChatContextChip?.();
+				return;
+			}
+			if ((e.key === "Delete" || e.key === "Backspace") && assetSelection.size > 0) {
 				e.preventDefault();
 				// Stop propagation so the window-level scene keydown handler
 				// doesn't ALSO fire and delete a scene object / keyframe alongside
@@ -6583,7 +6663,15 @@
 					const tile = assetsGrid.querySelector(`.assets-tile[data-filename="${CSS.escape(n)}"]`);
 					if (tile) tile.remove();
 				}
+				// Empty-state hint: if we just nuked everything visible, flip
+				// the "no assets" message on so the pane doesn't look broken.
+				if (assetsFiltered.length === 0 && assetsEmpty) {
+					assetsEmpty.hidden = false;
+					assetsGrid.style.display = "none";
+				}
 				refreshChatContextChip?.();
+				// Fire deletes in parallel — errors are silent (next refresh
+				// will resurrect any files that failed to delete server-side).
 				Promise.all(names.map(n =>
 					fetch(`/api/assets/${encodeURIComponent(n)}`, { method: "DELETE" }).catch(() => {})
 				));
@@ -7242,13 +7330,6 @@
 		});
 	})();
 	</script>
-
-	<div id="drop-overlay">
-		<div class="drop-card">
-			<div class="drop-card-icon">▼</div>
-			<div class="drop-card-text">Drop GLB · FBX · OBJ · PLY · SPLAT · SPZ</div>
-		</div>
-	</div>
 
 	<div id="loading-overlay">
 		<div class="load-card">
@@ -8805,6 +8886,43 @@ async function loadGLB(arrayBuffer, filename, opts = {}) {
 		try {
 			gltfLoader.parse(arrayBuffer, "", (gltf) => {
 				const root = gltf.scene;
+				// Point-cloud GLBs (from DA3, Depth Anything, Luma, etc.) come
+				// through as a Points primitive inside a Group. Detect that
+				// case and promote the Points to a scene object so it inherits
+				// the existing "points" properties section (size + density),
+				// same as PLY point-cloud imports. Any GLB with a mix of Mesh
+				// + Points stays as a normal glb import.
+				let hasMesh = false;
+				let pointsChild = null;
+				let pointsCount = 0;
+				root.traverse((c) => {
+					if (c.isMesh) hasMesh = true;
+					if (c.isPoints) { pointsChild = c; pointsCount++; }
+				});
+				if (!hasMesh && pointsChild && pointsCount === 1) {
+					// Bake the group's world transform into the Points so the
+					// promoted object sits where the GLB placed it, then swap
+					// the root — Points takes the wrapper's spot in `objects`.
+					root.updateMatrixWorld(true);
+					pointsChild.applyMatrix4(root.matrixWorld);
+					if (!opts.restoring) {
+						const box = new THREE.Box3().setFromObject(pointsChild);
+						const size = box.getSize(new THREE.Vector3()).length();
+						if (size > 0) pointsChild.scale.multiplyScalar(2 / size);
+						pointsChild.position.set(0, 0, 0);
+					}
+					applySavedTransform(pointsChild, opts.transform);
+					scene.add(pointsChild);
+					if (opts.assetId) pointsChild.userData.assetId = opts.assetId;
+					// Stash the original geometry so Density can subsample
+					// non-destructively (slider back to 100% restores full).
+					pointsChild.userData._srcGeometry = pointsChild.geometry;
+					registerImported(pointsChild, "points", filename);
+					if (opts.savedName) pointsChild.name = opts.savedName;
+					updateStatus(`GLB point cloud loaded · ${filename}`);
+					resolve(pointsChild);
+					return;
+				}
 				if (!opts.restoring) {
 					const box = new THREE.Box3().setFromObject(root);
 					const size = box.getSize(new THREE.Vector3()).length();
@@ -9183,14 +9301,47 @@ window.__cbUploadAsset = uploadAsset;
 window.__cbSaveScene = () => { try { saveScene?.(); } catch {} };
 
 async function loadFile(file) {
+	// Image / video imports spawn a media plane object in the scene (visible
+	// in the outliner) instead of loading as 3D. Falls back to extension if
+	// the browser didn't stamp a MIME type (some Windows Explorer drops omit
+	// `file.type` for uncommon extensions).
+	const mime = (file.type || "").toLowerCase();
+	const ext = (file.name.split(".").pop() || "").toLowerCase();
+	const isImage = mime.startsWith("image/") || /^(png|jpe?g|webp|gif|bmp|tiff?|avif)$/.test(ext);
+	const isVideo = mime.startsWith("video/") || /^(mp4|webm|mov|mkv|m4v)$/.test(ext);
+	if (isImage || isVideo) {
+		try {
+			const buf = await file.arrayBuffer();
+			const { assetId, ext: savedExt } = await uploadAsset(file.name, buf);
+			const url = bgAssetUrl({ assetId, ext: savedExt });
+			await spawnMediaPlane(url, file.name, isImage ? "image" : "video");
+			// spawnMediaPlane snapshots for undo + calls saveScene once the
+			// texture resolves — nothing else to do here.
+		} catch (e) {
+			console.warn("[ComfyBlockout] media plane import failed:", e);
+			updateStatus?.(`import failed · ${e.message || e}`);
+		}
+		return;
+	}
+
 	snapshotForUndo();
 	const arrayBuffer = await file.arrayBuffer();
 	const obj = await loadFromBytes(arrayBuffer, file.name);
 	if (!obj) return;
 	// Persist the asset so deserializeScene can replay it on reopen
 	try {
-		const { assetId } = await uploadAsset(file.name, arrayBuffer);
+		const { assetId, ext: savedExt } = await uploadAsset(file.name, arrayBuffer);
 		obj.userData.assetId = assetId;
+		// Splat tools (Paint Delete, Simplify, Kill Floaters, SH filter,
+		// Export) all need `_srcPlyUrl` so they can re-fetch the PLY bytes
+		// on demand. The generation paths (TripoSplat / point cloud) stamp
+		// this at creation time; plain file-import previously didn't, so
+		// Paint Delete silently no-op'd on user-imported splats. Stamp the
+		// asset URL here for any splat-kind PLY / .splat / .ksplat / .spz.
+		if (obj.userData?.primKind === "splat") {
+			obj.userData._srcPlyUrl = bgAssetUrl({ assetId, ext: savedExt });
+			obj.userData._srcPlyFilename = file.name;
+		}
 		saveScene?.();
 	} catch (e) {
 		console.warn("[ComfyBlockout] asset upload failed; object won't persist:", e);
@@ -10828,6 +10979,48 @@ function addPrimitive(kind) {
 	return mesh;
 }
 
+// MeshBasicMaterial for media planes with an injected 5x5 box-blur on the
+// texture sample. `mat.userData.uBlur.value` in UV units controls the tap
+// offset — 0 disables blur and takes the single-sample fast path. Wired
+// this way (uniform on the material, injection via onBeforeCompile) so
+// updating the slider is a single uniform write, no recompile.
+function _makeMediaPlaneMaterial() {
+	const mat = new THREE.MeshBasicMaterial({
+		color: 0xffffff, side: THREE.DoubleSide,
+		transparent: true, opacity: 1,
+	});
+	const uBlur = { value: 0 };
+	mat.userData.uBlur = uBlur;
+	mat.onBeforeCompile = (shader) => {
+		shader.uniforms.uBlur = uBlur;
+		shader.fragmentShader = shader.fragmentShader
+			.replace("#include <common>", "#include <common>\nuniform float uBlur;")
+			.replace(
+				"#include <map_fragment>",
+				`#ifdef USE_MAP
+					vec4 sampledDiffuseColor;
+					if (uBlur > 0.0001) {
+						sampledDiffuseColor = vec4(0.0);
+						for (int y = -2; y <= 2; y++) {
+							for (int x = -2; x <= 2; x++) {
+								vec2 off = vec2(float(x), float(y)) * uBlur;
+								sampledDiffuseColor += texture2D(map, vMapUv + off);
+							}
+						}
+						sampledDiffuseColor /= 25.0;
+					} else {
+						sampledDiffuseColor = texture2D(map, vMapUv);
+					}
+					#ifdef DECODE_VIDEO_TEXTURE
+						sampledDiffuseColor = vec4(mix(pow(sampledDiffuseColor.rgb * 0.9478672986 + vec3(0.0521327014), vec3(2.4)), sampledDiffuseColor.rgb * 0.0773993808, vec3(lessThanEqual(sampledDiffuseColor.rgb, vec3(0.04045)))), sampledDiffuseColor.a);
+					#endif
+					diffuseColor *= sampledDiffuseColor;
+				#endif`
+			);
+	};
+	return mat;
+}
+
 // Spawn a plane primitive with an image or video mapped as its diffuse
 // texture. Plane geometry auto-resizes to the media's native aspect so the
 // mapping doesn't stretch. Called from the assets-to-viewport drop handler
@@ -10837,12 +11030,7 @@ async function spawnMediaPlane(url, filename, mediaKind /* "image" | "video" */)
 	primCounters.plane = (primCounters.plane || 0) + 1;
 	// Placeholder geometry — replaced once we know the media's aspect.
 	const geom = new THREE.PlaneGeometry(2, 2);
-	const mat = new THREE.MeshBasicMaterial({
-		color: 0xffffff, side: THREE.DoubleSide,
-		// Slightly transparent so a partially-loaded texture doesn't hide
-		// meshes behind it while we're still populating.
-		transparent: true, opacity: 1,
-	});
+	const mat = _makeMediaPlaneMaterial();
 	const mesh = new THREE.Mesh(geom, mat);
 	mesh.name = `Plane.${String(primCounters.plane).padStart(3, "0")}`;
 	mesh.position.set(0, 1, 0);
@@ -10893,14 +11081,104 @@ async function spawnMediaPlane(url, filename, mediaKind /* "image" | "video" */)
 		// Stash the <video> element so we can clean it up on delete.
 		mesh.userData.mediaVideoEl = vid;
 	}
+	// Media planes default to 2D backdrop mode — see _apply2DPlaneBackdrop
+	// below. Swap in/out via the Object properties Mode toggle.
+	mesh.userData._planeMode = "2d";
+	_apply2DPlaneBackdrop(mesh);
 	stashInitialTransform(mesh);
 	scene.add(mesh);
 	objects.push(mesh);
 	select(mesh);
+	// select() attaches the gizmo, but for a 2D backdrop the plane's world
+	// transform gets rewritten every frame — gizmo handles would drift and
+	// dragging wouldn't stick. Detach so the plane just reads as a scene
+	// entry until the user flips it to 3D.
+	try { transformControls?.detach?.(); } catch {}
 	refreshOutliner();
 	updateStatus();
 	if (typeof saveScene === "function") saveScene();
 	return mesh;
+}
+
+// Configure a media plane to act as a full-viewport backdrop that fills the
+// frame regardless of camera position. onBeforeRender recomputes the
+// world transform for each render pass (main + blockout inset), so both
+// views see the plane sized to their own camera's frustum. Behind everything
+// via renderOrder + depthWrite:false so 3D objects still occlude cleanly.
+function _apply2DPlaneBackdrop(mesh) {
+	if (!mesh) return;
+	mesh.renderOrder = -1000;
+	if (mesh.material) {
+		mesh.material.depthWrite = false;
+		mesh.material.depthTest = false;
+		mesh.material.transparent = true;
+	}
+	mesh.onBeforeRender = function (renderer, scene, camera) {
+		if (mesh.userData._planeMode !== "2d") return;
+		// Distance chosen so the plane sits well inside the frustum but far
+		// enough that scene objects near the camera don't clip through it.
+		const d = Math.min(camera.far * 0.5, 200);
+		const fovRad = (camera.fov || 45) * Math.PI / 180;
+		const viewH = 2 * Math.tan(fovRad / 2) * d;
+		const viewW = viewH * (camera.aspect || 1);
+		// Existing plane geometry is (2 × aspect) wide × 2 tall — see
+		// applyAspect above. Scale so the media covers the viewport, then
+		// clamp so aspect-mismatched media contains (letterboxes) instead
+		// of cropping content out.
+		const g = mesh.geometry;
+		let planeW = 2, planeH = 2;
+		if (g && g.boundingBox === null) g.computeBoundingBox();
+		if (g && g.boundingBox) {
+			planeW = g.boundingBox.max.x - g.boundingBox.min.x || 2;
+			planeH = g.boundingBox.max.y - g.boundingBox.min.y || 2;
+		}
+		const planeAspect = planeW / planeH;
+		const viewAspect = viewW / viewH;
+		const fitScale = planeAspect > viewAspect
+			? viewW / planeW  // wider than view — fit by width
+			: viewH / planeH; // taller — fit by height
+		// Source cell's Scale (% of fit) — 100 = default cover behavior.
+		const userScale = (mesh.userData._planeScalePct || 100) / 100;
+		mesh.scale.setScalar(fitScale * userScale);
+		// Anchor to the camera's forward vector at distance d, oriented flat
+		// against the camera. X/Y offsets (in the source cell pill grid)
+		// nudge the anchor along the camera's right/up so the reference
+		// image can be composed off-center.
+		const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+		mesh.position.copy(camera.position).addScaledVector(forward, d);
+		const offX = (mesh.userData._planeOffsetX || 0);
+		const offY = (mesh.userData._planeOffsetY || 0);
+		if (offX || offY) {
+			// Slider 0..500 maps to ~half a screen at the fitted distance —
+			// dividing by 500 → offset fraction of viewW/viewH.
+			const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+			const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+			mesh.position.addScaledVector(right, (offX / 500) * viewW * 0.5);
+			mesh.position.addScaledVector(up,    (offY / 500) * viewH * 0.5);
+		}
+		mesh.quaternion.copy(camera.quaternion);
+		mesh.updateMatrixWorld(true);
+	};
+}
+
+// Flip a plane back to normal 3D behavior — remove the backdrop hook and
+// restore its initial transform (position/rotation/scale captured by
+// stashInitialTransform when it first spawned).
+function _apply3DPlaneMode(mesh) {
+	if (!mesh) return;
+	mesh.renderOrder = 0;
+	if (mesh.material) {
+		mesh.material.depthWrite = true;
+		mesh.material.depthTest = true;
+	}
+	mesh.onBeforeRender = function () {};
+	const t = mesh.userData._initialTransform;
+	if (t) {
+		mesh.position.fromArray(t.position);
+		mesh.quaternion.fromArray(t.quaternion);
+		mesh.scale.fromArray(t.scale);
+		mesh.updateMatrixWorld(true);
+	}
 }
 
 function duplicateObject(obj) {
@@ -11942,6 +12220,15 @@ function select(obj, opts = {}) {
 	if (typeof _refreshBoolPane === "function") _refreshBoolPane();
 		if (typeof _updateCamOrbitRingVisibility === "function") _updateCamOrbitRingVisibility();
 		if (typeof refreshAnimPaths === "function") refreshAnimPaths();
+		// Selection cleared → annotation draw mode must also disarm so a
+		// stray Ctrl+drag doesn't leak strokes into a container that isn't
+		// currently the user's focus.
+		if (_annotateMode?.active) {
+			_annotateMode.active = false;
+			_annotateMode.activeContainer = null;
+			document.querySelector('.prim-btn[data-tool="annotate"]')?.classList.remove("active");
+			_annotateSyncCursor?.();
+		}
 		return;
 	}
 	if (additive) {
@@ -11964,11 +12251,10 @@ function select(obj, opts = {}) {
 		selected = obj;
 	}
 	window.__selectedObj = selected;
-	// Auto-arm on annotation select — clicking an existing Annotations.NNN
-	// row in the outliner (or picking the container in the viewport) sets
-	// it as the active draw target so Ctrl+drag adds strokes to THAT group.
-	// If the tool wasn't armed yet, arm it now (without spawning a fresh
-	// container, since we already have one).
+	// Draw mode is driven by selection: an annotation container being
+	// selected = armed to receive Ctrl+drag strokes. Selecting anything
+	// else disarms so a follow-up Ctrl+drag on a cube doesn't leak strokes
+	// back into the previously-active annotation.
 	if (selected?.userData?.primKind === "annotation") {
 		_annotateMode.activeContainer = selected;
 		if (!_annotateMode.active) {
@@ -11976,9 +12262,14 @@ function select(obj, opts = {}) {
 			document.querySelector('.prim-btn[data-tool="annotate"]')?.classList.add("active");
 			_annotateSyncCursor?.();
 			if (typeof updateStatus === "function") {
-				updateStatus("Annotate — hold Ctrl (Cmd) + LMB to draw · plain drag/RMB orbits/pans as usual · Esc exits");
+				updateStatus("Annotate — LMB drag to paint · RMB pans · MMB dollies · Esc / click empty outliner to orbit");
 			}
 		}
+	} else if (_annotateMode.active) {
+		_annotateMode.active = false;
+		_annotateMode.activeContainer = null;
+		document.querySelector('.prim-btn[data-tool="annotate"]')?.classList.remove("active");
+		_annotateSyncCursor?.();
 	}
 	// Outline every set member — primary + additive members read the same.
 	for (const o of selectionSet) applySelectionTint(o);
@@ -12978,9 +13269,14 @@ function runTool(kind) {
 		return;
 	}
 	if (kind === "annotate") {
-		// Toggle grease-pencil draw mode. Second click exits so the tile
-		// doubles as the off-switch (same pattern as MediaPipe / Boolean).
-		_setAnnotateMode(!_annotateMode.active);
+		// Object-add semantics — every click spawns a fresh annotation
+		// container and selects it (matches how the Objects grid tiles work).
+		// Draw mode is armed by SELECTION: the pointerdown handler paints
+		// whenever `selected` is an annotation container, so opening the
+		// Annotate properties pane later just means clicking the row in the
+		// outliner. No global toggle state to remember.
+		const g = _annotateSpawnContainer();
+		if (g) select(g);
 		return;
 	}
 	if (kind && kind.startsWith("soon-")) return;
@@ -13081,7 +13377,7 @@ function _setAnnotateMode(on) {
 	_annotateSyncCursor();
 	if (typeof updateStatus === "function") {
 		updateStatus(_annotateMode.active
-			? "Annotate — hold Ctrl (Cmd) + LMB to draw · plain drag/RMB orbits/pans as usual · Esc exits"
+			? "Annotate — LMB drag to paint · RMB pans · MMB dollies · Esc / click empty outliner to orbit"
 			: "Annotate mode off");
 	}
 	if (_annotateMode.active) {
@@ -13095,43 +13391,19 @@ function _setAnnotateMode(on) {
 	// container the user just selected from the outliner to add more strokes.
 	// Explicit delete via the outliner row is the only path to remove.)
 }
-// Swap cursor between crosshair (Ctrl held → next drag will paint) and the
-// default arrow (plain drag will orbit). Called from the keydown/up trackers
-// and from _setAnnotateMode. Only affects the viewport canvas wrap.
+// Crosshair whenever annotate mode is armed (an annotation container is
+// selected). Signals "clicking here will paint", matching pen-tool feel.
 function _annotateSyncCursor() {
 	const cw = document.getElementById("canvas-wrap");
 	if (!cw) return;
-	cw.style.cursor = (_annotateMode.active && _annotateMode.ctrlHeld) ? "crosshair" : "";
+	cw.style.cursor = _annotateMode.active ? "crosshair" : "";
 }
-// Esc exits draw mode — matches the "second click = off" toggle so users
-// have two ways out. Ctrl / Meta (Cmd on Mac) flips the cursor so the user
-// gets a visual cue that a Ctrl+drag will paint (vs a plain drag which
-// orbits). We use Ctrl instead of Shift because three.js OrbitControls
-// treats Shift+LMB as a pan gesture and steals the event before our
-// capture-phase handler can intercept.
+// Esc = deselect the annotation. Draw mode is selection-driven, so dropping
+// the selection auto-disarms via select(null) and restores plain-LMB orbit.
 window.addEventListener("keydown", (e) => {
 	if (e.key === "Escape" && _annotateMode.active) {
 		e.preventDefault();
-		_setAnnotateMode(false);
-		return;
-	}
-	if ((e.key === "Control" || e.key === "Meta") && _annotateMode.active && !_annotateMode.ctrlHeld) {
-		_annotateMode.ctrlHeld = true;
-		_annotateSyncCursor();
-	}
-});
-window.addEventListener("keyup", (e) => {
-	if ((e.key === "Control" || e.key === "Meta") && _annotateMode.ctrlHeld) {
-		_annotateMode.ctrlHeld = false;
-		_annotateSyncCursor();
-	}
-});
-// Window blur (Alt-tab) can strip a Ctrl keyup — reset so the cursor
-// doesn't stay stuck on crosshair after the user swaps apps.
-window.addEventListener("blur", () => {
-	if (_annotateMode.ctrlHeld) {
-		_annotateMode.ctrlHeld = false;
-		_annotateSyncCursor();
+		select(null);
 	}
 });
 
@@ -13250,20 +13522,17 @@ function _annotateBuildShapePoints() {
 		return [start.clone(), end.clone(), wing1, end.clone(), wing2];
 	}
 	if (shape === "box") {
-		// Axis-aligned rectangle in the drawing plane between start and end.
-		// Same perp trick as arrow — use the plane normal to define the two
-		// axes so the box sits flat on the raycast plane instead of a wonky
-		// world-XY rectangle.
+		// Screen-aligned rectangle in the drawing plane between start and end.
+		// The drag plane's normal IS the camera forward (set in _annotateBeginStroke),
+		// so the camera's screen-right and screen-up already lie in that plane.
+		// Using them as the basis means a horizontal drag → wide/short rect and a
+		// vertical drag → tall/thin rect — the box tracks the drag direction on
+		// screen. Using world-X projected instead (older approach) collapsed the
+		// preview to a line whenever the camera was orbited at an angle: dx or
+		// dy would zero out and three corners would coincide.
 		const diag = new THREE.Vector3().subVectors(end, start);
-		const planeN = _annotateMode.plane?.normal || new THREE.Vector3(0, 0, 1);
-		// Two in-plane basis vectors: `right` is world-right projected into
-		// the plane; `up` is the perpendicular. Falls back to X/Y if the
-		// plane normal happens to be world-forward.
-		let right = new THREE.Vector3(1, 0, 0);
-		right.projectOnPlane(planeN);
-		if (right.lengthSq() < 1e-6) right.set(0, 1, 0).projectOnPlane(planeN);
-		right.normalize();
-		const up = new THREE.Vector3().crossVectors(planeN, right).normalize();
+		const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+		const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
 		const dx = diag.dot(right);
 		const dy = diag.dot(up);
 		const c0 = start.clone();
@@ -13531,25 +13800,24 @@ window.addEventListener("resize", () => {
 });
 
 // Capture-phase pointer handlers — install BEFORE the existing viewport
-// pointerdown / pointerup handlers see the event. Painting is Ctrl-gated
-// (Cmd on Mac): plain LMB drag still orbits (no intercept), so camera
-// reframing between strokes is friction-free. We use Ctrl instead of Shift
-// because three.js OrbitControls binds Shift+LMB to PAN internally — it
-// steals the gesture before our capture-phase handler even runs.
+// pointerdown / pointerup handlers see the event. When an annotation is the
+// current selection, plain LMB paints (pen-tool feel — no modifier needed).
+// RMB/MMB stay unhandled so OrbitControls' pan/dolly still work; to rotate
+// with plain LMB, the user has to Esc / click empty outliner space to
+// deselect the annotation first.
 canvas.addEventListener("pointerdown", (e) => {
 	if (!_annotateMode.active) return;
-	// Painting requires LMB + Ctrl/Meta held. Every other combo (no Ctrl,
-	// RMB, MMB, Alt+LMB, Shift+LMB) passes through so orbit / pan / dolly /
-	// altCam all work uninterrupted.
-	if (e.button !== 0 || !(e.ctrlKey || e.metaKey) || e.altKey) return;
-	// Gizmo priority — only yield if a gizmo drag is already IN PROGRESS
-	// (transform.dragging). We used to also bail on `transform.axis` (hover),
-	// but a fresh container sits at world origin so its gizmo axes crossed
-	// the viewport middle — Ctrl+drag anywhere near center would hover an
-	// axis and get eaten before any ink appeared. Ctrl+LMB is now painting
-	// even when hovering the gizmo; user releases Ctrl first if they want
-	// to grab it.
-	if (transform?.dragging) return;
+	// Plain LMB paints. RMB / MMB / Alt+LMB pass through untouched so
+	// orbit / pan / dolly / altCam still work while an annotation is selected.
+	if (e.button !== 0 || e.altKey) return;
+	// Gizmo priority — if the pointer is over a gizmo axis (transform.axis
+	// truthy) OR a drag is already in progress, let TransformControls handle
+	// it. Under the pen-tool gate (plain LMB paints) we HAVE to respect
+	// hover, otherwise the container's gizmo becomes ungrabbable and the
+	// user can never reposition the annotation. Fresh containers spawn at
+	// world origin — click a bit off-center to start a stroke, or use the
+	// outliner-driven transform edits.
+	if (transform?.dragging || transform?.axis) return;
 	// Text tool — click-to-place with an inline HTML input (no browser prompt
 	// modal). Raycasts to find placement, opens a small floating <input>
 	// docked at the click position, focuses it so the user just starts
@@ -13744,8 +14012,8 @@ function _annotationSyncPaneFromSelection(group) {
 		const kids = group.children || [];
 		const n = kids.filter(c => c.userData?._isAnnotationLine || c.userData?._isAnnotationText).length;
 		countEl.textContent = n === 0
-			? "Empty — hold Ctrl (Cmd) and drag to draw. Camera controls stay unblocked when Ctrl isn't held."
-			: `${n} element${n === 1 ? "" : "s"} — hold Ctrl (Cmd) and drag to add more. Plain drag orbits.`;
+			? "Empty — drag on the viewport to paint. Deselect to orbit."
+			: `${n} element${n === 1 ? "" : "s"} — drag to add more. Deselect to orbit.`;
 	}
 }
 // Push current _annotateMode defaults into the Annotate tool pane's controls.
@@ -16186,7 +16454,13 @@ function setActiveWorkflowCell(id) {
 // and get rendered as buttons in the Tools grid — NOT the WORKFLOWS section.
 const utilModules = {};
 
+// Boot-time promise for the module list — anything that needs modules to
+// exist (e.g. loadScene's workflow-cell hydration) can `await` this so it
+// paints the workflow rows in one pass instead of empty-then-populated.
+let _workflowModulesReady = null;
 async function fetchWorkflowModules() {
+	if (_workflowModulesReady) return _workflowModulesReady;
+	_workflowModulesReady = (async () => {
 	try {
 		const r = await fetch("/api/modules");
 		if (!r.ok) return;
@@ -16215,6 +16489,8 @@ async function fetchWorkflowModules() {
 	// panel with every local + cloud module a returning user has registered.
 	refreshWorkflowCells();
 	refreshUtilTools();
+	})();
+	return _workflowModulesReady;
 }
 
 // Inject a button into the Tools grid for each registered util module,
@@ -22428,6 +22704,11 @@ function _appendWorkflowRows(container) {
 		});
 		row.addEventListener("focusin", () => setActiveWorkflowCell(cell.id));
 		row.addEventListener("mousedown", (e) => {
+			// Skip cell activation when the click is on the delete button.
+			// setActiveWorkflowCell fires refreshWorkflowsList which rebuilds
+			// this DOM subtree, so the click event never lands on the (now
+			// detached) button — that's why the ✕ appeared to do nothing.
+			if (e.target.closest(".gen-del-btn")) return;
 			setActiveWorkflowCell(cell.id);
 			if (!e.target.closest("input,textarea,button,select")) {
 				row.focus({ preventScroll: true });
@@ -22459,6 +22740,22 @@ function _appendWorkflowRows(container) {
 			e.stopPropagation();
 			setActiveWorkflowCell(cell.id);
 			const btn = e.currentTarget;
+			// If any scene-image input is empty (user didn't pick / drag an
+			// asset into the slot), grab a fresh viewport snapshot so the
+			// server's _image_store has the CURRENT blockout instead of
+			// whatever was there last (or nothing, → 400 "no scene image").
+			// Skipped when every scene-image input already has a value —
+			// autoSnapshot is heavy and would overwrite the user's explicit
+			// pick via the single-slot _image_store cache.
+			const needsSnapshot = (m.inputs || []).some(spec => {
+				if (spec.type !== "scene-image") return false;
+				const v = cell.values[spec.name];
+				return !(v && typeof v === "object" && v.url);
+			});
+			if (needsSnapshot && typeof autoSnapshot === "function") {
+				try { await autoSnapshot(); }
+				catch (snapErr) { console.warn("[workflow] autoSnapshot failed:", snapErr); }
+			}
 			// Build inputs dict from the manifest spec so we only forward known keys.
 			const inputs = {};
 			for (const spec of (m.inputs || [])) {
@@ -22528,6 +22825,40 @@ function _appendWorkflowRows(container) {
 // Kept as a name-alias so every existing caller fires the unified repaint.
 function refreshWorkflowCells() { refreshWorkflowsList(); }
 
+// Render a dropdown option list, grouped by subfolder when ComfyUI returns
+// paths with `/` or `\` in them (loras/flux/…, checkpoints/SDXL/…). Root-
+// level items render first, then each folder as a small section header + its
+// items indented one step. `data-value` keeps the full path so the run
+// payload carries the exact string Comfy expects; the visible label drops
+// the folder prefix so long paths don't overflow the menu.
+function _renderGroupedDropdownOptions(options, current) {
+	const esc = (s) => String(s).replace(/</g, "&lt;").replace(/"/g, "&quot;");
+	const groups = new Map();
+	for (const o of (options || [])) {
+		const s = String(o);
+		const sep = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\"));
+		const folder = sep >= 0 ? s.slice(0, sep) : "";
+		if (!groups.has(folder)) groups.set(folder, []);
+		groups.get(folder).push(s);
+	}
+	const folders = [...groups.keys()].sort((a, b) => {
+		if (a === b) return 0;
+		if (!a) return -1; // root first
+		if (!b) return 1;
+		return a.localeCompare(b);
+	});
+	let html = "";
+	for (const folder of folders) {
+		if (folder) html += `<div class="wf-dropdown-folder">${esc(folder)}</div>`;
+		for (const o of groups.get(folder)) {
+			const displayName = folder ? o.slice(folder.length + 1) : o;
+			const cls = "wf-dropdown-opt" + (folder ? " nested" : "") + (o === String(current) ? " selected" : "");
+			html += `<button type="button" class="${cls}" data-value="${esc(o)}" role="option">${esc(displayName)}</button>`;
+		}
+	}
+	return html;
+}
+
 // Right-panel renderer — builds the workflow module's inputs (textarea / seed /
 // drag-number) into #rp-pane-workflowcell and wires listeners. Called from
 // setActiveWorkflowCell on activation.
@@ -22539,7 +22870,26 @@ function renderWorkflowCellProperties(cell) {
 	pane.innerHTML = "";
 
 	let inputsHtml = "";
-	for (const spec of (m.inputs || [])) {
+	// Row grouping — consecutive inputs sharing a non-empty `row` field pack
+	// into one .wf-drag-row (same flex layout Hand-held's Speed/Noise use).
+	// Each spec's normal wrapper is suppressed when it's inside a group so
+	// the inner chips share the row and distribute evenly (drag-num default
+	// is flex:1). Non-grouped specs render exactly like before.
+	const specList = m.inputs || [];
+	const groups = [];
+	let _grp = null;
+	for (const spec of specList) {
+		if (spec.row && _grp?.row === spec.row) {
+			_grp.specs.push(spec);
+		} else {
+			_grp = { row: spec.row || null, specs: [spec] };
+			groups.push(_grp);
+		}
+	}
+	for (const group of groups) {
+		const inRow = group.row && group.specs.length > 1;
+		if (inRow) inputsHtml += `<div class="wf-drag-row" style="margin-top:6px">`;
+	for (const spec of group.specs) {
 		const label = spec.label || spec.name;
 		const placeholder = (spec.placeholder || "").replace(/"/g, "&quot;");
 		if (spec.type === "textarea" || spec.type === "text") {
@@ -22574,14 +22924,16 @@ function renderWorkflowCellProperties(cell) {
 		} else if (spec.type === "number") {
 			// Label + value baked INSIDE the drag chip — matches Hand-held's
 			// Speed/Noise cells (label left, value right, full-width row).
-			inputsHtml += `
-				<div class="wf-drag-row">
-					<div class="drag-num wf-drag" data-input="${spec.name}" title="${label}">
-						<span class="drag-label">${label}</span>
-						<span class="drag-val">0</span>
-					</div>
+			// When packed into a shared row group (Width + Height), skip the
+			// outer .wf-drag-row wrapper so the two chips share the parent
+			// row and split it 50/50 via flex:1.
+			const chip = `
+				<div class="drag-num wf-drag" data-input="${spec.name}" title="${label}">
+					<span class="drag-label">${label}</span>
+					<span class="drag-val">0</span>
 				</div>
 			`;
+			inputsHtml += inRow ? chip : `<div class="wf-drag-row">${chip}</div>`;
 		} else if (spec.type === "dropdown") {
 			// COMBO widget picker — fully custom dropdown so styling matches
 			// the app (native <select> option lists can't be branded on all
@@ -22595,11 +22947,7 @@ function renderWorkflowCellProperties(cell) {
 			const curEsc = String(cur).replace(/</g, "&lt;").replace(/"/g, "&quot;");
 			const optsHtml = dynamic
 				? `<div class="wf-dropdown-loading" style="padding:8px 10px;font-size:10px;color:rgba(255,255,255,0.45)">Loading…</div>`
-				: opts.map(o => {
-					const esc = String(o).replace(/</g, "&lt;").replace(/"/g, "&quot;");
-					const cls = "wf-dropdown-opt" + (String(o) === String(cur) ? " selected" : "");
-					return `<button type="button" class="${cls}" data-value="${esc}" role="option">${esc}</button>`;
-				}).join("");
+				: _renderGroupedDropdownOptions(opts, cur);
 			const srcAttr = dynamic
 				? ` data-options-source="${String(JSON.stringify(spec.options_source)).replace(/</g, "&lt;").replace(/"/g, "&quot;")}"`
 				: "";
@@ -22656,22 +23004,40 @@ function renderWorkflowCellProperties(cell) {
 				</div>
 			`;
 		}
+		}
+		if (inRow) inputsHtml += `</div>`;
 	}
 
 	const emptyHint = (!m.inputs || m.inputs.length === 0)
 		? `<div class="hint" style="margin-top:8px">No configurable inputs — hit ▶ to run.</div>`
 		: "";
 
+	// Notes — persistent-per-cell scratchpad the user can jot prompts,
+	// seeds worth revisiting, todo hooks, etc. Collapsed by default;
+	// expanded state + text both persist through saveScene since cell is
+	// serialized whole.
+	const notesText = (cell.notes || "").replace(/</g, "&lt;");
+	const notesExpanded = cell.notesExpanded === true;
 	pane.innerHTML = `
-		<div class="section">
+		<div class="section" style="margin-bottom:0">
 			<div class="section-label">Inputs</div>
 			${inputsHtml}
 			${emptyHint}
 		</div>
-		<button type="button" class="rp-generate-btn" data-run-cell="${cell.id}">
+		<button type="button" class="rp-generate-btn" data-run-cell="${cell.id}" style="margin-top:8px">
 			<span>Generate</span>
 			<svg viewBox="0 0 24 24" fill="currentColor" style="width:12px;height:12px" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
 		</button>
+		<div class="section wf-notes-section" style="margin-top:10px">
+			<button type="button" class="wf-notes-header" style="width:100%;display:flex;align-items:center;justify-content:space-between;background:none;border:none;padding:6px 0;cursor:pointer;font:inherit;color:rgba(255,255,255,0.55);font-size:10px;letter-spacing:0.08em;text-transform:uppercase">
+				<span>Notes</span>
+				<svg class="wf-notes-chevron" viewBox="0 0 12 12" style="width:10px;height:10px;transition:transform 0.15s;transform:rotate(${notesExpanded ? 90 : 0}deg)" aria-hidden="true"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+			</button>
+			<div class="wf-notes-body" ${notesExpanded ? "" : "hidden"} style="margin-top:4px">
+				<textarea class="wf-notes-input" rows="4" placeholder="Prompt riffs, seeds worth revisiting, next steps…" spellcheck="false"
+					style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.06);border-radius:4px;padding:6px 8px;color:#e6e6ea;caret-color:#fff;font:inherit;font-size:11px;line-height:1.4;resize:vertical;outline:none;min-height:70px">${notesText}</textarea>
+			</div>
+		</div>
 	`;
 
 	// Delegate to the sidebar row's ▶ — same wiring, same busy-state hooks,
@@ -22681,6 +23047,24 @@ function renderWorkflowCellProperties(cell) {
 		document.querySelector(`#workflow-cells .gen-cell[data-cell-id="${cell.id}"] .gen-run-btn`)?.click();
 	});
 	restoreRpGenerateBusyIfRunning(rpGenBtn, cell.id);
+
+	// Notes wiring — chevron toggles expand/collapse (persisted), textarea
+	// auto-saves debounced through the shared saveScene pipeline so the
+	// notes ride along with the scene file.
+	const notesHeader = pane.querySelector(".wf-notes-header");
+	const notesBody = pane.querySelector(".wf-notes-body");
+	const notesChev = pane.querySelector(".wf-notes-chevron");
+	const notesInput = pane.querySelector(".wf-notes-input");
+	notesHeader?.addEventListener("click", () => {
+		cell.notesExpanded = !(cell.notesExpanded === true);
+		notesBody.hidden = !cell.notesExpanded;
+		if (notesChev) notesChev.style.transform = `rotate(${cell.notesExpanded ? 90 : 0}deg)`;
+		saveSceneDebounced?.();
+	});
+	notesInput?.addEventListener("input", () => {
+		cell.notes = notesInput.value;
+		saveSceneDebounced?.();
+	});
 
 	function autosize(ta) {
 		if (ta.tagName !== "TEXTAREA") return;
@@ -22732,11 +23116,8 @@ function renderWorkflowCellProperties(cell) {
 				const inc = (src.include || "").toLowerCase();
 				const filtered = inc ? list.filter(o => String(o).toLowerCase().includes(inc)) : list;
 				const cur = cell.values[specName] ?? valueEl.textContent ?? "";
-				menu.innerHTML = filtered.map(o => {
-					const esc = String(o).replace(/</g, "&lt;").replace(/"/g, "&quot;");
-					const cls = "wf-dropdown-opt" + (String(o) === String(cur) ? " selected" : "");
-					return `<button type="button" class="${cls}" data-value="${esc}" role="option">${esc}</button>`;
-				}).join("") || `<div style="padding:8px 10px;font-size:10px;color:rgba(255,255,255,0.4)">No matches</div>`;
+				menu.innerHTML = _renderGroupedDropdownOptions(filtered, cur)
+					|| `<div style="padding:8px 10px;font-size:10px;color:rgba(255,255,255,0.4)">No matches</div>`;
 			})();
 		}
 		const closeMenu = () => {
@@ -22832,7 +23213,20 @@ function renderWorkflowCellProperties(cell) {
 				return isFinite(n) ? n : defaultVal;
 			},
 			set: (v) => {
-				const stored = isSeed ? String(Math.max(0, Math.floor(v))) : String(v);
+				let stored;
+				if (isSeed) {
+					stored = String(Math.max(0, Math.floor(v)));
+				} else {
+					// Snap to the manifest's declared step so cfg=2.0 (step 0.5)
+					// actually lands on 2.0, not 2.03. Rounds floating error
+					// out to the step's decimal count so serialized values
+					// stay clean ("2" / "2.5" instead of "2.0000004").
+					if (typeof spec.step === "number" && spec.step > 0) {
+						v = Math.round(v / spec.step) * spec.step;
+						v = parseFloat(v.toFixed(decimals));
+					}
+					stored = String(v);
+				}
 				cell.values[specName] = stored;
 				saveSceneDebounced?.();
 			},
@@ -26191,6 +26585,13 @@ document.getElementById("cam-path-clear")?.addEventListener("click", () => {
 	// here inserted a SECOND unlabeled .drag-num below the labeled row.
 	{ id: "mp-video-opacity", format: v => `${v.toFixed(0)}%`,      sens: 0.4 },
 	{ id: "mp-video-blur",    format: v => `${v.toFixed(0)}`,       sens: 0.16 },
+	// Media plane source cell — mirrors the Scene Properties BG image/
+	// video pill styling so the two panels read as siblings.
+	{ id: "obj-plane-x",       label: "X",       format: v => `${v.toFixed(0)}`,   sens: 4 },
+	{ id: "obj-plane-y",       label: "Y",       format: v => `${v.toFixed(0)}`,   sens: 4 },
+	{ id: "obj-plane-scale",   label: "Scale",   format: v => `${v.toFixed(0)}%`,  sens: 2 },
+	{ id: "obj-plane-blur",    label: "Blur",    format: v => `${v.toFixed(0)}`,   sens: 0.16 },
+	{ id: "obj-plane-opacity", label: "Opacity", format: v => `${v.toFixed(0)}%`,  sens: 0.4 },
 ].forEach(cfg => {
 	const el = document.getElementById(cfg.id);
 	if (el) enhanceRangeAsDrag(el, cfg);
@@ -26244,6 +26645,112 @@ document.getElementById("cam-path-clear")?.addEventListener("click", () => {
 		const vEl = document.getElementById("obj-points-size-val");
 		if (vEl) vEl.textContent = v.toFixed(3);
 		saveSceneDebounced?.();
+	});
+	// Density — subsample the point cloud non-destructively. We keep the
+	// full source geometry on userData._srcGeometry (stamped at import) and
+	// derive a decimated BufferGeometry from it every time the slider moves.
+	// Uniform stride sampling (every-Nth) preserves spatial distribution and
+	// is O(N) which handles multi-million-point clouds without a stutter.
+	function _applyPointsDensity(obj, pct) {
+		const src = obj.userData._srcGeometry;
+		if (!src) return;
+		pct = Math.max(1, Math.min(100, pct | 0));
+		obj.userData._pointsDensityPct = pct;
+		if (pct === 100) {
+			if (obj.geometry !== src) {
+				try { obj.geometry.dispose?.(); } catch {}
+				obj.geometry = src;
+			}
+			return;
+		}
+		const srcPos = src.getAttribute("position");
+		const srcCol = src.getAttribute("color");
+		if (!srcPos) return;
+		const total = srcPos.count;
+		const keep = Math.max(1, Math.round(total * pct / 100));
+		const stride = total / keep;
+		const outPos = new Float32Array(keep * 3);
+		const outCol = srcCol ? new Float32Array(keep * srcCol.itemSize) : null;
+		for (let i = 0; i < keep; i++) {
+			const s = Math.min(total - 1, Math.floor(i * stride));
+			outPos[i * 3    ] = srcPos.getX(s);
+			outPos[i * 3 + 1] = srcPos.getY(s);
+			outPos[i * 3 + 2] = srcPos.getZ(s);
+			if (outCol) {
+				const dim = srcCol.itemSize;
+				for (let k = 0; k < dim; k++) outCol[i * dim + k] = srcCol.array[s * dim + k];
+			}
+		}
+		const g = new THREE.BufferGeometry();
+		g.setAttribute("position", new THREE.BufferAttribute(outPos, 3));
+		if (outCol) g.setAttribute("color", new THREE.BufferAttribute(outCol, srcCol.itemSize));
+		try { if (obj.geometry !== src) obj.geometry.dispose?.(); } catch {}
+		obj.geometry = g;
+	}
+	document.getElementById("obj-points-density")?.addEventListener("input", (e) => {
+		if (!selected?.isPoints) return;
+		const pct = parseInt(e.target.value, 10) || 100;
+		_applyPointsDensity(selected, pct);
+		const vEl = document.getElementById("obj-points-density-val");
+		if (vEl) vEl.textContent = `${pct}%`;
+	});
+	document.getElementById("obj-points-density")?.addEventListener("change", () => saveSceneDebounced?.());
+	// Binary PLY exporter for THREE.Points. Writes the CURRENT geometry (so
+	// a subsampled density bakes into the download), 3× float32 for position
+	// and optional 3× uchar for color if the source had per-point RGB. Kept
+	// client-side — a small ~24-byte-per-point payload is fine for millions
+	// of points and doesn't need the /api/splat/transform round-trip.
+	function _exportPointsPly(obj) {
+		if (!obj?.isPoints || !obj.geometry) return;
+		const pos = obj.geometry.getAttribute("position");
+		const col = obj.geometry.getAttribute("color");
+		if (!pos) { updateStatus?.("no vertex positions to export"); return; }
+		const n = pos.count;
+		const hasColor = !!col && (col.itemSize >= 3);
+		const header =
+			"ply\n" +
+			"format binary_little_endian 1.0\n" +
+			"comment ComfyBlockout points export\n" +
+			`element vertex ${n}\n` +
+			"property float x\nproperty float y\nproperty float z\n" +
+			(hasColor ? "property uchar red\nproperty uchar green\nproperty uchar blue\n" : "") +
+			"end_header\n";
+		const headerBytes = new TextEncoder().encode(header);
+		const stride = 12 + (hasColor ? 3 : 0);
+		const body = new ArrayBuffer(n * stride);
+		const dv = new DataView(body);
+		const u8 = new Uint8Array(body);
+		// Color source may be normalised floats (0..1) OR raw uchars — the
+		// three.js Points path we use stores floats by default (vertexColors
+		// with FloatBufferAttribute), so scale ×255 and clamp.
+		for (let i = 0; i < n; i++) {
+			const o = i * stride;
+			dv.setFloat32(o,     pos.getX(i), true);
+			dv.setFloat32(o + 4, pos.getY(i), true);
+			dv.setFloat32(o + 8, pos.getZ(i), true);
+			if (hasColor) {
+				let r = col.getX(i), g = col.getY(i), b = col.getZ(i);
+				if (r <= 1 && g <= 1 && b <= 1) { r *= 255; g *= 255; b *= 255; }
+				u8[o + 12] = Math.max(0, Math.min(255, r | 0));
+				u8[o + 13] = Math.max(0, Math.min(255, g | 0));
+				u8[o + 14] = Math.max(0, Math.min(255, b | 0));
+			}
+		}
+		const blob = new Blob([headerBytes, body], { type: "application/octet-stream" });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url;
+		const stem = (obj.userData.filename || obj.name || "points").replace(/\.[^.]+$/, "");
+		a.download = `${stem}.ply`;
+		document.body.appendChild(a);
+		a.click();
+		a.remove();
+		setTimeout(() => URL.revokeObjectURL(url), 5000);
+		updateStatus?.(`exported ${n.toLocaleString()} points → ${a.download}`);
+	}
+	document.getElementById("obj-points-export-btn")?.addEventListener("click", () => {
+		if (!selected?.isPoints) return;
+		_exportPointsPly(selected);
 	});
 	document.getElementById("obj-text-font")?.addEventListener("change", (e) => {
 		if (!selected || selected.userData?.primKind !== "text") return;
@@ -26558,6 +27065,16 @@ function refreshObjectInspector() {
 			const sVal = document.getElementById("obj-points-size-val");
 			if (sInput) sInput.value = String(mat.size ?? 0.001);
 			if (sVal) sVal.textContent = (mat.size ?? 0.001).toFixed(3);
+			// Density — Points cloned from PLY imports may not have
+			// _srcGeometry; row is inert but still visible. GLB-promoted
+			// point clouds stamp _srcGeometry so the slider can subsample.
+			const dInput = document.getElementById("obj-points-density");
+			const dVal = document.getElementById("obj-points-density-val");
+			const hint = document.getElementById("obj-points-density-hint");
+			const pct = selected.userData._pointsDensityPct ?? 100;
+			if (dInput) dInput.value = String(pct);
+			if (dVal) dVal.textContent = `${pct}%`;
+			if (hint) hint.style.opacity = selected.userData._srcGeometry ? "" : "0.45";
 		}
 	}
 	// Text primitives — show a dedicated Text section with the editable
@@ -26613,9 +27130,53 @@ function refreshObjectInspector() {
 	// button lit instead of default off.
 	const checkerBtn = document.getElementById("obj-checker-btn");
 	if (checkerBtn) {
-		const isPlanePrim = selected.userData?.primKind === "plane";
-		checkerBtn.hidden = !isPlanePrim || hideAppearance;
-		checkerBtn.classList.toggle("active", !!selected.userData?._checkerOn);
+		// Checker chip retired — media-plane imports replace the classic
+		// blockout-floor use case. Kept in the DOM so the toggle handler
+		// still exists for legacy planes; just hidden.
+		checkerBtn.hidden = true;
+		checkerBtn.style.display = "none";
+	}
+	// Plane Mode section — only for media planes (image/video imports).
+	// Syncs the Mode pill, the Source cell thumb + label, and the Opacity
+	// + Blur sliders from the mesh's current state so re-selecting a plane
+	// mirrors what's actually rendered.
+	const planeModeSection = document.getElementById("obj-plane-mode-section");
+	if (planeModeSection) {
+		const isMediaPlane = selected.userData?.primKind === "plane" && !!selected.userData?.mediaSource;
+		planeModeSection.style.display = isMediaPlane ? "" : "none";
+		if (isMediaPlane) {
+			const mode = selected.userData._planeMode || "2d";
+			document.querySelectorAll('#obj-plane-mode button').forEach(b => {
+				b.classList.toggle("active", b.dataset.planeMode === mode);
+			});
+			// Sync every knob from the mesh's userData / material state.
+			// Each pill (drag-num migrator) reads .value on the underlying
+			// <input type=range> and picks up the label formatting itself,
+			// so we only touch .value here — the migrator's ._refresh() (if
+			// present) repaints the pill to match.
+			const _syncPill = (id, value) => {
+				const el = document.getElementById(id);
+				if (!el) return;
+				el.value = String(value);
+				el._refresh?.();
+			};
+			const currentOpPct = Math.round((selected.material?.opacity ?? 1) * 100);
+			_syncPill("obj-plane-opacity", currentOpPct);
+			_syncPill("obj-plane-blur",  selected.userData._planeBlurPx || 0);
+			_syncPill("obj-plane-x",     selected.userData._planeOffsetX || 0);
+			_syncPill("obj-plane-y",     selected.userData._planeOffsetY || 0);
+			_syncPill("obj-plane-scale", selected.userData._planeScalePct || 100);
+			// Source cell thumb + label — reflect the current asset.
+			const src = selected.userData.mediaSource;
+			const thumb = document.getElementById("obj-plane-source-thumb");
+			const label = document.getElementById("obj-plane-source-label");
+			if (thumb && src?.url) {
+				thumb.style.backgroundImage = `url("${src.url}")`;
+				thumb.style.backgroundSize = "cover";
+				thumb.style.backgroundPosition = "center";
+			}
+			if (label && src?.filename) label.textContent = src.filename;
+		}
 	}
 	const transformSection = document.getElementById("obj-transform-section");
 	if (transformSection) transformSection.style.display = isPlaceholder ? "none" : "";
@@ -26883,6 +27444,146 @@ objCheckerBtn?.addEventListener("click", () => {
 	for (const obj of targets) _applyChecker(obj, nextOn);
 	objCheckerBtn.classList.toggle("active", nextOn);
 	saveScene?.();
+});
+
+// Plane Mode pill — flip a media plane between 2D backdrop (full-viewport,
+// camera-locked) and 3D positioned. Also detaches TransformControls when
+// switching to 2D since gizmo edits have no meaning while the transform is
+// being overwritten every frame by _apply2DPlaneBackdrop.
+document.getElementById("obj-plane-mode")?.addEventListener("click", (e) => {
+	const btn = e.target.closest("button[data-plane-mode]");
+	if (!btn || !selected) return;
+	const mode = btn.dataset.planeMode;
+	if (selected.userData._planeMode === mode) return;
+	selected.userData._planeMode = mode;
+	if (mode === "2d") _apply2DPlaneBackdrop(selected);
+	else _apply3DPlaneMode(selected);
+	document.querySelectorAll('#obj-plane-mode button').forEach(b => {
+		b.classList.toggle("active", b.dataset.planeMode === mode);
+	});
+	if (mode === "2d") { try { transformControls?.detach?.(); } catch {} }
+	else { try { transformControls?.attach?.(selected); } catch {} }
+	saveScene?.();
+});
+
+// Blur slider — writes into the material's injected uBlur uniform. Range
+// 0..40 (matching BG blur) maps to 0..0.02 in UV space, which lands as a
+// noticeable but not extreme smear at max on a full-viewport 2D plane.
+document.getElementById("obj-plane-blur")?.addEventListener("input", (e) => {
+	if (!selected?.material?.userData?.uBlur) return;
+	const px = parseInt(e.target.value, 10) || 0;
+	selected.material.userData.uBlur.value = px * 0.0005;
+	selected.userData._planeBlurPx = px;
+	const valEl = document.getElementById("obj-plane-blur-val");
+	if (valEl) valEl.textContent = String(px);
+});
+document.getElementById("obj-plane-blur")?.addEventListener("change", () => saveScene?.());
+
+// Opacity slider on media planes (0-100 range → 0..1 material opacity).
+document.getElementById("obj-plane-opacity")?.addEventListener("input", (e) => {
+	if (!selected?.material) return;
+	const pct = parseInt(e.target.value, 10);
+	const v = Math.max(0, Math.min(100, isFinite(pct) ? pct : 100)) / 100;
+	selected.material.transparent = true;
+	selected.material.opacity = v;
+	selected.material.needsUpdate = true;
+});
+document.getElementById("obj-plane-opacity")?.addEventListener("change", () => saveScene?.());
+
+// X / Y / Scale — offset knobs. In 2D backdrop mode they shift the plane
+// in screen space (relative to the camera-locked anchor) and scale its
+// fitted size. In 3D mode they map to the plane's own position.x/y and
+// uniform scale. State lives on userData so 2D restores across reloads.
+function _writePlaneTransformOffset(mesh) {
+	if (!mesh) return;
+	if (mesh.userData._planeMode === "3d") {
+		mesh.position.x = (mesh.userData._planeOffsetX || 0) * 0.01;
+		mesh.position.y = (mesh.userData._planeOffsetY || 0) * 0.01;
+		const s = (mesh.userData._planeScalePct || 100) / 100;
+		mesh.scale.set(s, s, s);
+	}
+	// 2D mode reads these values inside onBeforeRender via
+	// _apply2DPlaneBackdrop, so no direct write here.
+}
+document.getElementById("obj-plane-x")?.addEventListener("input", (e) => {
+	if (!selected) return;
+	selected.userData._planeOffsetX = parseInt(e.target.value, 10) || 0;
+	_writePlaneTransformOffset(selected);
+});
+document.getElementById("obj-plane-y")?.addEventListener("input", (e) => {
+	if (!selected) return;
+	selected.userData._planeOffsetY = parseInt(e.target.value, 10) || 0;
+	_writePlaneTransformOffset(selected);
+});
+document.getElementById("obj-plane-scale")?.addEventListener("input", (e) => {
+	if (!selected) return;
+	selected.userData._planeScalePct = parseInt(e.target.value, 10) || 100;
+	_writePlaneTransformOffset(selected);
+});
+["obj-plane-x", "obj-plane-y", "obj-plane-scale"].forEach(id => {
+	document.getElementById(id)?.addEventListener("change", () => saveScene?.());
+});
+
+// Change-source — swap the plane's texture with a freshly picked file.
+// Reuses uploadAsset so the new source is persisted, then reloads the
+// material's map + adjusts the plane geometry to the new media's aspect.
+document.getElementById("obj-plane-source-btn")?.addEventListener("click", () => {
+	document.getElementById("obj-plane-source-file")?.click();
+});
+document.getElementById("obj-plane-source-file")?.addEventListener("change", async (e) => {
+	const f = e.target.files?.[0];
+	e.target.value = "";
+	if (!f || !selected || selected.userData?.primKind !== "plane") return;
+	const mime = (f.type || "").toLowerCase();
+	const ext = (f.name.split(".").pop() || "").toLowerCase();
+	const isImage = mime.startsWith("image/") || /^(png|jpe?g|webp|gif|bmp|tiff?|avif)$/.test(ext);
+	const isVideo = mime.startsWith("video/") || /^(mp4|webm|mov|mkv|m4v)$/.test(ext);
+	if (!isImage && !isVideo) return;
+	try {
+		snapshotForUndo();
+		const buf = await f.arrayBuffer();
+		const { assetId, ext: savedExt } = await uploadAsset(f.name, buf);
+		const url = bgAssetUrl({ assetId, ext: savedExt });
+		const kind = isImage ? "image" : "video";
+		// Tear down the old video element if we're replacing a video source.
+		try { selected.userData.mediaVideoEl?.pause?.(); } catch {}
+		selected.userData.mediaVideoEl = null;
+		const mat = selected.material;
+		try { mat.map?.dispose?.(); } catch {}
+		const applyAspect = (w, h) => {
+			if (!w || !h) return;
+			const aspect = w / h;
+			const g = new THREE.PlaneGeometry(2 * aspect, 2);
+			selected.geometry.dispose();
+			selected.geometry = g;
+		};
+		if (isImage) {
+			new THREE.TextureLoader().load(url, (tex) => {
+				tex.colorSpace = THREE.SRGBColorSpace;
+				mat.map = tex;
+				mat.needsUpdate = true;
+				applyAspect(tex.image?.naturalWidth || tex.image?.width, tex.image?.naturalHeight || tex.image?.height);
+				saveScene?.();
+			});
+		} else {
+			const vid = document.createElement("video");
+			vid.src = url; vid.muted = true; vid.loop = true; vid.playsInline = true;
+			vid.crossOrigin = "anonymous"; vid.preload = "auto";
+			vid.addEventListener("loadedmetadata", () => {
+				applyAspect(vid.videoWidth, vid.videoHeight);
+				saveScene?.();
+			}, { once: true });
+			vid.play?.().catch(() => {});
+			mat.map = new THREE.VideoTexture(vid);
+			mat.map.colorSpace = THREE.SRGBColorSpace;
+			mat.needsUpdate = true;
+			selected.userData.mediaVideoEl = vid;
+		}
+		selected.userData.mediaSource = { url, filename: f.name, kind };
+	} catch (err) {
+		console.warn("[plane source] swap failed:", err);
+		updateStatus?.(`source swap failed · ${err.message || err}`);
+	}
 });
 
 objDoubleSided.addEventListener("change", () => {
@@ -28096,16 +28797,9 @@ document.querySelectorAll(".bg-cell .bg-cell-head").forEach(head => {
 			// (loaded-asset re-picker branch returns above).
 			cell.classList.toggle("collapsed");
 		}
-		// One-click UX — clicking a cell's head auto-fires its picker so
-		// the user doesn't need to hunt for a second button in the body.
-		// Color has an inline custom picker (already expanded), so nothing
-		// to pop there. Image / Video pop the file picker only when empty
-		// (avoids re-picking on every click once a source is loaded).
-		if (mode === "image" && !bgImage) {
-			document.getElementById("bg-image-file")?.click?.();
-		} else if (mode === "video" && !bgVideo) {
-			document.getElementById("bg-video-file")?.click?.();
-		}
+		// Cell just expands — the user can hit "Choose image…" for the file
+		// picker OR drop an asset from the Output panel. Auto-popping the OS
+		// picker on first click blocked the drag-from-Output workflow.
 	});
 });
 // Live-refresh the color swatch thumb whenever the user picks a color —
@@ -28293,9 +28987,10 @@ document.getElementById("bg-image-clear")?.addEventListener("click", e => {
 	applyBgMode();
 	saveScene?.();
 });
-bgImageFile.addEventListener("change", async () => {
-	const f = bgImageFile.files?.[0];
-	bgImageFile.value = "";
+// Extracted so the Objects → Import path (which routes image files here
+// instead of into loadFromBytes) can share the same upload / preload /
+// mode-flip flow without knowing about the BG cell chrome.
+async function _applyBgImageFile(f) {
 	if (!f) return;
 	const cell = document.querySelector('.bg-cell[data-bgmode="image"]');
 	cell?.classList.add("uploading");
@@ -28326,6 +29021,11 @@ bgImageFile.addEventListener("change", async () => {
 	} finally {
 		cell?.classList.remove("uploading");
 	}
+}
+bgImageFile.addEventListener("change", async () => {
+	const f = bgImageFile.files?.[0];
+	bgImageFile.value = "";
+	await _applyBgImageFile(f);
 });
 bgVideoBtn?.addEventListener("click", () => bgVideoFile.click());
 document.getElementById("bg-video-clear")?.addEventListener("click", e => {
@@ -28336,9 +29036,7 @@ document.getElementById("bg-video-clear")?.addEventListener("click", e => {
 	applyBgMode();
 	saveScene?.();
 });
-bgVideoFile?.addEventListener("change", async () => {
-	const f = bgVideoFile.files?.[0];
-	bgVideoFile.value = "";
+async function _applyBgVideoFile(f) {
 	if (!f) return;
 	const cell = document.querySelector('.bg-cell[data-bgmode="video"]');
 	cell?.classList.add("uploading");
@@ -28370,6 +29068,11 @@ bgVideoFile?.addEventListener("change", async () => {
 	} finally {
 		cell?.classList.remove("uploading");
 	}
+}
+bgVideoFile?.addEventListener("change", async () => {
+	const f = bgVideoFile.files?.[0];
+	bgVideoFile.value = "";
+	await _applyBgVideoFile(f);
 });
 bgBlurInput?.addEventListener("input", e => {
 	bgBlur = parseInt(e.target.value, 10) || 0;
@@ -28900,11 +29603,14 @@ async function showBlockoutSnapshot() {
 	resultOverlayImg.removeAttribute("src");
 	resultOverlay.classList.add("loading");
 	updateResultOverlayPos();
-	// If a MediaPipe still has been captured, THAT is the image the model sees
-	// as image 1 (either directly dropped into a workflow slot, or via the
-	// implicit "current source" convention). Blockout tab shows it so the
+	// If the MediaPipe tool is CURRENTLY open with a captured still, that's
+	// the image the model sees as image 1 — Blockout tab shows it so the
 	// user sees the real input, not the 3D scene sitting beneath the overlay.
-	if (_mp.lastStill?.url) {
+	// Scoped to `mediapipe-overlay` being visible so a stale lastStill from
+	// a prior tool session doesn't hijack Blockout on unrelated workflows.
+	const mpOverlayEl = document.getElementById("mediapipe-overlay");
+	const mpActive = mpOverlayEl && !mpOverlayEl.hidden;
+	if (mpActive && _mp.lastStill?.url) {
 		await new Promise((resolve) => {
 			const pre = new Image();
 			pre.onload = pre.onerror = resolve;
@@ -29031,9 +29737,11 @@ function syncCompareMode() {
 	//   Preproc → blockout snapshot
 	//   anything else → no compare (viewport is live, blockout has no "before")
 	// "Blockout" for compare purposes = whatever the model actually saw as
-	// image 1. Prefer the MediaPipe still if one was captured; fall back to
-	// the auto-composited 3D scene snapshot.
-	const blockoutSrc = _mp.lastStill?.url
+	// image 1. Prefer the MediaPipe still only when the tool is actually
+	// open; fall back to the auto-composited 3D scene snapshot.
+	const mpEl = document.getElementById("mediapipe-overlay");
+	const mpOn = mpEl && !mpEl.hidden;
+	const blockoutSrc = (mpOn && _mp.lastStill?.url)
 		|| `/comfyblockout/image/${encodeURIComponent(NODE_ID)}?t=${Date.now()}`;
 	let underlaySrc = null;
 	if (resultMode === "render" && lastResult) {
@@ -29296,6 +30004,13 @@ window.showResultInViewport = function (kind, url, filename, intermediates) {
 	if (preprocInter) {
 		lastPreprocResult = { url: preprocInter.url, filename: preprocInter.filename };
 		if (preprocToggleBtn) preprocToggleBtn.hidden = false;
+	} else {
+		// No preproc this run — clear any stale one so the tab doesn't linger
+		// (server may have skipped injection via manifest skip_when when
+		// preprocessor="none" or controlnet_strength=0).
+		lastPreprocResult = null;
+		if (preprocToggleBtn) preprocToggleBtn.hidden = true;
+		if (resultMode === "preproc") resultMode = "render";
 	}
 	// Rebuild the preview pills fresh — a re-run of the same workflow just
 	// swaps the images under existing tabs, but a switch to a workflow with
@@ -29481,6 +30196,29 @@ for (const b of resultToggle.querySelectorAll("button")) {
 		}
 	});
 }
+
+// Auto-return to Viewport when the user starts interacting with the live
+// scene. Two entry points:
+//   1. Outliner clicks — selecting or right-clicking a row is a "show me this
+//      object" gesture; keeping the render overlay up hides the very thing
+//      the user just asked to see.
+//   2. Clicking the render/blockout overlay itself — reads as "get this out
+//      of my way". Skipped if the click landed on an overlay control (save/
+//      clear/spinner) so those still fire their own actions.
+// Native drag events (image → chat / input slot) don't emit `click`, so the
+// drag-out gesture is preserved for both cases.
+function _switchToViewportMode() {
+	if (resultMode === "viewport") return;
+	resultMode = "viewport";
+	applyResultMode();
+}
+outlinerEl?.addEventListener("pointerdown", _switchToViewportMode, true);
+resultOverlay?.addEventListener("click", (e) => {
+	// Skip overlay controls (save/clear/close buttons) and the compare-slider
+	// handle so their own click semantics survive.
+	if (e.target?.closest?.("button, .compare-handle")) return;
+	_switchToViewportMode();
+});
 
 new ResizeObserver(updateResultOverlayPos).observe(canvasWrap);
 applyResultMode();
@@ -29961,13 +30699,10 @@ window.addEventListener("resize", () => {
 // Kick once on boot, after layout has settled.
 queueMicrotask(() => { syncPanelWidthsToAspect(); handleResize(); });
 
-const dropOverlay = document.getElementById("drop-overlay");
-let dragDepth = 0;
-// Only show the "Drop GLB · FBX · …" overlay for actual OS file drags. Internal asset-tile
-// drags from the Assets pane set their own MIME (application/x-cb-asset) and target the
-// Outliner / module reference slots — they must NOT trigger the import flow. Dragging an
-// <img> (like the Blockout / Render overlay) makes Chrome auto-add a `Files` entry even
-// though the drag is internal, so we also short-circuit when our custom MIME is present.
+// Internal asset-tile drags from the Assets pane set their own MIME (application/x-cb-asset)
+// and target specific slots — they must NOT trigger the import flow. Dragging an <img> (like
+// the Blockout / Render overlay) makes Chrome auto-add a `Files` entry even though the drag
+// is internal, so we also short-circuit when our custom MIME is present.
 function isFileDrag(e) {
 	const types = e.dataTransfer?.types;
 	if (!types) return false;
@@ -29975,30 +30710,32 @@ function isFileDrag(e) {
 	if (arr.includes("application/x-cb-asset")) return false;
 	return arr.includes("Files");
 }
-window.addEventListener("dragenter", e => {
-	if (!isFileDrag(e)) return;
-	e.preventDefault();
-	dragDepth++;
-	dropOverlay.classList.add("active");
-});
+// Block the browser's default "open the file" behavior on stray drops outside a real target,
+// but don't consume the event — specific targets (viewport, image slots) register their own
+// drop handlers so users can aim at exactly what they want.
 window.addEventListener("dragover", e => {
 	if (!isFileDrag(e)) return;
 	e.preventDefault();
-	e.dataTransfer.dropEffect = "copy";
 });
-window.addEventListener("dragleave", e => {
-	if (!isFileDrag(e)) return;
-	dragDepth = Math.max(0, dragDepth - 1);
-	if (dragDepth === 0) dropOverlay.classList.remove("active");
-});
-window.addEventListener("drop", async e => {
+window.addEventListener("drop", e => {
 	if (!isFileDrag(e)) return;
 	e.preventDefault();
-	dragDepth = 0;
-	dropOverlay.classList.remove("active");
-	const files = Array.from(e.dataTransfer.files || []);
-	for (const f of files) await loadFile(f);
 });
+// Viewport-scoped file import: dropping a 3D file onto the canvas imports it into the scene.
+if (canvasWrap) {
+	canvasWrap.addEventListener("dragover", e => {
+		if (!isFileDrag(e)) return;
+		e.preventDefault();
+		e.dataTransfer.dropEffect = "copy";
+	});
+	canvasWrap.addEventListener("drop", async e => {
+		if (!isFileDrag(e)) return;
+		e.preventDefault();
+		e.stopPropagation();
+		const files = Array.from(e.dataTransfer.files || []);
+		for (const f of files) await loadFile(f);
+	});
+}
 
 // Drag-and-drop from the Assets panel onto the viewport — internal drags
 // carry `application/x-cb-asset` payload (see Assets tile dragstart). 3D
@@ -32765,6 +33502,17 @@ function serializeScene() {
 			// reload rebuilds the same-shaped geometry (the mesh's actual
 			// geometry buffer is derived, not authoritative).
 			textConfig: o.userData.primKind === "text" ? o.userData.textConfig : undefined,
+			// Media planes (image/video imports) — persist the asset ref +
+			// their display state so a restart rehydrates the texture, mode,
+			// transform offsets, opacity, and blur. Without these, the plane
+			// comes back as a blank white default from addPrimitive("plane").
+			mediaSource: o.userData.mediaSource || undefined,
+			planeMode: o.userData._planeMode || undefined,
+			planeBlurPx: o.userData._planeBlurPx || undefined,
+			planeOpacity: (o.userData.mediaSource && o.material?.opacity !== undefined && o.material.opacity !== 1) ? o.material.opacity : undefined,
+			planeOffsetX: o.userData._planeOffsetX || undefined,
+			planeOffsetY: o.userData._planeOffsetY || undefined,
+			planeScalePct: (o.userData._planeScalePct && o.userData._planeScalePct !== 100) ? o.userData._planeScalePct : undefined,
 			keyframes: serializeObjectKeyframes(o),
 		})),
 		imports: objects.filter(o => o.userData.assetId).map(o => ({
@@ -32795,6 +33543,7 @@ function serializeScene() {
 		workflowCells: workflowCells.map(c => ({
 			id: c.id, moduleId: c.moduleId, values: { ...c.values }, expanded: c.expanded,
 		})),
+		activeWorkflowCellId,
 		// Outliner-only groupings. Members referenced by name (stable across
 		// save/load). Filtered to only include names that still resolve to an
 		// existing object — deletes may have happened between saves.
@@ -33029,6 +33778,48 @@ async function deserializeScene(state, opts = {}) {
 	while (objects.length) deleteObject(objects[0]);
 
 	for (const p of (state.primitives || [])) {
+		// Media planes (image/video imports) rehydrate through spawnMediaPlane
+		// so the asset re-loads into a fresh material with the blur shader —
+		// addPrimitive("plane") alone hands back a blank white MeshStandard-
+		// Material with no re-texture path.
+		if (p.kind === "plane" && p.mediaSource?.url) {
+			const src = p.mediaSource;
+			try {
+				const m = await spawnMediaPlane(src.url, src.filename || "media", src.kind || "image");
+				if (m) {
+					m.name = p.name || m.name;
+					m.position.fromArray(p.position);
+					m.rotation.set(p.rotation[0], p.rotation[1], p.rotation[2]);
+					m.scale.fromArray(p.scale);
+					stashInitialTransform(m);
+					if (p.visible === false) m.visible = false;
+					if (p.locked) m.userData.locked = true;
+					if (p.notes) m.userData.notes = p.notes;
+					if (typeof p.planeOpacity === "number") { m.material.opacity = p.planeOpacity; m.material.needsUpdate = true; }
+					if (typeof p.planeBlurPx === "number" && m.material.userData?.uBlur) {
+						m.userData._planeBlurPx = p.planeBlurPx;
+						m.material.userData.uBlur.value = p.planeBlurPx * 0.0005;
+					}
+					if (typeof p.planeOffsetX === "number") m.userData._planeOffsetX = p.planeOffsetX;
+					if (typeof p.planeOffsetY === "number") m.userData._planeOffsetY = p.planeOffsetY;
+					if (typeof p.planeScalePct === "number") m.userData._planeScalePct = p.planeScalePct;
+					// Default is 2D from spawnMediaPlane. Flip to 3D if the
+					// save said so; _apply3DPlaneMode resets to the stashed
+					// initial transform, so we re-apply the saved one after.
+					if (p.planeMode === "3d") {
+						m.userData._planeMode = "3d";
+						_apply3DPlaneMode(m);
+						m.position.fromArray(p.position);
+						m.rotation.set(p.rotation[0], p.rotation[1], p.rotation[2]);
+						m.scale.fromArray(p.scale);
+					}
+					if (Array.isArray(p.keyframes)) m.userData.keyframes = deserializeObjectKeyframes(p.keyframes);
+				}
+			} catch (e) {
+				console.warn("[ComfyBlockout] media plane restore failed:", e);
+			}
+			continue;
+		}
 		const mesh = addPrimitive(p.kind);
 		if (!mesh) continue;
 		mesh.name = p.name || mesh.name;
@@ -33090,6 +33881,11 @@ async function deserializeScene(state, opts = {}) {
 			if (obj && Array.isArray(im.keyframes)) obj.userData.keyframes = deserializeObjectKeyframes(im.keyframes);
 			if (obj && obj.userData?.primKind === "splat") {
 				if (im.splatTintHex) obj.userData._splatTintHex = im.splatTintHex;
+				// Re-stamp the source PLY URL so splat tools (Paint Delete,
+				// Simplify, etc.) can re-fetch after a scene reload. Same URL
+				// shape loadFile uses when it stamps a freshly-imported splat.
+				obj.userData._srcPlyUrl = url;
+				obj.userData._srcPlyFilename = im.filename;
 			}
 			if (obj && im.textureHidden) setObjectTextureVisible(obj, false);
 			else if (obj && obj.userData?.primKind === "splat" && im.splatTintHex) applySplatColorState(obj);
@@ -33149,6 +33945,13 @@ async function deserializeScene(state, opts = {}) {
 		}
 		activeWorkflowCellId = null;
 		refreshWorkflowCells();
+		// Restore the last-active workflow cell so its properties pane reopens
+		// on scene load — saves the "select the cell you just had open" click
+		// after every save/restart cycle. Guarded on the id still resolving
+		// to a hydrated cell (moduleId collisions or dedupe may have dropped it).
+		if (state.activeWorkflowCellId && workflowCells.some(c => c.id === state.activeWorkflowCellId)) {
+			try { setActiveWorkflowCell(state.activeWorkflowCellId); } catch {}
+		}
 	}
 	refreshGenAddBtn();
 
@@ -34203,23 +35006,37 @@ function showAlert(title, message, opts = {}) {
 			fontSize: "11px", background: "transparent", color: "rgba(255,255,255,0.7)",
 		});
 		copy.onclick = async () => {
-			// Prefer the modern clipboard API; fall back to a synthetic range
-			// selection for older webviews that don't grant clipboard-write.
+			// navigator.clipboard often silently refuses under WebView2/Tauri
+			// without clipboard-write permission — and the original selectRange
+			// fallback set textContent = "Copied" even when nothing landed on
+			// the clipboard, which is exactly what the user was hitting. The
+			// hidden-textarea + execCommand path works reliably in every
+			// embedded webview we've tested; we only report success when the
+			// underlying copy operation actually returned true.
 			const text = card.querySelector(".alert-message")?.textContent || "";
-			try {
-				await navigator.clipboard.writeText(text);
-				copy.textContent = "Copied";
-				setTimeout(() => { copy.textContent = "Copy"; }, 1200);
-			} catch {
-				const r = document.createRange();
-				r.selectNodeContents(card.querySelector(".alert-message"));
-				const sel = window.getSelection();
-				sel?.removeAllRanges();
-				sel?.addRange(r);
-				try { document.execCommand("copy"); } catch {}
-				copy.textContent = "Copied";
-				setTimeout(() => { copy.textContent = "Copy"; }, 1200);
+			let ok = false;
+			if (navigator.clipboard?.writeText) {
+				try {
+					await navigator.clipboard.writeText(text);
+					ok = true;
+				} catch { /* fall through to textarea */ }
 			}
+			if (!ok) {
+				try {
+					const ta = document.createElement("textarea");
+					ta.value = text;
+					ta.style.position = "fixed";
+					ta.style.top = "-9999px";
+					ta.style.opacity = "0";
+					document.body.appendChild(ta);
+					ta.focus();
+					ta.select();
+					ok = document.execCommand("copy");
+					document.body.removeChild(ta);
+				} catch { /* leave ok=false */ }
+			}
+			copy.textContent = ok ? "Copied" : "Copy failed";
+			setTimeout(() => { copy.textContent = "Copy"; }, 1400);
 		};
 		row.appendChild(copy);
 		// "Send to Agent" — closes the modal, opens the AI Agent pane (if not

@@ -10,10 +10,10 @@
   },
   "3": {
     "inputs": {
-      "seed": 43623624,
+      "seed": 209980276407611,
       "steps": 30,
-      "cfg": 3,
-      "sampler_name": "euler",
+      "cfg": 7,
+      "sampler_name": "dpmpp_2m",
       "scheduler": "karras",
       "denoise": 1,
       "model": [
@@ -29,7 +29,7 @@
         1
       ],
       "latent_image": [
-        "5",
+        "28",
         0
       ]
     },
@@ -56,13 +56,19 @@
   },
   "5": {
     "inputs": {
-      "width": 1344,
-      "height": 768,
+      "width": [
+        "27",
+        0
+      ],
+      "height": [
+        "27",
+        1
+      ],
       "batch_size": 1
     },
     "class_type": "EmptyLatentImage",
     "_meta": {
-      "title": "Empty Latent 1344x768"
+      "title": "Empty Latent"
     }
   },
   "6": {
@@ -93,10 +99,10 @@
   },
   "9": {
     "inputs": {
-      "preprocessor": "DepthAnythingV2Preprocessor",
+      "preprocessor": "DepthAnythingPreprocessor",
       "resolution": 1024,
       "image": [
-        "10",
+        "25",
         0
       ]
     },
@@ -201,13 +207,13 @@
     },
     "class_type": "PreviewImage",
     "_meta": {
-      "title": "Preview Image"
+      "title": "Preview Preprocessor"
     }
   },
   "22": {
     "inputs": {
       "blur_radius": 17,
-      "sigma": 1,
+      "sigma": 3.8,
       "image": [
         "9",
         0
@@ -216,6 +222,61 @@
     "class_type": "ImageBlur",
     "_meta": {
       "title": "Blur Image"
+    }
+  },
+  "23": {
+    "inputs": {
+      "images": [
+        "22",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Blurred"
+    }
+  },
+  "25": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "megapixels": 1,
+      "resolution_steps": 1,
+      "image": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "Scale Image to Total Pixels"
+    }
+  },
+  "27": {
+    "inputs": {
+      "image": [
+        "25",
+        0
+      ]
+    },
+    "class_type": "GetImageSize",
+    "_meta": {
+      "title": "Get Image Size"
+    }
+  },
+  "28": {
+    "inputs": {
+      "pixels": [
+        "25",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode (Source → Latent)"
     }
   }
 }

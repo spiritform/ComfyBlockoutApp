@@ -102,13 +102,20 @@ _EXT_KIND = {
 }
 
 
-def new_output_path(data_dir: Path, module_id: str, ext: str) -> Path:
+def new_output_path(data_dir: Path, module_id: str, ext: str, *, preview: bool = False) -> Path:
     # Route by extension into type-partitioned subfolders (images/videos/3d) so
     # a fresh install has a browsable output structure and the Output panel can
     # find everything with a single recursive scan. Unknown types fall back to
     # data_dir root (unchanged behavior).
+    #
+    # `preview=True` writes with a `preview_` prefix instead of `out_` so
+    # diagnostic surfaces (workflow input blockout copy, preprocessor
+    # intermediates) are still served via /output/ URLs for the Blockout /
+    # Preproc tabs, but Assets list (which globs `out_*`) skips them so they
+    # don't fill up the Output pane with per-generation debug files.
     sub = _EXT_KIND.get(ext.lower().lstrip("."))
     target_dir = (data_dir / sub) if sub else data_dir
     target_dir.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    return target_dir / f"out_{module_id}_{stamp}_{uuid.uuid4().hex[:6]}.{ext}"
+    prefix = "preview" if preview else "out"
+    return target_dir / f"{prefix}_{module_id}_{stamp}_{uuid.uuid4().hex[:6]}.{ext}"

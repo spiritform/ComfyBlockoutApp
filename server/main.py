@@ -362,6 +362,11 @@ async def pivot_test() -> FileResponse:
     return FileResponse(WEB_DIR / "pivot-test.html")
 
 
+@app.get("/freemocap-mockup")
+async def freemocap_mockup() -> FileResponse:
+    return FileResponse(WEB_DIR / "freemocap-mockup.html")
+
+
 # Editor still references /extensions/ComfyBlockout/icons/... — keep that path live.
 @app.get("/extensions/ComfyBlockout/icons/{name}")
 async def legacy_icon(name: str) -> FileResponse:
@@ -1937,8 +1942,11 @@ def _splat_action_to_args(action: dict) -> list[str]:
 
 
 def _resolve_splat_src(body: dict) -> Path:
-    """Accept src_path (absolute) or src_url (/output/...). Reject anything
-    that escapes DATA_DIR to prevent path traversal."""
+    """Accept src_path (absolute) or src_url. src_url may be:
+      * /output/<...>            — generation output under DATA_DIR
+      * /comfyblockout/asset/<node_id>/<file> — per-node upload cache
+                                                 (routes through _asset_dir)
+    Reject anything that escapes DATA_DIR to prevent path traversal."""
     src_path = body.get("src_path")
     src_url = body.get("src_url")
     if src_path:
@@ -1947,7 +1955,19 @@ def _resolve_splat_src(body: dict) -> Path:
         rel = str(src_url).lstrip("/")
         if rel.startswith("output/"):
             rel = rel[len("output/"):]
-        p = (DATA_DIR / rel).resolve()
+            p = (DATA_DIR / rel).resolve()
+        elif rel.startswith("comfyblockout/asset/"):
+            # Route to _asset_dir(node_id) rather than DATA_DIR + rel — the
+            # HTTP endpoint at /comfyblockout/asset/<node>/<file> reads from
+            # DATA_DIR/assets/<node>/<file>, not the literal URL path. Splat
+            # tools invoked on a user-imported PLY / SPZ hit this branch.
+            parts = rel[len("comfyblockout/asset/"):].split("/", 1)
+            if len(parts) != 2 or not parts[0] or not parts[1]:
+                raise HTTPException(400, f"bad asset src_url: {src_url}")
+            node_id, asset_name = parts
+            p = (_asset_dir(node_id) / asset_name).resolve()
+        else:
+            p = (DATA_DIR / rel).resolve()
     else:
         raise HTTPException(400, "src_path or src_url required")
     try:
@@ -3298,7 +3318,11 @@ async def run_module(module_id: str, request: Request):
         import tempfile as _tempfile, urllib.request as _urlreq
         try:
             if image_url.startswith("/output/"):
-                candidate = DATA_DIR / image_url[len("/output/"):]
+                # Strip any cache-busting query string (e.g. ?t=1234) — the
+                # viewport result-overlay adds one on render and the URL rides
+                # along with the drag payload straight into the workflow slot.
+                rel = image_url[len("/output/"):].split("?", 1)[0]
+                candidate = DATA_DIR / rel
                 if not candidate.exists():
                     raise HTTPException(400, f"source image not found: {image_url}")
                 inputs["image_path"] = candidate

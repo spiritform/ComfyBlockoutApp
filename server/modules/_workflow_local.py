@@ -90,6 +90,33 @@ def apply_source_aspect_to_latents(workflow: dict, src_w: int, src_h: int) -> No
         inputs["height"] = new_h
 
 
+def intermediate_skipped(spec: dict, kwargs: dict) -> bool:
+    """Evaluate a manifest `skip_when` clause. Skip injection when ANY listed
+    condition matches — e.g. ControlNet preproc preview is meaningless if
+    strength is 0 or preprocessor is "none". Clause form:
+        {"input": "<kwarg_name>", "equals": <value>}
+    Numeric coercion catches float 0.0 vs int 0 across JSON round-trips."""
+    clauses = spec.get("skip_when") or []
+    if isinstance(clauses, dict):
+        clauses = [clauses]
+    for c in clauses:
+        if not isinstance(c, dict):
+            continue
+        name = c.get("input")
+        if not name:
+            continue
+        actual = kwargs.get(name)
+        expected = c.get("equals")
+        if actual == expected:
+            return True
+        try:
+            if float(actual) == float(expected):
+                return True
+        except (TypeError, ValueError):
+            pass
+    return False
+
+
 def inject_intermediate_saves(workflow: dict, intermediates: list[dict]) -> dict[str, str]:
     """For each declared intermediate, splice in a synthetic SaveImage that fans
     off the source node's chosen slot. Returns {intermediate_name -> synthetic
@@ -514,7 +541,10 @@ async def run_local_workflow(workflow_path: Path, manifest: dict, kwargs: dict, 
                     # bleeding into the blockout). Copy runs before the upload
                     # so a network failure still leaves a preview on disk.
                     try:
-                        blockout_asset_path = new_output_path(data_dir, f"{module_id}_blockout", "png")
+                        # preview=True → diagnostic surface, kept out of the
+                        # Assets pane so per-generation blockout copies don't
+                        # accumulate as visible clutter.
+                        blockout_asset_path = new_output_path(data_dir, f"{module_id}_blockout", "png", preview=True)
                         shutil.copyfile(Path(image_path), blockout_asset_path)
                     except Exception:
                         blockout_asset_path = None
@@ -537,6 +567,7 @@ async def run_local_workflow(workflow_path: Path, manifest: dict, kwargs: dict, 
         # exposes (depth, canny, pose, etc.), then track their synthetic ids
         # so we can lift the files out of /history after the run.
         intermediates_spec = manifest.get("intermediates") or []
+        intermediates_spec = [s for s in intermediates_spec if not intermediate_skipped(s, kwargs)]
         intermediates_map = inject_intermediate_saves(workflow, intermediates_spec)
 
         run_started_at = time.time() - 5
@@ -571,7 +602,9 @@ async def run_local_workflow(workflow_path: Path, manifest: dict, kwargs: dict, 
                 print(f"[workflow] intermediate '{name}' (synth {synth_id}) produced no matching output — skipping tab")
                 continue
             e = Path(picked["filename"]).suffix.lstrip(".").lower() or allowed_exts[0]
-            i_dst = new_output_path(data_dir, f"{module_id}_{name}", e)
+            # preview=True — intermediates (preproc previews, condition maps)
+            # are tab-only surfaces, not files the user wants in Assets.
+            i_dst = new_output_path(data_dir, f"{module_id}_{name}", e, preview=True)
             await download_output(client, picked, i_dst)
             intermediates_out.append({
                 "name": name,
@@ -580,6 +613,18 @@ async def run_local_workflow(workflow_path: Path, manifest: dict, kwargs: dict, 
                 "filename": i_dst.name,
                 "ext": e,
             })
+
+        # Strip any user-added PreviewImage / PreviewAudio nodes from outputs
+        # before the primary render pick. Users add these to eyeball a stage
+        # in ComfyUI (e.g. PreviewImage of the depth preproc). Their file lands
+        # in outputs alongside SaveImage's and can win pick_output, which then
+        # returns the depth pass as "the render". Explicit skip by class_type.
+        _preview_classes = {"PreviewImage", "PreviewAudio"}
+        for nid in [k for k in list((outputs or {}).keys())
+                    if isinstance(workflow.get(k), dict)
+                    and workflow[k].get("class_type") in _preview_classes]:
+            outputs.pop(nid, None)
+            print(f"[workflow] skipping {workflow[nid]['class_type']} node {nid} from render pick")
 
         item = pick_output(outputs, allowed_exts)
         if not item:
