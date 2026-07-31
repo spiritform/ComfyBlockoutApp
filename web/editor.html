@@ -6682,11 +6682,27 @@
 					assetsGrid.style.display = "none";
 				}
 				refreshChatContextChip?.();
-				// Fire deletes in parallel — errors are silent (next refresh
-				// will resurrect any files that failed to delete server-side).
-				Promise.all(names.map(n =>
-					fetch(`/api/assets/${encodeURIComponent(n)}`, { method: "DELETE" }).catch(() => {})
-				));
+				// Fire deletes in parallel and surface any server-side
+				// failures. If a DELETE fails, the file lingers on disk
+				// and the next refreshAssets() resurrects the tile —
+				// which is exactly the "I deleted it, it came back"
+				// bug. Log so we can see it in DevTools.
+				(async () => {
+					const results = await Promise.allSettled(names.map(n =>
+						fetch(`/api/assets/${encodeURIComponent(n)}`, { method: "DELETE" })
+							.then(r => { if (!r.ok) throw new Error(`${r.status} ${r.statusText}`); return n; })
+					));
+					const failed = [];
+					for (let i = 0; i < results.length; i++) {
+						if (results[i].status === "rejected") failed.push([names[i], results[i].reason]);
+					}
+					if (failed.length) {
+						console.warn("[assets] delete failed for:", failed);
+						// Resync UI with disk truth so the user sees which files
+						// stuck. Better than a stale UI that pretends they're gone.
+						window.refreshAssets?.();
+					}
+				})();
 			}
 		});
 
@@ -34482,9 +34498,6 @@ async function saveScene() {
 				scene,
 			}, "*");
 		} catch {}
-		// Refresh the IMAGE output snapshot so queuing the workflow uses the current view
-		// without forcing a record-first. Debounced so orbit drags don't snapshot per-frame.
-		autoSnapshotDebounced();
 	} catch (e) {
 		console.warn("[ComfyBlockout] scene save failed:", e);
 	}
@@ -34583,16 +34596,6 @@ const saveSceneDebounced = (() => {
 })();
 // Wire the forward-reference so early callers (gen-cell seed, etc.) can route through.
 _saveSceneDebouncedRef = saveSceneDebounced;
-
-const autoSnapshotDebounced = (() => {
-	let t = null;
-	return () => {
-		if (restoringScene) return;
-		if (recording || isPlayingPreview) return;
-		clearTimeout(t);
-		t = setTimeout(() => { autoSnapshot().catch(() => {}); }, 200);
-	};
-})();
 
 // Parent (comfyblockout.js) hooks app.queuePrompt and asks the preview iframe to
 // flush a fresh snapshot before submitting. Acks back when the upload completes.
@@ -36269,7 +36272,6 @@ document.getElementById("th-help")?.addEventListener("click", () => {
 		renderCamHelper.visible = activeView === "scene" && !renderCam.userData.wireframeHidden;
 	}
 	await new Promise(r => requestAnimationFrame(r));
-	autoSnapshot().catch(() => {});
 	console.log(`[ComfyBlockout] boot ready in ${(performance.now() - bootStart).toFixed(0)}ms`);
 	// Curtain-down as soon as deserialize resolves. The imports loop inside
 	// deserialize now fetches + parses in parallel (Promise.allSettled) so

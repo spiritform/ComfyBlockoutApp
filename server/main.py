@@ -4987,10 +4987,34 @@ async def assets_delete(filename: str):
             p = candidate
             break
     if p:
+        # Windows: static file handler / thumb generator may still hold a
+        # handle for a few ms after the last tile paint. Short retry loop
+        # turns transient PermissionError into eventual success instead of
+        # a silent failure that resurrects the tile on next refresh.
+        import time as _t
+        last_err = None
+        for _ in range(5):
+            try:
+                p.unlink()
+                last_err = None
+                break
+            except PermissionError as e:
+                last_err = e
+                _t.sleep(0.05)
+            except Exception as e:
+                last_err = e
+                break
+        if last_err:
+            raise HTTPException(500, f"delete failed: {last_err}")
+        # Nuke every cached thumb for this source (all sizes, all subfolder
+        # variants). Without this the .thumbs cache balloons over time and
+        # a re-uploaded file with the same stem serves the stale thumb.
         try:
-            p.unlink()
-        except Exception as e:
-            raise HTTPException(500, f"delete failed: {e}")
+            for thumb in _THUMB_ROOT.rglob(f"{p.stem}.jpg"):
+                try: thumb.unlink()
+                except Exception: pass
+        except Exception:
+            pass
     return {"deleted": True, "filename": safe}
 
 
