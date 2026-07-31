@@ -11185,25 +11185,25 @@ function _apply3DPlaneMode(mesh) {
 	}
 }
 
-function duplicateObject(obj) {
+async function duplicateObject(obj) {
 	if (!obj) return;
-	snapshotForUndo();
-	const kind = obj.userData.primKind || "cube";
-	// Lights route through addLightFx (a wrapper Group with lightConfig, no
-	// mesh material). Offset the dup so it doesn't sit inside the source.
-	if (kind === "light" && obj.userData.lightConfig) {
-		const dup = addLightFx({ ...obj.userData.lightConfig });
-		dup.position.copy(obj.position).add(new THREE.Vector3(0.5, 0, 0.5));
-		dup.rotation.copy(obj.rotation);
-		dup.scale.copy(obj.scale);
-		dup.visible = obj.visible !== false;
-		return;
+	// Delegate to the copy/paste pipeline — pasteFromClipboard handles every
+	// kind (light, particles, clouds, scatter, terrain, mannequin, imports,
+	// primitives) via snapshotPrimitiveFor + kind-specific reconstruction.
+	// The old direct-clone path only handled Light + PRIM_DEFS primitives and
+	// silently broke on GLB imports (addPrimitive("glb") returns undefined,
+	// then dup.material.color.copy crashes) as well as Tripo3D-generated
+	// meshes. Save + restore the user's clipboard so Ctrl+D doesn't clobber
+	// whatever they last Ctrl+C'd.
+	const snap = snapshotPrimitiveFor(obj);
+	if (!snap) { updateStatus("nothing to duplicate"); return; }
+	const prevClip = objectClipboard;
+	objectClipboard = [snap];
+	try {
+		await pasteFromClipboard();
+	} finally {
+		objectClipboard = prevClip;
 	}
-	const dup = addPrimitive(kind);
-	dup.position.copy(obj.position).add(new THREE.Vector3(0.5, 0, 0.5));
-	dup.rotation.copy(obj.rotation);
-	dup.scale.copy(obj.scale);
-	dup.material.color.copy(obj.material.color);
 }
 
 window.forceRightPane = forceRightPane;
@@ -12136,9 +12136,14 @@ function applySelectionTint(obj) {
 	} else {
 		// Group / import — union every descendant mesh's bbox transformed
 		// into the root's local space so the cage snugs the whole subtree.
+		// Update world matrices FIRST, then invert — otherwise `worldToLocal`
+		// captures the STALE pre-transform matrix while `c.matrixWorld` gets
+		// the fresh one via updateWorldMatrix. That mixes coordinate spaces
+		// and blows the cage up wildly on freshly-pasted objects (whose
+		// paste-time position/scale weren't in matrixWorld yet).
+		obj.updateWorldMatrix(false, true);
 		const worldToLocal = new THREE.Matrix4().copy(obj.matrixWorld).invert();
 		const corner = new THREE.Vector3();
-		obj.updateWorldMatrix(false, true);
 		obj.traverse(c => {
 			if (!c.isMesh || !c.geometry) return;
 			c.geometry.computeBoundingBox();
@@ -20264,6 +20269,16 @@ async function _replaceTripo3dPlaneWithMesh(glbUrl) {
 		box.userData.tripo3dConsumed = true;
 		root.userData.tripo3dResult = true;
 		root.userData.tripo3dPlaceholderRef = box;
+		// Persist to the per-node asset cache so Ctrl+C / paste (which fetches
+		// via /comfyblockout/asset/) can hydrate the copy. Without this the
+		// mesh only exists at /output/3d/<file>.glb and paste 404s.
+		try {
+			const { assetId } = await uploadAsset(filename, buf);
+			root.userData.assetId = assetId;
+			root.userData.filename = filename;
+		} catch (e) {
+			console.warn("[tripo3d] asset persist failed; Ctrl+C paste won't work:", e);
+		}
 		select(root);
 		refreshOutliner();
 		if (typeof saveScene === "function") saveScene();
@@ -25816,6 +25831,16 @@ const SCALE_SNAP_STEP = 0.25;
 // gives smoother fine control by default. Snap mode skips this so the 0.25 step
 // still feels like 0.25.
 const SCALE_FINE = 0.4;
+// The center (uniform-XYZ) handle changes all three axes at once, so a raw drag
+// there feels roughly 3× more sensitive than an axis handle for the same pointer
+// motion — a pixel of drift can double the object's size. Very tight multiplier
+// keeps small nudges actually small. Hold Shift for the coarser factor when you
+// want big deliberate changes.
+const SCALE_FINE_UNIFORM = 0.08;
+// Shift-held override for the uniform-XYZ handle only — swaps in bigger
+// increments up AND down for fast/deliberate scaling. Axis handles keep their
+// existing shift = snap-to-0.25 behavior.
+const SCALE_COARSE_UNIFORM = 0.5;
 function snapActive() { return snapEnabled || shiftSnapHeld; }
 function applyTransformSnap() {
 	const on = snapActive();
@@ -26160,20 +26185,29 @@ transform.addEventListener("objectChange", () => {
 		// corner / bbox face-center) to the nearest such anchor on any other visible object.
 		const offset = findObjectToObjectSnapOffset(selected);
 		if (offset) selected.position.add(offset);
-	} else if (!snapActive() && selected && transform.mode === "scale" && scaleDragStart) {
+	} else if (selected && transform.mode === "scale" && scaleDragStart) {
 		// Compress the delta between drag-start and what TransformControls just set,
-		// so a pixel of pointer motion produces a smaller scale change. Skipped when
-		// snap is on so the 0.25 quantization steps still land visibly.
-		// Clamp to a small positive floor — dragging a scale handle past zero
-		// flips the sign, which inverts the object's local axes and makes the
-		// translate gizmo drag in reverse ("Y up drags down"). Keeping scale
-		// strictly positive blocks that whole class of bug at the source.
-		const SCALE_MIN = 0.01;
-		selected.scale.set(
-			Math.max(SCALE_MIN, scaleDragStart.x + (selected.scale.x - scaleDragStart.x) * SCALE_FINE),
-			Math.max(SCALE_MIN, scaleDragStart.y + (selected.scale.y - scaleDragStart.y) * SCALE_FINE),
-			Math.max(SCALE_MIN, scaleDragStart.z + (selected.scale.z - scaleDragStart.z) * SCALE_FINE),
-		);
+		// so a pixel of pointer motion produces a smaller scale change. Axis
+		// handles obey the snap-active gate (snap-mode skips damping so the 0.25
+		// quantization stays visible). The uniform (center-XYZ) handle ALWAYS
+		// damps — snap on uniform scale is pointless, and Shift is repurposed
+		// there to swap in a coarser factor for deliberate big-move drags.
+		// Clamp to a small positive floor — dragging past zero flips sign, which
+		// inverts local axes and makes translate drags run backward.
+		const isUniform = transform.axis === "XYZ";
+		if (!isUniform && snapActive()) {
+			// axis handle + snap active — pass through, let snap-to-0.25 stand
+		} else {
+			const SCALE_MIN = 0.01;
+			const k = isUniform
+				? (shiftSnapHeld ? SCALE_COARSE_UNIFORM : SCALE_FINE_UNIFORM)
+				: SCALE_FINE;
+			selected.scale.set(
+				Math.max(SCALE_MIN, scaleDragStart.x + (selected.scale.x - scaleDragStart.x) * k),
+				Math.max(SCALE_MIN, scaleDragStart.y + (selected.scale.y - scaleDragStart.y) * k),
+				Math.max(SCALE_MIN, scaleDragStart.z + (selected.scale.z - scaleDragStart.z) * k),
+			);
+		}
 	}
 	// Group-drag delta pass — runs last so it picks up the primary's FINAL
 	// world state after any snap / anchor adjustments applied above. Every
@@ -30804,12 +30838,17 @@ if (canvasWrap) {
 				const obj = await loadFromBytes(buf, payload.filename || "asset.glb");
 				if (obj) {
 					try {
-						// Re-register the asset id so scene save persists a
-						// reference — the file already lives in the assets
-						// folder, we just tag the object with its id.
-						obj.userData.assetId = payload.url.replace(/^.*\//, "").replace(/\.[^.]+$/, "");
+						// Persist to the per-node asset cache so scene save +
+						// Ctrl+C paste both work — the source file lives at
+						// /output/... but paste fetches from /comfyblockout/
+						// asset/. Uploading gives us a real assetId in that
+						// namespace that both paths can read from.
+						const { assetId } = await uploadAsset(payload.filename || "asset.glb", buf);
+						obj.userData.assetId = assetId;
 						saveScene?.();
-					} catch {}
+					} catch (e) {
+						console.warn("[cb] asset persist failed; paste won't work:", e);
+					}
 					updateStatus?.(`imported ${payload.filename}`);
 				}
 			} catch (err) {
