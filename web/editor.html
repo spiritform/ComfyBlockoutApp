@@ -4430,13 +4430,17 @@
 				     open. Result replaces the source objects in place. -->
 				<button class="prim-btn" data-tool="bool" data-label="Boolean" title="Boolean — union / subtract / intersect two or more selected objects into a single mesh."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 22a2 2 0 0 1-2-2"/><path d="M16 22h-2"/><path d="M16 4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3a1 1 0 0 0 1-1v-5a2 2 0 0 1 2-2h5a1 1 0 0 0 1-1z"/><path d="M20 8a2 2 0 0 1 2 2"/><path d="M22 14v2"/><path d="M22 20a2 2 0 0 1-2 2"/></svg></button>
 				<button class="prim-btn" data-fx="scatter" data-label="Scatter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="18.5" cy="5.5" r=".5" fill="currentColor"/><circle cx="11.5" cy="11.5" r=".5" fill="currentColor"/><circle cx="7.5" cy="16.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="14.5" r=".5" fill="currentColor"/><path d="M3 3v16a2 2 0 0 0 2 2h16"/></svg></button>
-				<!-- TripoSplat util — image → gaussian splat (.ply) via the local
-				     ComfyUI at 127.0.0.1:8188. The Docker standalone runtime was
-				     dropped as a tile: too heavy for non-technical users (Docker
-				     Desktop + CUDA image + weights). Comfy Cloud has no splat
-				     partner yet, so local ComfyUI is the current path. Hardcoded
-				     so the astroid glyph paints at boot. -->
-				<button class="prim-btn" data-tool="util:triposplat-local" data-hardcoded="1" data-label="TripoSplat" title="TripoSplat — generate a 3D gaussian splat from a source image (runs on your local ComfyUI at 127.0.0.1:8188)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.983 21.186a1 1 0 0 1-1.966 0 10 10 0 0 0-8.203-8.203 1 1 0 0 1 0-1.966 10 10 0 0 0 8.203-8.203 1 1 0 0 1 1.966 0 10 10 0 0 0 8.203 8.203 1 1 0 0 1 0 1.966 10 10 0 0 0-8.203 8.203"/></svg></button>
+				<!-- Tripo 3D util — text OR image → GLB mesh via Comfy Cloud's
+				     Tripo H3.1 partner nodes. Placeholder cube spawns in the
+				     scene; properties pane exposes a Mode pill (Image / Text),
+				     prompt textarea or image slot, and Materials / Texture
+				     options; Generate calls /api/run/tripo-h31 which dispatches
+				     to tripo-i2m or tripo-t2m under the hood. Downloadable now
+				     that comfy-cli PR #600 shipped the "3d"-bucket extractor
+				     fix (see project_tripo_h31_cloud_broken memory). Local
+				     TripoSplat still available via Add Workflow list. Hardcoded
+				     so the glyph paints at boot. -->
+				<button class="prim-btn" data-tool="util:tripo-h31" data-hardcoded="1" data-label="Tripo 3D" title="Tripo 3D — text or image to 3D mesh via Comfy Cloud. Spawns a placeholder cube; pick Image or Text mode in the properties pane, then Generate."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></button>
 				<!-- Mannequin — procedural block-figure at real-world 1.72m scale.
 				     Reference for blockouts (door frames, couches, camera height).
 				     AnimoFlow (text-to-motion) lives inside the Mannequin
@@ -15197,18 +15201,10 @@ const GEN_MODELS = {
 		iconSvg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>`,
 		legacyBtnId: "gen-sd",
 	},
-	"tripo-i2m": {
-		name: "Tripo — Image to 3D",
-		kind: "3d",
-		placeholder: "Tripo H3.1 Image→Model runs on Comfy Cloud. Uses the current viewport snapshot (or a picked source image) to generate a .glb mesh that imports into the scene.",
-		iconSvg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 16l9 5 9-5"/></svg>`,
-	},
-	"tripo-t2m": {
-		name: "Tripo — Text to 3D",
-		kind: "3d",
-		placeholder: "Describe the 3D model — e.g. 'armored knight kneeling with sword, ornate silver-gold plate armor'",
-		iconSvg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h8"/><path d="M17 12l4 4-4 4"/></svg>`,
-	},
+	// tripo-i2m / tripo-t2m intentionally NOT listed here — they're internal
+	// dispatch targets for the "Tripo 3D" Tools-grid tile (tripo-h31 routes
+	// to whichever mode the placeholder's Mode pill is set to). Exposing them
+	// as separate Add Workflow entries would be duplicate UI for one tool.
 	"triposplat-local": {
 		name: "TripoSplat (Local)",
 		kind: "3d",
@@ -15670,8 +15666,21 @@ function _appendGenRows(container) {
 			if (e.target.closest(".gen-run-btn, .gen-del-btn")) return;
 			setActiveGenCell(cell.id);
 		});
-		row.addEventListener("focusin", () => setActiveGenCell(cell.id));
+		row.addEventListener("focusin", (e) => {
+			// Skip when focus landed inside the delete or run button — the
+			// browser moves focus BEFORE dispatching click, so activating the
+			// cell here would rebuild the DOM and detach the button before
+			// the pending click could fire.
+			if (e.target.closest(".gen-del-btn, .gen-run-btn")) return;
+			setActiveGenCell(cell.id);
+		});
 		row.addEventListener("mousedown", (e) => {
+			// Skip cell activation when the click is on the delete button.
+			// setActiveGenCell fires refreshGenCells which rebuilds this DOM
+			// subtree, so the click event never lands on the (now detached)
+			// button — that's why the ✕ appeared to do nothing on nano-banana
+			// / seedance rows. Same guard the workflow-cell rows use below.
+			if (e.target.closest(".gen-del-btn")) return;
 			setActiveGenCell(cell.id);
 			if (!e.target.closest("input,textarea,button,select")) {
 				row.focus({ preventScroll: true });
@@ -16528,7 +16537,7 @@ function refreshUtilTools() {
 			btn.dataset.tool = `util:${m.id}`;
 		}
 		btn.dataset.label = m.label || m.id;
-		btn.title = `${m.label || m.id} — util workflow, output lands in Assets`;
+		btn.title = `${m.label || m.id} — API workflow, output lands in Assets`;
 		// Only paint the icon on newly-created buttons. Static-HTML buttons
 		// have a hand-tuned SVG in their initial markup and we want that
 		// exact glyph to survive the manifest fetch — otherwise the app
@@ -20345,7 +20354,11 @@ async function _tripo3dGenerate() {
 		const j = await r.json();
 		_setTripo3dStatus(`done · ${j.filename || "saved to Assets"}`, "ok");
 		window.refreshAssets?.();
-		if (j.filename) await _replaceTripo3dPlaneWithMesh(`/output/${j.filename}`);
+		// Backend partitions output/ by ext (images/videos/3d) — prefer the
+		// URL it built (e.g. /output/3d/<file>.glb) over a bare /output/<file>
+		// which 404s on partitioned installs and made loadGLB return null.
+		const meshUrl = j.url || (j.filename ? `/output/3d/${j.filename}` : null);
+		if (meshUrl) await _replaceTripo3dPlaneWithMesh(meshUrl);
 	} catch (err) {
 		console.error("[tripo3d] generate failed:", err);
 		_setTripo3dStatus(`failed · ${String(err.message || err).slice(0, 120)}`, "error");
@@ -22702,7 +22715,15 @@ function _appendWorkflowRows(container) {
 			if (e.target.closest(".gen-run-btn, .gen-del-btn")) return;
 			setActiveWorkflowCell(cell.id);
 		});
-		row.addEventListener("focusin", () => setActiveWorkflowCell(cell.id));
+		row.addEventListener("focusin", (e) => {
+			// Same detach-before-click race the mousedown guard below catches —
+			// clicking the ✕ moves focus to the button, focusin bubbles to the
+			// row, setActiveWorkflowCell rebuilds the DOM, and the pending
+			// click lands on nothing. Skip activation when focus landed inside
+			// the delete or run button.
+			if (e.target.closest(".gen-del-btn, .gen-run-btn")) return;
+			setActiveWorkflowCell(cell.id);
+		});
 		row.addEventListener("mousedown", (e) => {
 			// Skip cell activation when the click is on the delete button.
 			// setActiveWorkflowCell fires refreshWorkflowsList which rebuilds
@@ -29928,8 +29949,16 @@ function applyResultMode() {
 	} else if (typeof resultMode === "string" && resultMode.startsWith("intermediate:")) {
 		showIntermediate(resultMode.slice("intermediate:".length));
 	} else {
-		// viewport — overlay hidden, live 3D scene visible
+		// viewport — overlay hidden, live 3D scene visible. If there's no
+		// meaningful scene-object selection (nothing selected, or the render
+		// camera which is more of an infrastructure object than a subject),
+		// route the properties pane to Scene rather than leaving Camera up —
+		// Scene reads as the sensible "what am I looking at" default for
+		// viewport mode, matching the mental model of the top-right pill.
 		resultOverlay.hidden = true;
+		if (typeof selected === "undefined" || selected === null || selected === (typeof renderCam !== "undefined" ? renderCam : null)) {
+			if (typeof forceRightPane === "function") forceRightPane("scene", "Scene");
+		}
 	}
 	// Compare slider — only meaningful in Render mode, where a blockout
 	// snapshot exists on disk and the user wants to see "before/after". Any

@@ -275,12 +275,12 @@ MODULE = ModuleDef(
          "help": "Runs the TripoSplat workflow on your local ComfyUI at 127.0.0.1:8188; result imports as a gaussian splat."},
     ],
     output_ext="ply",
-    # Lives in the Tools grid — TripoSplat is the one-click splat generator.
-    # The Docker standalone runtime was dropped as a first-class tile (too
-    # heavy for non-technical users); this local variant is the only path,
-    # so it belongs where users go looking for it. Flag also gates the
-    # runUtilTool click dispatch — util=False silently no-ops the tile.
-    util=True,
+    # Off the Tools grid — the Tools tile that spot used to hold now spawns
+    # the Cloud Tripo H3.1 mesh tool. TripoSplat stays available via the
+    # Add Workflow list ("TripoSplat (Local)"), so users who specifically
+    # want a gaussian-splat output can still hit it. Module id is preserved
+    # so scenes that already reference triposplat-local keep loading.
+    util=False,
     # Lucide "astroid" — a four-cusped concave diamond that reads as
     # "converging point cloud" better than the earlier asterisk placeholder.
     icon=(

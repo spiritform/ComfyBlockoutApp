@@ -51,11 +51,10 @@ MODULE = ModuleDef(
          "help": "Used in image mode. Auto-resolves to the current viewport snapshot; ignored in text mode."},
     ],
     output_ext="glb",
-    # Off the Tools grid — the Comfy Cloud partner-3D download path is
-    # unreliable (see project_tripo_h31_cloud_broken memory). Kept in the
-    # module registry so /api/run/tripo-h31 still works if the user opens
-    # it via the Workflows list to test whether Cloud has been patched.
-    util=False,
+    # Tools grid tile — the "Tripo 3D" one-click. Downloadable as of
+    # comfy-cli PR #600 (SaveGLB "3d"-bucket extractor fix); users need the
+    # git-HEAD build or 1.14.0+ once released. See project_tripo_h31_cloud_broken.
+    util=True,
     # Lucide "box" — reads as a 3D mesh output. Distinct from the astroid
     # glyph the old TripoSplat button carried; splats now live in the
     # Workflows list, not the Tools grid.
