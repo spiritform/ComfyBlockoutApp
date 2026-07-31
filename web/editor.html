@@ -3218,6 +3218,11 @@
 		box-shadow: 0 20px 60px rgba(0,0,0,0.7);
 		border-radius: 4px;
 	}
+	/* Media container is only there so JS can swap innerHTML for gallery
+	   navigation without touching the backdrop's other children (download
+	   button). display:contents makes it invisible to flex layout so the
+	   img/video keep their original centered-max-size behavior. */
+	.asset-viewer-backdrop .asset-viewer-media { display: contents; }
 	/* Download button anchored in the viewer's top-right corner. Sits on top
 	   of the backdrop so it's visible whether the media is a photo or a video
 	   (video controls occupy the bottom edge already). Cursor stays default
@@ -6570,7 +6575,10 @@
 					}
 					return;
 				}
-				openAssetViewer(asset);
+				// Pass the current filter as the gallery list so ArrowLeft/Right
+				// walks the same set the user is looking at (respects the sort
+				// tag / search filter, not the raw asset store).
+				openAssetViewer(asset, assetsFiltered);
 			});
 			// (inline .dl / .del handlers removed — the viewer owns download
 			// and Del-key + selection owns removal.)
@@ -6686,31 +6694,58 @@
 		window.refreshAssets = refreshAssets;
 
 		// Fullscreen viewer — created per-open and torn down on close (no lingering DOM).
+		// Optional second arg `list` enables gallery navigation: ArrowLeft/Right
+		// step through the list (filtered by image/video kinds, since 3D imports
+		// short-circuit before this viewer opens). Without a list, arrows no-op.
 		window.openAssetViewer = openAssetViewer;
-		function openAssetViewer(asset) {
+		function openAssetViewer(asset, list) {
 			// Tear down any prior viewer first (rapid double-clicks shouldn't stack).
 			document.querySelectorAll(".asset-viewer-backdrop").forEach(el => el.remove());
+			// Only images + videos are viewable; 3D assets never make it here (the
+			// tile dblclick imports them directly). Filter so arrow navigation
+			// skips any 3D entries that snuck into the passed-in list.
+			const gallery = Array.isArray(list)
+				? list.filter(a => a && (a.kind === "image" || a.kind === "video"))
+				: [];
+			let idx = gallery.findIndex(a => a && a.url === asset.url);
+			if (idx < 0) idx = 0;
 			const backdrop = document.createElement("div");
 			backdrop.className = "asset-viewer-backdrop";
-			const media = asset.kind === "video"
-				? `<video src="${asset.url}" controls autoplay loop></video>`
-				: `<img src="${asset.url}" alt="${asset.filename}">`;
 			backdrop.innerHTML = `
-				${media}
+				<div class="asset-viewer-media"></div>
 				<button class="asset-viewer-download" title="Download to disk">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
 				</button>
 			`;
+			const mediaHost = backdrop.querySelector(".asset-viewer-media");
+			const dlBtn = backdrop.querySelector(".asset-viewer-download");
+			let current = asset;
+			const paint = (a) => {
+				current = a;
+				mediaHost.innerHTML = a.kind === "video"
+					? `<video src="${a.url}" controls autoplay loop></video>`
+					: `<img src="${a.url}" alt="${a.filename}">`;
+			};
+			paint(asset);
+			const step = (dir) => {
+				if (gallery.length < 2) return;
+				idx = (idx + dir + gallery.length) % gallery.length;
+				paint(gallery[idx]);
+			};
 			const close = () => {
 				backdrop.remove();
 				document.removeEventListener("keydown", onKey);
 			};
-			const onKey = (e) => { if (e.key === "Escape") close(); };
+			const onKey = (e) => {
+				if (e.key === "Escape") { close(); return; }
+				if (e.key === "ArrowRight") { e.preventDefault(); step(+1); return; }
+				if (e.key === "ArrowLeft")  { e.preventDefault(); step(-1); return; }
+			};
 			backdrop.addEventListener("click", e => { if (e.target === backdrop) close(); });
-			backdrop.querySelector(".asset-viewer-download").addEventListener("click", (e) => {
+			dlBtn.addEventListener("click", (e) => {
 				e.stopPropagation();
 				const a = document.createElement("a");
-				a.href = asset.url; a.download = asset.filename;
+				a.href = current.url; a.download = current.filename;
 				document.body.appendChild(a); a.click(); a.remove();
 			});
 			document.addEventListener("keydown", onKey);
@@ -10137,6 +10172,25 @@ const LIGHT_DEFAULTS = {
 	softboxHeight: 2,
 };
 
+// Difference-style blending for light glyphs so they stay legible on any
+// background — a pale sun glyph on a pale-blue sky background would disappear
+// otherwise. Formula: gl_output = material.color * (1 - dst_color). On black
+// bg → material.color (looks normal); on white bg → its complement; on a
+// mid-blue sky → an orange-tinted inversion. Line alpha is passed through so
+// the low-opacity ring/cone hints still read as subtle. Called from the two
+// custom glyphs' constructors and from _lightApply for the built-in helpers.
+function _applyDifferenceBlending(mat) {
+	if (!mat) return;
+	mat.blending = THREE.CustomBlending;
+	mat.blendEquation = THREE.AddEquation;
+	mat.blendSrc = THREE.OneMinusDstColorFactor;
+	mat.blendDst = THREE.ZeroFactor;
+	mat.blendEquationAlpha = THREE.AddEquation;
+	mat.blendSrcAlpha = THREE.OneFactor;
+	mat.blendDstAlpha = THREE.ZeroFactor;
+	mat.needsUpdate = true;
+}
+
 // Custom point-light glyph — small billboard sunburst (ring + 8 radial rays
 // that always face the camera) PLUS an optional low-opacity horizontal ring in
 // the world XZ plane at radius = light.distance to show the falloff boundary
@@ -10148,6 +10202,8 @@ class _PointLightGlyph extends THREE.Group {
 		this.light = light;
 		this._mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9, depthTest: false });
 		this._ringMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.22, depthTest: false });
+		_applyDifferenceBlending(this._mat);
+		_applyDifferenceBlending(this._ringMat);
 		// Sunburst sub-group — billboarded to camera. Kept as a child so we can
 		// rotate it independently of the radius ring (which stays world-aligned
 		// horizontal).
@@ -10229,6 +10285,8 @@ class _SpotLightGlyph extends THREE.Group {
 		// remains obvious as a pick/reference marker.
 		this._mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.2, depthTest: false });
 		this._tipMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.7, depthTest: false });
+		_applyDifferenceBlending(this._mat);
+		_applyDifferenceBlending(this._tipMat);
 		const d = light.distance > 0 ? light.distance : 5;
 		const rBase = Math.tan(light.angle);
 		const segs = 32;
@@ -10383,6 +10441,15 @@ function _lightApply(wrapper) {
 	else helper = new THREE.DirectionalLightHelper(light, 0.5, cfg.color);
 	helper.userData._lightHelper = true;
 	helper.userData._ownerWrapper = wrapper;
+	// Difference blending on every line material inside the helper — makes the
+	// glyph readable on any BG (sky-blue, white overlay, dark scene). Traverse
+	// covers DirectionalLightHelper's two lines and RectAreaLightHelper's
+	// rectangle; the two custom glyphs above already applied it in their
+	// constructors, but a re-apply here is idempotent.
+	helper.traverse(c => {
+		if (Array.isArray(c.material)) c.material.forEach(_applyDifferenceBlending);
+		else if (c.material) _applyDifferenceBlending(c.material);
+	});
 	if (helperAtSceneRoot) scene.add(helper);
 	else light.add(helper);
 	wrapper.userData._helper = helper;
