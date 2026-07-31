@@ -108,6 +108,62 @@
         "widget_index": 0,
         "widget_name": "seed"
       }
+    },
+    {
+      "name": "sampler",
+      "type": "dropdown",
+      "label": "Sampler",
+      "options_source": {
+        "class_type": "KSampler",
+        "widget": "sampler_name"
+      },
+      "default": "res_multistep",
+      "patch": {
+        "node_id": 44,
+        "widget_name": "sampler_name"
+      }
+    },
+    {
+      "name": "scheduler",
+      "type": "dropdown",
+      "label": "Scheduler",
+      "options_source": {
+        "class_type": "KSampler",
+        "widget": "scheduler"
+      },
+      "default": "simple",
+      "patch": {
+        "node_id": 44,
+        "widget_name": "scheduler"
+      }
+    },
+    {
+      "name": "steps",
+      "type": "number",
+      "label": "Steps",
+      "row": "sc",
+      "default": 8,
+      "min": 1,
+      "max": 30,
+      "step": 1,
+      "patch": {
+        "node_id": 44,
+        "widget_name": "steps"
+      }
+    },
+    {
+      "name": "shift",
+      "type": "number",
+      "label": "Shift",
+      "row": "sc",
+      "default": 3,
+      "min": 0.5,
+      "max": 10,
+      "step": 0.5,
+      "patch": {
+        "node_id": 47,
+        "widget_name": "shift"
+      }
     }
   ],
   "intermediates": [

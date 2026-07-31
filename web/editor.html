@@ -35568,6 +35568,28 @@ async function autoSnapshot() {
 				gz.visible = false;
 			}
 		}
+		// Light glyphs (sun icon, spot cone, point sunburst, softbox wire).
+		// Point/spot/directional helpers are added at SCENE ROOT for gizmo
+		// clearance (not under the light Group), so a per-Group traverse
+		// misses them. Use the direct wrapper.userData._helper reference —
+		// stable for every light type. Hides both the helper itself and any
+		// _lightHelper-tagged descendants so the framed snapshot doesn't
+		// burn a sun/lantern onto whatever the diffusion model sees.
+		const lightHelperStates = [];
+		for (const o of objects) {
+			if (o.userData?.primKind !== "light") continue;
+			const h = o.userData?._helper;
+			if (h && typeof h.visible === "boolean") {
+				lightHelperStates.push([h, h.visible]);
+				h.visible = false;
+			}
+			o.traverse(c => {
+				if (c.userData?._lightHelper && typeof c.visible === "boolean") {
+					lightHelperStates.push([c, c.visible]);
+					c.visible = false;
+				}
+			});
+		}
 
 		// Blockout is the FRAMED SHOT — always render through renderCam.
 		const snapCam = renderCam;
@@ -35611,6 +35633,7 @@ async function autoSnapshot() {
 			for (const [mesh, prev] of rimStates) mesh.visible = prev;
 			if (_camOrbitRing) _camOrbitRing.visible = !!orbitRingWasVisible;
 			for (const [gz, prev] of mannequinGizmoStates) gz.visible = prev;
+			for (const [c, prev] of lightHelperStates) c.visible = prev;
 		}
 
 		// Composite BG (image/video mode) under the captured scene. Color
