@@ -98,6 +98,100 @@ async def upload_image_to_cloud(image_path: Path) -> str:
     return uploads[0]["cloud_name"]
 
 
+async def upload_file_to_cloud_with_subfolder(file_path: Path, subfolder: str = "") -> str:
+    """Direct multipart POST to Cloud's /api/upload/image endpoint with an
+    explicit `subfolder` form field. The `comfy upload` CLI shim hardcodes
+    the endpoint but never sends subfolder, so any upload lands untagged in
+    root input/ — LoadImage sees it, but LoadVideo's enum (which we believe
+    filters by `subfolder=="video"` or an equivalent asset tag) does not.
+
+    Auth reuses comfy-cli's session machinery: `resolve_target(where="cloud")`
+    reads the persisted OAuth token / API key the same way `comfy upload` does,
+    so if the CLI can talk to Cloud, so can this function. Returns the
+    server-side filename the LoadVideo widget must reference.
+    """
+    if not file_path.exists():
+        raise ValueError(f"file not found: {file_path}")
+
+    def _post() -> str:
+        # Imports live inside the sync body so the module import chain doesn't
+        # fail if comfy-cli's internals shift between versions.
+        import mimetypes
+        import os as _os
+        import urllib.error
+        import urllib.request
+        import uuid as _uuid
+        from comfy_cli.target import resolve_target
+
+        target = resolve_target(where="cloud")
+        # Auth precedence mirrors comfy-cli's own target_auth_headers helper:
+        # OAuth Bearer > X-API-Key > env-var fallback for the app's server
+        # process (which sets COMFY_API_KEY / COMFY_CLOUD_API_KEY via
+        # /api/auth/key at startup — see server main.py).
+        auth_headers: dict[str, str] = {}
+        auth_token = getattr(target, "auth_token", None)
+        api_key = getattr(target, "api_key", None) or _os.environ.get("COMFY_API_KEY") or _os.environ.get("COMFY_CLOUD_API_KEY")
+        if auth_token:
+            auth_headers["Authorization"] = f"Bearer {auth_token}"
+        elif api_key:
+            auth_headers["X-API-Key"] = api_key
+        else:
+            raise RuntimeError(
+                "Cloud auth not available — sign in with `comfy cloud login` "
+                "or set COMFY_API_KEY. Same requirement as `comfy upload`."
+            )
+        url = target.url("upload/image")
+        filename = file_path.name
+        content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        boundary = _uuid.uuid4().hex
+        parts: list[bytes] = []
+        def _field(name: str, value: str) -> None:
+            parts.append(f"--{boundary}\r\n".encode())
+            parts.append(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode())
+            parts.append(f"{value}\r\n".encode())
+        _field("overwrite", "true")
+        _field("type", "input")
+        if subfolder:
+            _field("subfolder", subfolder)
+        # File field — server code inspects the `image` form key regardless of
+        # actual media type (see ComfyUI server.py `image_upload`).
+        parts.append(f"--{boundary}\r\n".encode())
+        parts.append(
+            f'Content-Disposition: form-data; name="image"; filename="{filename}"\r\n'.encode()
+        )
+        parts.append(f"Content-Type: {content_type}\r\n\r\n".encode())
+        parts.append(file_path.read_bytes())
+        parts.append(b"\r\n")
+        parts.append(f"--{boundary}--\r\n".encode())
+        body = b"".join(parts)
+        req = urllib.request.Request(url, data=body, method="POST")
+        req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+        for hdr, val in auth_headers.items():
+            req.add_header(hdr, val)
+        try:
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                data = json.loads(resp.read().decode("utf-8", errors="replace"))
+        except urllib.error.HTTPError as e:
+            body_bytes = b""
+            try:
+                body_bytes = e.read()
+            except Exception:
+                pass
+            raise RuntimeError(
+                f"POST {url} failed: HTTP {e.code} — {body_bytes.decode('utf-8','replace')[:500]}"
+            )
+        name = data.get("name")
+        if not name:
+            raise RuntimeError(f"upload response missing 'name': {data}")
+        # LoadVideo widget value is `{subfolder}/{filename}` when subfolder is set;
+        # matches ComfyUI's folder_paths.get_annotated_filepath format. Bare
+        # filename when we uploaded into root input/.
+        sf = data.get("subfolder") or subfolder or ""
+        return f"{sf}/{name}" if sf else name
+
+    return await asyncio.to_thread(_post)
+
+
 async def run_workflow_and_fetch_glb(workflow: dict, module_id: str, data_dir: Path,
                                       status_cb=None) -> dict:
     """Submit a patched workflow to Cloud, wait for it, download the .glb, and

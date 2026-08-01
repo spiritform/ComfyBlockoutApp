@@ -772,18 +772,11 @@
 		display: flex; align-items: flex-end; gap: 3px; padding: 14px;
 		font-family: inherit; user-select: none;
 	}
-	/* Small recording status line — sits directly above the transport, shown only while
-	   the mediaRecorder is running so the user sees a "recording · 2.4s @ 24fps" hint
-	   without leaving the viewport for the top-corner status pill. */
-	#tl-rec-status {
-		flex: 0 0 auto;
-		background: #0a0a10;
-		color: #ff8a8a;
-		font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
-		padding: 6px 24px 0 24px;
-		text-align: right;
-	}
-	#tl-rec-status[hidden] { display: none; }
+	/* Bottom-right red recording pill retired — the same info now shows in the
+	   bottom-left #status readout, so this duplicate is force-hidden. Keeping
+	   the element in the DOM (rather than deleting) means any existing setter
+	   code still no-ops harmlessly. */
+	#tl-rec-status { display: none !important; }
 
 	/* Preview-mode (in-node iframe): hide chrome, expose tiny floating transport */
 	body.preview-mode #panel,
@@ -1071,12 +1064,16 @@
 	#tl-time:hover { color: rgba(255,255,255,0.7); }
 
 	#status {
-		position: absolute; top: 14px; right: 14px; z-index: 10;
+		/* Bottom-left of the viewport (inside #canvas-wrap). Reads next to
+		   the record button on the transport strip below without leaving the
+		   viewport — was top-right originally, which forced the eye to sweep
+		   the whole screen to correlate with the click. */
+		position: absolute; bottom: 14px; left: 14px; z-index: 10;
 		font-size: 10px; color: rgba(255,255,255,0.5);
 		letter-spacing: 0.08em; text-transform: uppercase;
 		background: rgba(10,10,14,0.6); backdrop-filter: blur(8px);
-		border: 1px solid rgba(255,255,255,0.08); border-radius: 20px;
-		padding: 5px 14px;
+		border: 1px solid rgba(255,255,255,0.08); border-radius: 3px;
+		padding: 5px 10px;
 		display: none; /* hidden — info was redundant; recording state shows on the rec button */
 	}
 	#status.recording { display: block; color: #ff8a8a; border-color: rgba(255,80,80,0.3); }
@@ -1621,7 +1618,30 @@
 	.assistant-msg.user    { color: rgba(255,255,255,0.9); }
 	.assistant-msg.user::before    { content: "you · "; color: #ffb454; font-weight: 600; }
 	.assistant-msg.bot     { color: rgba(255,255,255,0.85); }
-	.assistant-msg.bot::before     { content: "agent · "; color: rgba(255,255,255,0.4); font-weight: 600; }
+	.assistant-msg.bot::before {
+		content: "agent";
+		display: inline-block;
+		background: rgba(255,180,84,0.14);
+		color: #ffb454;
+		padding: 1px 6px;
+		border-radius: 3px;
+		font-size: 9px;
+		font-weight: 700;
+		letter-spacing: 0.5px;
+		text-transform: uppercase;
+		margin-right: 6px;
+		vertical-align: 1px;
+		border: 1px solid rgba(255,180,84,0.28);
+	}
+	/* Pulses three times when a fresh bot reply is appended — visual anchor
+	   so the user can find where the new response started after the chat
+	   auto-scrolls to the bottom. */
+	.assistant-msg.bot.pulse::before { animation: agent-chip-pulse 1.2s ease-out 3; }
+	@keyframes agent-chip-pulse {
+		0%   { box-shadow: 0 0 0 0    rgba(255,180,84,0.55); background: rgba(255,180,84,0.28); }
+		70%  { box-shadow: 0 0 0 6px  rgba(255,180,84,0);    background: rgba(255,180,84,0.14); }
+		100% { box-shadow: 0 0 0 0    rgba(255,180,84,0);    background: rgba(255,180,84,0.14); }
+	}
 	/* Rendered-markdown body inside bot messages */
 	.assistant-md { display: block; }
 	.assistant-md > :first-child { margin-top: 0; }
@@ -15551,9 +15571,13 @@ function addGenCell(init = {}) {
 		refVideo:   init.refVideo   ?? null,   // seedance: { url, filename, kind:"video" }
 		styleRef:   init.styleRef   ?? null,   // nano-banana: { url, filename, kind:"image" } — aesthetic only, not subject
 		blockoutStrength: Number.isFinite(init.blockoutStrength) ? init.blockoutStrength : 70,
-		// Seedance-only: exposed CLI knobs. Duration is capped at 12s upstream.
+		// Seedance-only: exposed knobs. Duration/resolution have UI; ratio +
+		// variant are payload-only right now with sensible defaults, add UI
+		// pickers later if you want to expose them.
 		duration:   Number.isFinite(init.duration)   ? init.duration   : 5,
 		resolution: init.resolution || "1080p",
+		ratio:      init.ratio      || "adaptive",
+		variant:    init.variant    || "standard",
 	};
 	// Enforce one cell per model (at least for now — user can delete and re-add).
 	if (genCells.some(c => c.model === cell.model)) return genCells.find(c => c.model === cell.model);
@@ -16503,13 +16527,21 @@ document.getElementById("vp-generate")?.addEventListener("click", async () => {
 		const built = buildGenPayload(rawPrompt);
 		const { prompt, references, sceneObjects } = built;
 		inputs = cell.model === "seedance"
-			? { prompt, resolution: cell.resolution || "1080p", duration: Number.isFinite(cell.duration) ? cell.duration : 5 }
+			? {
+				prompt,
+				resolution: cell.resolution || "1080p",
+				duration: Number.isFinite(cell.duration) ? cell.duration : 5,
+				ratio: cell.ratio || "adaptive",
+				variant: cell.variant || "standard",
+			}
 			: { prompt };
-		// Seedance ref slots — start frame = first frame of the generated video; video
-		// reference matches motion / timing.
-		if (cell.model === "seedance") {
-			if (cell.startFrame?.url) inputs.image = cell.startFrame.url;
-			if (cell.refVideo?.url) inputs.video = cell.refVideo.url;
+		// Seedance 2.0 R2V — reference is EITHER an image (start frame) OR a
+		// video, both optional. Video comes from _video_store server-side when
+		// the user recorded via the transport (no explicit send needed). The
+		// startFrame slot goes through the standard image_url override path so
+		// a user-picked image overrides the scene-image auto-inject.
+		if (cell.model === "seedance" && cell.startFrame?.url) {
+			inputs.image_url = cell.startFrame.url;
 		}
 		// Nano style ref — surface-only aesthetic transfer. Sent alongside per-object
 		// material swatches so the server can prepend a "style only" instruction in the
@@ -23944,6 +23976,14 @@ function pushAssistantMsg(kind, text, opts = {}) {
 	}
 	assistantLog.appendChild(el);
 	assistantLog.scrollTop = assistantLog.scrollHeight;
+	// Pulse the amber "agent" chip briefly so the user has a visual anchor
+	// for where the new response STARTS after the log auto-scrolls to the
+	// bottom. Skipped for hydration replay (opts.silent) — old replies
+	// pulsing on every reload would be noise.
+	if (kind === "bot" && !opts.silent) {
+		el.classList.add("pulse");
+		setTimeout(() => el.classList.remove("pulse"), 4200);
+	}
 	// If the AI Agent zone is currently collapsed, flag the split handle so
 	// its CSS `.has-new` rule kicks the soft amber pulse. Signals "new reply
 	// waiting" without needing the user to un-collapse and check. Cleared by
@@ -29822,16 +29862,15 @@ function refreshToggleActive() {
 
 async function showBlockoutSnapshot() {
 	resultOverlay.hidden = false;
-	// If a video util is currently active AND a recording is staged, Blockout
-	// shows THAT (it's what the model will see when the util runs). Otherwise
-	// Blockout defaults to the auto-composited still snapshot — image-workflow
-	// mode. Gating on _activeUtilId stops a leftover recording from a previous
-	// session (server startup scans DATA_DIR and repopulates _video_store) from
-	// hijacking the Blockout tab for non-video work.
+	// If a recording is staged for this node, Blockout shows the VIDEO —
+	// that's what the model will see, and it matches user intent right after
+	// hitting record (previously gated on an active util which meant post-
+	// record you saw a still snapshot instead of the clip you just made).
+	// A stale recording from a prior session can be dismissed via the ×
+	// clear button on the overlay.
 	const t = Date.now();
 	const nid = encodeURIComponent(NODE_ID);
 	try {
-		if (!_activeUtilId) throw new Error("no active util — skip video path");
 		const r = await fetch(`/comfyblockout/video_url?node_id=${nid}&t=${t}`);
 		const j = r.ok ? await r.json() : null;
 		if (j?.url) {
@@ -33360,11 +33399,10 @@ function flashRecordingDone(text) {
 		el.id = "c3d-rec-toast";
 		Object.assign(el.style, {
 			position: "absolute", top: "14px", right: "14px", zIndex: "20",
-			background: "rgba(20,90,40,0.92)", color: "#d3ffd3",
-			padding: "8px 14px", borderRadius: "20px",
-			font: "11px Inter, sans-serif", letterSpacing: "0.04em",
-			border: "1px solid rgba(80,255,140,0.25)",
-			boxShadow: "0 4px 18px rgba(0,0,0,0.4)",
+			background: "rgba(10,10,14,0.85)", color: "rgba(160,230,180,0.95)",
+			padding: "5px 10px", borderRadius: "3px",
+			font: "10px Inter, sans-serif", letterSpacing: "0.06em", textTransform: "uppercase",
+			border: "1px solid rgba(120,220,150,0.35)",
 			backdropFilter: "blur(8px)",
 			pointerEvents: "none", opacity: "0",
 			transition: "opacity 200ms ease",
@@ -33378,6 +33416,10 @@ function flashRecordingDone(text) {
 	el._fadeTimer = setTimeout(() => { el.style.opacity = "0"; }, 2400);
 }
 
+// Module-level so setRecordingMode(true) can save prior state and
+// setRecordingMode(false) can restore it. Cleared on exit.
+let _recHiddenStates = null;
+
 function setRecordingMode(on) {
 	// canvas.captureStream() only sees WebGL pixels, NOT HTML overlays — so the
 	// panel, status pill, aspect frame, and timeline are invisible to the recording.
@@ -33388,6 +33430,52 @@ function setRecordingMode(on) {
 	transformHelper.visible = IS_PREVIEW ? false : !on;
 	animPathsGroup.visible = !on;
 	if (hoverDot) hoverDot.visible = hoverDot.visible && !on;
+
+	// Everything else that would burn editor scaffolding into the recording —
+	// selection cages, camera frustum lines, light glyphs, particle box
+	// helpers, mannequin gizmos, orbit ring. Same list autoSnapshot hides so
+	// the video and the still snapshot agree on what "the scene" looks like
+	// to a downstream model. Save prior visibility on enter, restore on exit.
+	if (on) {
+		const states = [];
+		const hide = (el) => {
+			if (el && typeof el.visible === "boolean") {
+				states.push([el, el.visible]);
+				el.visible = false;
+			}
+		};
+		// Selection rim shells (amber Box3Helpers parented to selected objects).
+		for (const { mesh } of _rimOverlays) hide(mesh);
+		// Camera frustum lines.
+		if (typeof renderCamHelper !== "undefined") hide(renderCamHelper);
+		// Turntable orbit ring.
+		if (typeof _camOrbitRing !== "undefined") hide(_camOrbitRing);
+		// Rim/edge overlays (light rims etc.) — same list autoSnapshot walks.
+		if (typeof _rimOverlays !== "undefined") {
+			for (const { mesh } of _rimOverlays) hide(mesh);
+		}
+		for (const o of objects) {
+			// Scatter / particle helpers.
+			const fx = o.userData?.scatterFx || o.userData?.particleSystem;
+			if (fx) {
+				hide(fx.boxHelper);
+				hide(fx.sphereHelper);
+			}
+			// Mannequin joint gizmos.
+			hide(o.userData?._gizmoContainer);
+			// Light glyphs (sun icon, spot cone, point sunburst, softbox wire).
+			if (o.userData?.primKind === "light") {
+				hide(o.userData?._helper);
+				o.traverse(c => {
+					if (c.userData?._lightHelper) hide(c);
+				});
+			}
+		}
+		_recHiddenStates = states;
+	} else if (_recHiddenStates) {
+		for (const [el, was] of _recHiddenStates) el.visible = was;
+		_recHiddenStates = null;
+	}
 }
 
 async function startRecording() {
@@ -33822,6 +33910,8 @@ function serializeScene() {
 			noBlockout: c.noBlockout || undefined,
 			duration: Number.isFinite(c.duration) ? c.duration : undefined,
 			resolution: c.resolution || undefined,
+			ratio: c.ratio || undefined,
+			variant: c.variant || undefined,
 		})),
 		activeGenCellId,
 		workflowCells: workflowCells.map(c => ({
@@ -34206,6 +34296,8 @@ async function deserializeScene(state, opts = {}) {
 				noBlockout: c.noBlockout === true,
 				duration: Number.isFinite(c.duration) ? c.duration : undefined,
 				resolution: c.resolution || undefined,
+				ratio: c.ratio || undefined,
+				variant: c.variant || undefined,
 			});
 		}
 		// Always boot with no active target regardless of what's persisted —

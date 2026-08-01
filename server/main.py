@@ -3231,9 +3231,10 @@ async def run_module(module_id: str, request: Request):
                 inputs["image_path"] = Path(tmp.name)
                 continue
             info = _image_store.get(node_id)
-            if not info or not Path(info["path"]).exists():
+            if info and Path(info["path"]).exists():
+                inputs["image_path"] = Path(info["path"])
+            elif spec.get("required", True):
                 raise HTTPException(400, "no scene image saved — snapshot in the editor first")
-            inputs["image_path"] = Path(info["path"])
         elif effective_type == "scene-video":
             # Preference order: transport-recorded clip FIRST (its duration
             # matches the scene trim range exactly, so feeding it to a video
@@ -3253,7 +3254,11 @@ async def run_module(module_id: str, request: Request):
                 if asset_path.exists():
                     inputs["video_path"] = asset_path
                     continue
-            raise HTTPException(400, "no scene video — record from the transport (● button on the timeline) or load a Background video in Scene Properties")
+            # Only error when the spec insists on a video. Optional scene-video
+            # inputs (e.g. Seedance's reference video — the model runs fine
+            # without one) just fall through with no video_path set.
+            if spec.get("required", True):
+                raise HTTPException(400, "no scene video — record from the transport (● button on the timeline) or load a Background video in Scene Properties")
 
     # Optional image_url override — the frontend's gen-cell source-image slot passes
     # this when the user picked/dragged a specific image instead of using the auto
