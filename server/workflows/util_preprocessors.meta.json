@@ -1,6 +1,6 @@
 {
   "id": "util_preprocessors",
-  "label": "Preprocessors",
+  "label": "Utility",
   "kind": "video",
   "output_ext": "mp4",
   "runner": "local",
@@ -20,9 +20,21 @@
       }
     },
     {
-      "id": "depth_anything_v2",
-      "label": "Depth Anything V2",
-      "coming_soon": true
+      "id": "depth_anything_3_cloud",
+      "label": "Depth Anything 3 (Cloud)",
+      "runner": "cloud",
+      "workflow": "utility_depth_anything3_video_depth_estimation",
+      "image_workflow": "utility_depth_anything3_image_depth_estimation",
+      "patches": {
+        "video": { "node_id": 87, "widget_index": 0, "widget_name": "video" },
+        "resolution": null,
+        "max_frames": null
+      },
+      "image_patches": {
+        "video": { "node_id": 85, "widget_index": 0, "widget_name": "image" },
+        "resolution": null,
+        "max_frames": null
+      }
     },
     {
       "id": "openpose",

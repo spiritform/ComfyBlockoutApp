@@ -137,86 +137,32 @@ else:
 # UI. The editor's "Prompt Tweaks" textarea is appended on top of this, so users
 # can add scene-specific guidance without ever losing the spatial-ControlNet base.
 BASE_PROMPT = (
-    "COMPOSITION-GUIDED IMAGE GENERATION TASK.\n\n"
-    "**OUTPUT ASPECT RATIO — HIGHEST PRIORITY RULE.** The output image's "
-    "width and height MUST match image 1's width and height ratio EXACTLY. "
-    "Format: match image 1. Measure image 1: if width > height, output "
-    "landscape. If height > width, output portrait. If width == height, "
-    "output square. Do NOT default to 1:1 or 1024×1024. Do NOT crop, pad, "
-    "or letterbox to reshape. Aspect ratio compliance is non-negotiable.\n\n"
-    "**IMAGE 1 IS A STRUCTURAL LAYOUT REFERENCE — NOT A LOOK REFERENCE.** "
-    "Image 1 is a 3D blockout: a low-fidelity scene with primitive shapes, "
-    "flat colors, and reference geometry. Treat it exactly like a hand-drawn "
-    "sketch or wireframe used to plan a final polished image. Follow the "
-    "structure of the attached reference image exactly for:\n"
-    "  • Camera angle, perspective, and lens compression.\n"
-    "  • Composition, framing, and where the horizon sits.\n"
-    "  • Placement, position, and screen-space size of each element.\n"
-    "  • Ground plane orientation and vanishing points.\n"
-    "Keep the exact layout of every element as shown in image 1, but render "
-    "it in the style described in the user prompt. Strictly adhere to the "
-    "placement and scale from the blockout while replacing the primitive "
-    "shapes with the intended subjects.\n\n"
-    "Do NOT copy from image 1: its flat colors, primitive silhouettes, "
-    "material simplicity, low-detail surfaces, tinted shapes, checker "
-    "patterns, grid overlays, or overall 'blockout' aesthetic. The output "
-    "must look like a fully realized real image (or the style described in "
-    "the user prompt), NOT like a stylized version of the blockout.\n\n"
-    "ANY ADDITIONAL IMAGES (image 2, 3, …) are per-object REFERENCE IMAGES — "
-    "they show what each object should look like as a subject. The SCENE "
-    "INVENTORY below tells you which image number maps to which named "
-    "object in image 1's composition.\n\n"
-    "**SEAMLESS COHESION.** The output must read as a single, unified, "
-    "seamless image — one photograph or one painting, not a composite. "
-    "Where two objects meet (object touching ground, object against sky, "
-    "shadow across a surface), the transition must be physically plausible: "
-    "consistent lighting direction, matching color temperature, correct "
-    "contact shadows, and continuous surrounding materials. Do NOT leave "
-    "visible seams, cut-out edges, hard color breaks, or 'pasted-on' looks "
-    "at boundaries between elements. Every object shares the same scene "
-    "lighting, atmosphere, and depth-of-field as the environment around it. "
-    "The whole image should look like it was captured or painted in one "
-    "pass.\n\n"
-    "Your job: produce a single new image that matches IMAGE 1 spatially "
-    "(camera, perspective, aspect ratio, position and SCALE of every colored "
-    "shape), but renders each colored shape as the subject described in the "
-    "user prompt + scene inventory, with its surface drawn from the matching "
-    "material swatch image.\n\n"
-    "HARD RULES — do not violate:\n"
-    "1. Each colored shape in image 1 has a screen-space footprint (X%, Y%, "
-    "size%). The replacement object occupies that EXACT footprint. Never scale "
-    "up to match what would 'normally' fit the environment. If the blockout "
-    "shows a 15%-of-frame cube on a city street, the cube stays 15% of the "
-    "frame in the output — it does NOT become a building. The blockout WINS "
-    "over semantic expectations.\n"
-    "2. The replacement object's center is at the SAME pixel coordinates as the "
-    "colored shape's center in image 1.\n"
-    "3. Preserve image 1's camera angle, perspective, aspect ratio, and the "
-    "ground plane implied by the perspective grid.\n"
-    "4. The perspective grid lines themselves are scaffolding — do NOT draw "
-    "them in the output.\n"
-    "5. One colored shape → one object. Do not add extra instances.\n"
-    "6. The colored shape's tint is metadata identifying the object — it is NOT "
-    "the final object's color. Pull color/material from the matching material "
-    "swatch image (if any), otherwise from the user prompt.\n\n"
-    "REFERENCE IMAGES (image 2+) ARE MATERIAL SWATCHES, NOT COMPOSITION:\n"
-    "- Pull ONLY surface qualities from them: color, texture, finish, "
-    "micro-detail, weathering, sheen, pattern, motif.\n"
-    "- IGNORE everything else from those images: their framing, scale, camera "
-    "angle, lighting direction, background, any other objects, depth-of-field. "
-    "Treat each reference image as if it were a flat material chip swatched "
-    "from a sample book.\n"
-    "- Do NOT copy the reference image's subject as a whole. If reference image "
-    "2 shows a galaxy nebula scene with planets and stars, only the cosmic "
-    "swirl / color palette / surface texture gets applied to the object — the "
-    "planets, stars, and overall composition stay OUT of the output.\n\n"
-    "WHAT TO INVENT vs PRESERVE:\n"
-    "- Invent from user prompt: lighting, mood, background environment, weather, "
-    "time of day, secondary scene elements around the object.\n"
-    "- Invent from material swatch images (surface only): the object's texture, "
-    "finish, color palette, micro-detail.\n"
-    "- Preserve from image 1: object position, object SCALE (most important), "
-    "object silhouette, camera framing, perspective."
+    "COMPOSITION-GUIDED IMAGE GENERATION.\n\n"
+    "**ASPECT RATIO (locked).** Output width:height matches image 1 exactly. "
+    "Landscape blockout → landscape output; portrait → portrait; square → square. "
+    "No cropping, padding, or reshape.\n\n"
+    "**CAMERA (locked).** Match image 1's camera angle, perspective, lens "
+    "compression, framing, horizon line, and vanishing points EXACTLY. Do not "
+    "reframe, re-tilt, dolly, pan, or change FOV. The camera is fixed by image 1 "
+    "regardless of any other setting below.\n\n"
+    "**IMAGE 1 IS A 3D BLOCKOUT.** Low-fidelity scene of primitive shapes with "
+    "flat tint colors — a wireframe used to plan the shot. It defines the "
+    "composition and camera. It does NOT define the look. Ignore its flat "
+    "colors, primitive silhouettes, checker patterns, and grid overlays in the "
+    "output — those are scaffolding.\n\n"
+    "**ADDITIONAL IMAGES (image 2+) ARE MATERIAL SWATCHES.** Pull ONLY surface "
+    "qualities from them: color, texture, finish, pattern, micro-detail. IGNORE "
+    "their framing, scale, subjects, lighting, and any other content — treat each "
+    "as a flat material chip from a sample book. The SCENE INVENTORY below maps "
+    "each swatch to a named object in image 1.\n\n"
+    "**YOUR JOB.** Produce a single unified image (one photograph or one painting, "
+    "not a composite) that preserves image 1's camera and composition exactly, "
+    "but replaces each colored blockout shape with the subject described in the "
+    "user prompt, surfaced with the matching swatch material. Lighting, "
+    "environment, mood, weather, and background are invented from the user "
+    "prompt. The output must read as physically-plausible: consistent lighting, "
+    "matching color temperature, correct contact shadows, no visible seams or "
+    "'pasted-on' edges."
 )
 DEFAULT_PROMPT = BASE_PROMPT  # back-compat alias for any old references
 
@@ -3460,45 +3406,38 @@ async def run_module(module_id: str, request: Request):
         base_override = (_prompt_store.get(node_id) or "").strip()
         inventory = _format_inventory(scene_objects, camera_meta)
         parts = [base_override or BASE_PROMPT.strip()]
-        # Blockout Strength language — tiered instruction that tells the model
-        # how tightly to hew to image 1's composition. 0 = pure creative
-        # freedom (image 1 is a hint), 1 = strict spatial replacement (default).
-        # Only added when we ARE using the blockout (not text-to-image mode).
+        # Blockout Strength language — tiered instruction for how tightly to
+        # hew to image 1's OBJECT-LEVEL composition. Camera angle + aspect are
+        # locked by BASE_PROMPT and NOT modulated by this dial. 0 = loose
+        # object placement, 1 = exact footprint replacement.
         if not skip_source_image:
+            pct = int(blockout_strength * 100)
             if blockout_strength <= 0.25:
                 strength_note = (
-                    f"BLOCKOUT STRENGTH: {int(blockout_strength * 100)}% (LOOSE). "
-                    "Image 1's composition is a loose suggestion only. Use it "
-                    "for rough spatial placement of subjects in the frame, but "
-                    "feel free to reinterpret sizes, silhouettes, and exact "
-                    "positions. Prioritize the user's prompt and creative "
-                    "vision over strict adherence to the blockout shapes."
+                    f"BLOCKOUT STRENGTH: {pct}% (LOOSE). Object placement in "
+                    "image 1 is a rough suggestion — reinterpret sizes, "
+                    "silhouettes, and exact positions as needed. Camera stays "
+                    "locked (see camera rule)."
                 )
             elif blockout_strength <= 0.6:
                 strength_note = (
-                    f"BLOCKOUT STRENGTH: {int(blockout_strength * 100)}% (MODERATE). "
-                    "Follow image 1's general placement and scale as guidance, "
-                    "but interpret the primitive shapes loosely — the final "
-                    "objects can have organic proportions that differ somewhat "
-                    "from the blockout stencils, as long as their approximate "
-                    "position and screen footprint match."
+                    f"BLOCKOUT STRENGTH: {pct}% (MODERATE). Follow image 1's "
+                    "object placement and scale as guidance, but the primitive "
+                    "shapes can be interpreted loosely — final objects can "
+                    "have organic proportions that differ from the blockout "
+                    "stencils. Camera stays locked."
                 )
             elif blockout_strength < 1.0:
                 strength_note = (
-                    f"BLOCKOUT STRENGTH: {int(blockout_strength * 100)}% (STRICT). "
-                    "Image 1's placement, scale, and silhouette should closely "
-                    "match in the output. Minor artistic reinterpretation of "
-                    "exact shape is allowed, but each object's screen-space "
-                    "footprint (position + size) must be very close to what "
-                    "the blockout shows."
+                    f"BLOCKOUT STRENGTH: {pct}% (STRICT). Image 1's object "
+                    "placement, scale, and silhouette closely match in the "
+                    "output. Camera stays locked."
                 )
             else:
                 strength_note = (
-                    "BLOCKOUT STRENGTH: 100% (LOCKED). Each colored shape in "
-                    "image 1 has an EXACT screen-space footprint (position, "
-                    "size). The replacement object must occupy that same "
-                    "footprint precisely. Do not scale up or down; do not "
-                    "reposition; do not reinterpret the silhouette."
+                    "BLOCKOUT STRENGTH: 100% (LOCKED). Each colored shape's "
+                    "exact screen-space footprint (position + size) is "
+                    "preserved. Camera stays locked."
                 )
             parts_prefix_strength = strength_note
         else:

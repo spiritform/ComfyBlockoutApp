@@ -4426,7 +4426,7 @@
 				     and just updates the label/title from the manifest
 				     without redrawing. Preset picker inside the pane routes
 				     between Lotus Depth + OpenPose, DepthCrafter, Depth Pro. -->
-				<button class="prim-btn" data-tool="util:util_preprocessors" data-hardcoded="1" data-label="Video Preprocessors" title="Video Preprocessors — run a video through a preprocessor preset (Lotus depth, OpenPose, DepthCrafter, Depth Pro)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 12v4a1 1 0 0 1-1 1h-4"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M17 8V7"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M7 17h.01"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="5" height="5" rx="1"/></svg></button>
+				<button class="prim-btn" data-tool="util:util_preprocessors" data-hardcoded="1" data-label="Utility" title="Utility — run an image or video through a preprocessor preset (Lotus depth, DepthCrafter, Depth Pro, Depth Anything 3)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 12v4a1 1 0 0 1-1 1h-4"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M17 8V7"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M7 17h.01"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="5" height="5" rx="1"/></svg></button>
 				<!-- MediaPipe tool — opens a browser webcam surface with
 				     MediaPipe.js pose/hand/face detection running client-side. -->
 				<button class="prim-btn" data-tool="mediapipe" data-label="MediaPipe" title="Webcam + MediaPipe pose/hand/face — record a sequence, take stills, or use as viewport source"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="8"/><circle cx="12" cy="10" r="3"/><path d="M7 22h10"/><path d="M12 22v-4"/></svg></button>
@@ -5272,6 +5272,10 @@
 						<div class="slider-row">
 							<input type="range" id="obj-text-depth" min="0" max="1" step="0.01" value="0.15">
 							<span class="slider-val" id="obj-text-depth-val">0.15</span>
+						</div>
+						<div class="slider-row">
+							<input type="range" id="obj-text-line-height" min="0.6" max="2.5" step="0.05" value="1.0">
+							<span class="slider-val" id="obj-text-line-height-val">1.00</span>
 						</div>
 					</div>
 				</div>
@@ -8322,24 +8326,46 @@ async function _loadTextFont(key = DEFAULT_TEXT_FONT) {
 }
 
 // Rebuild a text mesh's geometry from userData.textConfig. Called when the
-// user edits the string / size / depth. Centers the geometry so the pivot
-// stays under the middle of the text (rotate/scale feel natural).
+// user edits the string / size / depth / lineHeight / font. Centers the
+// geometry so the pivot stays under the middle of the text (rotate/scale
+// feel natural). Multi-line layout is done manually (one TextGeometry per
+// line, merged) so cfg.lineHeight can override the font's baked spacing —
+// TextGeometry's built-in \n handling uses fixed font metrics.
 async function rebuildTextGeometry(mesh) {
 	if (!mesh?.userData) return;
 	const cfg = mesh.userData.textConfig || {};
+	// Per-mesh generation counter — a re-entrant rebuild (spawn seed followed
+	// by scene-restore override) can finish out-of-order because the second
+	// call's font is cache-hit while the first is still resolving. Without
+	// this guard the earlier "Text" default lands on the mesh AFTER the real
+	// "THE WOODS" build, and you see the seed value in the viewport with the
+	// correct value stuck in the inspector textarea.
+	const gen = (mesh.userData._textRebuildGen || 0) + 1;
+	mesh.userData._textRebuildGen = gen;
 	const text = cfg.text ?? "Text";
 	const size = cfg.size ?? 0.6;
 	const depth = cfg.depth ?? 0.15;
+	const lineHeightMult = cfg.lineHeight ?? 1.0;
 	const fontKey = cfg.font || DEFAULT_TEXT_FONT;
 	const font = await _loadTextFont(fontKey);
 	const { TextGeometry } = await import("three/addons/geometries/TextGeometry.js");
-	const geom = new TextGeometry(text || " ", {
-		font,
-		size,
-		depth,
-		curveSegments: 6,
-		bevelEnabled: false,
+	const { BufferGeometryUtils } = await import("three/addons/utils/BufferGeometryUtils.js");
+	const lines = (text || " ").split("\n");
+	const perLine = lines.map((line, i) => {
+		const g = new TextGeometry(line || " ", {
+			font,
+			size,
+			depth,
+			curveSegments: 6,
+			bevelEnabled: false,
+		});
+		if (i > 0) g.translate(0, -i * size * lineHeightMult, 0);
+		return g;
 	});
+	const geom = perLine.length === 1
+		? perLine[0]
+		: BufferGeometryUtils.mergeGeometries(perLine, false);
+	if (perLine.length > 1) perLine.forEach(g => g.dispose?.());
 	geom.computeBoundingBox();
 	const bb = geom.boundingBox;
 	if (bb) {
@@ -8350,6 +8376,10 @@ async function rebuildTextGeometry(mesh) {
 			-(bb.max.y + bb.min.y) / 2,
 			-(bb.max.z + bb.min.z) / 2,
 		);
+	}
+	if (mesh.userData._textRebuildGen !== gen) {
+		geom.dispose?.();
+		return;
 	}
 	const old = mesh.geometry;
 	mesh.geometry = geom;
@@ -15521,6 +15551,9 @@ function addGenCell(init = {}) {
 		refVideo:   init.refVideo   ?? null,   // seedance: { url, filename, kind:"video" }
 		styleRef:   init.styleRef   ?? null,   // nano-banana: { url, filename, kind:"image" } — aesthetic only, not subject
 		blockoutStrength: Number.isFinite(init.blockoutStrength) ? init.blockoutStrength : 70,
+		// Seedance-only: exposed CLI knobs. Duration is capped at 12s upstream.
+		duration:   Number.isFinite(init.duration)   ? init.duration   : 5,
+		resolution: init.resolution || "1080p",
 	};
 	// Enforce one cell per model (at least for now — user can delete and re-add).
 	if (genCells.some(c => c.model === cell.model)) return genCells.find(c => c.model === cell.model);
@@ -15921,6 +15954,26 @@ function renderGenCellProperties(cell) {
 		</div>
 	` : "";
 
+	// Seedance CLI knobs — duration (3-12s) + resolution. Previously hardcoded
+	// at the payload builder, which meant every clip was 5s / 1080p regardless
+	// of what the user wanted. Values persist per-cell via addGenCell defaults +
+	// scene save/load. Model / ratio / audio can join here later if wanted.
+	const seedanceHtml = cell.model === "seedance" ? `
+		<div class="section" style="padding-top:6px">
+			<div class="drag-row">
+				<div class="drag-num" id="cell-duration-drag" style="flex:1"><span class="drag-label">Duration</span><span class="drag-val">${Number.isFinite(cell.duration) ? cell.duration : 5}s</span></div>
+			</div>
+			<div class="wf-dropdown" id="cell-resolution" style="margin-top:6px">
+				<div class="wf-dropdown-label">Resolution</div>
+				<button type="button" class="wf-dropdown-btn" aria-haspopup="listbox" aria-expanded="false">
+					<span class="wf-dropdown-value">${cell.resolution || "1080p"}</span>
+					<svg class="wf-dropdown-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+				</button>
+				<div class="wf-dropdown-menu" role="listbox" hidden>${_renderGroupedDropdownOptions(["480p","720p","1080p"], cell.resolution || "1080p")}</div>
+			</div>
+		</div>
+	` : "";
+
 	let objRefsHtml = "";
 	if (usesObjectRefs) {
 		const withRefs = objects.filter(o => o.userData?.refImage && (o.userData.refImage.signedUrl || o.userData.refImage.localUrl));
@@ -15967,6 +16020,7 @@ function renderGenCellProperties(cell) {
 			${emptyHint}
 		</div>
 		${strengthHtml}
+		${seedanceHtml}
 		${objRefsHtml}
 		<button type="button" class="rp-generate-btn" data-run-cell="${cell.id}">
 			<span>Generate</span>
@@ -15996,6 +16050,74 @@ function renderGenCellProperties(cell) {
 			sens: 0.5, min: 0, max: 100,
 			format: v => `${Math.round(v)}%`,
 		});
+	}
+	// Seedance duration drag-num (5–12s; CLI docs say 3–12 but API validates
+	// stricter — 5s minimum for 1.0-pro, up to 12s for 1.5-pro).
+	const durationDrag = pane.querySelector("#cell-duration-drag");
+	if (durationDrag) {
+		setupDragField(durationDrag, {
+			get: () => Number.isFinite(cell.duration) ? cell.duration : 5,
+			set: v => {
+				cell.duration = Math.max(5, Math.min(12, Math.round(v)));
+				maybeSaveDebounced?.();
+			},
+			sens: 0.06, min: 5, max: 12,
+			format: v => `${Math.round(v)}s`,
+		});
+	}
+	// Resolution — .wf-dropdown pattern shared with workflow-cell dropdowns.
+	// The document-level click-outside handler (bound once in
+	// renderWorkflowCellProperties) closes this too, but we still need the
+	// per-instance open/toggle + option-select wiring since the gen-cell pane
+	// doesn't run through that setup.
+	const resolutionWrap = pane.querySelector("#cell-resolution.wf-dropdown");
+	if (resolutionWrap) {
+		const btn = resolutionWrap.querySelector(".wf-dropdown-btn");
+		const menu = resolutionWrap.querySelector(".wf-dropdown-menu");
+		const valueEl = resolutionWrap.querySelector(".wf-dropdown-value");
+		const closeMenu = () => {
+			menu.hidden = true;
+			btn.setAttribute("aria-expanded", "false");
+			resolutionWrap.classList.remove("open");
+		};
+		btn?.addEventListener("click", (e) => {
+			e.stopPropagation();
+			if (menu.hidden) {
+				menu.hidden = false;
+				btn.setAttribute("aria-expanded", "true");
+				resolutionWrap.classList.add("open");
+			} else {
+				closeMenu();
+			}
+		});
+		menu?.addEventListener("click", (e) => {
+			const opt = e.target.closest(".wf-dropdown-opt");
+			if (!opt) return;
+			const val = opt.dataset.value;
+			cell.resolution = val;
+			valueEl.textContent = val;
+			for (const other of menu.querySelectorAll(".wf-dropdown-opt.selected")) {
+				other.classList.remove("selected");
+			}
+			opt.classList.add("selected");
+			closeMenu();
+			maybeSaveDebounced?.();
+		});
+		// Global click-outside bind — same guard flag the workflow-cell pane
+		// uses. Idempotent so re-renders don't stack listeners.
+		if (!document.__wfDropdownOutsideBound) {
+			document.__wfDropdownOutsideBound = true;
+			document.addEventListener("click", (e) => {
+				for (const wrap of document.querySelectorAll(".wf-dropdown.open")) {
+					if (!wrap.contains(e.target)) {
+						wrap.classList.remove("open");
+						const m = wrap.querySelector(".wf-dropdown-menu");
+						if (m) m.hidden = true;
+						wrap.querySelector(".wf-dropdown-btn")?.setAttribute("aria-expanded", "false");
+					}
+				}
+			});
+		}
 	}
 
 	// Referenced-objects rows: main click → select the object (opens its
@@ -16381,7 +16503,7 @@ document.getElementById("vp-generate")?.addEventListener("click", async () => {
 		const built = buildGenPayload(rawPrompt);
 		const { prompt, references, sceneObjects } = built;
 		inputs = cell.model === "seedance"
-			? { prompt, resolution: "1080p", duration: 5 }
+			? { prompt, resolution: cell.resolution || "1080p", duration: Number.isFinite(cell.duration) ? cell.duration : 5 }
 			: { prompt };
 		// Seedance ref slots — start frame = first frame of the generated video; video
 		// reference matches motion / timing.
@@ -26711,8 +26833,9 @@ document.getElementById("cam-path-clear")?.addEventListener("click", () => {
 	{ id: "bg-offset-y",      label: "Y",       format: v => `${v.toFixed(0)}`,       sens: 4 },
 	{ id: "bg-scale",         label: "Scale",   format: v => `${v.toFixed(0)}%`,      sens: 2 },
 	{ id: "env-intensity",    label: "Intensity", format: v => `${v.toFixed(2)}`,   sens: 0.012 },
-	{ id: "obj-text-size",    label: "Size",  format: v => `${v.toFixed(2)}`,   sens: 0.016 },
-	{ id: "obj-text-depth",   label: "Depth", format: v => `${v.toFixed(2)}`,   sens: 0.004 },
+	{ id: "obj-text-size",        label: "Size",        format: v => `${v.toFixed(2)}`, sens: 0.016 },
+	{ id: "obj-text-depth",       label: "Depth",       format: v => `${v.toFixed(2)}`, sens: 0.004 },
+	{ id: "obj-text-line-height", label: "Line Height", format: v => `${v.toFixed(2)}`, sens: 0.008 },
 	{ id: "fog-near",         format: v => `${v.toFixed(1)}`,       sens: 0.4 },
 	{ id: "fog-far",          format: v => `${v.toFixed(0)}`,       sens: 2 },
 	{ id: "ao-intensity",     format: v => `${v.toFixed(1)}`,       sens: 0.08 },
@@ -26767,7 +26890,7 @@ document.getElementById("cam-path-clear")?.addEventListener("click", () => {
 		cfg.text = e.target.value;
 		scheduleRebuild();
 	});
-	for (const [id, key] of [["obj-text-size", "size"], ["obj-text-depth", "depth"]]) {
+	for (const [id, key] of [["obj-text-size", "size"], ["obj-text-depth", "depth"], ["obj-text-line-height", "lineHeight"]]) {
 		document.getElementById(id)?.addEventListener("input", (e) => {
 			if (!selected || selected.userData?.primKind !== "text") return;
 			const cfg = selected.userData.textConfig || (selected.userData.textConfig = { text: "Text", size: 0.6, depth: 0.15 });
@@ -27232,6 +27355,10 @@ function refreshObjectInspector() {
 			if (sInput) sInput.value = String(cfg.size ?? 0.6);
 			const dInput = document.getElementById("obj-text-depth");
 			if (dInput) dInput.value = String(cfg.depth ?? 0.15);
+			const lhInput = document.getElementById("obj-text-line-height");
+			if (lhInput) lhInput.value = String(cfg.lineHeight ?? 1.0);
+			const lhVal = document.getElementById("obj-text-line-height-val");
+			if (lhVal) lhVal.textContent = (cfg.lineHeight ?? 1.0).toFixed(2);
 			const fSelect = document.getElementById("obj-text-font");
 			if (fSelect) fSelect.value = cfg.font || DEFAULT_TEXT_FONT;
 		}
@@ -33691,6 +33818,10 @@ function serializeScene() {
 			startFrame: c.startFrame || undefined,
 			refVideo: c.refVideo || undefined,
 			styleRef: c.styleRef || undefined,
+			blockoutStrength: Number.isFinite(c.blockoutStrength) ? c.blockoutStrength : undefined,
+			noBlockout: c.noBlockout || undefined,
+			duration: Number.isFinite(c.duration) ? c.duration : undefined,
+			resolution: c.resolution || undefined,
 		})),
 		activeGenCellId,
 		workflowCells: workflowCells.map(c => ({
@@ -34071,6 +34202,10 @@ async function deserializeScene(state, opts = {}) {
 				startFrame: c.startFrame || null,
 				refVideo: c.refVideo || null,
 				styleRef: c.styleRef || null,
+				blockoutStrength: Number.isFinite(c.blockoutStrength) ? c.blockoutStrength : undefined,
+				noBlockout: c.noBlockout === true,
+				duration: Number.isFinite(c.duration) ? c.duration : undefined,
+				resolution: c.resolution || undefined,
 			});
 		}
 		// Always boot with no active target regardless of what's persisted —

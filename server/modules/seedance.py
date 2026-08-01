@@ -65,7 +65,7 @@ MODULE = ModuleDef(
          "label": "Start frame (optional)"},
         {"name": "resolution", "type": "select", "default": "1080p",
          "options": ["480p", "720p", "1080p"]},
-        {"name": "duration", "type": "number", "default": 5, "min": 1, "max": 12,
+        {"name": "duration", "type": "number", "default": 5, "min": 5, "max": 12,
          "label": "Duration (seconds)"},
     ],
     output_ext="mp4",

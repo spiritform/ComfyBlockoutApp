@@ -399,8 +399,12 @@ def _make_run(workflow_path: Path, manifest: dict):
     call so workflow authors can iterate on the graph without restarting the
     server (manifest changes still need a restart, since it's captured here).
 
-    Dispatches on `manifest.runner`:
-      - "cloud" (default): submit via `comfy run --where cloud`, poll, download
+    Dispatches on `manifest.runner` — but a preset can override with its own
+    `runner` field, letting one tool tile mix local + cloud presets (e.g.
+    Utility hosts Lotus Depth locally alongside Depth Anything 3 in the cloud).
+
+    Runner semantics:
+      - "cloud": submit via `comfy run --where cloud`, poll, download
       - "local": POST to 127.0.0.1:8188 /prompt, poll /history, download /view
         via `_workflow_local.run_local_workflow`. Requires the API-format
         workflow; local runner raises a clear error otherwise."""
@@ -408,10 +412,73 @@ def _make_run(workflow_path: Path, manifest: dict):
     runner_kind = (manifest.get("runner") or "cloud").lower()
     output_exts = _resolve_output_exts(manifest)
 
+    def _resolve_preset_context(kwargs: dict) -> tuple[Path, dict, dict | None]:
+        """Peel `preset` + `mode` off kwargs and translate them into an
+        effective (workflow_path, manifest, active_preset) triple. Used by
+        BOTH run_cloud and run_local so a single tile can host presets that
+        target different workflow JSONs (with different node ids) under the
+        same input schema.
+
+        Preset override rules:
+          - `preset.workflow` (or `image_workflow` when ui_mode == "image")
+            picks a different JSON on disk
+          - `preset.patches` / `image_patches` remaps top-level input `name`s
+            to per-preset patch targets. Value `null` skips that input
+            entirely (target workflow doesn't have the widget).
+          - `image_output_ext` on the manifest pins image-mode output format
+            so a video-oriented default (mp4) doesn't misname a PNG output.
+        """
+        preset_id = kwargs.pop("preset", None)
+        ui_mode = (kwargs.pop("mode", None) or "").strip().lower() or None
+        base_path = workflow_path
+        active_preset = None
+        presets = manifest.get("presets") or []
+        if presets and preset_id:
+            active_preset = next((p for p in presets if p.get("id") == preset_id), None)
+            if active_preset is None:
+                raise ValueError(f"unknown preset '{preset_id}' for {manifest['id']}")
+            if active_preset.get("coming_soon"):
+                raise ValueError(f"preset '{active_preset.get('label') or preset_id}' isn't wired up yet")
+            preset_stem = (
+                active_preset.get("image_workflow")
+                if ui_mode == "image" and active_preset.get("image_workflow")
+                else active_preset.get("workflow")
+            )
+            if preset_stem and preset_stem != workflow_path.stem:
+                candidate = workflow_path.parent / f"{preset_stem}.json"
+                if not candidate.exists():
+                    raise RuntimeError(f"preset workflow missing on disk: {candidate.name}")
+                base_path = candidate
+        overrides = None
+        if active_preset:
+            if ui_mode == "image" and isinstance(active_preset.get("image_patches"), dict):
+                overrides = active_preset["image_patches"]
+            elif isinstance(active_preset.get("patches"), dict):
+                overrides = active_preset["patches"]
+        effective_manifest = manifest
+        if overrides or ui_mode == "image":
+            new_inputs = []
+            for spec in manifest.get("inputs", []):
+                new_spec = dict(spec)
+                if ui_mode == "image" and new_spec.get("type") == "scene-video":
+                    new_spec["type"] = "scene-image"
+                if overrides and new_spec.get("name") in overrides:
+                    ov = overrides[new_spec["name"]]
+                    new_spec["patch"] = ov  # None → runner sees no patch → skip
+                new_inputs.append(new_spec)
+            effective_manifest = {**manifest, "inputs": new_inputs}
+        if ui_mode == "image":
+            image_ext = manifest.get("image_output_ext", "png")
+            effective_manifest = {**effective_manifest, "output_ext": image_ext, "kind": "image"}
+        return base_path, effective_manifest, active_preset
+
     async def run_cloud(**kwargs):
         data_dir = kwargs.pop("data_dir")
-        workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
-        for spec in manifest.get("inputs", []):
+        base_path, effective_manifest, _preset = _resolve_preset_context(kwargs)
+        workflow = json.loads(base_path.read_text(encoding="utf-8"))
+        module_id_actual = effective_manifest.get("id", module_id)
+        output_exts_actual = _resolve_output_exts(effective_manifest)
+        for spec in effective_manifest.get("inputs", []):
             patch = spec.get("patch")
             if not patch:
                 continue
@@ -429,6 +496,17 @@ def _make_run(workflow_path: Path, manifest: dict):
                         raise ValueError(f"{spec['name']} is required")
                     continue
                 cloud_name = await upload_image_to_cloud(Path(image_path))
+                _patch_widget(workflow, node_id, widget_index, cloud_name, widget_name)
+            elif input_type == "scene-video":
+                # `comfy upload` is not image-specific — same call handles video
+                # files for LoadVideo widgets. Cloud returns a hashed filename
+                # the LoadVideo node references from Cloud's input/ dir.
+                video_path = kwargs.get("video_path")
+                if not video_path:
+                    if spec.get("required", True):
+                        raise ValueError(f"{spec['name']} is required")
+                    continue
+                cloud_name = await upload_image_to_cloud(Path(video_path))
                 _patch_widget(workflow, node_id, widget_index, cloud_name, widget_name)
             else:
                 value = kwargs.get(spec["name"])
@@ -459,84 +537,12 @@ def _make_run(workflow_path: Path, manifest: dict):
                             pass  # leave as string; the widget may actually want a string
                 _patch_widget(workflow, node_id, widget_index, value, widget_name)
 
-        return await _submit_wait_download(workflow, module_id, output_exts, data_dir)
+        return await _submit_wait_download(workflow, module_id_actual, output_exts_actual, data_dir)
 
     async def run_local(**kwargs):
         from ._workflow_local import run_local_workflow
         data_dir = kwargs.pop("data_dir")
-        # Preset routing — if the manifest declares a `presets` array and the
-        # client passed `preset` in kwargs, look up the entry and use its
-        # `workflow` stem to load a different JSON. Falls back to the manifest's
-        # own workflow if the preset doesn't override. Coming-soon presets fail
-        # fast with a clear message so the frontend can surface it.
-        preset_id = kwargs.pop("preset", None)
-        # Image/Video mode — utils like Preprocessors accept either kind of
-        # source. When mode="image", the preset's optional `image_workflow`
-        # stem overrides the default `workflow`, and `image_patches` overrides
-        # `patches` (LoadImage lives at a different node id than VHS_LoadVideo).
-        # scene-video input specs also flip to scene-image so run_local_workflow
-        # uploads from _image_store, not _video_store.
-        ui_mode = (kwargs.pop("mode", None) or "").strip().lower() or None
-        base_path = workflow_path
-        active_preset = None
-        presets = manifest.get("presets") or []
-        if presets and preset_id:
-            active_preset = next((p for p in presets if p.get("id") == preset_id), None)
-            if active_preset is None:
-                raise ValueError(f"unknown preset '{preset_id}' for {manifest['id']}")
-            if active_preset.get("coming_soon"):
-                raise ValueError(f"preset '{active_preset.get('label') or preset_id}' isn't wired up yet")
-            # Prefer image_workflow when in image mode, fall back to the regular workflow.
-            preset_stem = (
-                active_preset.get("image_workflow")
-                if ui_mode == "image" and active_preset.get("image_workflow")
-                else active_preset.get("workflow")
-            )
-            if preset_stem and preset_stem != workflow_path.stem:
-                candidate = workflow_path.parent / f"{preset_stem}.json"
-                if not candidate.exists():
-                    raise RuntimeError(f"preset workflow missing on disk: {candidate.name}")
-                base_path = candidate
-        # Per-preset patch overrides — when the picked preset points at a
-        # different workflow file its node ids will diverge from the default
-        # workflow's, so the manifest's shared `inputs[i].patch` targets won't
-        # apply cleanly. A preset's optional `patches` dict remaps by input
-        # name → patch (or list of patches). We build an effective manifest
-        # here so the downstream runner sees the correct targets without
-        # having to know about presets at all.
-        # In image mode, `image_patches` wins over `patches` — the image
-        # workflow's LoadImage node has different ids from the video loader.
-        effective_manifest = manifest
-        overrides = None
-        if active_preset:
-            if ui_mode == "image" and isinstance(active_preset.get("image_patches"), dict):
-                overrides = active_preset["image_patches"]
-            elif isinstance(active_preset.get("patches"), dict):
-                overrides = active_preset["patches"]
-        # Even without preset-level overrides, image mode must flip scene-video
-        # slots to scene-image so run_local_workflow uploads from _image_store.
-        if overrides or ui_mode == "image":
-            new_inputs = []
-            for spec in manifest.get("inputs", []):
-                new_spec = dict(spec)
-                if ui_mode == "image" and new_spec.get("type") == "scene-video":
-                    new_spec["type"] = "scene-image"
-                if overrides and new_spec.get("name") in overrides:
-                    new_spec["patch"] = overrides[new_spec["name"]]
-                new_inputs.append(new_spec)
-            effective_manifest = {**manifest, "inputs": new_inputs}
-        # Video pipelines commonly hardcode output_ext=mp4, but image mode's
-        # SaveImage node writes PNG. Without this override the runner would
-        # pick up the PNG then rename it to .mp4 — file is opened as video
-        # in Assets, plays as garbled bytes. Manifest can declare
-        # `image_output_ext` to pin a specific format; defaults to png.
-        if ui_mode == "image":
-            image_ext = manifest.get("image_output_ext", "png")
-            effective_manifest = {
-                **effective_manifest,
-                "output_ext": image_ext,
-                "kind": "image",
-            }
+        base_path, effective_manifest, _preset = _resolve_preset_context(kwargs)
         # Prefer an API-format sidecar over the raw imported JSON. Two naming
         # conventions:
         #   - `<stem>.local.json`  — written by the "prepare for local" agent flow
@@ -554,7 +560,17 @@ def _make_run(workflow_path: Path, manifest: dict):
 
     async def run(*, data_dir: Path, **kwargs):
         kwargs["data_dir"] = data_dir
-        if runner_kind == "local":
+        # Per-preset runner override — lets one tool tile mix local and cloud
+        # presets (e.g. Utility hosts local Lotus + cloud Depth Anything 3).
+        # We peek at the preset here WITHOUT consuming kwargs — the actual
+        # preset handler downstream still needs to see them.
+        preset_id = kwargs.get("preset")
+        effective_runner = runner_kind
+        if preset_id:
+            preset = next((p for p in manifest.get("presets") or [] if p.get("id") == preset_id), None)
+            if preset and preset.get("runner"):
+                effective_runner = str(preset["runner"]).lower()
+        if effective_runner == "local":
             return await run_local(**kwargs)
         return await run_cloud(**kwargs)
 
