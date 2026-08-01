@@ -128,6 +128,47 @@
         "node_id": 97,
         "widget_name": "denoise"
       }
+    },
+    {
+      "name": "lora",
+      "type": "dropdown",
+      "label": "LoRA",
+      "options_source": {
+        "class_type": "LoraLoaderModelOnly",
+        "widget": "lora_name"
+      },
+      "default": "qwen\\flymy_realism.safetensors",
+      "patch": {
+        "node_id": 109,
+        "widget_name": "lora_name"
+      }
+    },
+    {
+      "name": "lightning",
+      "type": "dropdown",
+      "label": "Lightning",
+      "options": ["Off", "4-step", "8-step"],
+      "default": "4-step",
+      "patch": [
+        {
+          "node_id": 96,
+          "widget_name": "lora_name",
+          "value_map": {
+            "Off": "Qwen-Image-Lightning-4steps-V1.0.safetensors",
+            "4-step": "Qwen-Image-Lightning-4steps-V1.0.safetensors",
+            "8-step": "Qwen-Image-Lightning-8steps-V1.0.safetensors"
+          }
+        },
+        {
+          "node_id": 96,
+          "widget_name": "strength_model",
+          "value_map": {
+            "Off": 0.0,
+            "4-step": 1.0,
+            "8-step": 1.0
+          }
+        }
+      ]
     }
   ]
 }

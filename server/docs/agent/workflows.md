@@ -9,9 +9,24 @@ Keep the module `label` short enough to fit on ONE line in a ~200px cell — rou
 - Good: `Flux 2 Klein · T2I · Local`, `SDXL · I2I`, `Tripo · I2M`
 - Bad: `Flux 2 Klein — Text to Image (Local)`
 
+## HARD RULE — NEVER RECONSTRUCT A KNOWN PARTNER WORKFLOW BY HAND
+
+If the target model has an official Comfy Cloud template (BFL, ByteDance, Kling, Ideogram, Runway, Stability, OpenAI, Vertex/Nano Banana, Recraft, Reve, xAI/Grok, Luma, Pika, Vidu, Moonvalley, Hailuo, etc. — anything under `Comfy-Org/workflow_templates`), you MUST fetch the canonical JSON and use it verbatim. Do NOT hand-build the graph from what you assume the node shape looks like.
+
+**Why:** Partner-API nodes (`ByteDanceSeedreamNodeV2`, `KlingImageNodeV2`, etc.) have widget orders, socket names, and input-conversion shapes (`shape: 7`) that are NOT self-evident from the node name. A hand-built API-format graph will pass local validation but hit "Failed to validate images" / `shape_mismatch` / other opaque cloud errors that get misdiagnosed as "widget_index unreliable" or "partner API rejects the input" — neither of which is true. The canonical template already has the exact wiring the cloud validator expects.
+
+**How to fetch canonically (in priority order):**
+1. Comfy Cloud MCP `search_templates` → `get_template` — returns the exact API/graph JSON the Cloud team ships.
+2. Direct GitHub raw fetch: `https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/api_<partner>_<model>_<mode>.json` — where mode is typically `t2i`, `image_edit`, `i2v`, `t2v`, etc.
+3. Only as last resort (custom nodes with no template): construct by hand, and document the source you pattern-matched against.
+
+**How to identify hand-built damage:** If a partner-API workflow errors at Cloud validation and the JSON was written by an agent (not fetched from templates), the fix is almost never "tweak the widget_index" — it's "throw the whole file away and refetch the canonical template." Retro-fitting is slower than starting over.
+
+**Precedent to point at:** `seedream_5_pro_image_edit` — an earlier agent hand-built it in API format, then spent multiple sessions inventing wrong root-causes (widget_index instability, `ByteDance* nodes can't be patched`, "cloud validator hard-rejects INT") to explain "Failed to validate images." The real cause was the reconstructed graph diverging from the canonical template. Fixed by swapping in `api_bytedance_seedream_5_0_pro_image_edit.json` verbatim.
+
 ## The 8-step recipe
 
-**1. Get the workflow.** Fetch a matching template via the Comfy Cloud MCP `get_template` tool, or construct it yourself from ComfyUI nodes if you know the shape. Ask `search_templates` first to find a match.
+**1. Get the workflow.** Fetch a matching template via the Comfy Cloud MCP `get_template` tool. Only fall back to hand-construction when `search_templates` returns nothing — and even then, prefer downloading a similar partner's template as a shape reference over inventing from the class_type name alone. Ask `search_templates` first to find a match.
 
 **2. Decide user-facing inputs.** Expose ONLY what changes per run (prompt, seed if the user cares, source image for image-edit workflows). Everything else stays baked into the workflow.
 
@@ -23,11 +38,36 @@ For workflows with a `scene-image` input, the local runner auto-patches the Empt
 
 ### 3b. Seed + strength widgets
 
-- Any KSampler → expose seed as `type: "seed"` (the UI adds a 🎲/🔒 random-vs-fixed toggle — random by default, user can lock a seed they liked).
-- ControlNet / IPAdapter / LoRA strength widgets that materially affect output (typical 0-1 range) → expose as `type: "number"` with `default`, `min: 0`, `max: 1`, `step: 0.05`.
+- Any KSampler → expose seed as `type: "seed"` (the UI adds a 🎲/🔒 random-vs-fixed toggle — random by default, user can lock a seed they liked). **NEVER `type: "number"` for seeds** — the UI stores number-field values as strings, and cloud partner nodes (`ByteDanceSeedreamNodeV2`, `KlingImageNodeV2`, etc.) hard-fail with `shape_mismatch` when they receive a string where INT is expected. `type: "seed"` triggers the runner's int-coercion path in both `_workflow_local.py` and `_workflow_shared.py:run_cloud`.
+- ControlNet / IPAdapter / LoRA strength widgets that materially affect output (typical 0-1 range) → expose as `type: "number"` with `default`, `min: 0`, `max: 1`, `step: 0.05`. `type: "number"` gets float-coerced before submission — cloud FLOAT validators accept it.
 - Same treatment for CFG when it's not baked in.
 
 These are the two most-common per-run knobs; skipping them forces the user back into the raw workflow JSON.
+
+### 3d. Multi-widget dropdowns (value_map)
+
+One dropdown can patch multiple widgets with different values via `patch: [...]` + `value_map`. Example: a "Lightning" selector on a LoRA node writes the correct lora filename AND toggles strength_model to 0 for "Off":
+
+```json
+{
+  "name": "lightning",
+  "type": "dropdown",
+  "options": ["Off", "4-step", "8-step"],
+  "default": "4-step",
+  "patch": [
+    { "node_id": 96, "widget_name": "lora_name",
+      "value_map": {
+        "Off": "Qwen-Image-Lightning-4steps-V1.0.safetensors",
+        "4-step": "Qwen-Image-Lightning-4steps-V1.0.safetensors",
+        "8-step": "Qwen-Image-Lightning-8steps-V1.0.safetensors"
+      } },
+    { "node_id": 96, "widget_name": "strength_model",
+      "value_map": { "Off": 0.0, "4-step": 1.0, "8-step": 1.0 } }
+  ]
+}
+```
+
+Supported by both `run_local` and `run_cloud`. Use when you want ONE knob to gate a whole node's behavior (bypass, mode switch, quality preset).
 
 ### 3c. Preprocessor previews
 
@@ -91,6 +131,33 @@ When a workflow has a `scene-image` input, the user cell shows an empty slot wit
 If any part of this wiring is off, the compute node receives a filename string instead of a tensor and errors with `'str' object has no attribute 'shape'` at runtime.
 
 ## Cloud gotchas
+
+### Shape mismatch (`shape_mismatch` / string-where-int-expected) — READ THIS BEFORE DIAGNOSING
+
+If a cloud run fails with `shape_mismatch`, `expected INT got STRING`, `expected FLOAT got str`, or similar type-shape errors on a numeric widget (seed, steps, cfg, strength):
+
+**ROOT CAUSE (99% of the time):** the manifest input `type` is wrong. HTML `<input>` stores all values as strings; only `type: "seed"` (→ int coercion) and `type: "number"` (→ float coercion) get cast before submission. Both runners now coerce identically — `_workflow_local.py:_apply_single_patch` for local, `_workflow_shared.py:run_cloud`'s else-branch for cloud (added 2026-07-31). `type: "text"` or missing type = string sails through and cloud validator rejects it.
+
+**CORRECT FIX:** change the manifest `type` (usually to `"seed"` for KSampler seed, `"number"` for cfg/strength/denoise). ONE LINE EDIT. Restart run.bat to reload the manifest cache. Test.
+
+**DO NOT DO ANY OF THE FOLLOWING** (these were tried, they are wrong, they will regress the user's control):
+
+1. Do NOT hardcode the seed/number into the workflow JSON and strip the input from the manifest as a "workaround." That hides the real bug, removes user control, and gaslights the next agent into thinking the pattern is intentional.
+2. Do NOT claim "the patch path is ambiguous because widget_index is unreliable on partner-API nodes." There is ONE patch function per runner. It's ~15 lines. It patches by widget_name for API format. There is no ambiguity, no dynamic-combo instability layer, no "partner node patch path." The coercion is driven purely by `input_type` — nothing else.
+3. Do NOT invent explanations like "ByteDance* nodes have known issues" or "cloud validator hard-rejects regardless of manifest type." They don't. This specific class of error is a manifest-type bug in the user's meta.json, always. Read the actual `_workflow_shared.py:run_cloud` source before speculating about behavior.
+4. Do NOT treat this as a "permanent limitation." If `type: "seed"` isn't working after a `run.bat` restart, the meta wasn't reloaded — remind the user (per `feedback_manifest_reload_needs_restart` in the codebase memory).
+
+**Sanity check before proposing any workflow-meta change:** open `server/modules/_workflow_shared.py` and read `run_cloud` (~30 lines). Open `server/modules/_workflow_local.py` and read `_apply_single_patch` (~60 lines). Both coerce on `input_type in ("seed", "number")`. That's the whole story.
+
+### "Failed to validate images" (Cloud LoadImage rejects the upload)
+
+Cloud's `LoadImage` node only accepts `.png` / `.jpg` / `.jpeg`. Viewport snapshots are now always PNG at the source (`web/editor.html:autoSnapshot` uses `canvas.toBlob(..., "image/png")`) — no per-runner transcode.
+
+If you see "Failed to validate images" (visible in the Comfy Cloud web dashboard, NOT the CLI's generic `execution_error` summary):
+
+1. Verify snapshots are still PNG — grep `autoSnapshot` in `web/editor.html` for the `toBlob` call.
+2. Rule out size / dimension limits — Cloud may cap `LoadImage` at some pixel or byte ceiling. Check the file that landed in `DATA_DIR/node_<id>_image.png` before assuming it's a format issue.
+3. Do NOT reintroduce WebP for snapshots without verifying against a real cloud workflow first — this was tried and reverted (see `feedback_webp_for_viewport_snapshots.md`).
 
 ### Widget-position shift (shape:7)
 

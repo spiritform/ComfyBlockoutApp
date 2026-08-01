@@ -102,7 +102,7 @@
       "lora_name": "Qwen-Image-Lightning-4steps-V1.0.safetensors",
       "strength_model": 1,
       "model": [
-        "92",
+        "109",
         0
       ]
     },
@@ -164,6 +164,20 @@
     "class_type": "VAEEncode",
     "_meta": {
       "title": "VAE Encode"
+    }
+  },
+  "109": {
+    "inputs": {
+      "lora_name": "qwen\\flymy_realism.safetensors",
+      "strength_model": 1,
+      "model": [
+        "92",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
     }
   }
 }

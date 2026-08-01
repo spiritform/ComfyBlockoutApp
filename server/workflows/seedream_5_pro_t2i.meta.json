@@ -1,0 +1,58 @@
+{
+  "id": "seedream_5_pro_t2i",
+  "label": "Seedream 5.0 Pro \u00b7 T2I",
+  "kind": "image",
+  "output_ext": "png",
+  "runner": "cloud",
+  "inputs": [
+    {
+      "name": "prompt",
+      "label": "Prompt",
+      "type": "textarea",
+      "placeholder": "Describe the image you want to generate\u2026",
+      "required": true,
+      "patch": {
+        "node_id": 1,
+        "widget_index": 0,
+        "widget_name": "prompt"
+      }
+    },
+    {
+      "name": "size_preset",
+      "label": "Resolution",
+      "type": "dropdown",
+      "options": [
+        "(1K) 1024x1024 (1:1)",
+        "(1K) 1312x736 (16:9)",
+        "(1K) 736x1312 (9:16)",
+        "(1K) 1152x864 (4:3)",
+        "(1K) 864x1152 (3:4)",
+        "(1K) 1248x832 (3:2)",
+        "(1K) 832x1248 (2:3)",
+        "(1K) 1568x672 (21:9)",
+        "(2K) 2048x2048 (1:1)",
+        "(2K) 2304x1728 (4:3)",
+        "(2K) 1728x2304 (3:4)",
+        "(2K) 2496x1664 (3:2)",
+        "(2K) 1664x2496 (2:3)",
+        "Custom"
+      ],
+      "default": "(1K) 1312x736 (16:9)",
+      "patch": {
+        "node_id": 1,
+        "widget_index": 2,
+        "widget_name": "model.size_preset"
+      }
+    },
+    {
+      "name": "seed",
+      "label": "Seed",
+      "type": "seed",
+      "patch": {
+        "node_id": 1,
+        "widget_index": 5,
+        "widget_name": "seed"
+      }
+    }
+  ]
+}

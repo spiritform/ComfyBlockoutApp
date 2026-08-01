@@ -12054,6 +12054,14 @@ document.getElementById("mcp-add-btn")?.addEventListener("click", async () => {
 		// row = AGENT_MIN_PX). User asked for this so the chat entry stays
 		// reachable without expanding — only the message log gets hidden.
 		const AGENT_COLLAPSED_H = AGENT_MIN_PX;
+		// Exposed for handlers that need to un-minimize the agent when a
+		// message is being sent (e.g. the error modal's Inspect button —
+		// otherwise the user clicks Inspect on a collapsed panel and sees
+		// nothing happen). No-op if already expanded.
+		window.expandAgentIfCollapsed = () => {
+			if (!lpPanel) return;
+			if (lpPanel.classList.contains("lp-agent-collapsed")) toggleAgentCollapse();
+		};
 		function toggleAgentCollapse() {
 			if (!lpPanel) return;
 			const isCollapsed = lpPanel.classList.contains("lp-agent-collapsed");
@@ -16319,7 +16327,15 @@ document.getElementById("vp-generate")?.addEventListener("click", async () => {
 	console.log("[vp-generate] click");
 	const btn = document.getElementById("vp-generate");
 	if (!btn) { console.warn("[vp-generate] button not found"); return; }
-	if (btn.classList.contains("busy")) { console.warn("[vp-generate] busy"); return; }
+	if (btn.classList.contains("busy")) {
+		// Clicking "Running…" jumps to the currently-running workflow's
+		// properties pane so the user can see inputs / cancel / follow
+		// progress without hunting through the sidebar.
+		const runningEl = document.querySelector("#workflow-cells .gen-cell .gen-run-btn.busy");
+		const runningId = runningEl?.closest(".gen-cell")?.dataset?.cellId;
+		if (runningId) setActiveWorkflowCell(runningId);
+		return;
+	}
 	// Explicit "no active target" gate — previously getActiveGenCell fell back
 	// to genCells[0] (nano-banana), so hitting Generate with nothing selected
 	// silently launched a nano run. Users didn't ask for that; they want the
@@ -35213,6 +35229,10 @@ function showAlert(title, message, opts = {}) {
 				}
 			}
 			cleanup();
+			// Un-minimize the agent panel — otherwise Inspect fires
+			// sendAssistant into a collapsed pane and the user sees no
+			// response, making the button feel broken.
+			try { window.expandAgentIfCollapsed?.(); } catch {}
 			// Auto-send instead of pre-filling the input. Two reasons:
 			//  1) A pasted error blob makes the input textarea look nasty
 			//     until the user finishes reading & hits Enter.
@@ -35713,14 +35733,12 @@ async function autoSnapshot() {
 		drawBgLayerToSnapshotCtx(snapshotCtx, w, h);
 		snapshotCtx.drawImage(snapshotSceneCanvas, 0, 0);
 
-		// Blockout snapshots are viewport-preview only — not AI reference —
-		// so WebP at q=0.9 gives 5-10x smaller files with no perceptible
-		// quality loss on flat scene shading. Fall back to PNG if the
-		// browser rejects WebP for some reason (rare — all supported
-		// targets have WebP encoders).
-		const blob = await new Promise(res => {
-			snapshotCanvas.toBlob(res, "image/webp", 0.9);
-		}) || await new Promise(res => snapshotCanvas.toBlob(res, "image/png"));
+		// Snapshot as PNG — WebP saved upload bytes but Comfy Cloud's
+		// LoadImage validator rejects .webp with "Failed to validate
+		// images", and paying per-runner transcodes was more surface area
+		// than the size win was worth. PNG is lossless, universally
+		// accepted, and a viewport-sized snapshot is still <2MB.
+		const blob = await new Promise(res => snapshotCanvas.toBlob(res, "image/png"));
 		if (!blob) return;
 		await uploadImage(blob);
 		// NOTE: no archival save here — autoSnapshot fires on every scene

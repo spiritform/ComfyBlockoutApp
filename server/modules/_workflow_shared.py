@@ -163,10 +163,33 @@ async def _submit_wait_download(
         # when the API's job-status endpoint stalls) would otherwise keep the
         # coroutine blocked indefinitely, even after the file is already sitting
         # in output/. This gives whichever finishes first the win.
+        # User-input + already-consumed filenames that live in data_dir
+        # alongside real outputs. Excluded from output scans — otherwise:
+        #   - `node_<id>_image.png` (viewport snapshot from /save_image)
+        #     gets picked up when a job fails right after autoSnapshot ran,
+        #     shutil.move'd into `out_<module>_<ts>.png`, and returned as
+        #     the "AI render" — user sees their blockout, no error raised.
+        #   - `out_blockout_<id>_<ts>.png` (versioned blockout archive from
+        #     the Blockout tab click) hits the same failure mode.
+        #   - Any prior `out_<module>_<ts>.png` from a recent successful run
+        #     could be re-harvested if the current job fails within the mtime
+        #     window (typically 30s).
+        # CLI-synced real outputs use the workflow's SaveImage filename_prefix
+        # (e.g. `Seedream5.0_Pro_image_edit_00001.png`), never `out_*` — our
+        # own naming convention only appears on files we've already claimed.
+        def _is_output_candidate(p: Path) -> bool:
+            n = p.name
+            if n.startswith("node_"): return False       # viewport snapshots + raw uploads
+            if n.startswith("chat_paste_"): return False # chat-pasted refs
+            if n.startswith("out_"): return False        # already-consumed outputs / blockout archives
+            return True
+
         async def _wait_for_output_file() -> str:
             while True:
                 for ext in output_exts:
                     for p in data_dir.rglob(f"*.{ext}"):
+                        if not _is_output_candidate(p):
+                            continue
                         try:
                             if p.stat().st_mtime >= job_start:
                                 return "output_synced"
@@ -183,8 +206,42 @@ async def _submit_wait_download(
             ], timeout=1600)
             env_ = _parse_envelope(out_)
             if code_ != 0 or not env_ or not env_.get("ok"):
-                detail_ = (env_ or {}).get("error") if env_ else None
-                raise RuntimeError(f"comfy jobs wait failed (rc={code_}): {detail_ or err_.strip() or out_.strip()[:800]}")
+                # `jobs wait` returns only a job-count summary; the actual
+                # per-node execution traceback lives in `jobs status`. Fetch
+                # it so the raised error surfaces the real cause (missing
+                # custom node, API 4xx, bad widget value, etc.) instead of
+                # the useless "0/1 completed — 1 failed" summary.
+                status_detail = ""
+                try:
+                    s_code, s_out, s_err = await run_cli([
+                        comfy_bin(), "--json", "jobs", "status", prompt_id,
+                        *WHERE_CLOUD,
+                    ], timeout=30)
+                    s_env = _parse_envelope(s_out)
+                    if s_env and isinstance(s_env.get("data"), dict):
+                        # Pull whatever error fields the status endpoint returns
+                        # — schema varies across CLI versions so cast a wide net.
+                        d = s_env["data"]
+                        for key in ("error", "exception", "node_errors",
+                                    "traceback", "message", "details"):
+                            if d.get(key):
+                                status_detail = f"{key}: {d[key]}"
+                                break
+                        if not status_detail:
+                            # Fall back to the whole data blob if nothing named.
+                            import json as _json
+                            status_detail = _json.dumps(d)[:2000]
+                    elif s_env and s_env.get("error"):
+                        status_detail = str(s_env["error"])[:2000]
+                    else:
+                        status_detail = (s_err.strip() or s_out.strip())[:2000]
+                except Exception as _e:
+                    status_detail = f"(status-fetch failed: {_e})"
+                summary = (env_ or {}).get("error") if env_ else None
+                raise RuntimeError(
+                    f"comfy jobs wait failed (rc={code_}): {summary}\n"
+                    f"— job details: {status_detail}"
+                )
             return "jobs_wait_ok"
 
         wait_task = asyncio.create_task(_run_jobs_wait())
@@ -234,6 +291,8 @@ async def _submit_wait_download(
                 for ext in output_exts:
                     try:
                         for p in root.rglob(f"*.{ext}"):
+                            if not _is_output_candidate(p):
+                                continue
                             try:
                                 if p.stat().st_mtime >= job_start:
                                     found.append(p)
@@ -377,6 +436,27 @@ def _make_run(workflow_path: Path, manifest: dict):
                     if spec.get("required"):
                         raise ValueError(f"{spec['name']} is required")
                     continue
+                # Per-patch value translation — same shape as local runner.
+                # Lets one UI knob write different values into different
+                # widgets (e.g. a "Lightning" dropdown mapping "Off" to
+                # strength=0 on one patch while picking a lora on another).
+                value_map = patch.get("value_map") if isinstance(patch, dict) else None
+                if isinstance(value_map, dict) and str(value) in value_map:
+                    value = value_map[str(value)]
+                # Coerce numeric widget types — the frontend serializes them
+                # as strings ("42", "0.8"). Cloud partner nodes schema-check
+                # KSampler.seed as INT and ControlNet.strength as FLOAT, so
+                # a string sail-through triggers shape_mismatch on the API
+                # side. Mirrors the same coercion in _workflow_local.py.
+                if input_type in ("seed", "number") and isinstance(value, str):
+                    s = value.strip()
+                    try:
+                        value = int(s) if input_type == "seed" else float(s)
+                    except ValueError:
+                        try:
+                            value = float(s)
+                        except ValueError:
+                            pass  # leave as string; the widget may actually want a string
                 _patch_widget(workflow, node_id, widget_index, value, widget_name)
 
         return await _submit_wait_download(workflow, module_id, output_exts, data_dir)

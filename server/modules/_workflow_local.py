@@ -337,6 +337,15 @@ def _apply_single_patch(workflow: dict, spec: dict, patch: dict, kwargs: dict) -
             if spec.get("required"):
                 raise ValueError(f"{spec['name']} is required")
             return
+        # Per-patch value translation — lets one UI knob write different
+        # values into different widgets (e.g. a "Lightning" dropdown that
+        # writes both a lora_name AND a strength_model, mapping "Off" to
+        # strength=0 while another patch on the same input picks a lora
+        # file). Applied AFTER required-check, BEFORE numeric coercion so
+        # translated numbers still get cast correctly.
+        value_map = patch.get("value_map")
+        if isinstance(value_map, dict) and str(value) in value_map:
+            value = value_map[str(value)]
         # Coerce numeric widget types — the frontend serializes them as
         # strings ("42", "0.8") but ComfyUI schema-checks KSampler.seed as
         # int and ControlNetApply.strength as float. Falls back to the raw
