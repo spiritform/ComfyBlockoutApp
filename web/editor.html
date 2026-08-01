@@ -15837,11 +15837,19 @@ function renderGenCellProperties(cell) {
 			</div>
 		`;
 	} else if (cell.model === "nano-banana") {
+		// Match the workflow scene-image pattern: slot + "Empty = uses
+		// current viewport" hint below. Second slot (Style ref) is
+		// Nano-specific. The trailing "skip (text-to-image)" link toggles
+		// cell.noBlockout so image 1 is dropped entirely — previously the
+		// mechanism lived on the × of the Referenced Objects snap row.
+		const skipLink = cell.noBlockout
+			? `<span style="color:rgba(255,180,84,0.9)">Text-to-image mode</span> · <a href="#" data-blockout-restore="1" style="color:rgba(102,204,255,0.8);text-decoration:none">use viewport</a>`
+			: `Empty = uses current viewport · <a href="#" data-blockout-clear="1" style="color:rgba(255,255,255,0.5);text-decoration:none">skip (text-to-image)</a>`;
 		slotsHtml = `
 			<div class="gen-slots">
-				<div class="gen-slot" data-slot="sourceImage" data-accepts="image" title="Optional source image — replaces the auto viewport blockout as image 1 (the spatial-composition reference). Leave empty to use the current viewport, or hit × on the Viewport blockout row below to skip image 1 entirely (text-to-image mode).">
+				<div class="gen-slot" data-slot="sourceImage" data-accepts="image" title="Optional custom render — replaces the auto viewport snapshot as image 1 (the spatial-composition reference). Leave empty to use the current viewport.">
 					<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
-					<div class="gen-slot-label">Source image</div>
+					<div class="gen-slot-label">Input image</div>
 					<button type="button" class="gen-slot-clear" hidden>×</button>
 					<input type="file" class="gen-slot-file" accept="image/*" hidden>
 				</div>
@@ -15852,6 +15860,7 @@ function renderGenCellProperties(cell) {
 					<input type="file" class="gen-slot-file" accept="image/*" hidden>
 				</div>
 			</div>
+			<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">${skipLink}</div>
 		`;
 	} else if (cell.model === "tripo-i2m" || cell.model === "triposplat-local") {
 		const helpByModel = {
@@ -15915,43 +15924,18 @@ function renderGenCellProperties(cell) {
 	let objRefsHtml = "";
 	if (usesObjectRefs) {
 		const withRefs = objects.filter(o => o.userData?.refImage && (o.userData.refImage.signedUrl || o.userData.refImage.localUrl));
-		// Show the section whenever we have object refs OR the cell has any
-		// image-1 state to surface (custom source, noBlockout, style ref). That
-		// way users can always see the image lineup + toggle no-blockout back.
-		const hasImageState = !!cell.sourceImage?.url || !!cell.styleRef?.url || !!cell.noBlockout;
-		if (withRefs.length || hasImageState || cell.model === "nano-banana") {
-			// Blockout snapshot is always image 1 — surface it in the list so the
-			// user sees the full lineup (snapshot + style ref + per-object refs)
-			// and can eyeball what the model will actually receive.
-			// Image-1 row — shows either the auto viewport snapshot, a
-			// user-uploaded source override (cell.sourceImage), or nothing at
-			// all when cell.noBlockout is set (pure text-to-image). × on the
-			// row cycles snapshot → skip; upload via the Source image slot
-			// above swaps to custom.
-			let snapRow = "";
-			if (!cell.noBlockout) {
-				const usingCustom = !!cell.sourceImage?.url;
-				const img1Url = usingCustom
-					? cell.sourceImage.url
-					: `/comfyblockout/image/${encodeURIComponent(NODE_ID)}?t=${Date.now()}`;
-				const img1Label = usingCustom ? "Custom source" : "Viewport blockout";
-				snapRow = `<div class="gen-objref-row gen-objref-snap"><span class="gen-objref-thumb" style="background-image:url('${img1Url}')"></span><span class="gen-objref-name">${img1Label} <span style="color:rgba(255,255,255,0.35)">(image 1)</span></span><button type="button" class="gen-objref-x" data-blockout-clear="1" title="Skip image 1 (text-to-image mode)">×</button></div>`;
-			} else {
-				// User previously hit × to skip image 1. Show a click-to-restore
-				// row so they aren't stranded in text-only mode.
-				snapRow = `<div class="gen-objref-row gen-objref-restore" data-blockout-restore="1" title="Enable viewport blockout"><span class="gen-objref-thumb" style="background:rgba(255,255,255,0.06)"></span><span class="gen-objref-name" style="color:rgba(255,255,255,0.4);font-style:italic">Enable viewport blockout</span></div>`;
-			}
-			const styleRow = cell.styleRef?.url
-				? `<div class="gen-objref-row gen-objref-style"><span class="gen-objref-thumb" style="background-image:url('${cell.styleRef.url}')"></span><span class="gen-objref-name">Style ref <span style="color:rgba(255,255,255,0.35)">(aesthetic only)</span></span><button type="button" class="gen-objref-x" data-styleref-clear="1" title="Remove style ref">×</button></div>`
-				: "";
-			const rows = snapRow + styleRow + withRefs.map(o => {
+		// Per-object image refs only — the image-1 snapshot and style ref are
+		// surfaced via the top INPUTS slots + "Empty = uses current viewport"
+		// hint, so no need to echo them here. Nano still gets a 14-image budget
+		// counter (scene + style + object refs) whenever this section shows.
+		if (withRefs.length) {
+			const rows = withRefs.map(o => {
 				const url = refImageThumbUrl(o.userData.refImage) || "";
 				const name = (o.name || "").replace(/</g, "&lt;");
 				return `<div class="gen-objref-row gen-objref-selectable" data-obj-uuid="${o.uuid}" title="Click to open ${name}'s properties"><span class="gen-objref-thumb" style="background-image:url('${url}')"></span><span class="gen-objref-name">${name}</span><button type="button" class="gen-objref-x" data-objref-clear="${o.uuid}" title="Remove image ref">×</button></div>`;
 			}).join("");
 			// Nano Banana caps at 14 input images total: scene snapshot (1) +
-			// style ref (0 or 1) + per-object refs. Compute + surface a budget
-			// counter so the user can see when they're near/over the cap.
+			// style ref (0 or 1) + per-object refs.
 			const NANO_MAX = 14;
 			const isNano = cell.model === "nano-banana";
 			const hasStyleRef = !!cell.styleRef?.url;
@@ -16048,21 +16032,23 @@ function renderGenCellProperties(cell) {
 			renderGenCellProperties(cell);
 		});
 	}
-	// Viewport blockout ×: toggle noBlockout, drops image 1 from the request.
-	// The runtime path in vp-generate translates this to inputs.skip_source_image
-	// which the server pops before invoking the module.
-	const blockoutClearX = pane.querySelector(".gen-objref-x[data-blockout-clear]");
-	if (blockoutClearX) {
-		blockoutClearX.addEventListener("click", (e) => {
+	// Viewport blockout toggle: link/× now lives inside the top-slots hint
+	// (Nano Banana). vp-generate translates cell.noBlockout to
+	// inputs.skip_source_image so the server drops image 1 from the request.
+	const blockoutClear = pane.querySelector("[data-blockout-clear]");
+	if (blockoutClear) {
+		blockoutClear.addEventListener("click", (e) => {
+			e.preventDefault();
 			e.stopPropagation();
 			cell.noBlockout = true;
 			maybeSaveDebounced?.();
 			renderGenCellProperties(cell);
 		});
 	}
-	const blockoutRestoreRow = pane.querySelector("[data-blockout-restore]");
-	if (blockoutRestoreRow) {
-		blockoutRestoreRow.addEventListener("click", (e) => {
+	const blockoutRestore = pane.querySelector("[data-blockout-restore]");
+	if (blockoutRestore) {
+		blockoutRestore.addEventListener("click", (e) => {
+			e.preventDefault();
 			e.stopPropagation();
 			cell.noBlockout = false;
 			maybeSaveDebounced?.();

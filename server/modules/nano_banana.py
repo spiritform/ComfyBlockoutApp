@@ -27,6 +27,7 @@ async def run(*, prompt: str, image_path: Path | None = None, data_dir: Path, re
     out = new_output_path(data_dir, "nano-banana", "png")
     argv = [
         comfy_bin(), "generate", "nano-banana",
+        "--yes",  # non-TTY subprocess: skip credit-spend confirmation prompt
         "--model", "gemini-3-pro-image-preview",
         "--prompt", prompt.strip(),
         "--download", str(out),

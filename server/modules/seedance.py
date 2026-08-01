@@ -27,6 +27,7 @@ async def run(*, prompt: str, resolution: str = "1080p", duration: int = 5,
     out = new_output_path(data_dir, "seedance", "mp4")
     cmd = [
         comfy_bin(), "generate", "seedance",
+        "--yes",  # non-TTY subprocess: skip credit-spend confirmation prompt
         "--prompt", prompt.strip(),
         "--resolution", str(resolution),
         "--duration", str(duration_i),
