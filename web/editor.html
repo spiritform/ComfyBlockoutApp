@@ -1621,7 +1621,7 @@
 	.assistant-msg.bot::before {
 		content: "agent";
 		display: inline-block;
-		background: rgba(255,180,84,0.14);
+		background: transparent;
 		color: #ffb454;
 		padding: 1px 6px;
 		border-radius: 3px;
@@ -1630,13 +1630,18 @@
 		letter-spacing: 0.5px;
 		text-transform: uppercase;
 		margin-right: 6px;
+		margin-bottom: 4px;
 		vertical-align: 1px;
-		border: 1px solid rgba(255,180,84,0.28);
+		border: 1px solid transparent;
 	}
 	/* Pulses three times when a fresh bot reply is appended — visual anchor
 	   so the user can find where the new response started after the chat
-	   auto-scrolls to the bottom. */
-	.assistant-msg.bot.pulse::before { animation: agent-chip-pulse 1.2s ease-out 3; }
+	   auto-scrolls to the bottom. Only new (unread) messages get the amber
+	   square; once the pulse ends the chip returns to bare yellow text. */
+	.assistant-msg.bot.pulse::before {
+		border-color: rgba(255,180,84,0.28);
+		animation: agent-chip-pulse 1.2s ease-out 3;
+	}
 	@keyframes agent-chip-pulse {
 		0%   { box-shadow: 0 0 0 0    rgba(255,180,84,0.55); background: rgba(255,180,84,0.28); }
 		70%  { box-shadow: 0 0 0 6px  rgba(255,180,84,0);    background: rgba(255,180,84,0.14); }
@@ -4774,6 +4779,7 @@
 			<button class="tl-btn" id="tl-rewind" title="Rewind to start">◀◀</button>
 			<button class="tl-btn" id="tl-addkey" title="Add keyframe at playhead — keys the selected object's pos/rot/scale, or the camera if nothing is selected">+</button>
 			<button class="tl-btn" id="tl-clearkey" title="Delete selected keyframe (or all if none selected)">✕</button>
+			<button class="tl-btn" id="tl-snapshot" title="Snapshot the current viewport as the still Blockout (updates image 1 for image workflows without recording)"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></svg></button>
 			<div style="width: 4px"></div>
 			<div id="tl-scrub-wrap">
 				<div id="tl-ruler"></div>
@@ -12248,6 +12254,11 @@ function clearSelectionTint() {
 
 function applySelectionTint(obj) {
 	if (!obj || obj === renderCam) return;
+	// Selection cage disabled — the amber wireframe Box3Helper cluttered the
+	// blockout view and duplicated feedback the transform gizmo + outliner
+	// row highlight already provide. Function kept as a no-op so callers
+	// (setSelection, hydrate paths) don't need to branch.
+	return;
 	// Skybox is a 50m inverted sphere wrapping the whole scene — a Box3Helper
 	// cage at that scale would fill the viewport with amber lines and hide
 	// every other object. The user is "selecting" the skybox via the Outliner
@@ -15982,6 +15993,23 @@ function renderGenCellProperties(cell) {
 	// at the payload builder, which meant every clip was 5s / 1080p regardless
 	// of what the user wanted. Values persist per-cell via addGenCell defaults +
 	// scene save/load. Model / ratio / audio can join here later if wanted.
+	// Seedance variant picker — Standard/Lite go to Comfy Cloud (no video-ref
+	// support; recording falls back to first-frame image). Local/Local Lite
+	// route through the user's local Comfy Desktop at 127.0.0.1:8188 where
+	// LoadVideo is unrestricted, so the recording feeds video_1 for actual
+	// motion conditioning. Partner-API call still hits ByteDance either way.
+	const _VARIANT_LABELS = {
+		"standard":   "Standard (Cloud)",
+		"lite":       "Lite (Cloud)",
+		"local":      "Standard (Local Comfy · uses video ref)",
+		"local-lite": "Lite (Local Comfy · uses video ref)",
+	};
+	const _variantValue = cell.variant || "standard";
+	const _variantOptions = Object.keys(_VARIANT_LABELS);
+	const _variantOptionsHtml = _variantOptions.map(v => {
+		const cls = "wf-dropdown-opt" + (v === _variantValue ? " selected" : "");
+		return `<button type="button" class="${cls}" data-value="${v}" role="option">${_VARIANT_LABELS[v]}</button>`;
+	}).join("");
 	const seedanceHtml = cell.model === "seedance" ? `
 		<div class="section" style="padding-top:6px">
 			<div class="drag-row">
@@ -15994,6 +16022,14 @@ function renderGenCellProperties(cell) {
 					<svg class="wf-dropdown-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
 				</button>
 				<div class="wf-dropdown-menu" role="listbox" hidden>${_renderGroupedDropdownOptions(["480p","720p","1080p"], cell.resolution || "1080p")}</div>
+			</div>
+			<div class="wf-dropdown" id="cell-variant" style="margin-top:6px">
+				<div class="wf-dropdown-label">Variant</div>
+				<button type="button" class="wf-dropdown-btn" aria-haspopup="listbox" aria-expanded="false">
+					<span class="wf-dropdown-value">${_VARIANT_LABELS[_variantValue] || _variantValue}</span>
+					<svg class="wf-dropdown-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+				</button>
+				<div class="wf-dropdown-menu" role="listbox" hidden>${_variantOptionsHtml}</div>
 			</div>
 		</div>
 	` : "";
@@ -16142,6 +16178,43 @@ function renderGenCellProperties(cell) {
 				}
 			});
 		}
+	}
+	// Variant — same .wf-dropdown pattern as Resolution above. Value stored on
+	// cell.variant. Display text pulls from the same VARIANT_LABELS map used to
+	// render the options so "local" → "Standard (Local Comfy · uses video ref)".
+	const variantWrap = pane.querySelector("#cell-variant.wf-dropdown");
+	if (variantWrap) {
+		const btn = variantWrap.querySelector(".wf-dropdown-btn");
+		const menu = variantWrap.querySelector(".wf-dropdown-menu");
+		const valueEl = variantWrap.querySelector(".wf-dropdown-value");
+		const closeMenu = () => {
+			menu.hidden = true;
+			btn.setAttribute("aria-expanded", "false");
+			variantWrap.classList.remove("open");
+		};
+		btn?.addEventListener("click", (e) => {
+			e.stopPropagation();
+			if (menu.hidden) {
+				menu.hidden = false;
+				btn.setAttribute("aria-expanded", "true");
+				variantWrap.classList.add("open");
+			} else {
+				closeMenu();
+			}
+		});
+		menu?.addEventListener("click", (e) => {
+			const opt = e.target.closest(".wf-dropdown-opt");
+			if (!opt) return;
+			const val = opt.dataset.value;
+			cell.variant = val;
+			valueEl.textContent = _VARIANT_LABELS[val] || val;
+			for (const other of menu.querySelectorAll(".wf-dropdown-opt.selected")) {
+				other.classList.remove("selected");
+			}
+			opt.classList.add("selected");
+			closeMenu();
+			maybeSaveDebounced?.();
+		});
 	}
 
 	// Referenced-objects rows: main click → select the object (opens its
@@ -23669,9 +23742,10 @@ fetchWorkflowModules();
 			item.className = "gen-add-item";
 			item.role = "menuitem";
 			item.disabled = exists;
+			const runnerTag = m.runner === "cloud" ? "cloud" : "local";
 			const suffix = exists
 				? '<span class="gen-add-check">added</span>'
-				: '<span class="gen-add-check" style="opacity:0.4">local</span>';
+				: `<span class="gen-add-check" style="opacity:0.4">${runnerTag}</span>`;
 			item.innerHTML = `${iconFor(m)}<span>${m.label}</span>${suffix}`;
 			// Inline trash on the row's right edge — hits DELETE /api/workflows/{id}
 			// after showConfirm. Server refuses to delete built-in Python modules
@@ -30262,12 +30336,19 @@ function applyResultMode() {
 			|| isIntermediate;
 		saveOv.classList.toggle("visible", canSave);
 	}
-	// Clear button suppressed for now — its "clear stale _video_store entry"
-	// role was surfacing during Seedance tests when no video-workflow was
-	// actually recording, which just read as noise. Leave the button in the
-	// DOM so the wiring survives; force `.visible` off unconditionally.
+	// Clear button — visible on Blockout mode ONLY when a recording is
+	// actually staged. Clicking it drops the server-side recording entry and
+	// re-runs showBlockoutSnapshot, which then falls through to the still
+	// snapshot path. Gives users a way out of a stale recording without
+	// hunting the transport for the snapshot button.
 	const clearOv = document.getElementById("result-clear-overlay");
-	if (clearOv) clearOv.classList.remove("visible");
+	if (clearOv) {
+		const hasRecording = resultMode === "blockout"
+			&& resultOverlayVid
+			&& resultOverlayVid.style.display !== "none"
+			&& !!resultOverlayVid.src;
+		clearOv.classList.toggle("visible", hasRecording);
+	}
 }
 
 // Wipe any dynamically-added preview pills (DEPTH, CANNY, etc.) — called
@@ -33708,6 +33789,12 @@ async function startRecording() {
 				// for the workflow's own output. Assets still gets a refresh so
 				// the recording appears in the modal / drag-source.
 				window.refreshAssets?.();
+				// Rewind the timeline to frame 0 after a recording — the
+				// playhead was parked at the end when record finished, and
+				// showBlockoutSnapshot's syncBlockoutPreviewToPlayhead would
+				// otherwise land the preview on the LAST frame. Users expect
+				// "record done → ready to play from start".
+				try { setPlayhead?.(0); } catch {}
 				// Reveal the Blockout pill (same as Generate does) and switch
 				// to it so the user sees the freshly-recorded source video.
 				if (typeof blockoutToggleBtn !== "undefined" && blockoutToggleBtn) {
@@ -33758,6 +33845,35 @@ function toggleRecording() {
 	startRecording();
 }
 tlRec.addEventListener("click", toggleRecording);
+
+// Snapshot button — updates the still Blockout (image 1 for image workflows)
+// from the current viewport WITHOUT requiring a recording. Also clears any
+// stashed recording server-side so the Blockout tab reverts to still mode
+// instead of showing the video preview. Reload → autoSnapshot writes a
+// fresh PNG to _image_store, then showBlockoutSnapshot re-renders.
+document.getElementById("tl-snapshot")?.addEventListener("click", async () => {
+	const btn = document.getElementById("tl-snapshot");
+	if (btn) btn.disabled = true;
+	try {
+		// Drop the server-side recording if there is one — otherwise the
+		// scene-video path keeps hijacking Blockout for the video preview.
+		await fetch(`/comfyblockout/video/${encodeURIComponent(NODE_ID)}`, { method: "DELETE" }).catch(() => {});
+		await autoSnapshot();
+		// Reveal Blockout tab + switch to it so the user immediately sees
+		// their new snapshot.
+		if (typeof blockoutToggleBtn !== "undefined" && blockoutToggleBtn) {
+			blockoutToggleBtn.hidden = false;
+		}
+		resultMode = "blockout";
+		applyResultMode?.();
+		updateStatus?.("snapshot taken");
+	} catch (e) {
+		console.warn("[snapshot] failed:", e);
+		updateStatus?.(`snapshot failed: ${e.message || e}`);
+	} finally {
+		if (btn) btn.disabled = false;
+	}
+});
 
 
 async function uploadImage(blob) {

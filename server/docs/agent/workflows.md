@@ -111,24 +111,51 @@ The AI Agent chat input row has an Import Workflow button (tray icon, top-right 
 
 When the button fires, you receive the file's contents in a fenced ```json``` block with the directive already spelled out (identify format, pick label, identify inputs, patch by widget_name for API, ask before creating if anything is ambiguous). Confirm ambiguous decisions with the user in one round before calling `create_workflow_module`.
 
-## Scene-image input (viewport snapshot as workflow input)
+## Scene-image input — THE universal image-input pattern
 
-When a workflow has a `scene-image` input, the user cell shows an empty slot with the hint "Empty = uses current viewport". Empty slot → the runner captures the current 3D viewport as the input image. Uploaded/dragged image → that reference image is used instead.
+Every image-in workflow in ComfyBlockout uses the SAME pattern. There is no other pattern. Learn it once and apply it to every module you build:
 
-- User asks "why is my workflow using the scene instead of the image I picked?" → check that the cell.values for the image key is set (they may have clicked Generate before the upload finished, or the upload failed silently).
-- User asks "how do I feed a reference image?" → tell them to click/drop onto the workflow cell's image slot.
+**The mechanism.** The workflow.json has a `LoadImage` node with `image: "scene_snapshot.png"` (a placeholder filename). The manifest declares an input `{"type": "scene-image", "patch": {"node_id": <LoadImage id>, "widget_name": "image"}}`. At run time:
 
-## When you build a workflow (not just import), wire scene-image correctly
+1. The runner resolves the image source — see next section.
+2. The runner uploads that file to Comfy Cloud (`upload_image_to_cloud`) or copies it into ComfyUI's `input/` dir (local).
+3. The returned filename is patched into the LoadImage node's `image` widget, replacing `scene_snapshot.png`.
+4. LoadImage decodes it into an IMAGE tensor that flows to the compute node via a link.
 
-**(a)** INCLUDE a LoadImage node in the graph — even if the source model has its own image input, always route through LoadImage so the runner's viewport-snapshot / upload-reference flow resolves cleanly.
+**Where the image comes from — viewport OR custom, always.** The workflow cell's image slot is a single UI control that resolves to one of two sources:
 
-**(b)** The manifest's scene-image patch MUST target the LoadImage node's `image` widget (API format: `widget_name: "image"`, node_id = LoadImage's id). NEVER target the compute node's image socket directly — that expects a decoded IMAGE tensor, and the runner only knows how to upload a filename to LoadImage's widget.
+- **Empty slot** ("Empty = uses current viewport") → the runner captures the current 3D viewport (blockout render, PNG, matching the current AR) and uses THAT as `image_path`. This is the default and the whole point — the blockout scene is the image reference for most runs.
+- **Populated slot** (user clicked/dragged an image onto the slot) → that uploaded file is used as `image_path` instead. Same downstream path — upload → patch → LoadImage decode.
 
-**(c)** In API format the compute node's `image` input should be a link reference like `["<loadimage_id>", 0]` — output index 0 of LoadImage is IMAGE, index 1 is MASK.
+Both are the same input from the module's perspective. The `scene-image` type IS "viewport OR custom, whichever is present."
 
-**(d)** In graph format the same wiring goes through the top-level `links[]` array as `[<link_id>, <loadimage_id>, 0, <compute_id>, <input_slot>, "IMAGE"]`.
+**Wiring rules for every workflow you build:**
 
-If any part of this wiring is off, the compute node receives a filename string instead of a tensor and errors with `'str' object has no attribute 'shape'` at runtime.
+**(a)** INCLUDE a LoadImage node in the graph, even if the source model has its own image input. Always route through LoadImage — it's the only path the runner knows how to feed.
+
+**(b)** The manifest patch MUST target LoadImage's `image` widget (API: `widget_name: "image"`; graph: `widget_index: 0`). NEVER patch the compute node's image socket directly — sockets expect a decoded IMAGE tensor, and the runner only knows how to write a filename string into a widget.
+
+**(c)** API format: the compute node's `image` input is a link ref `["<loadimage_id>", 0]` — output 0 of LoadImage is IMAGE, output 1 is MASK.
+
+**(d)** Graph format: same wiring via top-level `links[]` as `[<link_id>, <loadimage_id>, 0, <compute_id>, <input_slot>, "IMAGE"]`.
+
+Wiring wrong → the compute node receives a filename string where a tensor is expected → runtime error `'str' object has no attribute 'shape'`.
+
+**Multi-LoadImage workflows (chained style refs, dual-image edits, etc.).** If a workflow has TWO or more LoadImage nodes that should both receive the viewport/custom image (e.g. Krea 2's chained `Krea2StyleReferenceNode` pair), declare a separate manifest input per LoadImage (`source_image`, `source_image_2`, ...), each with its own patch targeting that LoadImage's `image` widget. The runner reads `kwargs["image_path"]` for every `scene-image` input, so all of them get the SAME uploaded file — the UI still shows ONE slot to the user (that's fine; the whole point is one source fanning out).
+
+Only declare extra `scene-image` inputs if extra LoadImage nodes actually exist in the graph. If you need two DIFFERENT source images per run, that's not supported by the current single-`image_path` runner — you'd need to split into two runs or extend the runner.
+
+## Before diagnosing "node X has no scene-image patch" — READ THE META FIRST
+
+If a partner-API cloud run fails and you're about to claim "node N is a LoadImage with the literal `scene_snapshot.png` and no patch on it, so the validator rejects it":
+
+**STOP. Open the module's `.meta.json` and grep for the node id.** If the meta already declares an input with `patch.node_id == N` and `type: "scene-image"`, node N IS patched at runtime — the literal `scene_snapshot.png` you see in the .json is the placeholder, which the runner replaces. The failure is somewhere else (wiring topology, widget order, canonical-template divergence — see the HARD RULE at the top of this doc).
+
+Adding a "second patch" or "duplicate scene-image input" for a node that already has one is a fake fix. Re-read the meta before proposing it.
+
+**Support answers:**
+- "Why is my workflow using the scene instead of the image I picked?" → the cell.values for the image key isn't set (they may have clicked Generate before the upload completed, or the drop failed silently).
+- "How do I feed a reference image?" → click/drop onto the workflow cell's image slot.
 
 ## Cloud gotchas
 

@@ -432,8 +432,17 @@ async def upload_video_to_local(client: httpx.AsyncClient, video_path: Path) -> 
     return name
 
 
-async def submit_and_wait(client: httpx.AsyncClient, workflow: dict) -> tuple[str, dict]:
-    r = await client.post(f"{COMFY_URL}/prompt", json={"prompt": workflow}, timeout=60.0)
+async def submit_and_wait(client: httpx.AsyncClient, workflow: dict, extra_data: dict | None = None) -> tuple[str, dict]:
+    # Partner-API nodes (ByteDance Seedance, BFL, Gemini, etc.) read the caller's
+    # comfy.org credential out of the /prompt payload's `extra_data` bag — the
+    # same way `comfy_client.submit_prompt` in comfy-cli injects it. Without it
+    # they raise "Unauthorized: Please login first to use this node." even when
+    # the Desktop UI shows the user as signed in. Modules that use partner
+    # nodes locally should pass `extra_data={"api_key_comfy_org": ...}`.
+    body: dict = {"prompt": workflow}
+    if extra_data:
+        body["extra_data"] = extra_data
+    r = await client.post(f"{COMFY_URL}/prompt", json=body, timeout=60.0)
     if r.status_code != 200:
         raise RuntimeError(f"/prompt rejected (rc={r.status_code}): {r.text[:1000]}")
     pid = (r.json() or {}).get("prompt_id")

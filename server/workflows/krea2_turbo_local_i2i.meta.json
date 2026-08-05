@@ -1,0 +1,64 @@
+{
+  "id": "krea2_turbo_local_i2i",
+  "label": "Krea 2 Turbo \u00b7 I2I \u00b7 Local",
+  "kind": "image",
+  "output_ext": "png",
+  "runner": "local",
+  "inputs": [
+    {
+      "name": "source_image",
+      "label": "Source Image",
+      "type": "scene-image",
+      "required": true,
+      "patch": { "node_id": 50, "widget_name": "image" }
+    },
+    {
+      "name": "prompt",
+      "label": "Prompt",
+      "type": "textarea",
+      "placeholder": "Describe the image\u2026",
+      "required": true,
+      "patch": { "node_id": "30:19", "widget_name": "value" }
+    },
+    {
+      "name": "denoise",
+      "label": "Denoise",
+      "type": "number",
+      "default": 0.6,
+      "min": 0,
+      "max": 1,
+      "step": 0.05,
+      "patch": { "node_id": "30:3", "widget_name": "denoise" }
+    },
+    {
+      "name": "refine_prompt",
+      "label": "Refine Prompt (LLM)",
+      "type": "dropdown",
+      "options": ["on", "off"],
+      "default": "on",
+      "patch": {
+        "node_id": "30:24",
+        "widget_name": "value",
+        "value_map": { "on": true, "off": false }
+      }
+    },
+    {
+      "name": "enable_lora",
+      "label": "DarkBrush LoRA",
+      "type": "dropdown",
+      "options": ["off", "on"],
+      "default": "off",
+      "patch": {
+        "node_id": "30:23",
+        "widget_name": "value",
+        "value_map": { "on": true, "off": false }
+      }
+    },
+    {
+      "name": "seed",
+      "label": "Seed",
+      "type": "seed",
+      "patch": { "node_id": "30:3", "widget_name": "seed" }
+    }
+  ]
+}

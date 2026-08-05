@@ -1339,6 +1339,7 @@ def _module_dict(m) -> dict:
         "inputs": m.inputs,
         "output_ext": m.output_ext,
         "source": getattr(m, "source", "python"),
+        "runner": getattr(m, "runner", "local"),
         "util": bool(getattr(m, "util", False)),
         "icon": getattr(m, "icon", "") or "",
         "presets": list(getattr(m, "presets", []) or []),
@@ -3277,6 +3278,17 @@ async def run_module(module_id: str, request: Request):
                 if not candidate.exists():
                     raise HTTPException(400, f"source image not found: {image_url}")
                 inputs["image_path"] = candidate
+            elif image_url.startswith("/comfyblockout/image/"):
+                # Drag from the Blockout overlay (or any node-scoped snapshot).
+                # `/comfyblockout/image/<node_id>[?t=...]` — resolve via the
+                # same _image_store the GET endpoint uses. Lets a user drag the
+                # Blockout view thumbnail into a generator's Input image slot.
+                tail = image_url[len("/comfyblockout/image/"):].split("?", 1)[0]
+                nid = tail.strip("/") or "preview"
+                info = _image_store.get(nid)
+                if not info or not Path(info["path"]).exists():
+                    raise HTTPException(400, f"no snapshot for node {nid!r}")
+                inputs["image_path"] = Path(info["path"])
             elif image_url.startswith(("http://", "https://")):
                 suffix = Path(image_url.split("?", 1)[0]).suffix or ".png"
                 tmp = _tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
@@ -3732,7 +3744,17 @@ ASSISTANT_SYSTEM = (
     "unless you've read `_workflow_shared.py:run_cloud` and `_workflow_local.py:"
     "_apply_single_patch` and can point to the specific line that would cause it. "
     "There is one patch function per runner and both coerce numeric types "
-    "identically.\n\n"
+    "identically.\n"
+    "- Before claiming 'node X is a LoadImage with no scene-image patch, so cloud "
+    "rejects the literal scene_snapshot.png', OPEN the module's .meta.json and "
+    "grep for the node id. If the meta already declares an input with "
+    "patch.node_id == X and type: 'scene-image', that node IS patched at runtime "
+    "— scene_snapshot.png is the placeholder the runner replaces with the "
+    "uploaded viewport/custom image. Adding a duplicate input is a fake fix. "
+    "Every scene-image input reads the same kwargs['image_path'], so one "
+    "uploaded snapshot fans out to every LoadImage that has a patch — this is "
+    "how chained-style-ref workflows (e.g. Krea 2's dual Krea2StyleReferenceNode) "
+    "get both LoadImage nodes fed from one UI slot.\n\n"
 
     "OUTPUT STYLE: keep responses tight. Quote object names with brackets like "
     "[Cube.001] when referring to scene objects — the editor renders those tokens "
