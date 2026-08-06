@@ -2682,7 +2682,8 @@
 	/* Nested-ID selector so specificity (0,2,0,0) beats the general
 	   `#result-overlay img` rule (0,1,0,1) that would otherwise force
 	   display: block and show a blank/black underlay over Blockout mode. */
-	#result-overlay #result-overlay-blockout-img {
+	#result-overlay #result-overlay-blockout-img,
+	#result-overlay #result-overlay-blockout-vid {
 		position: absolute; inset: 0;
 		width: 100%; height: 100%;
 		/* cover (not contain) so aspect mismatches between the render (often
@@ -2694,7 +2695,14 @@
 		object-fit: cover; background: #000;
 		display: none; z-index: 0; pointer-events: none;
 	}
-	#result-overlay.compare-mode #result-overlay-blockout-img { display: block; }
+	#result-overlay.compare-mode #result-overlay-blockout-img,
+	#result-overlay.compare-mode #result-overlay-blockout-vid { display: block; }
+	/* Video underlay hidden by default even in compare-mode — only shown when
+	   .blockout-is-video is present on the overlay (set by syncCompareMode
+	   when lastResult.kind === "video"). Keeps still-mode workflows on the
+	   img element. */
+	#result-overlay.compare-mode:not(.blockout-is-video) #result-overlay-blockout-vid { display: none; }
+	#result-overlay.compare-mode.blockout-is-video #result-overlay-blockout-img { display: none; }
 	/* Overlay keeps its default overflow:hidden in compare mode too — that
 	   way when the tab is parked at the AR-frame edge (0% / 100%) only its
 	   inner half is visible, and dragging it inward reveals the full
@@ -4721,6 +4729,7 @@
 				     as the user drags the top layer's clip-path. Hidden by default;
 				     compare-mode class on #result-overlay activates the reveal. -->
 				<img id="result-overlay-blockout-img" alt="" aria-hidden="true">
+				<video id="result-overlay-blockout-vid" autoplay loop muted playsinline aria-hidden="true"></video>
 				<img id="result-overlay-img" alt="" draggable="true">
 				<video id="result-overlay-vid" loop muted playsinline draggable="true"></video>
 				<div class="compare-handle" id="result-compare-handle" aria-label="Drag to compare blockout vs render"></div>
@@ -23327,22 +23336,21 @@ function renderWorkflowCellProperties(cell) {
 				</div>
 			`;
 		} else if (spec.type === "scene-video") {
-			// Video source input — pulls from Scene Properties → Background → Video.
-			// No drop slot in the cell; the user configures the video once in
-			// the Scene pane and every scene-video workflow uses it. Cell just
-			// surfaces the current BG video's filename (or a "set one" nudge).
-			const has = !!(bgVideo && bgVideo.assetId);
-			const filename = has ? `${bgVideo.assetId}.${bgVideo.ext}` : "—";
-			const statusColor = has ? "rgba(102,204,255,0.85)" : "rgba(255,180,84,0.85)";
-			const statusText = has ? "Uses Scene → Background → Video" : "Set a background video in Scene Properties first";
+			// Video source input — same .gen-slot markup as scene-image (and the
+			// Seedance refVideo slot) so users get the familiar upload/drop
+			// affordance. Empty slot = server uses the transport recording
+			// (● button on the timeline), or the Scene bg video as a last
+			// fallback. Uploaded/dropped video replaces the recording.
+			const uploadIcon = `<svg class="gen-slot-upload" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2"/><path d="M8 9V2.5"/><path d="m5 5 3-3 3 3"/></svg>`;
 			inputsHtml += `
-				<div style="margin-top:6px;padding:8px 10px;border:1px solid rgba(255,255,255,0.06);border-radius:4px;background:rgba(0,0,0,0.15)">
-					<div style="display:flex;align-items:center;gap:8px">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:${statusColor};flex:0 0 auto"><rect x="3" y="5" width="15" height="14" rx="2"/><path d="M18 10l3-2v8l-3-2z"/></svg>
-						<div style="font-size:11px;color:rgba(255,255,255,0.85);font-weight:600">${label}</div>
+				<div style="margin-top:6px">
+					<div class="gen-slot wf-scene-video" data-input="${spec.name}" data-accepts="video" title="Drop a video here, click to upload, or leave empty to use your recorded blockout (● button on the transport).">
+						<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
+						<div class="gen-slot-label">${label}</div>
+						<button type="button" class="gen-slot-clear" hidden>×</button>
+						<input type="file" class="gen-slot-file" accept="video/*" hidden>
 					</div>
-					<div class="hint" style="margin-top:4px;font-size:10px;color:${statusColor}">${statusText}</div>
-					${has ? `<div class="hint" style="margin-top:2px;font-size:9px;color:rgba(255,255,255,0.35);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${filename}</div>` : ""}
+					<div class="hint" style="margin-top:4px;font-size:9px;color:rgba(255,255,255,0.4)">Empty = uses recorded blockout (● in transport)</div>
 				</div>
 			`;
 		} else {
@@ -23669,6 +23677,107 @@ function renderWorkflowCellProperties(cell) {
 			slot.classList.add("just-dropped");
 			setTimeout(() => slot.classList.remove("just-dropped"), 700);
 			saveSceneDebounced?.();
+		});
+	}
+	// Scene-video slots — same UX as scene-image (click/drop/×). uploadVideo()
+	// writes to _video_store[NODE_ID], which is exactly what the runner reads
+	// for a scene-video input. So an uploaded/dropped video effectively takes
+	// the place of the transport recording for this run (and any subsequent
+	// scene-video workflow in this editor session).
+	for (const slot of pane.querySelectorAll(".wf-scene-video")) {
+		const key = slot.dataset.input;
+		const thumb = slot.querySelector(".gen-slot-thumb");
+		const labelEl = slot.querySelector(".gen-slot-label");
+		const clearBtn = slot.querySelector(".gen-slot-clear");
+		const fileInput = slot.querySelector(".gen-slot-file");
+		const paint = () => {
+			const asset = cell.values[key];
+			if (asset && typeof asset === "object" && asset.filename) {
+				thumb.classList.add("has-image");
+				slot.classList.add("filled");
+				if (labelEl) labelEl.textContent = asset.filename;
+				if (clearBtn) clearBtn.hidden = false;
+			} else {
+				thumb.classList.remove("has-image");
+				slot.classList.remove("filled");
+				if (clearBtn) clearBtn.hidden = true;
+			}
+		};
+		paint();
+		slot.addEventListener("click", (e) => {
+			if (e.target.closest(".gen-slot-clear")) return;
+			if (cell.values[key]) return;
+			fileInput?.click();
+		});
+		fileInput?.addEventListener("change", async () => {
+			const f = fileInput.files?.[0];
+			fileInput.value = "";
+			if (!f) return;
+			try {
+				slot.classList.add("uploading");
+				const j = await uploadVideo(f);
+				cell.values[key] = {
+					url: j?.url || "",
+					filename: j?.filename || f.name,
+					kind: "video",
+				};
+				paint();
+				saveSceneDebounced?.();
+			} catch (err) {
+				console.error("[wf-scene-video] upload failed", err);
+				window.showAlert?.("Upload failed", err.message || String(err));
+			} finally {
+				slot.classList.remove("uploading");
+			}
+		});
+		clearBtn?.addEventListener("click", (e) => {
+			e.stopPropagation();
+			cell.values[key] = null;
+			paint();
+			saveSceneDebounced?.();
+		});
+		slot.addEventListener("dragover", e => {
+			if (!e.dataTransfer?.types?.includes("application/x-cb-asset")) return;
+			e.preventDefault();
+			e.dataTransfer.dropEffect = "copy";
+			slot.classList.add("drop-target");
+		});
+		slot.addEventListener("dragleave", () => slot.classList.remove("drop-target"));
+		slot.addEventListener("drop", async e => {
+			slot.classList.remove("drop-target");
+			const raw = e.dataTransfer?.getData("application/x-cb-asset");
+			if (!raw) return;
+			e.preventDefault();
+			let asset;
+			try { asset = JSON.parse(raw); } catch { return; }
+			if (asset.kind !== "video") {
+				window.showAlert?.("Wrong kind", "This slot only accepts videos.");
+				return;
+			}
+			// Fetch the dropped asset and re-upload so it lands in
+			// _video_store[NODE_ID] (the source of truth for scene-video runs).
+			// Bare cell.values[key] = { url } wouldn't reach the runner.
+			try {
+				slot.classList.add("uploading");
+				const resp = await fetch(asset.url);
+				if (!resp.ok) throw new Error(`fetch ${resp.status}`);
+				const blob = await resp.blob();
+				const j = await uploadVideo(blob);
+				cell.values[key] = {
+					url: j?.url || asset.url,
+					filename: j?.filename || asset.filename,
+					kind: "video",
+				};
+				paint();
+				slot.classList.add("just-dropped");
+				setTimeout(() => slot.classList.remove("just-dropped"), 700);
+				saveSceneDebounced?.();
+			} catch (err) {
+				console.error("[wf-scene-video] drop-upload failed", err);
+				window.showAlert?.("Drop failed", err.message || String(err));
+			} finally {
+				slot.classList.remove("uploading");
+			}
 		});
 	}
 	for (const btn of pane.querySelectorAll(".wf-seed-mode")) {
@@ -30082,6 +30191,7 @@ function showRenderResult() {
 // CSS wires the clip + handle location from the same source of truth.
 const _compareHandle = document.getElementById("result-compare-handle");
 const _blockoutUnderlay = document.getElementById("result-overlay-blockout-img");
+const _blockoutUnderlayVid = document.getElementById("result-overlay-blockout-vid");
 // _compareTarget is where the pointer says the handle should be; _comparePct
 // is the currently-rendered position. A RAF loop eases _comparePct toward the
 // target so quick pointer flicks glide instead of snapping. Both default to
@@ -30121,20 +30231,38 @@ function syncCompareMode() {
 	// open; fall back to the auto-composited 3D scene snapshot.
 	const mpEl = document.getElementById("mediapipe-overlay");
 	const mpOn = mpEl && !mpEl.hidden;
-	const blockoutSrc = (mpOn && _mp.lastStill?.url)
+	const stillSrc = (mpOn && _mp.lastStill?.url)
 		|| `/comfyblockout/image/${encodeURIComponent(NODE_ID)}?t=${Date.now()}`;
+	// If the current render is a video and a recorded blockout exists for this
+	// node, the "before" wipe should show the SOURCE video (what the anim
+	// workflow actually consumed frame-by-frame), not a stale still snapshot.
+	// Prefer video for compare when both sides are video — for still-render on
+	// top of a video recording we still fall back to the still snapshot since
+	// mixing kinds looks weird.
+	const useVideoUnderlay = lastResult?.kind === "video";
+	const videoSrc = useVideoUnderlay
+		? `/comfyblockout/video/${encodeURIComponent(NODE_ID)}?t=${Date.now()}`
+		: null;
 	let underlaySrc = null;
 	if (resultMode === "render" && lastResult) {
-		underlaySrc = lastPreprocResult ? lastPreprocResult.url : blockoutSrc;
+		underlaySrc = lastPreprocResult ? lastPreprocResult.url : (videoSrc || stillSrc);
 	} else if (resultMode === "preproc" && lastPreprocResult) {
-		underlaySrc = blockoutSrc;
+		underlaySrc = stillSrc;
 	}
 	const active = !!underlaySrc;
 	resultOverlay.classList.toggle("compare-mode", active);
+	resultOverlay.classList.toggle("blockout-is-video", active && underlaySrc === videoSrc);
 	if (active) {
-		if (_blockoutUnderlay.dataset.src !== underlaySrc) {
-			_blockoutUnderlay.dataset.src = underlaySrc;
-			_blockoutUnderlay.src = underlaySrc;
+		if (underlaySrc === videoSrc) {
+			if (_blockoutUnderlayVid && _blockoutUnderlayVid.dataset.src !== underlaySrc) {
+				_blockoutUnderlayVid.dataset.src = underlaySrc;
+				_blockoutUnderlayVid.src = underlaySrc;
+			}
+		} else {
+			if (_blockoutUnderlay.dataset.src !== underlaySrc) {
+				_blockoutUnderlay.dataset.src = underlaySrc;
+				_blockoutUnderlay.src = underlaySrc;
+			}
 		}
 		resultOverlay.style.setProperty("--compare-x", `${_comparePct}%`);
 	} else {

@@ -1,0 +1,89 @@
+{
+  "id": "krea2_turbo_local_anim",
+  "label": "Krea 2 Turbo \u00b7 Anim \u00b7 Local",
+  "kind": "video",
+  "output_ext": "mp4",
+  "runner": "local",
+  "inputs": [
+    {
+      "name": "source_video",
+      "label": "Blockout Video",
+      "type": "scene-video",
+      "required": true,
+      "patch": { "node_id": 50, "widget_name": "video" }
+    },
+    {
+      "name": "prompt",
+      "label": "Prompt",
+      "type": "textarea",
+      "placeholder": "Describe the animated look\u2026",
+      "required": true,
+      "patch": { "node_id": "30:19", "widget_name": "value" }
+    },
+    {
+      "name": "denoise",
+      "label": "Denoise",
+      "type": "number",
+      "default": 0.45,
+      "min": 0,
+      "max": 1,
+      "step": 0.05,
+      "patch": { "node_id": "30:3", "widget_name": "denoise" }
+    },
+    {
+      "name": "fps",
+      "label": "FPS",
+      "type": "number",
+      "default": 12,
+      "min": 1,
+      "max": 30,
+      "step": 1,
+      "patch": [
+        { "node_id": 50, "widget_name": "force_rate" },
+        { "node_id": 29, "widget_name": "frame_rate" }
+      ]
+    },
+    {
+      "name": "steps",
+      "label": "Steps",
+      "type": "number",
+      "default": 8,
+      "min": 1,
+      "max": 50,
+      "step": 1,
+      "patch": { "node_id": "30:3", "widget_name": "steps" }
+    },
+    {
+      "name": "cfg",
+      "label": "CFG",
+      "type": "number",
+      "default": 1,
+      "min": 0,
+      "max": 20,
+      "step": 0.5,
+      "patch": { "node_id": "30:3", "widget_name": "cfg" }
+    },
+    {
+      "name": "sampler",
+      "label": "Sampler",
+      "type": "dropdown",
+      "options_source": { "class_type": "KSampler", "widget": "sampler_name" },
+      "default": "euler",
+      "patch": { "node_id": "30:3", "widget_name": "sampler_name" }
+    },
+    {
+      "name": "scheduler",
+      "label": "Scheduler",
+      "type": "dropdown",
+      "options_source": { "class_type": "KSampler", "widget": "scheduler" },
+      "default": "simple",
+      "patch": { "node_id": "30:3", "widget_name": "scheduler" }
+    },
+    {
+      "name": "seed",
+      "label": "Seed",
+      "type": "seed",
+      "patch": { "node_id": "30:3", "widget_name": "seed" }
+    }
+  ]
+}

@@ -461,9 +461,78 @@ async def submit_and_wait(client: httpx.AsyncClient, workflow: dict, extra_data:
                 if status.get("completed"):
                     if status.get("status_str") == "error":
                         raise RuntimeError(f"workflow errored: {json.dumps(status)[:800]}")
-                    return pid, (entry.get("outputs") or {})
+                    outputs = entry.get("outputs") or {}
+                    # VHS meta-batch (BatchManager) marks its downstream outputs
+                    # with `unfinished_batch: [true]` until the LAST sub-execution
+                    # emits the accumulated result. Each sub-execution runs under a
+                    # NEW prompt_id auto-queued by VHS. So we can't just return here
+                    # — we need to wait for the whole meta-batch cascade to drain
+                    # (queue empty) and then look for a fresher /history entry
+                    # that carries the real output.
+                    if _has_unfinished_batch(outputs):
+                        return await _await_meta_batch_completion(client, pid, deadline)
+                    return pid, outputs
         await asyncio.sleep(POLL_INTERVAL)
     raise RuntimeError(f"timed out after {POLL_TIMEOUT}s waiting for prompt {pid}")
+
+
+def _has_unfinished_batch(outputs: dict) -> bool:
+    for node_outs in (outputs or {}).values():
+        if isinstance(node_outs, dict) and node_outs.get("unfinished_batch"):
+            return True
+    return False
+
+
+async def _await_meta_batch_completion(client: httpx.AsyncClient, initial_pid: str, deadline: float) -> tuple[str, dict]:
+    """Wait for a VHS meta-batch cascade to fully drain, then return the newest
+    /history entry that has real outputs (not `unfinished_batch: true`). The
+    initial pid we submitted is one of many auto-queued sub-executions; the
+    final mp4 lives on whichever prompt is last."""
+    loop = asyncio.get_event_loop()
+    empty_streak = 0
+    while loop.time() < deadline:
+        try:
+            q = await client.get(f"{COMFY_URL}/queue", timeout=15.0)
+            if q.status_code == 200:
+                qj = q.json() or {}
+                pending = len(qj.get("queue_pending") or [])
+                running = len(qj.get("queue_running") or [])
+                if pending == 0 and running == 0:
+                    empty_streak += 1
+                else:
+                    empty_streak = 0
+                # Two consecutive empty polls = cascade truly done (avoids
+                # a race where a sub-exec finishes and the next hasn't been
+                # queued yet).
+                if empty_streak >= 2:
+                    break
+        except Exception:
+            pass
+        await asyncio.sleep(POLL_INTERVAL)
+    else:
+        raise RuntimeError("timed out waiting for VHS meta-batch cascade")
+
+    # Cascade drained — walk /history for the newest entry with real outputs.
+    h = await client.get(f"{COMFY_URL}/history", timeout=15.0)
+    if h.status_code != 200:
+        raise RuntimeError(f"/history fetch failed: {h.status_code}")
+    j = h.json() or {}
+    # /history returns a dict keyed by prompt_id — dict order is insertion
+    # order (newest last in Python 3.7+, but ComfyUI may not guarantee that).
+    # Sort by status.completed time if present, else last-key wins.
+    for pid, entry in reversed(list(j.items())):
+        outputs = entry.get("outputs") or {}
+        if outputs and not _has_unfinished_batch(outputs):
+            # Extra sanity: at least one node emits a file-shaped item.
+            if any(
+                isinstance(v, dict) and any(
+                    isinstance(items, list) and any(isinstance(it, dict) and it.get("filename") for it in items)
+                    for items in v.values()
+                )
+                for v in outputs.values()
+            ):
+                return pid, outputs
+    raise RuntimeError(f"meta-batch drained but no completed prompt has real outputs; initial pid was {initial_pid}")
 
 
 async def download_output(client: httpx.AsyncClient, item: dict, dst: Path) -> None:

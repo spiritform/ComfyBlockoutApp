@@ -212,3 +212,152 @@ Options:
 - File the bug + wait for a fix
 - Try an alternate cloud API node for the same task if one exists (`search_nodes` MCP tool)
 - Preprocess the image differently (some nodes want it fed via a PreviewImage or explicit VAEDecode step)
+
+## Local runner diagnostics
+
+For any local workflow question, the ComfyUI Desktop instance at `http://127.0.0.1:8188` is authoritative. Prefer it over guessing node names or widget schemas.
+
+### Inspect what classes exist
+
+```bash
+curl -s http://127.0.0.1:8188/object_info | python -c "import json,sys; d=json.load(sys.stdin); print('\n'.join(k for k in d if 'YourSearch' in k))"
+```
+
+Common gotchas:
+- Node display names (`Load Video FFmpeg (Upload)`) do NOT necessarily match class names (`VHS_LoadVideoFFmpeg`). Don't guess — query.
+- VHS ships multiple LoadVideo variants (`VHS_LoadVideo`, `VHS_LoadVideoPath`, `VHS_LoadVideoFFmpeg`, `VHS_LoadVideoFFmpegPath`). Upload variants take a filename enum widget; Path variants take an absolute filesystem path. Our runner uploads scene-video to Comfy's `input/` dir → use the Upload variant.
+
+### Inspect a node's widget schema
+
+```bash
+curl -s http://127.0.0.1:8188/object_info/CLASS_NAME | python -c "import json,sys; d=json.load(sys.stdin); ins=d.get('CLASS_NAME',{}).get('input',{}); print('REQUIRED:', list(ins.get('required',{}).keys())); print('OPTIONAL:', list(ins.get('optional',{}).keys()))"
+```
+
+Every field named under `required` MUST appear in the workflow.json's `inputs` — missing any triggers `Required input is missing: <name>` at validation time. Optional inputs (`meta_batch`, `vae`, `format`, etc.) can be omitted.
+
+### Read the ComfyUI terminal
+
+When a local run fails, the ComfyUI Desktop LOGS panel has the real traceback. Ask for it — the error dialog in the editor only shows the runner's polling error, which is usually a downstream symptom, not the root cause.
+
+Common patterns seen from the terminal:
+- `Value not in list: lora_name: '<file>' not in (list of length N)` — model file missing from `models/loras/`. ComfyUI validates every node upfront including branches a switch would skip; there's no lazy validation. Downloading the model or renaming to match the workflow.json is the only fix. See "eager validation" below.
+- `Required input is missing: <name>` — the node has a new required widget your workflow doesn't set. Query `/object_info/<class>` and add the field with a sensible default.
+- `Sizes of tensors must match except in dimension 1. Expected size 1 but got size N` — batch/conditioning mismatch. See "video-output workflows" below.
+
+### Eager validation caveat
+
+ComfyUI validates ALL nodes at prompt submission time, including branches that a runtime switch (`ComfySwitchNode`, `Impact Switch`, etc.) would prune. So a LoraLoader referencing a missing file kills the whole prompt even when its switch is off. This is why UI toggles cannot gate model-file requirements without a runner-side node-bypass helper.
+
+## Dynamic widget dropdowns (`options_source`)
+
+For any dropdown whose valid options depend on the live ComfyUI catalog (samplers, schedulers, model names, checkpoint files, LoRA files, etc.), don't hardcode them. Use `options_source`:
+
+```json
+{
+  "name": "sampler",
+  "type": "dropdown",
+  "options_source": { "class_type": "KSampler", "widget": "sampler_name" },
+  "default": "euler",
+  "patch": { "node_id": "30:3", "widget_name": "sampler_name" }
+}
+```
+
+The frontend fetches the current enum list from ComfyUI's `/object_info/<class_type>` at render time and populates the menu. Prevents stale hardcoded lists that lose new samplers as ComfyUI adds them. Reference implementations: `flux_dev_i2i_lora_local.meta.json`, `sd15_lora_t2i.meta.json`, `krea2_turbo_local_anim.meta.json` (sampler + scheduler).
+
+## Video-output workflows (batch cascade)
+
+Workflows that emit a video (kind: "video", output_ext: "mp4") need one of two patterns:
+
+### Pattern A — Native batch model (WAN, AnimateDiff, etc.)
+
+The UNET handles batched conditioning natively. Standard graph:
+`LoadVideo → VAEEncode → KSampler (batch-native) → VAEDecode → SaveVideo / VHS_VideoCombine`
+
+Conditioning at batch=1 broadcasts to the image batch. No special handling.
+
+### Pattern B — Non-batch UNET (Krea 2, most image models) — REQUIRES meta_batch
+
+Krea 2's forward pass does `torch.cat((context, img), dim=1)` which hard-fails when `context.shape[0] != img.shape[0]`. Feeding a 12-frame image batch through a KSampler with a 1-sample conditioning throws `Sizes of tensors must match except in dimension 1. Expected size 1 but got size 12`.
+
+Fix: wire `VHS_BatchManager` (from VideoHelperSuite) with `frames_per_batch: 1`. Each sub-execution processes exactly one frame, so conditioning-batch (1) matches image-batch (1) and Krea 2's cat succeeds. VHS auto-requeues the workflow N times (once per frame) and accumulates outputs into a single final mp4.
+
+Wiring:
+- Add a `VHS_BatchManager` node (id "52" by convention in existing workflows) with `frames_per_batch: 1`.
+- Add `"meta_batch": ["52", 0]` to BOTH `VHS_LoadVideoFFmpeg.inputs` AND `VHS_VideoCombine.inputs`. VHS uses the manager as the coordination handle across sub-executions.
+- Everything else in the graph stays as if it were a still-image workflow.
+
+Reference: `server/workflows/krea2_turbo_local_anim.json`.
+
+### Runner cascade handling — DO NOT "FIX" THIS
+
+`server/modules/_workflow_local.py:submit_and_wait` calls `_await_meta_batch_completion` when it detects `unfinished_batch: [true]` in any node's history entry. That helper:
+
+1. Polls `/queue` until both `queue_pending` and `queue_running` are empty for 2 consecutive checks (avoids the race where one sub-execution finishes and the next hasn't been queued yet).
+2. Fetches `/history` and walks entries in reverse to find the newest one with real file outputs.
+
+If the runner returns early with `unfinished_batch: true` as the "final" output, the error is `no output matching ['mp4'] in /history. Outputs keys: ['30:20', '29']` — the mp4 hasn't been written yet because the cascade isn't done. Don't rewrite the polling loop; if this signature appears, the BatchManager wiring is likely wrong or the ComfyUI queue isn't draining.
+
+## Scene-video input specifics
+
+`scene-video` input specs auto-populate `kwargs["video_path"]` on the backend from `_video_store[node_id]` (transport recording) or the scene bg video as fallback. The local runner then calls `upload_video_to_local` and passes the ComfyUI-side filename to whichever `widget_name` the patch targets. Wire scene-video patches to VHS's `video` widget (the upload-variant enum) — that's what `apply_manifest_inputs` writes to. Never target a Path-variant node; the runner has no local-path passthrough.
+
+Frontend rendering: the scene-video slot uses the same `.gen-slot` markup as scene-image (upload / drop / clear). Wiring is in `renderWorkflowCellProperties`'s `.wf-scene-video` loop. Uploaded videos land in `_video_store[NODE_ID]` (via `/comfyblockout/save_video`), replacing whatever recording was there. This is intentional and expected — the scene-video slot is a "video reference" whether it came from the transport ● button or a drop.
+
+## Properties-pane UI patterns
+
+The workflow cell's LEFT sidebar row is a compact tile (icon + label + run/× buttons); every real input control renders in the right-hand PROPERTIES pane via `renderWorkflowCellProperties`. It reads `manifest.inputs` in order and dispatches per `spec.type`. Match these types + their patch shapes and the pane renders correctly with zero extra frontend code:
+
+- **`textarea`** — big multiline prompt input. Placeholder from `spec.placeholder`. Use for user prompts, negative prompts, any free-form text.
+- **`text`** — single-line string input.
+- **`number`** — `.wf-drag` chip with click-and-drag numeric scrubbing. Fields: `default`, `min`, `max`, `step`. Coerces to int (whole numbers) or float on submit. Use for cfg, denoise, strength, steps, fps, any per-run knob that changes value.
+- **`seed`** — `.wf-drag` chip PLUS a 🎲/🔒 mode button. Random by default (a fresh seed per run). User clicks 🔒 to lock the current seed so re-runs are deterministic. Coerces to int. The mode is persisted per-cell as `<seedname>_mode`.
+- **`dropdown`** — combo picker. Options from either `spec.options` (baked list) OR `spec.options_source: { class_type, widget }` (live-fetched from ComfyUI's `/object_info` at render time — preferred for sampler/scheduler/model-file dropdowns).
+- **`scene-image`** — `.gen-slot` upload widget. Empty = runner uses the current viewport snapshot; user click / drop replaces with a specific image. The runner uploads the image to ComfyUI's `input/` dir and patches the returned filename into `widget_name` (typically `"image"` on a LoadImage node).
+- **`scene-video`** — same `.gen-slot` UX, videos only. Empty = runner uses the transport recording (● button) or scene bg video as fallback. Drop / upload replaces the recording for this session.
+
+Every input can carry a `label` (falls back to the humanized `name`). Order in `manifest.inputs` is the render order in the pane.
+
+## Blockout image / video: the full pipeline
+
+The user-facing "blockout" is the viewport render — the 3D scene the user is composing. It's the primary reference every workflow sees. Two flavors that share the same mental model:
+
+### Image blockout (scene-image path)
+
+1. User opens the Blockout tab OR clicks Generate on any workflow cell with a `scene-image` input.
+2. `autoSnapshot` in `web/editor.html` renders one frame of the scene through the same pipeline the animate loop uses (renderCam, full lighting, SMAA — byte-identical to a live viewport frame), captures the canvas as PNG, and POSTs it to `/comfyblockout/save_image?node_id=<NODE_ID>`.
+3. Server stashes it in `_image_store[NODE_ID]` (single-slot per node).
+4. When any workflow with a `scene-image` input runs, main.py resolves `image_path = _image_store[NODE_ID]["path"]` and passes it to the module runner.
+5. Cloud runner: `upload_image_to_cloud` → filename patched into LoadImage. Local runner: `upload_image_to_local` → same.
+6. If the user drops / uploads a custom image on the workflow cell's slot, the frontend POSTs it to the same `/comfyblockout/save_image` endpoint — overwriting the auto-snapshot. So the "custom image" path is just "different bytes in the same slot."
+
+Race gotcha (documented in `feedback_image_store_race`): opening the Blockout tab triggers an autoSnapshot that CLOBBERS a user's uploaded image. The frontend re-uploads the cached user blob just before running to prevent this — don't remove that re-upload without understanding the race.
+
+### Video blockout (scene-video path)
+
+1. User hits ● on the transport (bottom of the viewport). Recording captures the canvas via `MediaRecorder` at ~30fps. On stop, the blob is POSTed to `/comfyblockout/save_video` and stored in `_video_store[NODE_ID]`.
+2. When a workflow with a `scene-video` input runs, main.py resolves `video_path = _video_store[NODE_ID]["path"]`.
+3. Local runner uploads to ComfyUI's `input/` dir via `upload_video_to_local` and patches the returned filename into the LoadVideo widget (VHS_LoadVideoFFmpeg or similar).
+4. Same custom-drop behavior as scene-image: dropping a video on the cell's slot POSTs to `/comfyblockout/save_video`, replacing the recording.
+
+Both paths preserve one universal invariant: **the workflow module never knows whether its input is a viewport auto-capture, a transport recording, or a user upload.** The runner exposes a single `image_path` / `video_path` kwarg. Everything upstream is just "where did those bytes come from."
+
+## Output display
+
+The workflow returns `{path, filename, ext}` from `run()`. Main.py serves the file at `/output/<subfolder>/<filename>` (subfolder partitioned by extension via `_EXT_KIND`: images/videos/3d/audio). Frontend picks up the URL and drives three surfaces:
+
+1. **Result overlay** (`#result-overlay` — the AR rectangle over the viewport). `applyResultMode("render")` sets `resultOverlayImg.src` (still) or `resultOverlayVid.src` (video, autoplay/loop/muted) based on the result's file extension. `lastResult.kind` is `"video"` if `ext in {mp4, webm, mov}`, else `"image"`.
+2. **Compare slider** (drag-to-wipe handle between blockout and render). `syncCompareMode` picks the underlay:
+   - Video-kind render → shows the recorded blockout VIDEO (`#result-overlay-blockout-vid`, synced via `.blockout-is-video` class).
+   - Image-kind render → shows the still blockout snapshot (`#result-overlay-blockout-img`).
+   - The `<video>` element for blockout is auto-play/loop/muted so the underlay plays while the user drags.
+3. **Output pane** (`.assets-tile` list on the right, RECENT / IMAGES / VIDEOS / 3D / BLOCKOUT tabs). Files land in `data/output/` on save, glob'd by extension. New outputs written by module runs auto-hydrate the pane on next open.
+
+For video-mode workflows, the result-overlay's × clear button (`#result-clear-overlay`) is wired to `/comfyblockout/video/<node_id>` DELETE — clears the recorded video so the Blockout tab falls back to the still snapshot.
+
+## Full working example: `krea2_turbo_local_anim`
+
+Everything above coheres into a real workflow. Study these files as the reference implementation for a video-in/video-out local module:
+
+- `server/workflows/krea2_turbo_local_anim.json` — the graph. `VHS_LoadVideoFFmpeg` (upload variant) → `VAEEncode` → `KSampler` → `VAEDecode` → `VHS_VideoCombine`. `VHS_BatchManager` wired to both LoadVideo and VideoCombine's `meta_batch` inputs for per-frame processing. Prompt refinement (`TextGenerate` + `PreviewAny`) preserved from the still i2i template.
+- `server/workflows/krea2_turbo_local_anim.meta.json` — the manifest. Demonstrates: scene-video input, multi-target patch (`fps` mirrors to both LoadVideo.force_rate and VideoCombine.frame_rate via `patch: [...]`), `options_source` dropdowns for sampler/scheduler, `type: "seed"` seed, `type: "number"` denoise/cfg/steps.
+- `server/modules/_workflow_local.py:submit_and_wait` — the runner path with meta-batch cascade awareness.

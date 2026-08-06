@@ -1,0 +1,148 @@
+{
+  "1": {
+    "class_type": "VAELoader",
+    "inputs": { "vae_name": "qwen_image_vae.safetensors" }
+  },
+  "2": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "krea2_turbo_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "3": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+      "type": "krea2",
+      "device": "default"
+    }
+  },
+  "7": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 42,
+      "steps": 10,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 0.6,
+      "model": ["32", 0],
+      "positive": ["21", 0],
+      "negative": ["24", 0],
+      "latent_image": ["51", 0]
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": { "samples": ["7", 0], "vae": ["1", 0] }
+  },
+  "21": {
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "inputs": {
+      "conditioning": ["34", 0],
+      "reference_latents_method": "index_timestep_zero"
+    }
+  },
+  "24": {
+    "class_type": "FluxKontextMultiReferenceLatentMethod",
+    "inputs": {
+      "conditioning": ["35", 0],
+      "reference_latents_method": "index_timestep_zero"
+    }
+  },
+  "28": {
+    "class_type": "ImageScaleToTotalPixels",
+    "inputs": {
+      "image": ["38", 0],
+      "upscale_method": "lanczos",
+      "megapixels": 1.0,
+      "resolution_steps": 1
+    }
+  },
+  "29": {
+    "class_type": "VHS_VideoCombine",
+    "inputs": {
+      "frame_rate": 12,
+      "loop_count": 0,
+      "filename_prefix": "Krea2_controlnet_anim",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 18,
+      "save_metadata": false,
+      "pingpong": false,
+      "save_output": true,
+      "images": ["8", 0],
+      "meta_batch": ["52", 0]
+    }
+  },
+  "32": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": ["33", 0],
+      "lora_name": "krea2_turbo_openpose_controlnet.safetensors",
+      "strength_model": 1
+    }
+  },
+  "33": {
+    "class_type": "Krea2OstrisEditModelPatch",
+    "inputs": { "model": ["2", 0], "kv_cache": true }
+  },
+  "34": {
+    "class_type": "TextEncodeKrea2OstrisEdit",
+    "inputs": {
+      "clip": ["3", 0],
+      "prompt": "a beautiful scene",
+      "vae": ["1", 0],
+      "image1": ["28", 0]
+    }
+  },
+  "35": {
+    "class_type": "TextEncodeKrea2OstrisEdit",
+    "inputs": {
+      "clip": ["3", 0],
+      "prompt": "",
+      "vae": ["1", 0],
+      "image1": ["28", 0]
+    }
+  },
+  "38": {
+    "class_type": "AIO_Preprocessor",
+    "inputs": {
+      "image": ["40", 0],
+      "preprocessor": "DWPreprocessor",
+      "resolution": 512
+    }
+  },
+  "40": {
+    "class_type": "ImageScaleToTotalPixels",
+    "inputs": {
+      "image": ["50", 0],
+      "upscale_method": "lanczos",
+      "megapixels": 1.0,
+      "resolution_steps": 1
+    }
+  },
+  "51": {
+    "class_type": "VAEEncode",
+    "inputs": { "pixels": ["40", 0], "vae": ["1", 0] }
+  },
+  "50": {
+    "class_type": "VHS_LoadVideoFFmpeg",
+    "inputs": {
+      "video": "scene_snapshot.mp4",
+      "force_rate": 12,
+      "custom_width": 0,
+      "custom_height": 0,
+      "frame_load_cap": 0,
+      "start_time": 0,
+      "skip_first_frames": 0,
+      "select_every_nth": 1,
+      "meta_batch": ["52", 0]
+    }
+  },
+  "52": {
+    "class_type": "VHS_BatchManager",
+    "inputs": { "frames_per_batch": 1 }
+  }
+}

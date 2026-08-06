@@ -1,0 +1,106 @@
+{
+  "id": "krea2_controlnet_local_i2i",
+  "label": "Krea 2 ControlNet \u00b7 Local",
+  "kind": "image",
+  "output_ext": "png",
+  "runner": "local",
+  "inputs": [
+    {
+      "name": "source_image",
+      "label": "Viewport / Source Image",
+      "type": "scene-image",
+      "required": true,
+      "patch": { "node_id": 25, "widget_name": "image" }
+    },
+    {
+      "name": "preprocessor",
+      "label": "Preprocessor",
+      "type": "dropdown",
+      "options_source": { "class_type": "AIO_Preprocessor", "widget": "preprocessor" },
+      "default": "DWPreprocessor",
+      "patch": { "node_id": 38, "widget_name": "preprocessor" }
+    },
+    {
+      "name": "controlnet_strength",
+      "label": "ControlNet",
+      "type": "number",
+      "default": 1.0,
+      "min": 0,
+      "max": 1.5,
+      "step": 0.05,
+      "patch": { "node_id": 32, "widget_name": "strength_model" }
+    },
+    {
+      "name": "prompt",
+      "label": "Prompt",
+      "type": "textarea",
+      "placeholder": "Describe the scene\u2026 (structure comes from the preprocessed source)",
+      "required": true,
+      "patch": { "node_id": 34, "widget_name": "prompt" }
+    },
+    {
+      "name": "sampler",
+      "label": "Sampler",
+      "type": "dropdown",
+      "options_source": { "class_type": "KSampler", "widget": "sampler_name" },
+      "default": "euler",
+      "patch": { "node_id": 7, "widget_name": "sampler_name" }
+    },
+    {
+      "name": "scheduler",
+      "label": "Scheduler",
+      "type": "dropdown",
+      "options_source": { "class_type": "KSampler", "widget": "scheduler" },
+      "default": "simple",
+      "patch": { "node_id": 7, "widget_name": "scheduler" }
+    },
+    {
+      "name": "steps",
+      "label": "Steps",
+      "type": "number",
+      "default": 10,
+      "min": 1,
+      "max": 50,
+      "step": 1,
+      "patch": { "node_id": 7, "widget_name": "steps" }
+    },
+    {
+      "name": "cfg",
+      "label": "CFG",
+      "type": "number",
+      "default": 1,
+      "min": 0,
+      "max": 20,
+      "step": 0.5,
+      "patch": { "node_id": 7, "widget_name": "cfg" }
+    },
+    {
+      "name": "denoise",
+      "label": "Denoise",
+      "type": "number",
+      "default": 0.6,
+      "min": 0,
+      "max": 1,
+      "step": 0.05,
+      "patch": { "node_id": 7, "widget_name": "denoise" }
+    },
+    {
+      "name": "seed",
+      "label": "Seed",
+      "type": "seed",
+      "patch": { "node_id": 7, "widget_name": "seed" }
+    }
+  ],
+  "intermediates": [
+    {
+      "name": "preproc",
+      "label": "Preproc",
+      "source_node_id": 38,
+      "source_slot": 0,
+      "filename_prefix": "krea2_cn_preproc",
+      "skip_when": [
+        {"input": "preprocessor", "equals": "none"}
+      ]
+    }
+  ]
+}
