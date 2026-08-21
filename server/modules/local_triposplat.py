@@ -38,10 +38,24 @@ COMFY_URL = "http://127.0.0.1:8188"
 WORKFLOW_NAME = "3d_triposplat.json"
 LOAD_IMAGE_NODE = "99"
 SPLAT_OUTPUT_NODE = "92"
+KSAMPLER_NODE = "102"
+DECODE_NODE = "108"
 OUTPUT_TITLE_MARKER = "BLOCKOUT_OUTPUT"
 POLL_INTERVAL = 2.0
 POLL_TIMEOUT = 1500
 SPLAT_EXTS = (".ply", ".spz", ".splat")
+
+# Human-readable splat-count labels → num_gaussians the workflow's decoder
+# needs. 262144 (256K) is the workflow's shipped default. Higher counts give
+# richer surface detail at the cost of file size + decode time; the top
+# option cap is 524288 (512K) — anything above starts pushing decode into
+# VRAM-spike territory on 12GB cards.
+_SPLAT_COUNT_MAP = {
+    "64K": 65536,
+    "128K": 131072,
+    "256K": 262144,
+    "512K": 524288,
+}
 
 # Known ComfyUI output directories on this machine. First existing dir wins.
 # Override with the COMFY_OUTPUT_DIR env var if the install is elsewhere.
@@ -185,7 +199,8 @@ def _scan_local_for_new_splat(start_ts: float) -> Path | None:
     return max(matches, key=lambda p: p.stat().st_mtime)
 
 
-async def run(*, image_path: Path, data_dir: Path, **_):
+async def run(*, image_path: Path, data_dir: Path,
+              splat_count: str = "256K", steps: int = 20, seed: int = 0, **_):
     if not image_path:
         raise ValueError("image is required")
     image_path = Path(image_path)
@@ -200,6 +215,16 @@ async def run(*, image_path: Path, data_dir: Path, **_):
     # Force PLY on SplatToFile3D — the frontend's sniffer routes .ply to sparkjs.
     if SPLAT_OUTPUT_NODE in wf and "inputs" in wf[SPLAT_OUTPUT_NODE]:
         wf[SPLAT_OUTPUT_NODE]["inputs"]["format"] = "ply"
+
+    # Patch user-tunable parameters. Unknown splat labels fall back to the
+    # workflow's shipped default (256K) rather than erroring — a rename in
+    # _SPLAT_COUNT_MAP shouldn't take the whole tool down.
+    num_gaussians = _SPLAT_COUNT_MAP.get(splat_count, _SPLAT_COUNT_MAP["256K"])
+    if DECODE_NODE in wf and "inputs" in wf[DECODE_NODE]:
+        wf[DECODE_NODE]["inputs"]["num_gaussians"] = num_gaussians
+        wf[DECODE_NODE]["inputs"]["seed"] = int(seed)
+    if KSAMPLER_NODE in wf and "inputs" in wf[KSAMPLER_NODE]:
+        wf[KSAMPLER_NODE]["inputs"]["steps"] = int(steps)
 
     # Title-based output routing — any node the user tagged with
     # `_meta.title = "BLOCKOUT_OUTPUT"` is the preferred output source.
@@ -273,6 +298,13 @@ MODULE = ModuleDef(
         {"name": "image", "type": "scene-image", "required": True,
          "label": "Source image",
          "help": "Runs the TripoSplat workflow on your local ComfyUI at 127.0.0.1:8188; result imports as a gaussian splat."},
+        {"name": "splat_count", "type": "select", "default": "256K",
+         "options": ["64K", "128K", "256K", "512K"],
+         "label": "Splat count",
+         "help": "How many gaussians the decoder emits. Higher = more detail + larger .ply file. 256K is the shipped default; 512K starts pushing 12GB cards."},
+        {"name": "steps", "type": "number", "default": 20, "min": 10, "max": 40, "step": 1,
+         "label": "Steps"},
+        {"name": "seed", "type": "seed", "label": "Seed"},
     ],
     output_ext="ply",
     # Off the Tools grid — the Tools tile that spot used to hold now spawns
