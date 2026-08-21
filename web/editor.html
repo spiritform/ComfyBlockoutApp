@@ -4051,7 +4051,7 @@
 		<main id="help-main">
 			<section id="help-sec-keys" class="help-section">
 				<h2>1. Configure keys & paths</h2>
-				<p>Open <strong>Settings</strong> (gear, top-right). Under <strong>Comfy Cloud</strong>, click <a href="https://platform.comfy.org/profile/api-keys" target="_blank">Sign in with Comfy Cloud</a> — the platform page opens in a new tab. Copy your API key from your profile and paste it back into the input below the sign-in button. New to Comfy? <a href="https://platform.comfy.org" target="_blank">Sign up for an account</a> first.</p>
+				<p>Open <strong>Settings</strong> (gear, top-right). Under <strong>Comfy Cloud</strong>, grab an API key from <a href="https://platform.comfy.org/profile/api-keys" target="_blank">platform.comfy.org/profile/api-keys</a>, paste it into the input, and hit <strong>Save</strong>. New to Comfy? <a href="https://platform.comfy.org" target="_blank">Sign up for an account</a> first.</p>
 				<p>To enable the in-editor AI Agent, add your <a href="https://platform.claude.com/" target="_blank">Anthropic API key</a> in the same Settings modal and flip <strong>Enable AI Agent</strong> on.</p>
 				<p>If you want to run <strong>local ComfyUI workflows</strong> too, fill in the Local ComfyUI paths on the right side of Settings. <strong>Auto-detect</strong> tries to find a working install for you.</p>
 			</section>
@@ -4239,7 +4239,6 @@
 					<div class="modal-section">
 						<div class="section-label">Comfy Cloud</div>
 						<div class="modal-status" id="settings-status"></div>
-						<button type="button" class="modal-btn-secondary" id="settings-signin" style="width:100%; padding:10px 14px; margin-bottom:8px">Sign in with Comfy Cloud</button>
 						<!-- New-user CTA — this is the affiliate slot. Only shown
 						     when no Comfy Cloud key is set (openSettings() toggles
 						     via #settings-signup-link). Links through the sjv.io
@@ -4256,7 +4255,7 @@
 							<button class="modal-btn-secondary" id="settings-clear">Clear</button>
 							<button class="modal-btn-primary" id="settings-save">Save</button>
 						</div>
-						<div class="modal-hint">After signing in, copy the API key from your profile page and paste it above.</div>
+						<div class="modal-hint">Get an API key at <a href="https://platform.comfy.org/profile/api-keys" target="_blank" rel="noopener noreferrer">platform.comfy.org/profile/api-keys</a> — copy it, paste it above, hit Save.</div>
 						<!-- Signed-in users see a plain account/credits link
 						     instead of the affiliate CTA above (they already
 						     have a subscription; affiliate wouldn't attribute
@@ -6293,7 +6292,6 @@
 		const settingsSave = document.getElementById("settings-save");
 		const settingsClear = document.getElementById("settings-clear");
 		const settingsStatus = document.getElementById("settings-status");
-		const settingsSignin = document.getElementById("settings-signin");
 
 		// ---------- assets pane (lives in the right properties panel) ----------
 		const assetsGrid = document.getElementById("assets-grid");
@@ -6810,8 +6808,11 @@
 		async function openSettings() {
 			settingsModal.classList.add("open");
 			settingsKey.value = "";
-			settingsStatus.className = "modal-status";
-			settingsStatus.textContent = "";
+			// Reset the persistent state before openSettings re-hydrates it —
+			// so a stale pill from the previous open doesn't briefly flash the
+			// wrong signed-in/key-set indicator.
+			setSettingsPersistent("");
+			setLlmPersistent("");
 			// Sync the assistant toggle with the persisted flag every time the modal
 			// opens, so users see the current state even after a reload.
 			const asstToggle = document.getElementById("assistant-toggle");
@@ -6831,10 +6832,43 @@
 					const ready = !!s?.ready;
 					if (signupBtn) signupBtn.style.display = ready ? "none" : "inline-flex";
 					if (mgmtLink) mgmtLink.style.display = ready ? "inline-flex" : "none";
+					// Reword the paste input + hint depending on state so a
+					// signed-in user doesn't read "Paste your API key" as
+					// "you haven't saved one yet".
+					const settingsHint = settingsKey?.closest(".modal-section")?.querySelector(".modal-hint");
+					if (settingsKey) {
+						settingsKey.placeholder = ready
+							? "comfyui-•••••••••••••••••••"
+							: "Paste your API key (comfyui-…)";
+					}
+					if (settingsHint) {
+						settingsHint.innerHTML = ready
+							? "Your key is saved. Only fill this in if you want to replace it, or hit Clear to sign out."
+							: 'Get an API key at <a href="https://platform.comfy.org/profile/api-keys" target="_blank" rel="noopener noreferrer">platform.comfy.org/profile/api-keys</a> — copy it, paste it above, hit Save.';
+					}
+					// Persistent "signed in" / "API key set" pill so a returning
+					// user can tell at a glance that credentials are on file —
+					// the input is intentionally blanked after save for security,
+					// which used to look identical to "no key set".
+					if (s?.signed_in) setSettingsPersistent("Signed in to Comfy Cloud");
+					else if (s?.api_key_set) setSettingsPersistent("API key saved");
+					else setSettingsPersistent("");
 				} catch {
 					// Fail-open toward the affiliate — if we can't tell, show the CTA.
 					if (signupBtn) signupBtn.style.display = "inline-flex";
 					if (mgmtLink) mgmtLink.style.display = "none";
+					setSettingsPersistent("");
+				}
+			})();
+			// Same treatment for the Anthropic key — no persistent indicator
+			// before this, so a saved key looked identical to an empty slot.
+			(async () => {
+				try {
+					const r = await fetch("/api/llm/status");
+					const s = r.ok ? await r.json() : null;
+					setLlmPersistent(s?.api_key_set ? "API key saved" : "");
+				} catch {
+					setLlmPersistent("");
 				}
 			})();
 			// Hydrate the ComfyUI paths column — pre-fill whatever the backend
@@ -6877,14 +6911,27 @@
 				setTimeout(() => window.showFirstRunModal?.(), 180);
 			}
 		}
+		// Persistent state pill (green) — sticks after the modal opens so a
+		// returning user sees "Signed in" / "API key saved" instead of an empty
+		// input that could be misread as "no key set". flashSettingsStatus
+		// still shows short-lived toasts on top and restores the persistent
+		// state after fading.
+		let _settingsPersistentText = "";
+		function setSettingsPersistent(text) {
+			_settingsPersistentText = text || "";
+			if (_settingsPersistentText) {
+				settingsStatus.className = "modal-status success";
+				settingsStatus.textContent = _settingsPersistentText;
+			} else {
+				settingsStatus.className = "modal-status";
+				settingsStatus.textContent = "";
+			}
+		}
 		function flashSettingsStatus(kind, text, hideMs = 1800) {
 			settingsStatus.className = `modal-status ${kind}`;
 			settingsStatus.textContent = text;
 			if (hideMs) {
-				setTimeout(() => {
-					settingsStatus.className = "modal-status";
-					settingsStatus.textContent = "";
-				}, hideMs);
+				setTimeout(() => setSettingsPersistent(_settingsPersistentText), hideMs);
 			}
 		}
 
@@ -7084,14 +7131,6 @@
 			w.document.close();
 			w.focus();
 		});
-		// "Sign in with Comfy Cloud" — Comfy Cloud has no public OAuth flow for
-		// third-party apps (their docs: X-API-Key only), so this opens the API
-		// keys page in a new tab and focuses the paste field so the user's next
-		// action is Ctrl+V. Swap the URL / handler when a real OAuth flow ships.
-		settingsSignin?.addEventListener("click", () => {
-			window.open("https://platform.comfy.org/profile/api-keys", "_blank", "noopener");
-			setTimeout(() => settingsKey?.focus(), 100);
-		});
 		document.addEventListener("keydown", (e) => {
 			if (e.key === "Escape" && settingsModal.classList.contains("open")) closeSettings();
 		});
@@ -7114,9 +7153,9 @@
 				// don't want to race the user.
 				btnNB.disabled = false; btnSD.disabled = false;
 				settingsKey.value = "";
+				setSettingsPersistent("API key saved");
 				flashSettingsStatus("success", "Saved");
 				refreshStatus();
-				setTimeout(closeSettings, 700);
 			} catch (e) {
 				flashSettingsStatus("error", e.message, 4000);
 			}
@@ -7127,6 +7166,7 @@
 				await fetch("/api/auth/key", { method: "DELETE" });
 				settingsKey.value = "";
 				btnNB.disabled = true; btnSD.disabled = true;
+				setSettingsPersistent("");
 				flashSettingsStatus("success", "Cleared");
 				refreshStatus();
 			} catch (e) { /* swallow */ }
@@ -7137,14 +7177,23 @@
 		const llmKeySave = document.getElementById("llm-key-save");
 		const llmKeyClear = document.getElementById("llm-key-clear");
 		const llmKeyStatus = document.getElementById("llm-key-status");
+		// Persistent state pill — same pattern as setSettingsPersistent above.
+		let _llmPersistentText = "";
+		function setLlmPersistent(text) {
+			_llmPersistentText = text || "";
+			if (_llmPersistentText) {
+				llmKeyStatus.className = "modal-status success";
+				llmKeyStatus.textContent = _llmPersistentText;
+			} else {
+				llmKeyStatus.className = "modal-status";
+				llmKeyStatus.textContent = "";
+			}
+		}
 		function flashLlmStatus(kind, text, hideMs = 1800) {
 			llmKeyStatus.className = `modal-status ${kind}`;
 			llmKeyStatus.textContent = text;
 			if (hideMs) {
-				setTimeout(() => {
-					llmKeyStatus.className = "modal-status";
-					llmKeyStatus.textContent = "";
-				}, hideMs);
+				setTimeout(() => setLlmPersistent(_llmPersistentText), hideMs);
 			}
 		}
 		llmKeySave.addEventListener("click", async () => {
@@ -7161,6 +7210,7 @@
 					return;
 				}
 				llmKeyInput.value = "";
+				setLlmPersistent("API key saved");
 				flashLlmStatus("success", "Saved");
 			} catch (e) {
 				flashLlmStatus("error", e.message, 4000);
@@ -7170,6 +7220,7 @@
 			try {
 				await fetch("/api/llm/key", { method: "DELETE" });
 				llmKeyInput.value = "";
+				setLlmPersistent("");
 				flashLlmStatus("success", "Cleared");
 			} catch (e) { /* swallow */ }
 		});
