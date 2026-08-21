@@ -2861,21 +2861,25 @@
 	   uncluttered until the user actually reaches for the download. */
 	#result-save-overlay.visible { display: inline-flex; opacity: 0; transition: opacity 0.12s; }
 	#result-overlay:hover #result-save-overlay.visible { opacity: 1; }
-	/* Clear button on the Blockout overlay — mirrors the save button's
-	   corner-pill styling but sits offset to its left so both can be
-	   visible simultaneously in some overlay states. */
+	/* Clear button on the Blockout overlay — sits 4px to the left of the
+	   save-overlay so the two read as an icon pair. Same 24×24 footprint,
+	   same top offset, same mix-blend-difference treatment. Hover-gated
+	   revelation matches save-overlay so the render stays uncluttered until
+	   the user reaches for a control. */
 	#result-clear-overlay {
-		position: absolute; top: 10px; right: 44px; z-index: 9;
-		width: 28px; height: 28px; padding: 0;
+		position: absolute; top: 8px; right: 44px; z-index: 9;
+		width: 24px; height: 24px; padding: 0;
 		border: none; border-radius: 4px; cursor: pointer;
-		background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
-		color: rgba(255,255,255,0.85);
-		font: 700 18px/1 ui-sans-serif, system-ui;
+		background: transparent;
+		color: #fff;
+		mix-blend-mode: difference;
 		display: none; align-items: center; justify-content: center;
 		pointer-events: auto;
 	}
-	#result-clear-overlay:hover { background: rgba(255,80,80,0.4); color: #fff; }
-	#result-clear-overlay.visible { display: inline-flex; }
+	#result-clear-overlay:hover { color: #fff; opacity: 1; }
+	#result-clear-overlay svg { width: 14px; height: 14px; display: block; }
+	#result-clear-overlay.visible { display: inline-flex; opacity: 0; transition: opacity 0.12s; }
+	#result-overlay:hover #result-clear-overlay.visible { opacity: 1; }
 	#aspect-frame {
 		position: absolute; z-index: 5; pointer-events: none;
 		display: none;
@@ -4748,7 +4752,9 @@
 				<!-- Clear button — only visible when Blockout is showing a recorded
 				     video. Drops the entry from _video_store server-side and reverts
 				     the Blockout tab to the still snapshot fallback. -->
-				<button id="result-clear-overlay" type="button" title="Clear source video">×</button>
+				<button id="result-clear-overlay" type="button" title="Clear source video">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+				</button>
 			</div>
 			<div id="status">idle · 0 objects</div>
 			<div id="info-block" style="display:none;position:absolute;top:6px;left:6px;background:rgba(20,20,24,0.85);border-radius:6px;z-index:11;flex-direction:column;align-items:flex-start">
@@ -30743,6 +30749,11 @@ function resetResultUI() {
 	if (renderToggleBtn) renderToggleBtn.hidden = true;
 	clearIntermediateButtons();
 	syncResultToggleContainer();
+	// Drop any recording staged in _video_store — otherwise a Blockout click
+	// on a fresh scene surfaces the previous scene's clip (showBlockoutSnapshot
+	// hits /video_url first and short-circuits on hit). Same DELETE that the
+	// overlay × fires; fire-and-forget so the UI reset doesn't await network.
+	try { fetch(`/comfyblockout/video/${encodeURIComponent(NODE_ID)}`, { method: "DELETE" }); } catch {}
 	applyResultMode?.();
 }
 // Close button on the result toggle — clears the render + overlay + pills.
