@@ -1,0 +1,116 @@
+{
+  "id": "utility_sam3d_body",
+  "label": "SAM3D Body \u00b7 Video\u21923D",
+  "kind": "video",
+  "output_ext": "mp4",
+  "extra_output_ext": "glb",
+  "runner": "cloud",
+  "inputs": [
+    {
+      "name": "video",
+      "type": "scene-video",
+      "label": "Input Video",
+      "auto_bg_display": true,
+      "patch": {
+        "node_id": 85,
+        "widget_name": "file",
+        "widget_index": 0
+      }
+    },
+    {
+      "name": "tracking_prompt",
+      "type": "text",
+      "label": "Tracking Prompt",
+      "placeholder": "person's face",
+      "patch": {
+        "node_id": 15,
+        "widget_name": "text",
+        "widget_index": 0
+      }
+    },
+    {
+      "name": "start_time",
+      "type": "number",
+      "label": "Clip Start (s)",
+      "default": 0,
+      "min": 0,
+      "step": 0.5,
+      "patch": {
+        "node_id": 125,
+        "widget_name": "start_time",
+        "widget_index": 0
+      }
+    },
+    {
+      "name": "duration",
+      "type": "number",
+      "label": "Clip Duration (s)",
+      "default": 5,
+      "min": 0,
+      "step": 0.5,
+      "patch": {
+        "node_id": 125,
+        "widget_name": "duration",
+        "widget_index": 1
+      }
+    },
+    {
+      "name": "render_style",
+      "type": "dropdown",
+      "label": "Render Style",
+      "default": "mesh",
+      "options": [
+        "mesh",
+        "silhouette",
+        "openpose_2d",
+        "openpose_3d",
+        "scail"
+      ],
+      "patch": {
+        "node_id": 131,
+        "widget_name": "render_style",
+        "widget_index": 2
+      }
+    },
+    {
+      "name": "output_width",
+      "type": "number",
+      "label": "Output Width (px)",
+      "default": 0,
+      "min": 0,
+      "step": 64,
+      "patch": {
+        "node_id": 131,
+        "widget_name": "width",
+        "widget_index": 0
+      }
+    },
+    {
+      "name": "smoothing_strength",
+      "type": "number",
+      "label": "Smoothing",
+      "default": 0.55,
+      "min": 0,
+      "max": 1,
+      "step": 0.05,
+      "patch": {
+        "node_id": 130,
+        "widget_name": "strength",
+        "widget_index": 0
+      }
+    },
+    {
+      "name": "smoothing_window",
+      "type": "number",
+      "label": "Smoothing Window",
+      "default": 7,
+      "min": 1,
+      "step": 1,
+      "patch": {
+        "node_id": 130,
+        "widget_name": "window",
+        "widget_index": 2
+      }
+    }
+  ]
+}

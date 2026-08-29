@@ -1,0 +1,330 @@
+{
+  "14": {
+    "inputs": {
+      "ckpt_name": "sam3.1_multiplex_fp16.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "15": {
+    "inputs": {
+      "text": "person's face",
+      "clip": [
+        "14",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "18": {
+    "inputs": {
+      "detection_threshold": 0.5,
+      "max_objects": 4,
+      "detect_interval": 1,
+      "images": [
+        "86",
+        0
+      ],
+      "model": [
+        "14",
+        0
+      ],
+      "conditioning": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "SAM3_VideoTrack",
+    "_meta": {
+      "title": "Run SAM3 Video Track"
+    }
+  },
+  "85": {
+    "inputs": {
+      "file": "6160ae48b90c4a14631ba89874f4f46edcfbf8d8051c4507cab12228c30ca1de.mp4",
+      "video-preview": ""
+    },
+    "class_type": "LoadVideo",
+    "_meta": {
+      "title": "Load Video"
+    }
+  },
+  "86": {
+    "inputs": {
+      "video": [
+        "125",
+        0
+      ]
+    },
+    "class_type": "GetVideoComponents",
+    "_meta": {
+      "title": "Get Video Components"
+    }
+  },
+  "109": {
+    "inputs": {
+      "threshold": 0.5,
+      "class_name": "person",
+      "max_detections": 100,
+      "model": [
+        "111",
+        0
+      ],
+      "image": [
+        "86",
+        0
+      ]
+    },
+    "class_type": "RTDETR_detect",
+    "_meta": {
+      "title": "Run Real-Time Detection (RT-DETR)"
+    }
+  },
+  "111": {
+    "inputs": {
+      "unet_name": "rt_detr_v4-x-hgnet_fp32.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "114": {
+    "inputs": {
+      "resolution_level": 9,
+      "fov_x_degrees": 0,
+      "batch_size": 4,
+      "force_projection": true,
+      "apply_mask": true,
+      "moge_model": [
+        "115",
+        0
+      ],
+      "image": [
+        "86",
+        0
+      ]
+    },
+    "class_type": "MoGeInference",
+    "_meta": {
+      "title": "Run MoGe Inference"
+    }
+  },
+  "115": {
+    "inputs": {
+      "model_name": "moge_2_vitl_normal_fp16.safetensors"
+    },
+    "class_type": "LoadMoGeModel",
+    "_meta": {
+      "title": "Load MoGe Model"
+    }
+  },
+  "119": {
+    "inputs": {
+      "model_file": "sam_3d_body_dinov3_bf16.safetensors"
+    },
+    "class_type": "SAM3DBody_Loader",
+    "_meta": {
+      "title": "Load SAM3D Body Model"
+    }
+  },
+  "125": {
+    "inputs": {
+      "start_time": 0,
+      "duration": 5,
+      "strict_duration": false,
+      "video": [
+        "85",
+        0
+      ]
+    },
+    "class_type": "Video Slice",
+    "_meta": {
+      "title": "Trim Video"
+    }
+  },
+  "126": {
+    "inputs": {
+      "axis": "vertical",
+      "unit": "degrees",
+      "moge_geometry": [
+        "114",
+        0
+      ]
+    },
+    "class_type": "MoGeGeometryToFOV",
+    "_meta": {
+      "title": "Get FoV from MoGe Geometry"
+    }
+  },
+  "128": {
+    "inputs": {
+      "strength": 1,
+      "mouth_strength": 1,
+      "eye_strength": 2,
+      "brow_strength": 2,
+      "input_threshold": 0.02,
+      "blendshape_smooth_window": 7,
+      "sam3d_body_model": [
+        "119",
+        0
+      ],
+      "mhr_pose_data": [
+        "129",
+        0
+      ],
+      "image": [
+        "86",
+        0
+      ]
+    },
+    "class_type": "SAM3DBody_FaceExpression",
+    "_meta": {
+      "title": "Face Expression to SAM3D Body"
+    }
+  },
+  "129": {
+    "inputs": {
+      "run_hand_refinement": true,
+      "fov": [
+        "126",
+        0
+      ],
+      "batch_size": 64,
+      "sam3d_body_model": [
+        "119",
+        0
+      ],
+      "image": [
+        "86",
+        0
+      ],
+      "track_data": [
+        "18",
+        0
+      ],
+      "bboxes": [
+        "109",
+        0
+      ]
+    },
+    "class_type": "SAM3DBody_Predict",
+    "_meta": {
+      "title": "Run SAM3D Body Prediction"
+    }
+  },
+  "130": {
+    "inputs": {
+      "strength": 0.55,
+      "method": "gaussian",
+      "window": 7,
+      "rotation_threshold_degrees": 15,
+      "mhr_pose_data": [
+        "128",
+        0
+      ]
+    },
+    "class_type": "SAM3DBody_Smooth",
+    "_meta": {
+      "title": "Smooth SAM3D Body Pose Data"
+    }
+  },
+  "131": {
+    "inputs": {
+      "width": 0,
+      "height": 0,
+      "render_style": "mesh",
+      "render_style.shader": "default",
+      "render_style.opacity": 1,
+      "render_style.person_palette_falloff": 0.6,
+      "render_style.region": "full_body",
+      "pose_data": [
+        "130",
+        0
+      ]
+    },
+    "class_type": "SAM3DBody_Render",
+    "_meta": {
+      "title": "Render 3D Body Pose"
+    }
+  },
+  "134": {
+    "inputs": {
+      "fps": [
+        "86",
+        2
+      ],
+      "bit_depth": 8,
+      "color_space": "sRGB",
+      "images": [
+        "131",
+        0
+      ]
+    },
+    "class_type": "CreateVideo",
+    "_meta": {
+      "title": "Create Video"
+    }
+  },
+  "135": {
+    "inputs": {
+      "filename_prefix": "video/SAM3D_body",
+      "format": "auto",
+      "format.codec": "auto",
+      "codec": "auto",
+      "video-preview": "",
+      "video": [
+        "134",
+        0
+      ]
+    },
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "Save Video"
+    }
+  },
+  "145": {
+    "inputs": {
+      "format": "glb",
+      "format.mesh_style": "body_mesh",
+      "format.mesh_style.bone_vis": "off",
+      "format.mesh_style.shader": "default",
+      "format.bone_smooth_window": 0,
+      "fps": 24,
+      "camera_translation": "off",
+      "track_index": -1,
+      "pose_data": [
+        "130",
+        0
+      ],
+      "sam3d_body_model": [
+        "119",
+        0
+      ]
+    },
+    "class_type": "BuildPoseFile",
+    "_meta": {
+      "title": "Create 3D Animation File"
+    }
+  },
+  "146": {
+    "inputs": {
+      "filename_prefix": "3d/ComfyUI",
+      "image": "",
+      "mesh": [
+        "145",
+        0
+      ]
+    },
+    "class_type": "SaveGLB",
+    "_meta": {
+      "title": "Save 3D Model"
+    }
+  }
+}

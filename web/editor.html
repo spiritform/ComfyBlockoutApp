@@ -9110,6 +9110,20 @@ async function loadGLB(arrayBuffer, filename, opts = {}) {
 					root.position.set(0, 0, 0);
 				}
 				applySavedTransform(root, opts.transform);
+				// GLB animations — mirror the FBX path so an animated GLB (SAM3D
+				// body, Mixamo-exported .glb, etc.) actually plays. Bare
+				// `scene.add(root)` used to drop `gltf.animations` on the floor;
+				// the transport already scans `fbxMixers`, so registering here
+				// makes scrubbing + play just work.
+				if (gltf.animations?.length) {
+					const mixer = new THREE.AnimationMixer(root);
+					const action = mixer.clipAction(gltf.animations[0]);
+					action.play();
+					mixer.timeScale = 0; // paused; playPreview() resumes
+					fbxMixers.push(mixer);
+					root.userData.mixer = mixer;
+					root.userData.animations = gltf.animations;
+				}
 				scene.add(root);
 				if (opts.assetId) root.userData.assetId = opts.assetId;
 				registerImported(root, "glb", filename);
@@ -23401,7 +23415,7 @@ function renderWorkflowCellProperties(cell) {
 			const uploadIcon = `<svg class="gen-slot-upload" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2"/><path d="M8 9V2.5"/><path d="m5 5 3-3 3 3"/></svg>`;
 			inputsHtml += `
 				<div style="margin-top:6px">
-					<div class="gen-slot wf-scene-video" data-input="${spec.name}" data-accepts="video" title="Drop a video here, click to upload, or leave empty to use your recorded blockout (● button on the transport).">
+					<div class="gen-slot wf-scene-video" data-input="${spec.name}" data-accepts="video" data-auto-bg="${spec.auto_bg_display ? '1' : ''}" title="Drop a video here, click to upload, or leave empty to use your recorded blockout (● button on the transport).">
 						<div class="gen-slot-thumb">${uploadIcon}<div class="gen-slot-spinner"></div></div>
 						<div class="gen-slot-label">${label}</div>
 						<button type="button" class="gen-slot-clear" hidden>×</button>
@@ -23754,10 +23768,46 @@ function renderWorkflowCellProperties(cell) {
 				slot.classList.add("filled");
 				if (labelEl) labelEl.textContent = asset.filename;
 				if (clearBtn) clearBtn.hidden = false;
+				// Poster-frame capture — same probe pattern as bg-video-thumb.
+				// Off-DOM <video>, seek ~5% in to skip a black keyframe, draw to
+				// canvas, cache the dataURL on the element so paint() re-runs
+				// don't re-decode. Cleared when the slot is cleared below.
+				const vurl = asset.url || "";
+				if (vurl && thumb.dataset._posterUrl !== vurl) {
+					thumb.dataset._posterUrl = vurl;
+					thumb.style.backgroundImage = "";
+					const probe = document.createElement("video");
+					probe.muted = true;
+					probe.playsInline = true;
+					probe.crossOrigin = "anonymous";
+					probe.preload = "auto";
+					probe.src = vurl;
+					probe.addEventListener("loadedmetadata", () => {
+						try { probe.currentTime = Math.min(0.5, (probe.duration || 1) * 0.05); } catch {}
+					}, { once: true });
+					probe.addEventListener("seeked", () => {
+						try {
+							const c = document.createElement("canvas");
+							c.width = probe.videoWidth || 160;
+							c.height = probe.videoHeight || 90;
+							c.getContext("2d").drawImage(probe, 0, 0, c.width, c.height);
+							const dataUrl = c.toDataURL("image/jpeg", 0.72);
+							if (thumb.dataset._posterUrl === vurl) {
+								thumb.style.backgroundImage = `url("${dataUrl}")`;
+								thumb.style.backgroundSize = "cover";
+								thumb.style.backgroundPosition = "center";
+							}
+						} catch (e) {
+							console.warn("[wf-scene-video] poster capture failed:", e);
+						}
+					}, { once: true });
+				}
 			} else {
 				thumb.classList.remove("has-image");
 				slot.classList.remove("filled");
 				if (clearBtn) clearBtn.hidden = true;
+				thumb.style.backgroundImage = "";
+				thumb.dataset._posterUrl = "";
 			}
 		};
 		paint();
@@ -23780,6 +23830,13 @@ function renderWorkflowCellProperties(cell) {
 				};
 				paint();
 				saveSceneDebounced?.();
+				// Manifest opt-in (auto_bg_display) — surface the same clip as the
+				// scene BG layer so the user has visual reference alongside the
+				// render. Independent from the workflow input; clearing × here
+				// does NOT touch BG (user still owns it via the Scene panel).
+				if (slot.dataset.autoBg === "1") {
+					_applyBgVideoFile?.(f).catch(err => console.warn("[wf-scene-video] auto-bg failed", err));
+				}
 			} catch (err) {
 				console.error("[wf-scene-video] upload failed", err);
 				window.showAlert?.("Upload failed", err.message || String(err));
@@ -23829,6 +23886,13 @@ function renderWorkflowCellProperties(cell) {
 				slot.classList.add("just-dropped");
 				setTimeout(() => slot.classList.remove("just-dropped"), 700);
 				saveSceneDebounced?.();
+				// Same auto-bg branch as the file-picker handler; wrap the Blob
+				// in a File so _applyBgVideoFile has a stable name to hand to
+				// uploadAsset.
+				if (slot.dataset.autoBg === "1") {
+					const bgFile = new File([blob], asset.filename || "video.mp4", { type: blob.type || "video/mp4" });
+					_applyBgVideoFile?.(bgFile).catch(err => console.warn("[wf-scene-video] auto-bg failed", err));
+				}
 			} catch (err) {
 				console.error("[wf-scene-video] drop-upload failed", err);
 				window.showAlert?.("Drop failed", err.message || String(err));
@@ -25811,7 +25875,8 @@ wfImportFile?.addEventListener("change", async e => {
 		const nodes = Array.isArray(parsed?.nodes)
 			? parsed.nodes.map(n => n?._meta?.title || n?.type || "").filter(Boolean)
 			: Object.values(parsed || {}).map(n => n?._meta?.title || "").filter(Boolean);
-		const meaningful = nodes.find(t => !/^(Load Image|Save |Preview )/i.test(t));
+		const SKIP = /^(Load |Save |Preview |CLIP |Get |Create |Trim |Empty |VAE |Repeat |Batch |Note$|Reroute$|K?Sampler)/i;
+			const meaningful = nodes.find(t => !SKIP.test(t));
 		if (meaningful) title = meaningful;
 	} catch {}
 	_workflowImportContext = { title };

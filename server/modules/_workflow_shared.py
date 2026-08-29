@@ -111,9 +111,22 @@ def _resolve_output_exts(manifest: dict) -> list[str]:
     return _KIND_EXTS.get(manifest.get("kind", "image"), ["png"])
 
 
+def _resolve_extra_exts(manifest: dict) -> list[str]:
+    # Secondary artifacts a workflow saves alongside its primary — e.g. SAM3D
+    # Body writes a rendered .mp4 AND an animated .glb. Runner picks primary
+    # by `output_ext`, but also copies each `extra_output_ext` into output/
+    # so the Assets panel picks it up.
+    raw = manifest.get("extra_output_ext")
+    if isinstance(raw, list):
+        return [str(e).lower().lstrip(".") for e in raw if e]
+    if isinstance(raw, str) and raw:
+        return [raw.lower().lstrip(".")]
+    return []
+
+
 async def _submit_wait_download(
     workflow: dict, module_id: str, output_exts: list[str], data_dir: Path,
-    status_cb=None,
+    status_cb=None, extra_exts: list[str] | None = None,
 ) -> dict:
     """Submit → poll → download → move newest matching output into data_dir.
 
@@ -184,9 +197,14 @@ async def _submit_wait_download(
             if n.startswith("out_"): return False        # already-consumed outputs / blockout archives
             return True
 
+        # Widen scans to include secondary artifacts (SAM3D: .glb next to .mp4).
+        # Only affects file discovery — primary selection still uses `output_exts`.
+        _extra_exts_norm = [e for e in (extra_exts or []) if e and e not in output_exts]
+        scan_exts = list(output_exts) + _extra_exts_norm
+
         async def _wait_for_output_file() -> str:
             while True:
-                for ext in output_exts:
+                for ext in scan_exts:
                     for p in data_dir.rglob(f"*.{ext}"):
                         if not _is_output_candidate(p):
                             continue
@@ -288,7 +306,7 @@ async def _submit_wait_download(
             found: list[Path] = []
             roots = [data_dir] + [p for p in _EXTRA_SCAN_ROOTS if p.exists()]
             for root in roots:
-                for ext in output_exts:
+                for ext in scan_exts:
                     try:
                         for p in root.rglob(f"*.{ext}"):
                             if not _is_output_candidate(p):
@@ -337,7 +355,7 @@ async def _submit_wait_download(
 
         # Look under scratch first (what `comfy download -o` was told to use).
         if not candidates:
-            for ext in output_exts:
+            for ext in scan_exts:
                 candidates.extend(scratch.rglob(f"*.{ext}"))
         # Final fallback: scan output/ once more in case the download call
         # succeeded but wrote directly to output/ instead of scratch.
@@ -367,7 +385,13 @@ async def _submit_wait_download(
                 f"no {output_exts} output found. scratch had: {listing}. "
                 f"data_dir scan since {job_start:.0f} also empty."
             )
-        src = max(candidates, key=lambda p: p.stat().st_mtime)
+        # Bias primary pick to the manifest-declared output_exts — with extras
+        # in scope, the newest file could be a .glb when we want the .mp4.
+        primary_candidates = [
+            p for p in candidates
+            if p.suffix.lstrip(".").lower() in output_exts
+        ] or candidates  # empty primary → fall back so we still return SOMETHING
+        src = max(primary_candidates, key=lambda p: p.stat().st_mtime)
         ext = src.suffix.lstrip(".").lower()
         dst = new_output_path(data_dir, module_id, ext)
         # If the source lives inside our own scratch or data_dir, move it
@@ -386,6 +410,24 @@ async def _submit_wait_download(
             shutil.move(str(src), str(dst))
         else:
             shutil.copy(str(src), str(dst))
+        # Copy any secondary artifacts into output/ so the Assets panel surfaces
+        # them. Best-effort: a failure here shouldn't sink the whole run.
+        for extra in _extra_exts_norm:
+            extra_pool = [
+                p for p in candidates
+                if p.suffix.lstrip(".").lower() == extra and p.exists()
+            ]
+            if not extra_pool:
+                continue
+            extra_src = max(extra_pool, key=lambda p: p.stat().st_mtime)
+            try:
+                extra_dst = new_output_path(data_dir, module_id, extra)
+                if _is_ours(extra_src):
+                    shutil.move(str(extra_src), str(extra_dst))
+                else:
+                    shutil.copy(str(extra_src), str(extra_dst))
+            except Exception as _e:
+                print(f"[cb-app] {module_id}: extra output copy failed ({extra}): {_e}")
         return {"path": str(dst), "filename": dst.name, "ext": ext}
     finally:
         try:
@@ -537,7 +579,11 @@ def _make_run(workflow_path: Path, manifest: dict):
                             pass  # leave as string; the widget may actually want a string
                 _patch_widget(workflow, node_id, widget_index, value, widget_name)
 
-        return await _submit_wait_download(workflow, module_id_actual, output_exts_actual, data_dir)
+        extra_exts_actual = _resolve_extra_exts(effective_manifest)
+        return await _submit_wait_download(
+            workflow, module_id_actual, output_exts_actual, data_dir,
+            extra_exts=extra_exts_actual,
+        )
 
     async def run_local(**kwargs):
         from ._workflow_local import run_local_workflow
