@@ -1,0 +1,59 @@
+{
+  "id": "api_wan3_0_r2v",
+  "label": "WAN 3.0 \u00b7 R2V",
+  "kind": "video",
+  "output_ext": "mp4",
+  "runner": "cloud",
+  "inputs": [
+    {
+      "name": "image",
+      "type": "scene-image",
+      "label": "Reference Image",
+      "patch": [
+        { "node_id": 6, "widget_index": 0, "widget_name": "image" },
+        { "node_id": 18, "widget_index": 0, "widget_name": "image" }
+      ]
+    },
+    {
+      "name": "video",
+      "type": "scene-video",
+      "label": "Reference Video",
+      "patch": {
+        "node_id": 19,
+        "widget_index": 0,
+        "widget_name": "file"
+      }
+    },
+    {
+      "name": "prompt",
+      "type": "textarea",
+      "label": "Prompt",
+      "required": true,
+      "placeholder": "Reference-guided scene description.",
+      "patch": {
+        "node_id": 16,
+        "widget_index": 1
+      }
+    },
+    {
+      "name": "resolution",
+      "type": "dropdown",
+      "label": "Resolution",
+      "default": "720P",
+      "options": ["480P", "720P", "1080P"],
+      "patch": {
+        "node_id": 16,
+        "widget_index": 2
+      }
+    },
+    {
+      "name": "seed",
+      "type": "seed",
+      "label": "Seed",
+      "patch": {
+        "node_id": 16,
+        "widget_index": 7
+      }
+    }
+  ]
+}

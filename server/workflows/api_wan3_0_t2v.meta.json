@@ -1,0 +1,40 @@
+{
+  "id": "api_wan3_0_t2v",
+  "label": "WAN 3.0 \u00b7 T2V",
+  "kind": "video",
+  "output_ext": "mp4",
+  "runner": "cloud",
+  "inputs": [
+    {
+      "name": "prompt",
+      "type": "textarea",
+      "label": "Prompt",
+      "required": true,
+      "placeholder": "Describe the scene, subject, motion, and camera.",
+      "patch": {
+        "node_id": 3,
+        "widget_index": 1
+      }
+    },
+    {
+      "name": "resolution",
+      "type": "dropdown",
+      "label": "Resolution",
+      "default": "720P",
+      "options": ["480P", "720P", "1080P"],
+      "patch": {
+        "node_id": 3,
+        "widget_index": 2
+      }
+    },
+    {
+      "name": "seed",
+      "type": "seed",
+      "label": "Seed",
+      "patch": {
+        "node_id": 3,
+        "widget_index": 7
+      }
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "id": "api_minimax_h3_r2v",
+  "label": "MiniMax H3 \u00b7 R2V",
+  "kind": "video",
+  "output_ext": "mp4",
+  "runner": "cloud",
+  "inputs": [
+    {
+      "name": "image",
+      "type": "scene-image",
+      "label": "Reference Image",
+      "patch": {
+        "node_id": 2,
+        "widget_index": 0,
+        "widget_name": "image"
+      }
+    },
+    {
+      "name": "prompt",
+      "type": "textarea",
+      "label": "Prompt",
+      "required": true,
+      "placeholder": "Storyboard or reference-guided scene description.",
+      "patch": {
+        "node_id": 4,
+        "widget_index": 1,
+        "widget_name": "model.prompt"
+      }
+    },
+    {
+      "name": "resolution",
+      "type": "dropdown",
+      "label": "Resolution",
+      "default": "768P",
+      "options": [
+        "768P",
+        "2K"
+      ],
+      "patch": {
+        "node_id": 4,
+        "widget_index": 2,
+        "widget_name": "model.resolution"
+      }
+    },
+    {
+      "name": "aspect_ratio",
+      "type": "dropdown",
+      "label": "Aspect Ratio",
+      "default": "adaptive",
+      "options": [
+        "adaptive",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16",
+        "21:9"
+      ],
+      "patch": {
+        "node_id": 4,
+        "widget_index": 3,
+        "widget_name": "model.ratio"
+      }
+    },
+    {
+      "name": "duration",
+      "type": "number",
+      "label": "Duration (s)",
+      "default": 5,
+      "min": 4,
+      "max": 15,
+      "step": 1,
+      "patch": {
+        "node_id": 4,
+        "widget_index": 4,
+        "widget_name": "model.duration"
+      }
+    },
+    {
+      "name": "seed",
+      "type": "seed",
+      "label": "Seed",
+      "patch": {
+        "node_id": 4,
+        "widget_index": 5,
+        "widget_name": "seed"
+      }
+    }
+  ]
+}
