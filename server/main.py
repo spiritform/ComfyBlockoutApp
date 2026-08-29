@@ -313,6 +313,11 @@ async def freemocap_mockup() -> FileResponse:
     return FileResponse(WEB_DIR / "freemocap-mockup.html")
 
 
+@app.get("/mixamo-mockup")
+async def mixamo_mockup() -> FileResponse:
+    return FileResponse(WEB_DIR / "mixamo-mockup.html")
+
+
 # Editor still references /extensions/ComfyBlockout/icons/... — keep that path live.
 @app.get("/extensions/ComfyBlockout/icons/{name}")
 async def legacy_icon(name: str) -> FileResponse:
@@ -1839,6 +1844,64 @@ async def heightmap_generate(request: Request):
     # 404 for the same reason skybox generate did.
     url = "/output/" + out.relative_to(DATA_DIR).as_posix()
     return {"filename": out.name, "path": str(out), "url": url, "ext": "png"}
+
+
+# ── Camera Track (mockup) ──────────────────────────────────────────────
+# Phase 1: accepts a video, ignores it, returns a placeholder circular-orbit
+# trajectory in the same shape the frontend uses for camera keyframes:
+#   [{ t, pos: [x,y,z], target: [x,y,z], up: [x,y,z], fov, ease }]
+# Phase 2 will swap the placeholder for a real solver (DUSt3R via Comfy
+# workflow, Blender headless, or MegaSAM). Keeping the endpoint shape stable
+# means the frontend Apply-to-Camera flow doesn't change when solvers swap.
+@app.post("/api/camera_track")
+async def camera_track(request: Request) -> dict:
+    import math
+    form = await request.form()
+    video = form.get("video")
+    # Frontend probes duration via <video>.duration and forwards it — the
+    # server-side alternative would be spawning ffprobe on the upload, which
+    # is fine but heavier. Fallback 5s covers the "duration missing" case.
+    try:
+        duration_s = float(form.get("duration") or 5.0)
+    except (TypeError, ValueError):
+        duration_s = 5.0
+    duration_s = max(0.5, min(60.0, duration_s))
+    filename = None
+    if hasattr(video, "filename"):
+        filename = video.filename
+        # Phase 2 will persist and hand this to the solver. For Phase 1 we
+        # just consume the bytes so upload completes cleanly.
+        _blob = await video.read()
+        _ = len(_blob)
+    # One keyframe per source frame at 30fps — real solvers emit pose per
+    # frame, so density here should match. Keeps the timeline realistic
+    # (a 10s clip gives 300 keys, not 60) and validates timeline perf ahead
+    # of Phase 2. Camera orbits (0,0,0) at radius 5m, height 1.5m, full 360°.
+    FPS = 30
+    N = max(2, int(round(duration_s * FPS)))
+    R = 5.0
+    H = 1.5
+    keyframes = []
+    for i in range(N):
+        u = i / (N - 1)
+        t = u * duration_s
+        theta = u * 2.0 * math.pi
+        keyframes.append({
+            "t": round(t, 4),
+            "pos": [round(R * math.cos(theta), 4), round(H, 4), round(R * math.sin(theta), 4)],
+            "target": [0.0, 0.0, 0.0],
+            "up": [0.0, 1.0, 0.0],
+            "fov": 45,
+            "ease": "linear",
+        })
+    return {
+        "ok": True,
+        "solver": "placeholder-orbit",
+        "filename": filename,
+        "duration": duration_s,
+        "fps": FPS,
+        "keyframes": keyframes,
+    }
 
 
 # ── Splat editing / compression (@playcanvas/splat-transform) ─────────

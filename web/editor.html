@@ -4511,6 +4511,12 @@
 				     orbit the render camera around a pivot (target object if
 				     set, otherwise renderCamTarget). -->
 				<button class="prim-btn" data-tool="turntable" data-label="Turntable" title="Turntable — bake a 360° rotation on the selection or an orbit on the camera as keyframes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3.4-7.03"/><path d="M21 4v5h-5"/></svg></button>
+				<!-- Camera Track (mockup) — load a video, run tracking, apply
+				     resulting per-frame camera transforms as keyframes on the
+				     render camera. Phase 1 backend returns a placeholder orbit
+				     to prove the wiring; Phase 2 swaps in a real solver
+				     (DUSt3R / MegaSAM / Blender headless). -->
+				<button class="prim-btn" data-tool="camtrack" data-label="Camera Track" title="Camera Track — load a video and bake the tracked camera motion as keyframes on the render camera (mockup)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg></button>
 			</div>
 			<input type="file" id="loadmedia-file" accept="image/*,video/*" hidden>
 		</div>
@@ -5825,6 +5831,33 @@
 				<div class="section">
 					<button type="button" id="tt-generate" class="mp-still-btn" style="width:100%">Generate Keyframes</button>
 					<div class="hint" id="tt-status" style="margin-top:6px;color:rgba(255,255,255,0.55)"></div>
+				</div>
+			</div>
+
+			<!-- Camera Track (mockup) — video → tracked camera path → keyframes on
+			     the render camera. Phase 1 ships a placeholder orbit backend so the
+			     apply-to-camera path is testable end-to-end; real solver
+			     (DUSt3R / MegaSAM / Blender headless) plugs into the same endpoint
+			     later without frontend churn. -->
+			<div class="rp-pane" id="rp-pane-camtrack" hidden>
+				<div class="section">
+					<div class="section-label">Video</div>
+					<div style="margin-top:6px">
+						<div class="gen-slot" id="camtrack-slot" data-accepts="video" title="Drop a video here or click to upload.">
+							<div class="gen-slot-thumb"><svg class="gen-slot-upload" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2"/><path d="M8 9V2.5"/><path d="m5 5 3-3 3 3"/></svg><div class="gen-slot-spinner"></div></div>
+							<div class="gen-slot-label">Choose video</div>
+							<button type="button" class="gen-slot-clear" id="camtrack-clear" hidden>×</button>
+							<input type="file" id="camtrack-file" accept="video/*" hidden>
+						</div>
+					</div>
+				</div>
+				<div class="section">
+					<button type="button" id="camtrack-run" class="mp-still-btn" style="width:100%" disabled>Track Camera</button>
+					<div class="hint" id="camtrack-status" style="margin-top:6px;color:rgba(255,255,255,0.55)">Phase 1 mockup — backend returns a placeholder orbit until we wire a real solver.</div>
+				</div>
+				<div class="section" id="camtrack-apply-section" hidden>
+					<button type="button" id="camtrack-apply" class="mp-still-btn" style="width:100%">Apply to Render Camera</button>
+					<div class="hint" style="margin-top:6px;color:rgba(255,255,255,0.55)">Overwrites the render camera's existing keyframes.</div>
 				</div>
 			</div>
 
@@ -11456,6 +11489,7 @@ function forceRightPane(which, label) {
 	const utilPane = document.getElementById("rp-pane-util");
 	const ttPane = document.getElementById("rp-pane-turntable");
 	const annoPane = document.getElementById("rp-pane-annotate");
+	const ctPane = document.getElementById("rp-pane-camtrack");
 	const prjPane = document.getElementById("rp-pane-projects");
 	const titleEl = document.getElementById("rp-title");
 	const kickerEl = document.getElementById("rp-kicker");
@@ -11474,6 +11508,7 @@ function forceRightPane(which, label) {
 	if (utilPane) utilPane.hidden = which !== "util";
 	if (ttPane) ttPane.hidden = which !== "turntable";
 	if (annoPane) annoPane.hidden = which !== "annotate";
+	if (ctPane) ctPane.hidden = which !== "camtrack";
 	if (prjPane) prjPane.hidden = which !== "projects";
 	// Assets + Projects own the kicker label with no sub-title. Object / Scene /
 	// Camera / GenCell / WorkflowCell use "Properties : <label>". "none" hides
@@ -11489,7 +11524,7 @@ function forceRightPane(which, label) {
 	if (sepEl) sepEl.style.display = (isFullPane || isBlank) ? "none" : "";
 	if (titleEl) {
 		titleEl.style.display = (isFullPane || isBlank) ? "none" : "";
-		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : which === "gencell" ? "Generator" : which === "workflowcell" ? "Workflow" : which === "mediapipe" ? "MediaPipe" : which === "bool" ? "Boolean" : which === "util" ? "Util" : which === "turntable" ? "Turntable" : which === "annotate" ? "Annotate" : "Object");
+		if (!isFullPane && !isBlank) titleEl.textContent = label || (which === "scene" ? "Scene" : which === "camera" ? "Camera" : which === "gencell" ? "Generator" : which === "workflowcell" ? "Workflow" : which === "mediapipe" ? "MediaPipe" : which === "bool" ? "Boolean" : which === "util" ? "Util" : which === "turntable" ? "Turntable" : which === "annotate" ? "Annotate" : which === "camtrack" ? "Camera Track" : "Object");
 	}
 	const namePillEl = document.getElementById("obj-pane-name");
 	if (namePillEl) { namePillEl.hidden = true; namePillEl.innerHTML = ""; }
@@ -13507,6 +13542,13 @@ function runTool(kind) {
 		// would ship keyframes before the user has a chance to pick a length.
 		forceRightPane("turntable", "Turntable");
 		_turntableRefreshHint?.();
+		return;
+	}
+	if (kind === "camtrack") {
+		// Mockup: video → tracked camera path → keyframes on the render
+		// camera. Backend currently returns a placeholder orbit so the
+		// end-to-end flow is testable before wiring a real solver.
+		forceRightPane("camtrack", "Camera Track");
 		return;
 	}
 	if (kind === "annotate") {
@@ -32255,6 +32297,132 @@ function _ttClearOrbit() {
 	_ttSyncOrbitControls();
 	saveSceneDebounced?.();
 }
+
+
+// ── Camera Track (mockup) ────────────────────────────────────────
+// Video upload + Track button + Apply-to-Camera flow. Backend
+// (/api/camera_track) currently returns a placeholder orbit; the frontend
+// side is complete so swapping in a real solver is a backend-only change.
+// queueMicrotask defer — the Apply closure captures the module-scope
+// `keyframes` binding declared further down, so we run wiring after the
+// whole script parses (see feedback_boot_iife_tdz pattern).
+queueMicrotask(function _wireCameraTrack() {
+	const slot = document.getElementById("camtrack-slot");
+	const fileInput = document.getElementById("camtrack-file");
+	const clearBtn = document.getElementById("camtrack-clear");
+	const runBtn = document.getElementById("camtrack-run");
+	const applyBtn = document.getElementById("camtrack-apply");
+	const applySection = document.getElementById("camtrack-apply-section");
+	const statusEl = document.getElementById("camtrack-status");
+	const labelEl = slot?.querySelector(".gen-slot-label");
+	if (!slot || !fileInput || !runBtn || !applyBtn) return;
+
+	let selectedFile = null;
+	let pendingKeyframes = null;
+
+	const setStatus = (msg, kind) => {
+		if (!statusEl) return;
+		statusEl.textContent = msg || "";
+		statusEl.style.color = kind === "error" ? "#ff8a8a" : kind === "ok" ? "#8ae0a5" : "rgba(255,255,255,0.55)";
+	};
+
+	const resetFile = () => {
+		selectedFile = null;
+		pendingKeyframes = null;
+		fileInput.value = "";
+		slot.classList.remove("filled");
+		if (labelEl) labelEl.textContent = "Choose video";
+		if (clearBtn) clearBtn.hidden = true;
+		runBtn.disabled = true;
+		if (applySection) applySection.hidden = true;
+		setStatus("Phase 1 mockup — backend returns a placeholder orbit until we wire a real solver.");
+	};
+
+	slot.addEventListener("click", (e) => {
+		if (e.target.closest(".gen-slot-clear")) return;
+		if (selectedFile) return;
+		fileInput.click();
+	});
+	clearBtn?.addEventListener("click", (e) => {
+		e.stopPropagation();
+		resetFile();
+	});
+	let stagedDuration = 0;
+	fileInput.addEventListener("change", () => {
+		const f = fileInput.files?.[0];
+		if (!f) return;
+		selectedFile = f;
+		stagedDuration = 0;
+		pendingKeyframes = null;
+		slot.classList.add("filled");
+		if (labelEl) labelEl.textContent = f.name;
+		if (clearBtn) clearBtn.hidden = false;
+		runBtn.disabled = false;
+		if (applySection) applySection.hidden = true;
+		setStatus(`Reading ${(f.size / 1024 / 1024).toFixed(1)} MB video…`);
+		// Off-DOM probe to read duration — the backend uses it to size the
+		// keyframe track (~30fps × duration). HTMLVideoElement's `duration`
+		// is the only reliable metadata handoff without shipping ffprobe.
+		const probe = document.createElement("video");
+		probe.preload = "metadata";
+		probe.muted = true;
+		const url = URL.createObjectURL(f);
+		probe.src = url;
+		probe.addEventListener("loadedmetadata", () => {
+			stagedDuration = Number(probe.duration) || 0;
+			URL.revokeObjectURL(url);
+			setStatus(`Ready — ${(f.size / 1024 / 1024).toFixed(1)} MB · ${stagedDuration.toFixed(1)}s.`);
+		}, { once: true });
+		probe.addEventListener("error", () => {
+			URL.revokeObjectURL(url);
+			setStatus(`Ready — ${(f.size / 1024 / 1024).toFixed(1)} MB (duration probe failed).`);
+		}, { once: true });
+	});
+	runBtn.addEventListener("click", async () => {
+		if (!selectedFile) return;
+		runBtn.disabled = true;
+		setStatus("Tracking…");
+		try {
+			const fd = new FormData();
+			fd.append("video", selectedFile);
+			if (stagedDuration > 0) fd.append("duration", String(stagedDuration));
+			const r = await fetch("/api/camera_track", { method: "POST", body: fd });
+			if (!r.ok) {
+				const err = await r.json().catch(() => ({ detail: r.statusText }));
+				throw new Error(err.detail || r.statusText);
+			}
+			const j = await r.json();
+			pendingKeyframes = Array.isArray(j?.keyframes) ? j.keyframes : null;
+			if (!pendingKeyframes?.length) throw new Error("solver returned no keyframes");
+			setStatus(`Solved · ${pendingKeyframes.length} keyframes · ${j.solver || "unknown"}`, "ok");
+			if (applySection) applySection.hidden = false;
+		} catch (e) {
+			setStatus(`Track failed: ${e?.message || e}`, "error");
+		} finally {
+			runBtn.disabled = false;
+		}
+	});
+	applyBtn.addEventListener("click", () => {
+		if (!pendingKeyframes?.length) return;
+		if (typeof snapshotForUndo === "function") snapshotForUndo();
+		// Overwrite the render camera's keyframes wholesale — the tracked path
+		// is what the user wants, not a merge with whatever was there before.
+		keyframes = pendingKeyframes.map(k => ({
+			t: Number(k.t) || 0,
+			pos: Array.isArray(k.pos) ? k.pos.slice(0, 3) : [0, 0, 0],
+			target: Array.isArray(k.target) ? k.target.slice(0, 3) : [0, 0, 0],
+			up: Array.isArray(k.up) ? k.up.slice(0, 3) : [0, 1, 0],
+			fov: Number(k.fov) || 45,
+			ease: k.ease || "easeInOut",
+		}));
+		if (typeof selectedKeys?.clear === "function") selectedKeys.clear();
+		if (typeof renderKeyframeMarkers === "function") renderKeyframeMarkers();
+		saveSceneDebounced?.();
+		setStatus(`Applied ${keyframes.length} keyframes to render camera.`, "ok");
+	});
+
+	resetFile();
+});
 
 
 // ── Keyframes / timeline ──────────────────────────────────────────
