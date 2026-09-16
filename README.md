@@ -162,12 +162,15 @@ comfyblockout-app/
 
 ## Roadmap
 
-Small stuff people have asked for that's not in yet:
-
 - 3D asset thumbnails for user-imported GLB / PLY / splat (currently only workflow-generated 3D outputs get thumbs via a paired blockout image).
 - Scatter as an agent tool (the frontend feature exists; the agent can't spawn one yet).
 - Client-side token streaming so long responses don't land all at once.
 - Selectable model (dropdown for future Claude versions instead of hardcoded Sonnet 4.6).
+
+Waiting on upstream Comfy:
+
+- **Video-reference input for cloud R2V workflows** (Seedance 2.0, WAN 3.0, MiniMax H3). Blocked on `comfy-cli` [#645](https://github.com/Comfy-Org/comfy-cli/issues/645) — the cloud `LoadVideo` enum can't see CLI-uploaded videos until mime-type tagging lands. Falls back to first-frame extraction for now.
+- **Tripo H3.1 cloud output extraction** is fixed in `comfy-cli` [PR #600](https://github.com/Comfy-Org/comfy-cli/pull/600) (merged) but not in the current 1.13.0 release. Local `run.bat` bootstrap will pick up the fix automatically once `comfy-cli>=1.14.0` ships.
 
 ## License
 
