@@ -171,4 +171,4 @@ Small stuff people have asked for that's not in yet:
 
 ## License
 
-TBD.
+MIT — see [LICENSE](LICENSE).
