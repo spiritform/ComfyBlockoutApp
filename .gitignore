@@ -27,7 +27,17 @@ tools/*
 
 # Early-stage prototype HTMLs — kept locally for reference but not shipped.
 mockups/
+web/mixamo-mockup.html
+web/serve-web.bat
 
 # Personal onboarding-emulator wrapper — used locally to re-test the first-run
 # flow (?firstrun=1 clears the "seen" flag). Not something to distribute.
 firstrun.bat
+
+# Pre-conversion graph backups saved next to their API-format twins during
+# workflow authoring — reference only, don't ship.
+server/workflows/*.graph_orig
+
+# Stray sample media that lands in server/workflows/ during workflow tests.
+server/workflows/*.mp4
+server/workflows/*.webm
