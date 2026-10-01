@@ -167,9 +167,39 @@ comfyblockout-app/
 - Client-side token streaming so long responses don't land all at once.
 - Selectable model (dropdown for future Claude versions instead of hardcoded Sonnet 4.6).
 
+- **Video-reference (R2V) via Comfy Router.** Verified working — see below. Not yet wired into the editor; the workflow cells still fall back to first-frame extraction.
+
+### On video-reference input
+
+Driving a generation with a *reference video* (not just a first frame) is the whole point of the blockout → render pipeline, and it doesn't work through the cloud-workflow path:
+
+- `comfy upload` posts everything to `/upload/image` with no mime-type routing, so uploads never appear in `LoadVideo`'s enum — `comfy-cli` [#645](https://github.com/Comfy-Org/comfy-cli/issues/645).
+- More fundamentally, the WAN 3.0 R2V and MiniMax H3 **API templates ship with no `LoadVideo` node at all**, so there's nothing to bind an upload to even once #645 lands.
+
+It *does* work through [Comfy Router](https://docs.comfy.org/development/comfy-router/api), which takes the reference as a URL instead of a workflow input:
+
+1. Trim the clip to 2–15s (longer gets rejected by the provider).
+2. `POST https://cloud.comfy.org/api/assets` (multipart). Note the host — `api.comfy.org` 404s here.
+3. `GET /api/assets/{id}/content` *without* following redirects; the `302` `Location` is an anonymously-fetchable signed URL.
+4. `POST https://api.comfy.org/v2/models/{provider}/{model}` with that URL as the reference.
+
+Verified working on WAN 3.0, MiniMax H3, and Seedance 2.0. Note that the request shape differs by family — WAN takes a `media[]` array, while MiniMax and Seedance take a `content[]` array of typed parts with a `role`:
+
+```jsonc
+// wan/wan3.0-video
+"media": [{"type": "reference_video", "url": "https://…"}]
+
+// minimax/minimax-h3, byteplus/dreamina-seedance-2-0-260128
+"content": [{"type": "video_url", "video_url": {"url": "https://…"},
+             "role": "reference_video"}]
+```
+
+Confirming the reference was actually ingested also differs: WAN reports `usage.input_video_duration`, H3 reports `usage.input_seconds`, and Seedance reports neither — for that one, send a deliberately broken URL and check it fails (`400 invalid_input`) rather than silently generating.
+
+These calls are synchronous and slow (~3–5 min), and `fal/h3-max` is a different model from `minimax/minimax-h3` with no media support at all.
+
 Waiting on upstream Comfy:
 
-- **Video-reference input for cloud R2V workflows** (Seedance 2.0, WAN 3.0, MiniMax H3). Blocked on `comfy-cli` [#645](https://github.com/Comfy-Org/comfy-cli/issues/645) — the cloud `LoadVideo` enum can't see CLI-uploaded videos until mime-type tagging lands. Falls back to first-frame extraction for now.
 - **Tripo H3.1 cloud output extraction** is fixed in `comfy-cli` [PR #600](https://github.com/Comfy-Org/comfy-cli/pull/600) (merged) but not in the current 1.13.0 release. Local `run.bat` bootstrap will pick up the fix automatically once `comfy-cli>=1.14.0` ships.
 
 ## License
