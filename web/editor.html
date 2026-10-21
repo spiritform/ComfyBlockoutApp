@@ -12485,7 +12485,11 @@ function select(obj, opts = {}) {
 		forceRightPane("camera", "Camera");
 		refreshOutliner();
 		if (typeof _updateCamOrbitRingVisibility === "function") _updateCamOrbitRingVisibility();
-		if (typeof refreshAnimPaths === "function") refreshAnimPaths();
+		// The timeline's object track renders ONLY the selected object's keys,
+		// so a selection change has to rebuild the diamonds — not just the
+		// in-scene paths. renderKeyframeMarkers() calls refreshAnimPaths() itself.
+		if (typeof renderKeyframeMarkers === "function") renderKeyframeMarkers();
+		else if (typeof refreshAnimPaths === "function") refreshAnimPaths();
 		return;
 	}
 	if (!obj) {
@@ -12506,7 +12510,11 @@ function select(obj, opts = {}) {
 		if (typeof refreshChatContextChip === "function") refreshChatContextChip();
 	if (typeof _refreshBoolPane === "function") _refreshBoolPane();
 		if (typeof _updateCamOrbitRingVisibility === "function") _updateCamOrbitRingVisibility();
-		if (typeof refreshAnimPaths === "function") refreshAnimPaths();
+		// The timeline's object track renders ONLY the selected object's keys,
+		// so a selection change has to rebuild the diamonds — not just the
+		// in-scene paths. renderKeyframeMarkers() calls refreshAnimPaths() itself.
+		if (typeof renderKeyframeMarkers === "function") renderKeyframeMarkers();
+		else if (typeof refreshAnimPaths === "function") refreshAnimPaths();
 		// Selection cleared → annotation draw mode must also disarm so a
 		// stray Ctrl+drag doesn't leak strokes into a container that isn't
 		// currently the user's focus.
@@ -12598,7 +12606,11 @@ function select(obj, opts = {}) {
 	// Camera-only overlays (motion path + orbit ring) are gated on renderCam
 	// being selected — refresh whenever selection transitions.
 	if (typeof _updateCamOrbitRingVisibility === "function") _updateCamOrbitRingVisibility();
-	if (typeof refreshAnimPaths === "function") refreshAnimPaths();
+	// The timeline's object track renders ONLY the selected object's keys,
+	// so a selection change has to rebuild the diamonds — not just the
+	// in-scene paths. renderKeyframeMarkers() calls refreshAnimPaths() itself.
+	if (typeof renderKeyframeMarkers === "function") renderKeyframeMarkers();
+	else if (typeof refreshAnimPaths === "function") refreshAnimPaths();
 }
 
 function toggleVisibility(obj) {
