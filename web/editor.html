@@ -908,7 +908,16 @@
 		display: flex; align-items: center; justify-content: center;
 		font-family: inherit; line-height: 1;
 	}
-	#tl-rec { font-size: 30px; line-height: 1; padding-bottom: 8px; color: #ff5c5c; }
+	/* Record dot is DRAWN, not typeset — the ● glyph sits on its baseline,
+	   so it needed a padding-bottom fudge to look centered and its ink size
+	   drifted with the font. A pseudo-element circle centers exactly via the
+	   button's flex box and takes its fill from the color rules below. */
+	#tl-rec { font-size: 0; line-height: 1; color: #ff5c5c; }
+	#tl-rec::before {
+		content: ""; display: block;
+		width: 13px; height: 13px; border-radius: 50%;
+		background: currentColor;
+	}
 	#tl-rec:hover { color: #ff8080; }
 	#tl-rec.recording { color: #ff2020; }
 	#tl-play { font-size: 14px; }
