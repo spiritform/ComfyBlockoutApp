@@ -6349,6 +6349,7 @@
 		let _outlinerPane = null;
 		let _prevTopKicker = null;
 		let _prevFilterParent = null;
+		let _prevFilterNextSibling = null;
 		let _prevOutlinerDisplay = null;
 		let _prevHideAllDisplay = null;
 		let _prevClearBtnDisplay = null;
@@ -6389,6 +6390,7 @@
 			const topHeader = document.getElementById("rp-zone-top-header");
 			if (filter && topHeader) {
 				_prevFilterParent = filter.parentElement;
+				_prevFilterNextSibling = filter.nextElementSibling;
 				// Insert the filter row as the top zone's SECOND row — after
 				// the header, before the body — so the sort tags sit under
 				// the Output kicker on their own line instead of crowding
@@ -6437,10 +6439,19 @@
 			if (xBtn) xBtn.style.display = "none";
 			const filter = document.getElementById("assets-filter");
 			if (filter && _prevFilterParent) {
-				_prevFilterParent.appendChild(filter);
+				// Put it back exactly where it was (directly above #rp-body),
+				// not appended to the end of the zone — otherwise the sort
+				// tags reappear stranded at the BOTTOM of the Properties pane.
+				const ref = _prevFilterNextSibling && _prevFilterNextSibling.parentElement === _prevFilterParent
+					? _prevFilterNextSibling : null;
+				_prevFilterParent.insertBefore(filter, ref);
 				filter.hidden = true;
+				// Mount set an inline display:flex, which outranks the
+				// .assets-filter[hidden] rule. Clear it or the row stays visible.
+				filter.style.display = "";
 			}
 			_prevFilterParent = null;
+			_prevFilterNextSibling = null;
 			zoneTop?.classList.remove("showing-assets");
 			_prevAssetsParent = null;
 		}
