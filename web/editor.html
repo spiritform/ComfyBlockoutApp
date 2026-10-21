@@ -24,9 +24,11 @@
 	}
 	#top-header .th-brand {
 		display: flex; align-items: center; gap: 10px;
-		font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
+		font-size: 15px; font-weight: 600; letter-spacing: 0.04em;
 		color: rgba(255,255,255,0.9);
 	}
+	/* Two-tone wordmark — "Comfy" yellow, "Blockout" white. */
+	#top-header .th-brand .th-brand-comfy { color: #ffd24a; }
 	#top-header .th-brand .th-dot {
 		width: 8px; height: 8px; border-radius: 50%;
 		background: linear-gradient(135deg, #ffb454, #ff7a00);
@@ -65,9 +67,6 @@
 	}
 	#top-header .th-right { display: flex; align-items: center; gap: 6px; }
 	#top-header .th-left { display: flex; align-items: center; gap: 12px; }
-	.th-comfy-cloud-brand { display: inline-flex; align-items: center; padding: 0; border-radius: 4px; }
-	.th-comfy-cloud-brand img { display: block; opacity: 0.9; transition: opacity 120ms; width: 22px; height: 22px; }
-	.th-comfy-cloud-brand:hover img { opacity: 1; }
 	#top-header .th-gen { display: flex; align-items: center; gap: 8px; }
 	#top-header .th-group-label, #top-header .th-project {
 		font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
@@ -194,9 +193,6 @@
 	body.help-open .th-brand > span:first-child { cursor: pointer; }
 	body.help-open .th-brand > span:first-child:hover { color: #ffb454; }
 	/* Comfy Cloud shortcut — uses the site favicon, kept slightly dimmed until hover */
-	.th-comfy-cloud { text-decoration: none; }
-	.th-comfy-cloud img { display: block; opacity: 0.75; transition: opacity 120ms; }
-	.th-comfy-cloud:hover img { opacity: 1; }
 
 	/* ---- settings modal ---- */
 	.modal-backdrop {
@@ -4002,11 +3998,8 @@
 
 	<header id="top-header">
 		<div class="th-left">
-			<a class="th-comfy-cloud th-comfy-cloud-brand" id="th-comfy-cloud" href="https://cloud.comfy.org" target="_blank" rel="noopener" title="Comfy Cloud — manage account, credits, billing">
-				<img src="https://cloud.comfy.org/favicon.ico" alt="Comfy" width="22" height="22">
-			</a>
 			<div class="th-brand">
-				<span>ComfyBlockout</span>
+				<span><span class="th-brand-comfy">Comfy</span>Blockout</span>
 				<small class="th-sep">:</small>
 				<small id="help-mode-label" class="th-project-name" hidden style="color:#ffd28a; cursor:default; pointer-events:none">Get Started</small>
 			</div>
